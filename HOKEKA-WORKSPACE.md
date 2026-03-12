@@ -29,22 +29,41 @@ fraud-detector/
 
 Changes made in this folder are automatically committed and pushed to git every 5 minutes.
 
+### Git Credentials Required
+
+⚠️ **Push requires authentication.** The repo is private and needs credentials.
+
+**To configure push access:**
+1. Use GitHub Personal Access Token (PAT) with repo access
+2. Or configure SSH key for the server
+3. Or use git credential helper:
+   ```bash
+   git config credential.helper store
+   git push origin main  # Enter credentials once, they'll be cached
+   ```
+
 ### How It Works
 1. Any agent/developer works in `/root/.openclaw/workspace/fraud-detector`
-2. Changes are automatically detected
+2. Changes are automatically detected every 5 minutes
 3. Auto-committed with timestamp: `Auto-commit: YYYY-MM-DD HH:MM:SS UTC`
-4. Pushed to origin/main
+4. If credentials configured → pushed to origin/main
+5. If no credentials → committed locally (you can push manually later)
 
-### Manual Push
-If you need to push immediately:
+### Manual Operations
 ```bash
 cd /root/.openclaw/workspace/fraud-detector
-./.auto-push.sh
-```
 
-### View Push Log
-```bash
-cat /root/.openclaw/workspace/fraud-detector/.auto-push.log
+# Check status
+git status
+
+# Push manually
+git push origin main
+
+# View auto-push log
+cat .auto-push.log
+
+# Run auto-push immediately
+./.auto-push.sh
 ```
 
 ## Development Workflow
