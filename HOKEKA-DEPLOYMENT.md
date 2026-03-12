@@ -37,7 +37,24 @@ docker compose -f docker-compose.preprod.yml up -d --build
 # - PostgreSQL: localhost:15432 (different port)
 ```
 
-### 3. Production Environment
+### 3. Test Environment (Time-Based Access)
+
+```bash
+# Copy and configure environment
+cp .env.example .env.test
+# Edit .env.test with test credentials
+
+# Start test environment
+docker compose -f docker-compose.test.yml up -d --build
+
+# Access:
+# - Frontend: http://localhost:9080
+# - API: http://localhost:9080/api
+# - PostgreSQL: localhost:25432
+# ⚠️  ONLY ACCESSIBLE 9am-11am EAT (6am-8am UTC)
+```
+
+### 4. Production Environment
 
 ```bash
 # Copy and configure environment
@@ -59,25 +76,103 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Environment Differences
 
-| Feature | Development | Preprod | Production |
-|---------|-------------|---------|------------|
-| Frontend Port | 5173 | 8080 | 80/443 |
-| Hot Reload | ✅ Yes | ❌ No | ❌ No |
-| PostgreSQL Port | 5432 | 15432 | Internal only |
-| Aerospike Port | 3000 | 13000 | Internal only |
-| SSL | ❌ No | Optional | ✅ Required |
-| Resource Limits | ❌ No | ❌ No | ✅ Yes |
-| Logging Level | DEBUG | INFO | WARN |
-| Database Names | fraud_detector_dev | fraud_detector_preprod | fraud_detector |
+| Feature | Development | Test | Preprod | Production |
+|---------|-------------|------|---------|------------|
+| Frontend Port | 5173 | 9080 | 8080 | 80/443 |
+| Hot Reload | ✅ Yes | ❌ No | ❌ No | ❌ No |
+| PostgreSQL Port | 5432 | 25432 | 15432 | Internal only |
+| Aerospike Port | 3000 | - | 13000 | Internal only |
+| SSL | ❌ No | ❌ No | Optional | ✅ Required |
+| **Access Control** | **None** | **Open (Time later)** | **IP Whitelist** | **VPN Only** |
+| Resource Limits | ❌ No | ❌ No | ❌ No | ✅ Yes |
+| Logging Level | DEBUG | INFO | INFO | WARN |
+| Database Names | fraud_detector_dev | fraud_detector_test | fraud_detector_preprod | fraud_detector |
 
 ## Network Isolation
 
 Each environment has its own Docker network:
 - **Dev:** 172.21.0.0/16
+- **Test:** 172.24.0.0/16
 - **Preprod:** 172.22.0.0/16
 - **Production:** 172.23.0.0/16
 
 This ensures complete isolation between environments.
+
+## Access Control Configuration
+
+### Preprod Environment - IP Whitelist
+
+Preprod requires specific IP addresses to be whitelisted.
+
+**Configure in `nginx-preprod.conf`:**
+
+```nginx
+# Add allowed IPs in the server block:
+allow 192.168.1.0/24;  # Office network
+allow 10.0.0.0/8;      # VPN network
+allow 72.62.133.45;    # Specific IP
+deny all;              # Deny all others
+```
+
+**Or create `allowed-ips.conf`:**
+```bash
+cat > allowed-ips.conf << 'EOF'
+allow 192.168.1.0/24;
+allow 10.0.0.0/8;
+deny all;
+EOF
+```
+
+Then mount it in docker-compose:
+```yaml
+volumes:
+  - ./allowed-ips.conf:/etc/nginx/allowed-ips.conf:ro
+```
+
+### Test Environment - Time-Based Access (Currently Open)
+
+Test environment time restriction is **DISABLED** for now. It will be enabled when moving to preprod.
+
+**Currently:** Open access 24/7  
+**Future:** Only 9am-11am EAT (6am-8am UTC) - configured in `nginx-test.conf`
+
+**To enable time restriction later:**
+1. Edit `nginx-test.conf`
+2. Uncomment the time control section
+3. Restart: `docker compose -f docker-compose.test.yml restart nginx-test`
+
+**Start test environment:**
+```bash
+docker compose -f docker-compose.test.yml up -d --build
+# Access: http://localhost:9080 (open access for now)
+```
+
+### Production Environment - VPN Only
+
+Production requires VPN access. Configure at multiple levels:
+
+**1. Firewall Level (Recommended):**
+```bash
+# Allow only VPN subnet
+iptables -A INPUT -p tcp --dport 80 -s 10.0.0.0/8 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -s 10.0.0.0/8 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j DROP
+iptables -A INPUT -p tcp --dport 443 -j DROP
+```
+
+**2. Nginx Level:**
+Edit `nginx-prod.conf` and uncomment:
+```nginx
+allow 10.0.0.0/8;      # VPN network
+allow 172.16.0.0/12;   # Private VPN range
+deny all;
+```
+
+**3. Cloud Provider Level:**
+Configure security groups to only allow VPN IPs:
+- AWS: Security Group inbound rules
+- Azure: Network Security Group rules
+- GCP: Firewall rules
 
 ## SSL Certificate Setup
 

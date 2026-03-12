@@ -1,10 +1,7 @@
-version: '3.8'
+# Pre-Production / UAT Environment with IP Whitelist
+# Only specific IPs can access preprod
 
-# Pre-Production / UAT Environment
-# - Production-like configuration
-# - Nginx serves static frontend
-# - Isolated ports from dev environment
-# - SSL-ready configuration
+version: '3.8'
 
 services:
   # PostgreSQL Database (Preprod)
@@ -18,7 +15,7 @@ services:
     volumes:
       - postgres_preprod_data:/var/lib/postgresql/data
     ports:
-      - "15432:5432"  # Different port from dev
+      - "127.0.0.1:15432:5432"  # Localhost only for security
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-fraud_user} -d fraud_detector_preprod"]
       interval: 10s
@@ -32,8 +29,7 @@ services:
   aerospike-preprod:
     image: aerospike/aerospike-server:6.4
     container_name: fraud-detector-aerospike-preprod
-    ports:
-      - "13000:3000"  # Different port from dev
+    # No exposed ports - internal only
     volumes:
       - aerospike_preprod_data:/opt/aerospike/data
     healthcheck:
@@ -76,7 +72,7 @@ services:
       - fraud-detector-preprod-network
     restart: unless-stopped
 
-  # Frontend (Preprod - nginx serves static)
+  # Frontend (Preprod)
   frontend-preprod:
     build:
       context: ./FRONTEND
@@ -97,16 +93,15 @@ services:
       - fraud-detector-preprod-network
     restart: unless-stopped
 
-  # Nginx Reverse Proxy (Preprod)
+  # Nginx with IP Whitelist (Preprod)
   nginx-preprod:
     image: nginx:1.25-alpine
     container_name: fraud-detector-nginx-preprod
     ports:
-      - "8080:80"  # Different port from dev
-      # - "8443:443"  # Enable for SSL testing
+      - "8080:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # - ./ssl-preprod:/etc/nginx/ssl:ro  # Mount SSL certificates here
+      - ./nginx-preprod.conf:/etc/nginx/conf.d/default.conf:ro
+      # - ./ssl-preprod:/etc/nginx/ssl:ro
     depends_on:
       frontend-preprod:
         condition: service_healthy
