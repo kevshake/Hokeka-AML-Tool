@@ -1,36 +1,15 @@
--- Compliance Cases
-CREATE TABLE IF NOT EXISTS compliance_cases (
-    id BIGSERIAL PRIMARY KEY,
-    case_reference VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    status VARCHAR(50) NOT NULL,
-    priority VARCHAR(50) NOT NULL,
-    sla_deadline TIMESTAMP,
-    days_open INT,
-    assigned_to_user_id BIGINT,
-    assigned_by_user_id BIGINT,
-    assigned_at TIMESTAMP,
-    escalated BOOLEAN DEFAULT FALSE,
-    escalated_to_user_id BIGINT,
-    escalation_reason TEXT,
-    escalated_at TIMESTAMP,
-    resolution VARCHAR(255),
-    resolution_notes TEXT,
-    resolved_by BIGINT,
-    resolved_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP,
-    CONSTRAINT fk_compliance_cases_assigned_to FOREIGN KEY (assigned_to_user_id) REFERENCES platform_users(id)
-);
+-- Compliance Cases (Fixed for schema compatibility)
+-- Note: compliance_cases table is created in a later migration with case_id as PK
+-- This migration creates supporting tables for case management
 
+-- Case Relationships
 CREATE TABLE IF NOT EXISTS case_relationships (
     case_id BIGINT NOT NULL,
     related_case_id BIGINT NOT NULL,
-    PRIMARY KEY (case_id, related_case_id),
-    CONSTRAINT fk_case_rel_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_case_rel_related FOREIGN KEY (related_case_id) REFERENCES compliance_cases(id)
+    PRIMARY KEY (case_id, related_case_id)
 );
 
+-- Case Notes
 CREATE TABLE IF NOT EXISTS case_notes (
     id BIGSERIAL PRIMARY KEY,
     case_id BIGINT NOT NULL,
@@ -38,10 +17,10 @@ CREATE TABLE IF NOT EXISTS case_notes (
     content TEXT NOT NULL,
     internal BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_case_notes_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_case_notes_author FOREIGN KEY (author_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_notes_author FOREIGN KEY (author_id) REFERENCES psp_users(user_id)
 );
 
+-- Case Evidence
 CREATE TABLE IF NOT EXISTS case_evidence (
     id BIGSERIAL PRIMARY KEY,
     case_id BIGINT NOT NULL,
@@ -51,8 +30,7 @@ CREATE TABLE IF NOT EXISTS case_evidence (
     storage_path VARCHAR(1000) NOT NULL,
     description TEXT,
     uploaded_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_case_evidence_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_case_evidence_uploader FOREIGN KEY (uploaded_by_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_evidence_uploader FOREIGN KEY (uploaded_by_id) REFERENCES psp_users(user_id)
 );
 
 -- Suspicious Activity Reports
@@ -79,11 +57,10 @@ CREATE TABLE IF NOT EXISTS suspicious_activity_reports (
     amendment_reason TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
-    CONSTRAINT fk_sar_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_sar_created_by FOREIGN KEY (created_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_reviewed_by FOREIGN KEY (reviewed_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_filed_by FOREIGN KEY (filed_by_user_id) REFERENCES platform_users(id),
+    CONSTRAINT fk_sar_created_by FOREIGN KEY (created_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_reviewed_by FOREIGN KEY (reviewed_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_filed_by FOREIGN KEY (filed_by_user_id) REFERENCES psp_users(user_id),
     CONSTRAINT fk_sar_amends FOREIGN KEY (amends_sar_id) REFERENCES suspicious_activity_reports(id)
 );
 
@@ -115,5 +92,3 @@ CREATE TABLE IF NOT EXISTS audit_logs_enhanced (
     error_message TEXT,
     checksum VARCHAR(255)
 );
-
-

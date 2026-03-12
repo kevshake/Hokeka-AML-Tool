@@ -1,6 +1,10 @@
 -- =====================================================================
--- V2__Performance_Indexes.sql
--- Role Permissions Table (Missing from initial migrations)
+-- V17__Performance_Indexes.sql
+-- Database Performance Optimization Indexes
+-- Created: 2025-12-15
+-- =====================================================================
+
+-- Role Permissions Table (created if not exists by V14, but included here for safety)
 CREATE TABLE IF NOT EXISTS role_permissions (
     id SERIAL PRIMARY KEY,
     user_role VARCHAR(50) NOT NULL,
@@ -10,10 +14,6 @@ CREATE TABLE IF NOT EXISTS role_permissions (
     notes TEXT,
     CONSTRAINT uk_role_permission UNIQUE (user_role, permission)
 );
-
--- Database Performance Optimization Indexes
--- Created: 2025-12-15
--- =====================================================================
 
 -- =====================================================================
 -- AUDIT LOGS PERFORMANCE INDEXES
@@ -44,30 +44,27 @@ ON audit_logs_enhanced(user_id, action_type, timestamp DESC);
 -- =====================================================================
 
 -- Index for dashboard queries (status + priority)
+-- Using case_status instead of status (actual column name in schema)
 CREATE INDEX IF NOT EXISTS idx_case_status_priority 
-ON compliance_cases(status, priority, created_at DESC);
+ON compliance_cases(case_status, priority, created_at DESC);
 
--- Index for SLA tracking (only open cases)
-CREATE INDEX IF NOT EXISTS idx_case_sla_deadline 
-ON compliance_cases(sla_deadline) 
-WHERE status NOT IN ('CLOSED', 'RESOLVED');
+-- Index for due date tracking (only open cases)
+CREATE INDEX IF NOT EXISTS idx_case_due_date 
+ON compliance_cases(due_date) 
+WHERE case_status NOT IN ('CLOSED', 'RESOLVED');
 
 -- Index for assigned cases lookup
+-- Using assigned_to instead of assigned_to_user_id (actual column name)
 CREATE INDEX IF NOT EXISTS idx_case_assigned 
-ON compliance_cases(assigned_to_user_id, status, priority);
-
--- Index for escalated cases
-CREATE INDEX IF NOT EXISTS idx_case_escalated 
-ON compliance_cases(escalated, escalated_at DESC) 
-WHERE escalated = TRUE;
+ON compliance_cases(assigned_to, case_status, priority);
 
 -- Index for merchant-related cases
 CREATE INDEX IF NOT EXISTS idx_case_merchant 
-ON compliance_cases(merchant_id, status);
+ON compliance_cases(merchant_id, case_status);
 
 -- Index for case aging analysis
 CREATE INDEX IF NOT EXISTS idx_case_age 
-ON compliance_cases(created_at, status);
+ON compliance_cases(created_at, case_status);
 
 -- =====================================================================
 -- SUSPICIOUS ACTIVITY REPORTS (SAR) PERFORMANCE INDEXES
@@ -106,16 +103,6 @@ WHERE status IN ('APPROVED', 'PENDING_REVIEW');
 -- Index for investigator workload (investigator column exists in V1)
 CREATE INDEX IF NOT EXISTS idx_alert_investigator 
 ON alerts(investigator, status, created_at DESC);
-
--- Note: disposition, disposed_at, severity, and merchant_id columns do not exist in alerts table
--- These indexes are commented out to prevent migration errors
--- If these columns are added in future migrations, uncomment these indexes:
--- CREATE INDEX IF NOT EXISTS idx_alert_disposition 
--- ON alerts(disposition, disposed_at DESC);
--- CREATE INDEX IF NOT EXISTS idx_alert_merchant 
--- ON alerts(merchant_id, status, created_at DESC);
--- CREATE INDEX IF NOT EXISTS idx_alert_severity_status 
--- ON alerts(severity, status, created_at DESC);
 
 -- =====================================================================
 -- TRANSACTIONS PERFORMANCE INDEXES
@@ -158,12 +145,6 @@ ON transaction_features(action_taken, score DESC);
 -- Index for merchant status queries
 CREATE INDEX IF NOT EXISTS idx_merchant_status 
 ON merchants(status, created_at DESC);
-
--- Note: risk_level column does not exist in merchants table
--- Risk level is stored in merchant_risk_scores table, not merchants table
--- This index is commented out to prevent migration errors
--- CREATE INDEX IF NOT EXISTS idx_merchant_risk 
--- ON merchants(risk_level, status);
 
 -- =====================================================================
 -- BENEFICIAL OWNERS PERFORMANCE INDEXES
@@ -225,8 +206,7 @@ ANALYZE role_permissions;
 -- 1. Audit log queries: 10-50x faster for time-based searches
 -- 2. Case dashboard: 20-100x faster for status/priority filtering
 -- 3. SAR workflow: 15-40x faster for deadline tracking
--- 4. Alert disposition: 25-75x faster for analysis queries
--- 5. Transaction velocity: 5-20x faster for fraud detection
+-- 4. Transaction velocity: 5-20x faster for fraud detection
 --
 -- Maintenance:
 -- - Indexes are automatically maintained by PostgreSQL
@@ -235,5 +215,3 @@ ANALYZE role_permissions;
 -- - Consider REINDEX if performance degrades over time
 --
 -- =====================================================================
-
-;
