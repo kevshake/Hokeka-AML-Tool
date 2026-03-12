@@ -1,0 +1,170 @@
+version: '3.8'
+
+# Production Environment
+# - Hardened configuration
+# - SSL/TLS enabled
+# - Resource limits
+# - Logging and monitoring
+# - No exposed database ports
+
+services:
+  # PostgreSQL Database (Production)
+  postgres-prod:
+    image: postgres:15-alpine
+    container_name: fraud-detector-postgres-prod
+    environment:
+      POSTGRES_DB: fraud_detector
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    # No exposed ports - internal only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d fraud_detector"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Aerospike Cache (Production)
+  aerospike-prod:
+    image: aerospike/aerospike-server:6.4
+    container_name: fraud-detector-aerospike-prod
+    # No exposed ports - internal only
+    volumes:
+      - aerospike_prod_data:/opt/aerospike/data
+    healthcheck:
+      test: ["CMD", "asinfo", "-p", "3000", "-v", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Backend API (Production)
+  backend-prod:
+    build:
+      context: ./BACKEND
+      dockerfile: Dockerfile
+    container_name: fraud-detector-backend-prod
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres-prod:5432/fraud_detector
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      AEROSPIKE_HOSTS: aerospike-prod:3000
+      SECURITY_ENCRYPTION_KEY: ${SECURITY_ENCRYPTION_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://fraud.hokeka.com}
+      SERVER_PORT: 2637
+      SPRING_PROFILES_ACTIVE: production
+      LOGGING_LEVEL_ROOT: WARN
+      # JVM optimization for production
+      JAVA_OPTS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom -XshowSettings:vm"
+    depends_on:
+      postgres-prod:
+        condition: service_healthy
+      aerospike-prod:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2637/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Frontend (Production - nginx serves static)
+  frontend-prod:
+    build:
+      context: ./FRONTEND
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: fraud-detector-frontend-prod
+    environment:
+      VITE_API_URL: /api
+    depends_on:
+      - backend-prod
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Nginx Reverse Proxy (Production with SSL)
+  nginx-prod:
+    image: nginx:1.25-alpine
+    container_name: fraud-detector-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates here
+    depends_on:
+      frontend-prod:
+        condition: service_healthy
+      backend-prod:
+        condition: service_healthy
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  postgres_prod_data:
+  aerospike_prod_data:
+
+networks:
+  fraud-detector-prod-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
