@@ -18,11 +18,9 @@ import {
 import {
   Dashboard as DashboardIcon,
   FolderOpen as CasesIcon,
-  Description as SarIcon,
   Notifications as AlertsIcon,
   TrendingUp as RiskIcon,
   CalendarToday as CalendarIcon,
-  Receipt as ReportsIcon,
   Business as MerchantsIcon,
   Visibility as MonitoringIcon,
   Search as ScreeningIcon,
@@ -76,13 +74,6 @@ const navSections: NavSection[] = [
         badge: 0,
       },
       {
-        id: "sar",
-        label: "SAR Reports",
-        icon: <SarIcon />,
-        path: "/sar",
-        badge: 0,
-      },
-      {
         id: "alerts",
         label: "Alerts",
         icon: <AlertsIcon />,
@@ -100,12 +91,6 @@ const navSections: NavSection[] = [
         label: "Compliance Calendar",
         icon: <CalendarIcon />,
         path: "/compliance-calendar",
-      },
-      {
-        id: "regulatory-reports",
-        label: "Regulatory Reports",
-        icon: <ReportsIcon />,
-        path: "/regulatory-reports",
       },
       {
         id: "merchants",

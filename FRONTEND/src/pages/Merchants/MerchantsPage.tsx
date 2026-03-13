@@ -33,7 +33,7 @@ export default function MerchantsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
           Merchants
         </Typography>
@@ -62,7 +62,7 @@ export default function MerchantsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={9} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
@@ -104,7 +104,7 @@ export default function MerchantsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={9} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   No merchants found
                 </TableCell>
               </TableRow>

@@ -16,15 +16,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
           flexGrow: 1,
           width: "calc(100% - 240px)",
           ml: "12px",
-          p: 2,
+          p: 1.5,
         }}
       >
         <Header />
         <Box
           sx={{
-            mt: "64px",
+            mt: "56px",
             width: "100%",
-            height: "calc(100vh - 110px)", // Adjusted for padding
+            height: "calc(100vh - 90px)", // Adjusted for compact padding
           }}
         >
           {children}

@@ -308,14 +308,6 @@ export const useOverdueDeadlines = () => {
   });
 };
 
-// Regulatory Reports
-export const useRegulatoryReport = (type: "ctr" | "lctr" | "iftr") => {
-  return useQuery({
-    queryKey: ["regulatory", type],
-    queryFn: () => apiClient.get(`reporting/regulatory/${type}`),
-  });
-};
-
 // Transaction Monitoring
 export const useMonitoringDashboardStats = () => {
   return useQuery({

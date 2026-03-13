@@ -10,11 +10,9 @@ import MainLayout from "./components/Layout/MainLayout";
 import LoginPage from "./pages/Auth/LoginPage";
 import DashboardPage from "./pages/Dashboard/DashboardPage";
 import CasesPage from "./pages/Cases/CasesPage";
-import SarReportsPage from "./pages/SarReports/SarReportsPage";
 import AlertsPage from "./pages/Alerts/AlertsPage";
 import RiskAnalyticsPage from "./pages/RiskAnalytics/RiskAnalyticsPage";
 import ComplianceCalendarPage from "./pages/ComplianceCalendar/ComplianceCalendarPage";
-import RegulatoryReportsPage from "./pages/RegulatoryReports/RegulatoryReportsPage";
 import MerchantsPage from "./pages/Merchants/MerchantsPage";
 import TransactionMonitoringPage from "./pages/TransactionMonitoring/TransactionMonitoringPage";
 import ScreeningPage from "./pages/Screening/ScreeningPage";
@@ -54,11 +52,9 @@ function App() {
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard/*" element={<DashboardPage />} />
                         <Route path="/cases/*" element={<CasesPage />} />
-                        <Route path="/sar" element={<SarReportsPage />} />
                         <Route path="/alerts" element={<AlertsPage />} />
                         <Route path="/risk-analytics" element={<RiskAnalyticsPage />} />
                         <Route path="/compliance-calendar" element={<ComplianceCalendarPage />} />
-                        <Route path="/regulatory-reports" element={<RegulatoryReportsPage />} />
                         <Route path="/merchants" element={<MerchantsPage />} />
                         <Route path="/transaction-monitoring/*" element={<TransactionMonitoringPage />} />
                         <Route path="/screening" element={<ScreeningPage />} />

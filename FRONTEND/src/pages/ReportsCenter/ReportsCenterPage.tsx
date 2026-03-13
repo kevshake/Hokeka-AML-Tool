@@ -287,9 +287,9 @@ export default function ReportsCenterPage() {
 
   return (
     <ReportErrorBoundary reportName="Reports Center">
-      <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Box sx={{ p: { xs: 1.5, md: 2 } }}>
         {/* Header */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
             <Box
               sx={{
@@ -336,7 +336,7 @@ export default function ReportsCenterPage() {
         {historyError && (
           <Alert
             severity="error"
-            sx={{ mb: 3, borderRadius: "12px" }}
+            sx={{ mb: 2, borderRadius: "12px" }}
             action={
               <Button color="inherit" size="small" onClick={() => refetchHistory()}>
                 Retry
@@ -348,7 +348,7 @@ export default function ReportsCenterPage() {
         )}
 
         {/* Tabs */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2 }}>
           <Tabs
             value={activeTab}
             onChange={(_, value) => setActiveTab(value)}
@@ -572,7 +572,7 @@ export default function ReportsCenterPage() {
                 if (!category) return null;
 
                 return (
-                  <Box key={categoryId} sx={{ mb: 4 }}>
+                  <Box key={categoryId} sx={{ mb: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                       <Typography variant="h6" sx={{ fontWeight: 600, color: "#2c3e50" }}>
                         {category.name}

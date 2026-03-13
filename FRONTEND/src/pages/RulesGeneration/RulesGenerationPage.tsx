@@ -205,7 +205,7 @@ export default function RulesGenerationPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
           Rules Generation
         </Typography>

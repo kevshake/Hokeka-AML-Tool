@@ -136,7 +136,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     name: "Regulatory Submission",
     icon: "FileText",
     description: "Regulatory filing and submission",
-    reportCount: 4
+    reportCount: 6
   },
   {
     id: "compliance-management",
@@ -1170,7 +1170,7 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
     tags: ["risk", "backtesting", "validation"]
   },
 
-  // ===== 10. Regulatory Submission (4 reports) =====
+  // ===== 10. Regulatory Submission (6 reports) =====
   {
     id: "reg-fincen-sar",
     name: "FinCEN SAR Filing Report",
@@ -1198,6 +1198,36 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
     supportsChart: true,
     supportsExport: ["PDF", "Excel"],
     tags: ["regulatory", "fincen", "ctr"]
+  },
+  {
+    id: "reg-lctr",
+    name: "Large Cash Transaction Report (LCTR)",
+    description: "LCTR filings for transactions exceeding $100,000 in currency",
+    category: "regulatory-submission",
+    type: "Regulatory",
+    parameters: [
+      { name: "dateRange", label: "Filing Period", type: "daterange", required: true },
+      { name: "threshold", label: "Threshold Amount", type: "currency", required: true, defaultValue: 100000 },
+      { name: "status", label: "Status", type: "multiselect", required: false, options: [{ value: "draft", label: "Draft" }, { value: "filed", label: "Filed" }, { value: "acknowledged", label: "Acknowledged" }] }
+    ],
+    supportsChart: true,
+    supportsExport: ["PDF", "CSV", "Excel"],
+    tags: ["regulatory", "lctr", "large-cash", "compliance"]
+  },
+  {
+    id: "reg-iftr",
+    name: "International Funds Transfer Report (IFTR)",
+    description: "Cross-border and international wire transfer reporting",
+    category: "regulatory-submission",
+    type: "Regulatory",
+    parameters: [
+      { name: "dateRange", label: "Filing Period", type: "daterange", required: true },
+      { name: "transferType", label: "Transfer Type", type: "multiselect", required: false, options: [{ value: "incoming", label: "Incoming" }, { value: "outgoing", label: "Outgoing" }, { value: "cross-border", label: "Cross-Border" }, { value: "foreign-currency", label: "Foreign Currency" }] },
+      { name: "status", label: "Status", type: "multiselect", required: false, options: [{ value: "draft", label: "Draft" }, { value: "filed", label: "Filed" }, { value: "acknowledged", label: "Acknowledged" }] }
+    ],
+    supportsChart: true,
+    supportsExport: ["PDF", "CSV", "Excel"],
+    tags: ["regulatory", "iftr", "international", "wire", "compliance"]
   },
   {
     id: "reg-314a-compliance",

@@ -13,7 +13,7 @@ export default function CasesPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Cases
       </Typography>
 
@@ -22,9 +22,9 @@ export default function CasesPage() {
       <Routes>
         <Route path="/" element={<Navigate to="/cases/all" replace />} />
         <Route path="/all" element={<CasesAllCases />} />
-        <Route path="/timeline" element={<Box sx={{ p: 3 }}><Typography>Timeline View - Coming Soon</Typography></Box>} />
-        <Route path="/network" element={<Box sx={{ p: 3 }}><Typography>Network Graph - Coming Soon</Typography></Box>} />
-        <Route path="/queues" element={<Box sx={{ p: 3 }}><Typography>Queues - Coming Soon</Typography></Box>} />
+        <Route path="/timeline" element={<Box sx={{ p: 2 }}><Typography>Timeline View - Coming Soon</Typography></Box>} />
+        <Route path="/network" element={<Box sx={{ p: 2 }}><Typography>Network Graph - Coming Soon</Typography></Box>} />
+        <Route path="/queues" element={<Box sx={{ p: 2 }}><Typography>Queues - Coming Soon</Typography></Box>} />
       </Routes>
     </Box>
   );

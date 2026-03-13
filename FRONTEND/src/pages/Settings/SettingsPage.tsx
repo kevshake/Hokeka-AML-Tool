@@ -58,7 +58,7 @@ function TabPanel(props: { children?: React.ReactNode; index: number; value: num
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 }
@@ -220,29 +220,29 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Settings
       </Typography>
 
-      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
+      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 2 }}>
         <Tab label="PSP Theme Management" />
         {isSuperAdmin && <Tab label="System Settings" />}
       </Tabs>
 
       <TabPanel value={tabValue} index={0}>
-        <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-          <Typography variant="h6" sx={{ color: "text.primary", mb: 3 }}>
+        <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+          <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
             PSP Theme Customization
           </Typography>
 
           {successMessage && (
-            <Alert severity={successMessage.includes("successfully") ? "success" : "error"} sx={{ mb: 3 }}>
+            <Alert severity={successMessage.includes("successfully") ? "success" : "error"} sx={{ mb: 2 }}>
               {successMessage}
             </Alert>
           )}
 
           {/* PSP Selection */}
-          <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid container spacing={3} sx={{ mb: 2 }}>
             <Grid item xs={12} md={6}>
               <Tooltip title="Select a Payment Service Provider (PSP) from the dropdown to customize its theme and branding settings. Once selected, you can modify colors, fonts, logo, button styles, and navigation layout. Each PSP can have a unique visual identity that is automatically applied when users from that PSP log into the system." arrow enterDelay={2000}>
                 <FormControl fullWidth>
@@ -265,13 +265,13 @@ export default function SettingsPage() {
           </Grid>
 
           {isLoadingTheme && selectedPspId ? (
-            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+            <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
               <CircularProgress />
             </Box>
           ) : themeData ? (
             <>
               {/* Theme Presets */}
-              <Box sx={{ mb: 4 }}>
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
                   Theme Presets
                 </Typography>
@@ -298,7 +298,7 @@ export default function SettingsPage() {
               </Box>
 
               {/* Color Customization */}
-              <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid container spacing={3} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={4}>
                   <Tooltip title="Set the primary brand color used throughout the application for primary buttons, links, highlights, and key interactive elements. This is the main color that represents the PSP's brand identity. Choose a color that aligns with the PSP's corporate branding guidelines. The color picker allows you to select any color value." arrow enterDelay={2000}>
                     <TextField
@@ -440,15 +440,15 @@ export default function SettingsPage() {
 
       {isSuperAdmin && (
         <TabPanel value={tabValue} index={1}>
-          <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <Typography variant="h6" sx={{ color: "text.primary", mb: 3 }}>
+          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
               System Configuration
             </Typography>
 
             <Grid container spacing={3}>
               {isLoadingSystemSettings ? (
                 <Grid item xs={12}>
-                  <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+                  <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
                     <CircularProgress />
                   </Box>
                 </Grid>
