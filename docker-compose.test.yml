@@ -27,16 +27,19 @@ services:
   backend-test:
     build:
       context: ./BACKEND
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
     container_name: fd-test-backend
     environment:
-      DATABASE_URL: jdbc:postgresql://172.17.0.1:15432/fraud_detector_test
-      DATABASE_USERNAME: fd_test
-      DATABASE_PASSWORD: ${TEST_DB_PASSWORD:-test_secure_2024}
+      DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
+      DATABASE_USERNAME: fraud_detector_test
+      DATABASE_PASSWORD: test_password_secure
       AEROSPIKE_HOSTS: fd-test-aerospike:3000
       SERVER_PORT: 2638
       SPRING_PROFILES_ACTIVE: test
       CORS_ALLOWED_ORIGINS: https://testaml.hokeka.com,https://testapi.hokeka.com
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_FLYWAY_ENABLED: "false"
+      JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseG1GC"
     ports:
       - "2638:2638"
     depends_on:
@@ -50,6 +53,7 @@ services:
       start_period: 60s
     networks:
       - fd-test-network
+      - test_fraud-detector-test
     restart: unless-stopped
 
   # Frontend (Test) - Port 5174
@@ -77,3 +81,5 @@ volumes:
 networks:
   fd-test-network:
     driver: bridge
+  test_fraud-detector-test:
+    external: true
