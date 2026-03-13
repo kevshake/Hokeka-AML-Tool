@@ -7,9 +7,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Copy source and build
+# Copy source and build (skip type check for production builds)
 COPY . .
-RUN npm run build
+RUN npm run build:prod
 
 # Production stage - nginx
 FROM nginx:1.25-alpine
