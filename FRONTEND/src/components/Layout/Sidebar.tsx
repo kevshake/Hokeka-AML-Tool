@@ -166,6 +166,20 @@ const navSections: NavSection[] = [
         label: "Reports",
         icon: <ChartsIcon />,
         path: "/reports",
+        children: [
+          {
+            id: "reports-summary",
+            label: "Summary",
+            icon: <ChartsIcon />,
+            path: "/reports",
+          },
+          {
+            id: "reports-center",
+            label: "Reports Center",
+            icon: <ChartsIcon />,
+            path: "/reports-center",
+          },
+        ],
       },
       {
         id: "audit",

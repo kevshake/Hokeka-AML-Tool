@@ -23,6 +23,7 @@ import MessagesPage from "./pages/Messages/MessagesPage";
 import SettingsPage from "./pages/Settings/SettingsPage";
 import UsersPage from "./pages/Users/UsersPage";
 import ReportsPage from "./pages/Reports/ReportsPage";
+import ReportsCenterPage from "./pages/ReportsCenter/ReportsCenterPage";
 import AuditLogsPage from "./pages/AuditLogs/AuditLogsPage";
 import RulesGenerationPage from "./pages/RulesGeneration/RulesGenerationPage";
 
@@ -66,6 +67,7 @@ function App() {
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/users/*" element={<UsersPage />} />
                         <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/reports-center" element={<ReportsCenterPage />} />
                         <Route path="/audit" element={<AuditLogsPage />} />
                         <Route path="/rules-generation" element={<RulesGenerationPage />} />
                       </Routes>
