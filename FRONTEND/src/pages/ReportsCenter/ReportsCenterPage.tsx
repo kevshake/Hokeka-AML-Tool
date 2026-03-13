@@ -1,9 +1,10 @@
 /**
  * Reports Center Page
  * Comprehensive AML reporting system with 85+ reports
+ * Integrated with backend APIs, error handling, and progress tracking
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -16,31 +17,32 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Badge,
   Divider,
-  Button,
   Chip,
   Tabs,
   Tab,
   Alert,
   Snackbar,
+  CircularProgress,
+  Fade,
+  Button,
 } from "@mui/material";
 import {
   Search as SearchIcon,
   Assessment as ReportsIcon,
   Refresh as RefreshIcon,
-  ShieldAlert,
-  DollarSign,
-  Activity,
-  Monitor,
-  Ban,
-  AlertTriangle,
+  Gavel,
+  AttachMoney,
+  TrendingUp,
+  DesktopMac,
+  Block,
+  Warning,
   FolderOpen,
   Settings,
-  BarChart3,
-  FileText,
+  BarChart,
+  Description,
   CheckCircle,
-  Database,
+  Storage,
   CreditCard,
 } from "@mui/icons-material";
 import type { ReportDefinition, ExportFormat } from "../../types/reports/reportDefinitions";
@@ -56,26 +58,33 @@ import {
   useScheduleReport,
   useDownloadReport,
   useDeleteReportInstance,
+  useReportProgress,
+  downloadBlob,
+  type ReportApiError,
 } from "../../features/api/reportQueries";
+import { useToast } from "../../hooks/useToast";
 import ReportCard from "./components/ReportCard";
 import ReportHistory from "./components/ReportHistory";
 import ScheduleReportDialog from "./components/ScheduleReportDialog";
 import ReportPreviewDialog from "./components/ReportPreviewDialog";
+import ReportProgress from "./components/ReportProgress";
+import ReportErrorBoundary from "./components/ReportErrorBoundary";
+import EmptyState from "./components/EmptyState";
 
 // Category Icons mapping
-const CATEGORY_ICONS: Record<string, typeof ShieldAlert> = {
-  "aml-fraud": ShieldAlert,
-  "currency-threshold": DollarSign,
-  "transaction-monitoring": Activity,
-  "channel-monitoring": Monitor,
-  "sanctions": Ban,
-  "fraud-incidents": AlertTriangle,
+const CATEGORY_ICONS: Record<string, typeof Gavel> = {
+  "aml-fraud": Gavel,
+  "currency-threshold": AttachMoney,
+  "transaction-monitoring": TrendingUp,
+  "channel-monitoring": DesktopMac,
+  "sanctions": Block,
+  "fraud-incidents": Warning,
   "alert-case": FolderOpen,
   "rule-engine": Settings,
-  "risk-scoring": BarChart3,
-  "regulatory-submission": FileText,
+  "risk-scoring": BarChart,
+  "regulatory-submission": Description,
   "compliance-management": CheckCircle,
-  "data-quality": Database,
+  "data-quality": Storage,
   "chargeback-dispute": CreditCard,
 };
 
@@ -87,18 +96,28 @@ export default function ReportsCenterPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ReportDefinition | null>(null);
   const [previewParams, setPreviewParams] = useState<Record<string, unknown>>({});
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+  const [generatingReportId, setGeneratingReportId] = useState<string | null>(null);
 
-  // API hooks
-  const { data: historyData, refetch: refetchHistory } = useReportHistory({ page: 0, size: 50 });
+  // Toast notifications
+  const { toast, showSuccess, showError, hideToast } = useToast();
+
+  // API hooks with error handling
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+    error: historyError,
+    refetch: refetchHistory,
+  } = useReportHistory({ page: 0, size: 50 });
+
   const generateMutation = useGenerateReport();
   const scheduleMutation = useScheduleReport();
   const downloadMutation = useDownloadReport();
   const deleteMutation = useDeleteReportInstance();
+
+  // Track progress for generating report
+  const { data: progressData } = useReportProgress(generatingReportId || "", {
+    enabled: !!generatingReportId,
+  });
 
   // Filter reports based on search and category
   const filteredReports = useMemo(() => {
@@ -123,483 +142,540 @@ export default function ReportsCenterPage() {
     return groups;
   }, [filteredReports]);
 
-  const handleCategorySelect = (categoryId: string | null) => {
+  const handleCategorySelect = useCallback((categoryId: string | null) => {
     setSelectedCategory(categoryId);
     setSearchQuery("");
-  };
+  }, []);
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(event.target.value);
-    if (event.target.value) {
+  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSearchQuery(value);
+    if (value) {
       setSelectedCategory(null);
     }
-  };
+  }, []);
 
-  const handleGenerateReport = async (
-    reportId: string,
-    parameters: Record<string, unknown>,
-    format: string
-  ) => {
-    try {
-      const report = REPORT_DEFINITIONS.find((r) => r.id === reportId);
-      if (!report) return;
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSelectedCategory(null);
+  }, []);
 
-      // If report has parameters, show preview dialog first
-      if (report.parameters.length > 0 && Object.keys(parameters).length === 0) {
-        setSelectedReport(report);
-        setPreviewParams(parameters);
-        setPreviewDialogOpen(true);
-        return;
+  const handleGenerateReport = useCallback(
+    async (reportId: string, parameters: Record<string, unknown>, format: string) => {
+      try {
+        const report = REPORT_DEFINITIONS.find((r) => r.id === reportId);
+        if (!report) {
+          showError("Report not found");
+          return;
+        }
+
+        // If report has parameters, show preview dialog first
+        if (report.parameters.length > 0 && Object.keys(parameters).length === 0) {
+          setSelectedReport(report);
+          setPreviewParams(parameters);
+          setPreviewDialogOpen(true);
+          return;
+        }
+
+        const result = await generateMutation.mutateAsync({
+          reportId,
+          parameters,
+          format: format as ExportFormat,
+        });
+
+        // Track generation progress
+        setGeneratingReportId(result.id);
+
+        showSuccess(`Report "${report.name}" generation started`);
+        refetchHistory();
+      } catch (error) {
+        const apiError = error as ReportApiError;
+        showError(apiError.message || "Failed to generate report");
+        console.error("Generate report error:", error);
       }
+    },
+    [generateMutation, showSuccess, showError, refetchHistory]
+  );
 
-      await generateMutation.mutateAsync({
-        reportId,
-        parameters,
-        format: format as ExportFormat,
-      });
-
-      setSnackbar({
-        open: true,
-        message: "Report generation started successfully",
-        severity: "success",
-      });
-      refetchHistory();
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: "Failed to generate report",
-        severity: "error",
-      });
-    }
-  };
-
-  const handleScheduleReport = (report: ReportDefinition) => {
+  const handleScheduleReport = useCallback((report: ReportDefinition) => {
     setSelectedReport(report);
     setScheduleDialogOpen(true);
-  };
+  }, []);
 
-  const handleScheduleSubmit = async (scheduleConfig: {
-    frequency: string;
-    timezone: string;
-    recipients: string[];
-    formats: ExportFormat[];
-  }) => {
-    if (!selectedReport) return;
+  const handleScheduleSubmit = useCallback(
+    async (scheduleConfig: {
+      frequency: "once" | "hourly" | "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+      timezone: string;
+      recipients: string[];
+      formats: ExportFormat[];
+    }) => {
+      if (!selectedReport) return;
 
-    try {
-      await scheduleMutation.mutateAsync({
-        reportId: selectedReport.id,
-        schedule: scheduleConfig,
-        parameters: {},
-      });
+      try {
+        await scheduleMutation.mutateAsync({
+          reportId: selectedReport.id,
+          schedule: scheduleConfig,
+          parameters: {},
+        });
 
-      setSnackbar({
-        open: true,
-        message: "Report scheduled successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: "Failed to schedule report",
-        severity: "error",
-      });
-    }
-  };
+        showSuccess(`Report "${selectedReport.name}" scheduled successfully`);
+        setScheduleDialogOpen(false);
+        setSelectedReport(null);
+      } catch (error) {
+        const apiError = error as ReportApiError;
+        showError(apiError.message || "Failed to schedule report");
+        console.error("Schedule report error:", error);
+      }
+    },
+    [scheduleMutation, selectedReport, showSuccess, showError]
+  );
 
-  const handleDownloadReport = async (instance: { id: string }, format: ExportFormat) => {
-    try {
-      await downloadMutation.mutateAsync({ instanceId: instance.id, format });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: "Failed to download report",
-        severity: "error",
-      });
-    }
-  };
+  const handleDownloadReport = useCallback(
+    async (instance: { id: string; reportName?: string }, format: ExportFormat) => {
+      try {
+        const blob = await downloadMutation.mutateAsync({
+          instanceId: instance.id,
+          format,
+        });
 
-  const handleDeleteReport = async (instanceId: string) => {
-    try {
-      await deleteMutation.mutateAsync(instanceId);
-      setSnackbar({
-        open: true,
-        message: "Report deleted successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: "Failed to delete report",
-        severity: "error",
-      });
-    }
-  };
+        const filename = `${instance.reportName || "report"}-${instance.id}.${format.toLowerCase()}`;
+        downloadBlob(blob, filename);
 
-  const getReportCount = (categoryId: string) => {
+        showSuccess("Report downloaded successfully");
+      } catch (error) {
+        const apiError = error as ReportApiError;
+        showError(apiError.message || "Failed to download report");
+        console.error("Download report error:", error);
+      }
+    },
+    [downloadMutation, showSuccess, showError]
+  );
+
+  const handleDeleteReport = useCallback(
+    async (instanceId: string) => {
+      try {
+        await deleteMutation.mutateAsync(instanceId);
+        showSuccess("Report deleted successfully");
+        refetchHistory();
+      } catch (error) {
+        const apiError = error as ReportApiError;
+        showError(apiError.message || "Failed to delete report");
+        console.error("Delete report error:", error);
+      }
+    },
+    [deleteMutation, showSuccess, showError, refetchHistory]
+  );
+
+  const getReportCount = useCallback((categoryId: string) => {
     return REPORT_DEFINITIONS.filter((r) => r.category === categoryId).length;
-  };
+  }, []);
+
+  // Handle report generation completion
+  if (
+    progressData?.status === "completed" &&
+    generatingReportId &&
+    toast.message !== "Report generation completed"
+  ) {
+    showSuccess("Report generation completed", 3000);
+    setGeneratingReportId(null);
+  }
+
+  if (progressData?.status === "failed" && generatingReportId) {
+    showError("Report generation failed");
+    setGeneratingReportId(null);
+  }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: "16px",
-              background: "linear-gradient(135deg, #800020 0%, #a52a2a 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ReportsIcon sx={{ color: "#FFD700", fontSize: 28 }} />
-          </Box>
-          <Box>
-            <Typography
-              variant="h4"
+    <ReportErrorBoundary reportName="Reports Center">
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+            <Box
               sx={{
-                fontWeight: 700,
-                color: "#2c3e50",
-                fontSize: { xs: "1.5rem", md: "2rem" },
+                width: 56,
+                height: 56,
+                borderRadius: "16px",
+                background: "linear-gradient(135deg, #800020 0%, #a52a2a 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              Reports Center
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {REPORT_DEFINITIONS.length}+ AML and compliance reports across{" "}
-              {REPORT_CATEGORIES.length} categories
-            </Typography>
+              <ReportsIcon sx={{ color: "#FFD700", fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 700,
+                  color: "#2c3e50",
+                  fontSize: { xs: "1.5rem", md: "2rem" },
+                }}
+              >
+                Reports Center
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {REPORT_DEFINITIONS.length}+ AML and compliance reports across{" "}
+                {REPORT_CATEGORIES.length} categories
+              </Typography>
+            </Box>
           </Box>
-        </Box>
-      </Box>
 
-      {/* Tabs */}
-      <Box sx={{ mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => setActiveTab(value)}
-          sx={{
-            "& .MuiTabs-indicator": {
-              backgroundColor: "#800020",
-              height: 3,
-              borderRadius: "3px 3px 0 0",
-            },
-          }}
-        >
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <ReportsIcon fontSize="small" />
-                <span>All Reports</span>
-                <Chip
-                  label={REPORT_DEFINITIONS.length}
-                  size="small"
-                  sx={{
-                    height: 20,
-                    fontSize: "0.7rem",
-                    backgroundColor: activeTab === 0 ? "#800020" : "rgba(0,0,0,0.1)",
-                    color: activeTab === 0 ? "#fff" : "inherit",
-                  }}
-                />
+          {/* Progress indicator for active generation */}
+          {generatingReportId && progressData && (
+            <Fade in>
+              <Box sx={{ mt: 2, maxWidth: 600 }}>
+                <ReportProgress progress={progressData} />
               </Box>
+            </Fade>
+          )}
+        </Box>
+
+        {/* Error Alert */}
+        {historyError && (
+          <Alert
+            severity="error"
+            sx={{ mb: 3, borderRadius: "12px" }}
+            action={
+              <Button color="inherit" size="small" onClick={() => refetchHistory()}>
+                Retry
+              </Button>
             }
+          >
+            Failed to load report history: {historyError.message}
+          </Alert>
+        )}
+
+        {/* Tabs */}
+        <Box sx={{ mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_, value) => setActiveTab(value)}
             sx={{
-              textTransform: "none",
-              fontWeight: 600,
-              color: activeTab === 0 ? "#800020 !important" : "text.secondary",
+              "& .MuiTabs-indicator": {
+                backgroundColor: "#800020",
+                height: 3,
+                borderRadius: "3px 3px 0 0",
+              },
             }}
-          />
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <RefreshIcon fontSize="small" />
-                <span>History</span>
-                {historyData?.totalElements > 0 && (
+          >
+            <Tab
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <ReportsIcon fontSize="small" />
+                  <span>All Reports</span>
                   <Chip
-                    label={historyData.totalElements}
+                    label={REPORT_DEFINITIONS.length}
                     size="small"
                     sx={{
                       height: 20,
                       fontSize: "0.7rem",
-                      backgroundColor: activeTab === 1 ? "#800020" : "rgba(0,0,0,0.1)",
-                      color: activeTab === 1 ? "#fff" : "inherit",
+                      backgroundColor: activeTab === 0 ? "#800020" : "rgba(0,0,0,0.1)",
+                      color: activeTab === 0 ? "#fff" : "inherit",
                     }}
                   />
-                )}
-              </Box>
-            }
-            sx={{
-              textTransform: "none",
-              fontWeight: 600,
-              color: activeTab === 1 ? "#800020 !important" : "text.secondary",
-            }}
-          />
-        </Tabs>
-      </Box>
-
-      {activeTab === 0 ? (
-        <Grid container spacing={3}>
-          {/* Sidebar - Categories */}
-          <Grid item xs={12} md={3} lg={2.5}>
-            <Paper
+                </Box>
+              }
               sx={{
-                borderRadius: "16px",
-                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
-                overflow: "hidden",
-                position: { md: "sticky" },
-                top: { md: 24 },
+                textTransform: "none",
+                fontWeight: 600,
+                color: activeTab === 0 ? "#800020 !important" : "text.secondary",
               }}
-            >
-              <Box sx={{ p: 2, borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                <TextField
-                  fullWidth
-                  placeholder="Search reports..."
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon sx={{ color: "text.secondary" }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                  sx={{
-                    "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
-                      backgroundColor: "#fafafa",
-                    },
-                  }}
-                />
-              </Box>
-
-              <List sx={{ py: 1 }}>
-                <ListItem disablePadding>
-                  <ListItemButton
-                    selected={selectedCategory === null && !searchQuery}
-                    onClick={() => handleCategorySelect(null)}
-                    sx={{
-                      py: 1.2,
-                      "&. Mui-selected": {
-                        backgroundColor: "rgba(128, 0, 32, 0.08)",
-                        borderLeft: "3px solid #800020",
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <ReportsIcon
-                        sx={{
-                          color: selectedCategory === null && !searchQuery ? "#800020" : "text.secondary",
-                        }}
-                      />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary="All Reports"
-                      primaryTypographyProps={{
-                        fontWeight: selectedCategory === null && !searchQuery ? 600 : 400,
-                        color: selectedCategory === null && !searchQuery ? "#800020" : "inherit",
-                      }}
-                    />
+            />
+            <Tab
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <RefreshIcon fontSize="small" />
+                  <span>History</span>
+                  {historyData?.totalElements && historyData.totalElements > 0 && (
                     <Chip
-                      label={REPORT_DEFINITIONS.length}
+                      label={historyData.totalElements}
                       size="small"
                       sx={{
                         height: 20,
                         fontSize: "0.7rem",
-                        backgroundColor: selectedCategory === null && !searchQuery ? "#800020" : "rgba(0,0,0,0.08)",
-                        color: selectedCategory === null && !searchQuery ? "#fff" : "inherit",
+                        backgroundColor: activeTab === 1 ? "#800020" : "rgba(0,0,0,0.1)",
+                        color: activeTab === 1 ? "#fff" : "inherit",
                       }}
                     />
-                  </ListItemButton>
-                </ListItem>
-
-                <Divider sx={{ my: 1 }} />
-
-                {REPORT_CATEGORIES.map((category) => {
-                  const CategoryIcon = CATEGORY_ICONS[category.id];
-                  const isSelected = selectedCategory === category.id;
-                  const count = getReportCount(category.id);
-
-                  return (
-                    <ListItem key={category.id} disablePadding>
-                      <ListItemButton
-                        selected={isSelected}
-                        onClick={() => handleCategorySelect(category.id)}
-                        sx={{
-                          py: 1.2,
-                          "&. Mui-selected": {
-                            backgroundColor: "rgba(128, 0, 32, 0.08)",
-                            borderLeft: "3px solid #800020",
-                          },
-                        }}
-                      >
-                        <ListItemIcon sx={{ minWidth: 40 }}>
-                          <CategoryIcon
-                            sx={{
-                              color: isSelected ? "#800020" : "text.secondary",
-                              fontSize: 20,
-                            }}
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={category.name}
-                          secondary={category.description}
-                          primaryTypographyProps={{
-                            fontSize: "0.9rem",
-                            fontWeight: isSelected ? 600 : 400,
-                            color: isSelected ? "#800020" : "inherit",
-                          }}
-                          secondaryTypographyProps={{
-                            fontSize: "0.75rem",
-                            noWrap: true,
-                          }}
-                        />
-                        <Chip
-                          label={count}
-                          size="small"
-                          sx={{
-                            height: 18,
-                            fontSize: "0.65rem",
-                            backgroundColor: isSelected ? "#800020" : "rgba(0,0,0,0.08)",
-                            color: isSelected ? "#fff" : "inherit",
-                          }}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  );
-                })}
-              </List>
-            </Paper>
-          </Grid>
-
-          {/* Main Content - Report Cards */}
-          <Grid item xs={12} md={9} lg={9.5}>
-            {searchQuery && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Search results for "<strong>{searchQuery}</strong>" ({" "}
-                  {filteredReports.length} reports found)
-                </Typography>
-              </Box>
-            )}
-
-            {Object.entries(groupedReports).map(([categoryId, reports]) => {
-              const category = REPORT_CATEGORIES.find((c) => c.id === categoryId);
-              if (!category) return null;
-
-              return (
-                <Box key={categoryId} sx={{ mb: 4 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-                    <Typography
-                      variant="h6"
-                      sx={{ fontWeight: 600, color: "#2c3e50" }}
-                    >
-                      {category.name}
-                    </Typography>
-                    <Chip
-                      label={`${reports.length} reports`}
-                      size="small"
-                      sx={{
-                        backgroundColor: "rgba(128, 0, 32, 0.1)",
-                        color: "#800020",
-                      }}
-                    />
-                  </Box>
-
-                  <Grid container spacing={2}>
-                    {reports.map((report) => (
-                      <Grid item xs={12} md={6} lg={4} key={report.id}>
-                        <ReportCard
-                          report={report}
-                          onGenerate={handleGenerateReport}
-                          onSchedule={handleScheduleReport}
-                        />
-                      </Grid>
-                    ))}
-                  </Grid>
+                  )}
                 </Box>
-              );
-            })}
+              }
+              sx={{
+                textTransform: "none",
+                fontWeight: 600,
+                color: activeTab === 1 ? "#800020 !important" : "text.secondary",
+              }}
+            />
+          </Tabs>
+        </Box>
 
-            {filteredReports.length === 0 && (
+        {activeTab === 0 ? (
+          <Grid container spacing={3}>
+            {/* Sidebar - Categories */}
+            <Grid item xs={12} md={3} lg={2.5}>
               <Paper
                 sx={{
-                  p: 6,
-                  textAlign: "center",
                   borderRadius: "16px",
-                  backgroundColor: "#fafafa",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+                  overflow: "hidden",
+                  position: { md: "sticky" },
+                  top: { md: 24 },
                 }}
               >
-                <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-                  No reports found
-                </Typography>
-                <Typography variant="body2" color="text.disabled">
-                  Try adjusting your search or category filter
-                </Typography>
+                <Box sx={{ p: 2, borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                  <TextField
+                    fullWidth
+                    placeholder="Search reports..."
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon sx={{ color: "text.secondary" }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "12px",
+                        backgroundColor: "#fafafa",
+                      },
+                    }}
+                  />
+                </Box>
+
+                <List sx={{ py: 1 }}>
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      selected={selectedCategory === null && !searchQuery}
+                      onClick={() => handleCategorySelect(null)}
+                      sx={{
+                        py: 1.2,
+                        "&. Mui-selected": {
+                          backgroundColor: "rgba(128, 0, 32, 0.08)",
+                          borderLeft: "3px solid #800020",
+                        },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 40 }}>
+                        <ReportsIcon
+                          sx={{
+                            color: selectedCategory === null && !searchQuery ? "#800020" : "text.secondary",
+                          }}
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="All Reports"
+                        primaryTypographyProps={{
+                          fontWeight: selectedCategory === null && !searchQuery ? 600 : 400,
+                          color: selectedCategory === null && !searchQuery ? "#800020" : "inherit",
+                        }}
+                      />
+                      <Chip
+                        label={REPORT_DEFINITIONS.length}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: "0.7rem",
+                          backgroundColor:
+                            selectedCategory === null && !searchQuery ? "#800020" : "rgba(0,0,0,0.08)",
+                          color: selectedCategory === null && !searchQuery ? "#fff" : "inherit",
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+
+                  <Divider sx={{ my: 1 }} />
+
+                  {REPORT_CATEGORIES.map((category) => {
+                    const CategoryIcon = CATEGORY_ICONS[category.id];
+                    const isSelected = selectedCategory === category.id;
+                    const count = getReportCount(category.id);
+
+                    return (
+                      <ListItem key={category.id} disablePadding>
+                        <ListItemButton
+                          selected={isSelected}
+                          onClick={() => handleCategorySelect(category.id)}
+                          sx={{
+                            py: 1.2,
+                            "&. Mui-selected": {
+                              backgroundColor: "rgba(128, 0, 32, 0.08)",
+                              borderLeft: "3px solid #800020",
+                            },
+                          }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 40 }}>
+                            <CategoryIcon
+                              sx={{
+                                color: isSelected ? "#800020" : "text.secondary",
+                                fontSize: 20,
+                              }}
+                            />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={category.name}
+                            secondary={category.description}
+                            primaryTypographyProps={{
+                              fontSize: "0.9rem",
+                              fontWeight: isSelected ? 600 : 400,
+                              color: isSelected ? "#800020" : "inherit",
+                            }}
+                            secondaryTypographyProps={{
+                              fontSize: "0.75rem",
+                              noWrap: true,
+                            }}
+                          />
+                          <Chip
+                            label={count}
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: "0.65rem",
+                              backgroundColor: isSelected ? "#800020" : "rgba(0,0,0,0.08)",
+                              color: isSelected ? "#fff" : "inherit",
+                            }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
+                </List>
               </Paper>
-            )}
+            </Grid>
+
+            {/* Main Content - Report Cards */}
+            <Grid item xs={12} md={9} lg={9.5}>
+              {/* Loading State */}
+              {generateMutation.isPending && (
+                <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <CircularProgress size={16} sx={{ color: "#800020" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Generating report...
+                  </Typography>
+                </Box>
+              )}
+
+              {searchQuery && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Search results for "<strong>{searchQuery}</strong>" ({" "}
+                    {filteredReports.length} reports found)
+                  </Typography>
+                </Box>
+              )}
+
+              {Object.entries(groupedReports).map(([categoryId, reports]) => {
+                const category = REPORT_CATEGORIES.find((c) => c.id === categoryId);
+                if (!category) return null;
+
+                return (
+                  <Box key={categoryId} sx={{ mb: 4 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: "#2c3e50" }}>
+                        {category.name}
+                      </Typography>
+                      <Chip
+                        label={`${reports.length} reports`}
+                        size="small"
+                        sx={{
+                          backgroundColor: "rgba(128, 0, 32, 0.1)",
+                          color: "#800020",
+                        }}
+                      />
+                    </Box>
+
+                    <Grid container spacing={2}>
+                      {reports.map((report) => (
+                        <Grid item xs={12} md={6} lg={4} key={report.id}>
+                          <ReportCard
+                            report={report}
+                            onGenerate={handleGenerateReport}
+                            onSchedule={handleScheduleReport}
+                            isGenerating={generatingReportId !== null}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Box>
+                );
+              })}
+
+              {filteredReports.length === 0 && (
+                <EmptyState
+                  type={searchQuery ? "no-results" : "no-filter-results"}
+                  searchQuery={searchQuery}
+                  onClearSearch={clearSearch}
+                />
+              )}
+            </Grid>
           </Grid>
-        </Grid>
-      ) : (
-        <ReportHistory
-          instances={historyData?.content || []}
-          loading={false}
-          onDownload={handleDownloadReport}
-          onDelete={handleDeleteReport}
-          onRefresh={refetchHistory}
-        />
-      )}
+        ) : (
+          <ReportHistory
+            instances={historyData?.content || []}
+            loading={historyLoading}
+            onDownload={handleDownloadReport}
+            onDelete={handleDeleteReport}
+            onRefresh={refetchHistory}
+            emptyState={
+              <EmptyState
+                type="no-history"
+                onGenerateReport={() => setActiveTab(0)}
+              />
+            }
+          />
+        )}
 
-      {/* Schedule Dialog */}
-      {selectedReport && (
-        <ScheduleReportDialog
-          open={scheduleDialogOpen}
-          onClose={() => {
-            setScheduleDialogOpen(false);
-            setSelectedReport(null);
-          }}
-          onSchedule={handleScheduleSubmit}
-          reportName={selectedReport.name}
-          availableFormats={selectedReport.supportsExport}
-        />
-      )}
+        {/* Schedule Dialog */}
+        {selectedReport && (
+          <ScheduleReportDialog
+            open={scheduleDialogOpen}
+            onClose={() => {
+              setScheduleDialogOpen(false);
+              setSelectedReport(null);
+            }}
+            onSchedule={handleScheduleSubmit}
+            reportName={selectedReport.name}
+            availableFormats={selectedReport.supportsExport}
+          />
+        )}
 
-      {/* Preview Dialog */}
-      {selectedReport && (
-        <ReportPreviewDialog
-          open={previewDialogOpen}
-          onClose={() => {
-            setPreviewDialogOpen(false);
-            setSelectedReport(null);
-          }}
-          report={selectedReport}
-          parameters={previewParams}
-          onGenerate={(format) => handleGenerateReport(selectedReport.id, previewParams, format)}
-          onSchedule={() => {
-            setPreviewDialogOpen(false);
-            setScheduleDialogOpen(true);
-          }}
-        />
-      )}
+        {/* Preview Dialog */}
+        {selectedReport && (
+          <ReportPreviewDialog
+            open={previewDialogOpen}
+            onClose={() => {
+              setPreviewDialogOpen(false);
+              setSelectedReport(null);
+            }}
+            report={selectedReport}
+            parameters={previewParams}
+            onGenerate={(format) => handleGenerateReport(selectedReport.id, previewParams, format)}
+            onSchedule={() => {
+              setPreviewDialogOpen(false);
+              setScheduleDialogOpen(true);
+            }}
+          />
+        )}
 
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert
-          severity={snackbar.severity}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          sx={{ borderRadius: "12px" }}
+        {/* Toast Notifications */}
+        <Snackbar
+          open={toast.open}
+          autoHideDuration={toast.autoHideDuration}
+          onClose={hideToast}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+          <Alert
+            severity={toast.severity}
+            onClose={hideToast}
+            sx={{ borderRadius: "12px" }}
+          >
+            {toast.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </ReportErrorBoundary>
   );
 }

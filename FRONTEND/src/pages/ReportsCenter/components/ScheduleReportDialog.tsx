@@ -20,13 +20,12 @@ import {
   Chip,
   FormControlLabel,
   Checkbox,
-  OutlinedInput,
   Grid,
 } from "@mui/material";
 import {
   Schedule as ScheduleIcon,
 } from "@mui/icons-material";
-import type { ScheduleConfig, ExportFormat } from "../../types/reports/reportDefinitions";
+import type { ScheduleConfig, ExportFormat } from "../../../types/reports/reportDefinitions";
 
 interface ScheduleReportDialogProps {
   open: boolean;

@@ -3,7 +3,7 @@
  * Displays generated report history with status and actions
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Box,
   Paper,
@@ -19,6 +19,8 @@ import {
   Typography,
   Button,
   Pagination,
+  Skeleton,
+  CircularProgress,
 } from "@mui/material";
 import {
   Download as DownloadIcon,
@@ -36,7 +38,8 @@ import type {
   ReportInstance,
   ReportStatus,
   ExportFormat,
-} from "../../types/reports/reportDefinitions";
+} from "../../../types/reports/reportDefinitions";
+import { formatFileSize } from "../../../features/api/reportQueries";
 
 interface ReportHistoryProps {
   instances: ReportInstance[];
@@ -44,6 +47,7 @@ interface ReportHistoryProps {
   onDownload: (instance: ReportInstance, format: ExportFormat) => void;
   onDelete: (instanceId: string) => void;
   onRefresh: () => void;
+  emptyState?: ReactNode;
 }
 
 const STATUS_ICONS: Record<ReportStatus, typeof SuccessIcon> = {
@@ -68,15 +72,29 @@ const FORMAT_ICONS: Record<ExportFormat, typeof PdfIcon> = {
   Excel: ExcelIcon,
 };
 
+// Loading skeleton row
+const SkeletonRow = () => (
+  <TableRow>
+    {[...Array(7)].map((_, i) => (
+      <TableCell key={i}>
+        <Skeleton variant="text" width={i === 0 ? 150 : i === 3 ? 120 : 80} />
+      </TableCell>
+    ))}
+  </TableRow>
+);
+
 export default function ReportHistory({
   instances,
   loading = false,
   onDownload,
   onDelete,
   onRefresh,
+  emptyState,
 }: ReportHistoryProps) {
   const [page, setPage] = useState(1);
-  const rowsPerPage = 10;
+  const [rowsPerPage] = useState(10);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -89,12 +107,22 @@ export default function ReportHistory({
     });
   };
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return "-";
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${kb.toFixed(1)} KB`;
-    const mb = kb / 1024;
-    return `${mb.toFixed(1)} MB`;
+  const handleDownload = async (instance: ReportInstance) => {
+    setDownloadingId(instance.id);
+    try {
+      await onDownload(instance, instance.format);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDelete = async (instanceId: string) => {
+    setDeletingId(instanceId);
+    try {
+      await onDelete(instanceId);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const paginatedInstances = instances.slice(
@@ -118,18 +146,26 @@ export default function ReportHistory({
           <Typography variant="h6" sx={{ fontWeight: 600, color: "#2c3e50" }}>
             Report History
           </Typography>
-          <Chip
-            label={`${instances.length} reports`}
-            size="small"
-            sx={{
-              backgroundColor: "rgba(128, 0, 32, 0.1)",
-              color: "#800020",
-            }}
-          />
+          {!loading && (
+            <Chip
+              label={`${instances.length} reports`}
+              size="small"
+              sx={{
+                backgroundColor: "rgba(128, 0, 32, 0.1)",
+                color: "#800020",
+              }}
+            />
+          )}
         </Box>
 
         <Button
-          startIcon={<RefreshIcon />}
+          startIcon={
+            loading ? (
+              <CircularProgress size={16} sx={{ color: "inherit" }} />
+            ) : (
+              <RefreshIcon />
+            )
+          }
           onClick={onRefresh}
           disabled={loading}
           sx={{
@@ -160,20 +196,26 @@ export default function ReportHistory({
               <TableCell sx={{ fontWeight: 600, color: "#2c3e50" }}>Created</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#2c3e50" }}>Size</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#2c3e50" }}>Created By</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600, color: "#2c3e50" }}>Actions</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600, color: "#2c3e50" }}>
+                Actions
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">Loading report history...</Typography>
-                </TableCell>
-              </TableRow>
+              <>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </>
             ) : paginatedInstances.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">No reports generated yet</Typography>
+                  {emptyState || (
+                    <Typography color="text.secondary">No reports generated yet</Typography>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -181,6 +223,8 @@ export default function ReportHistory({
                 const StatusIcon = STATUS_ICONS[instance.status];
                 const statusColors = STATUS_COLORS[instance.status];
                 const FormatIcon = FORMAT_ICONS[instance.format];
+                const isDeleting = deletingId === instance.id;
+                const isDownloading = downloadingId === instance.id;
 
                 return (
                   <TableRow
@@ -214,8 +258,14 @@ export default function ReportHistory({
                     <TableCell>
                       <Chip
                         size="small"
-                        icon={<StatusIcon sx={{ fontSize: 16 }} />}
-                        label={instance.status}
+                        icon={
+                          isDeleting ? (
+                            <CircularProgress size={14} sx={{ color: statusColors.text }} />
+                          ) : (
+                            <StatusIcon sx={{ fontSize: 16 }} />
+                          )
+                        }
+                        label={isDeleting ? "Deleting..." : instance.status}
                         sx={{
                           backgroundColor: statusColors.bg,
                           color: statusColors.text,
@@ -257,34 +307,48 @@ export default function ReportHistory({
                       <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
                         {instance.status === "completed" && instance.fileUrl && (
                           <Tooltip title="Download" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={() => onDownload(instance, instance.format)}
-                              sx={{
-                                color: "#800020",
-                                "&: hover": {
-                                  backgroundColor: "rgba(128, 0, 32, 0.1)",
-                                },
-                              }}
-                            >
-                              <DownloadIcon fontSize="small" />
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDownload(instance)}
+                                disabled={isDownloading || isDeleting}
+                                sx={{
+                                  color: "#800020",
+                                  "&: hover": {
+                                    backgroundColor: "rgba(128, 0, 32, 0.1)",
+                                  },
+                                }}
+                              >
+                                {isDownloading ? (
+                                  <CircularProgress size={16} sx={{ color: "#800020" }} />
+                                ) : (
+                                  <DownloadIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         )}
                         <Tooltip title="Delete" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => onDelete(instance.id)}
-                            sx={{
-                              color: "text.secondary",
-                              "&: hover": {
-                                color: "#d32f2f",
-                                backgroundColor: "rgba(211, 47, 47, 0.1)",
-                              },
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDelete(instance.id)}
+                              disabled={isDeleting || isDownloading}
+                              sx={{
+                                color: "text.secondary",
+                                "&: hover": {
+                                  color: "#d32f2f",
+                                  backgroundColor: "rgba(211, 47, 47, 0.1)",
+                                },
+                              }}
+                            >
+                              {isDeleting ? (
+                                <CircularProgress size={16} sx={{ color: "#d32f2f" }} />
+                              ) : (
+                                <DeleteIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </Box>
                     </TableCell>

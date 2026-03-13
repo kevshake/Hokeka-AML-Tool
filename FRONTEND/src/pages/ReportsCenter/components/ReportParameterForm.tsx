@@ -19,9 +19,7 @@ import {
   OutlinedInput,
   InputAdornment,
 } from "@mui/material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { DateRangePicker } from "@mui/x-date-pickers-pro/DateRangePicker";
-import type { ReportParameter } from "../../types/reports/reportDefinitions";
+import type { ReportParameter } from "../../../types/reports/reportDefinitions";
 
 interface ReportParameterFormProps {
   parameters: ReportParameter[];
