@@ -1,0 +1,176 @@
+/* HOKEKA Marketing Website Styles */
+
+:root {
+  --burgundy: #800020;
+  --burgundy-50: #fdf2f4;
+  --burgundy-100: #fce7eb;
+  --burgundy-200: #f8d0d9;
+  --burgundy-300: #f2a9ba;
+  --burgundy-400: #e87694;
+  --burgundy-500: #d64d72;
+  --burgundy-600: #c2305a;
+  --burgundy-700: #a3244a;
+  --burgundy-800: #800020;
+  --burgundy-900: #6d1d2c;
+  --burgundy-950: #3d0a14;
+  
+  --gold: #FFD700;
+  --gold-50: #fffdf5;
+  --gold-100: #fffbe0;
+  --gold-200: #fff5b8;
+  --gold-300: #ffec7a;
+  --gold-400: #ffe03d;
+  --gold-500: #FFD700;
+  --gold-600: #ccac00;
+  --gold-700: #997f00;
+  --gold-800: #665500;
+  --gold-900: #332a00;
+  --gold-950: #1a1500;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* Utility Classes */
+.section-padding {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .section-padding {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section-padding {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .section-padding {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .section-padding {
+    padding-left: 5rem;
+    padding-right: 5rem;
+  }
+}
+
+/* Gradient Backgrounds */
+.gradient-burgundy {
+  background: linear-gradient(135deg, var(--burgundy-800) 0%, var(--burgundy-900) 50%, var(--burgundy-950) 100%);
+}
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  background: var(--gold-500);
+  color: var(--burgundy-900);
+  font-weight: 700;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover {
+  background: var(--gold-400);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  border: 2px solid var(--gold-500);
+  color: var(--gold-500);
+  font-weight: 700;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--gold-500);
+  color: var(--burgundy-900);
+}
+
+/* Card Hover Effect */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Text Gradient */
+.text-gradient-gold {
+  background: linear-gradient(90deg, var(--gold-400), var(--gold-500), var(--gold-300));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Container */
+.max-w-7xl {
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.max-w-5xl {
+  max-width: 64rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.max-w-3xl {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.max-w-xl {
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
