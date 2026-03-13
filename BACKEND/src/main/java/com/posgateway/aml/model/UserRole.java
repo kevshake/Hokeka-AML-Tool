@@ -5,6 +5,7 @@ package com.posgateway.aml.model;
  * Defines the roles available in the system
  */
 public enum UserRole {
+    SUPER_ADMIN, // Full system access - manages PSPs and global settings
     ADMIN,
     MLRO, // Money Laundering Reporting Officer
     COMPLIANCE_OFFICER,

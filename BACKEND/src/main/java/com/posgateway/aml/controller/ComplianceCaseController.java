@@ -23,7 +23,7 @@ import java.util.Map;
 // @RequiredArgsConstructor removed
 @RestController
 @RequestMapping("/compliance/cases")
-@PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
 public class ComplianceCaseController {
 
     private static final Logger log = LoggerFactory.getLogger(ComplianceCaseController.class);
@@ -81,6 +81,7 @@ public class ComplianceCaseController {
         com.posgateway.aml.model.UserRole role = com.posgateway.aml.model.UserRole.valueOf(user.getRole().getName());
         boolean isPspUser = (role == com.posgateway.aml.model.UserRole.PSP_ADMIN
                 || role == com.posgateway.aml.model.UserRole.PSP_ANALYST);
+        boolean isSuperAdmin = (role == com.posgateway.aml.model.UserRole.SUPER_ADMIN);
         Long pspId = (user.getPsp() != null) ? user.getPsp().getPspId() : null;
 
         if (isPspUser && pspId == null) {
@@ -91,7 +92,7 @@ public class ComplianceCaseController {
         if (status != null && !status.isEmpty()) {
             try {
                 CaseStatus cs = CaseStatus.valueOf(status);
-                // PSP Filtered vs Global
+                // PSP Filtered vs Global (SUPER_ADMIN sees all like ADMIN)
                 if (isPspUser) {
                     cases = complianceCaseRepository.findByPspIdAndStatus(pspId, cs, pageable);
                 } else {
