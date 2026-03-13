@@ -1,35 +1,36 @@
-# Test Environment with Time-Based Access
-# Only accessible 9am-11am EAT (6am-8am UTC)
+# Test / UAT Environment
+# Ports: Backend 2638, Frontend 5174, Postgres 15432, Aerospike 3002
 
 version: '3.8'
 
 services:
-  # PostgreSQL Database (Test)
+  # PostgreSQL Database (Test) - Port 15432
   postgres-test:
     image: postgres:15-alpine
-    container_name: fraud-detector-postgres-test
+    container_name: fd-test-postgres
     environment:
       POSTGRES_DB: fraud_detector_test
-      POSTGRES_USER: ${DATABASE_USERNAME:-fraud_user}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-test_password}
+      POSTGRES_USER: fd_test
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-test_secure_2024}
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:25432:5432"  # Localhost only
+      - "15432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-fraud_user} -d fraud_detector_test"]
+      test: ["CMD-SHELL", "pg_isready -U fd_test -d fraud_detector_test"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - fraud-detector-test-network
+      - fd-test-network
     restart: unless-stopped
 
-  # Aerospike Cache (Test)
+  # Aerospike Cache (Test) - Port 3002
   aerospike-test:
     image: aerospike/aerospike-server:6.4
-    container_name: fraud-detector-aerospike-test
-    # No exposed ports
+    container_name: fd-test-aerospike
+    ports:
+      - "3002:3000"
     volumes:
       - aerospike_test_data:/opt/aerospike/data
     healthcheck:
@@ -38,76 +39,56 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - fraud-detector-test-network
+      - fd-test-network
     restart: unless-stopped
 
-  # Backend API (Test)
+  # Backend API (Test) - Port 2638
   backend-test:
     build:
       context: ./BACKEND
       dockerfile: Dockerfile
-    container_name: fraud-detector-backend-test
+    container_name: fd-test-backend
     environment:
       DATABASE_URL: jdbc:postgresql://postgres-test:5432/fraud_detector_test
-      DATABASE_USERNAME: ${DATABASE_USERNAME:-fraud_user}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-test_password}
+      DATABASE_USERNAME: fd_test
+      DATABASE_PASSWORD: ${TEST_DB_PASSWORD:-test_secure_2024}
       AEROSPIKE_HOSTS: aerospike-test:3000
-      SECURITY_ENCRYPTION_KEY: ${SECURITY_ENCRYPTION_KEY}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://test-fraud.hokeka.com}
-      SERVER_PORT: 2637
+      SERVER_PORT: 2638
       SPRING_PROFILES_ACTIVE: test
-      LOGGING_LEVEL_ROOT: INFO
+      CORS_ALLOWED_ORIGINS: https://testaml.hokeka.com,https://testapi.hokeka.com
+    ports:
+      - "2638:2638"
     depends_on:
       postgres-test:
         condition: service_healthy
       aerospike-test:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2637/actuator/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2638/actuator/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 60s
     networks:
-      - fraud-detector-test-network
+      - fd-test-network
     restart: unless-stopped
 
-  # Frontend (Test)
+  # Frontend (Test) - Port 5174
   frontend-test:
     build:
       context: ./FRONTEND
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: /api
-    container_name: fraud-detector-frontend-test
+        VITE_API_URL: https://testapi.hokeka.com
+    container_name: fd-test-frontend
     environment:
-      VITE_API_URL: /api
+      VITE_API_URL: https://testapi.hokeka.com
+    ports:
+      - "5174:80"
     depends_on:
       - backend-test
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
     networks:
-      - fraud-detector-test-network
-    restart: unless-stopped
-
-  # Nginx with Time-Based Access (Test)
-  nginx-test:
-    image: nginx:1.25-alpine
-    container_name: fraud-detector-nginx-test
-    ports:
-      - "9080:80"
-    volumes:
-      - ./nginx-test.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      frontend-test:
-        condition: service_healthy
-      backend-test:
-        condition: service_healthy
-    networks:
-      - fraud-detector-test-network
+      - fd-test-network
     restart: unless-stopped
 
 volumes:
@@ -115,8 +96,5 @@ volumes:
   aerospike_test_data:
 
 networks:
-  fraud-detector-test-network:
+  fd-test-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.24.0.0/16
