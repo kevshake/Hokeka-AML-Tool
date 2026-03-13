@@ -14,9 +14,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
         component="main"
         sx={{
           flexGrow: 1,
-          width: "calc(100% - 280px)",
-          ml: "15px", // Reduced margin to bring content closer to sidebar
-          p: 2, // Reduced padding
+          width: "calc(100% - 240px)",
+          ml: "12px",
+          p: 2,
         }}
       >
         <Header />
