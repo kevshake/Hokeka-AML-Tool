@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS compliance_cases (
     resolved_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
-    CONSTRAINT fk_compliance_cases_assigned_to FOREIGN KEY (assigned_to_user_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_compliance_cases_assigned_to FOREIGN KEY (assigned_to_user_id) REFERENCES psp_users(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS case_relationships (
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS case_notes (
     internal BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_case_notes_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_case_notes_author FOREIGN KEY (author_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_notes_author FOREIGN KEY (author_id) REFERENCES psp_users(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS case_evidence (
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS case_evidence (
     description TEXT,
     uploaded_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_case_evidence_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_case_evidence_uploader FOREIGN KEY (uploaded_by_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_evidence_uploader FOREIGN KEY (uploaded_by_id) REFERENCES psp_users(user_id)
 );
 
 -- Suspicious Activity Reports
@@ -80,10 +80,10 @@ CREATE TABLE IF NOT EXISTS suspicious_activity_reports (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
     CONSTRAINT fk_sar_case FOREIGN KEY (case_id) REFERENCES compliance_cases(id),
-    CONSTRAINT fk_sar_created_by FOREIGN KEY (created_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_reviewed_by FOREIGN KEY (reviewed_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_sar_filed_by FOREIGN KEY (filed_by_user_id) REFERENCES platform_users(id),
+    CONSTRAINT fk_sar_created_by FOREIGN KEY (created_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_reviewed_by FOREIGN KEY (reviewed_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_sar_filed_by FOREIGN KEY (filed_by_user_id) REFERENCES psp_users(user_id),
     CONSTRAINT fk_sar_amends FOREIGN KEY (amends_sar_id) REFERENCES suspicious_activity_reports(id)
 );
 
