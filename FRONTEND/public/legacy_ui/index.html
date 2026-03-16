@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AML Fraud Detector - Admin Dashboard</title>
+    <title>AML Fraud Detector — TEST Environment</title>
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/case-management.css">
     <link rel="stylesheet" href="css/session-management.css">
@@ -191,6 +191,11 @@
         <!-- Dashboard View -->
         <div id="dashboard-view">
             <!-- Page Title -->
+            <!-- Environment Banner -->
+            <div class="env-banner test-env">
+                <i class="fas fa-flask"></i> TEST ENVIRONMENT — testaml.hokeka.com — Data: 120 merchants, 1200 transactions, 60 cases
+            </div>
+
             <div class="page-header">
                 <h1>Analytics <span class="subtitle">Fraud Detection Performance</span></h1>
             </div>
@@ -241,6 +246,55 @@
                         <span class="legend-item"><i class="fas fa-square" style="color: #27ae60;"></i> Low</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Recent Updates / Changelog -->
+            <div class="updates-card">
+                <h3><i class="fas fa-bullhorn"></i> Recent Updates — March 2026</h3>
+                <ul class="updates-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <div>
+                            <strong>Test Environment Fully Operational</strong> — Database seeded with 120 merchants, 1200 transactions, 60 cases
+                            <div class="update-date">2026-03-15</div>
+                        </div>
+                    </li>
+                    <li>
+                        <i class="fas fa-shield-alt"></i>
+                        <div>
+                            <strong>Infrastructure Fixes Applied</strong> — Nginx config updated, JWT forwarding enabled, CORS headers configured
+                            <div class="update-date">2026-03-15</div>
+                        </div>
+                    </li>
+                    <li>
+                        <i class="fas fa-chart-bar"></i>
+                        <div>
+                            <strong>AML Reporting System</strong> — 200+ reports across 21 categories, regulatory (SAR, STR, CTR) + operational + analytical
+                            <div class="update-date">2026-03-13</div>
+                        </div>
+                    </li>
+                    <li>
+                        <i class="fas fa-project-diagram"></i>
+                        <div>
+                            <strong>Case Management Enhanced</strong> — Timeline view, network graph visualization, work queues, skills-based routing
+                            <div class="update-date">2026-03-13</div>
+                        </div>
+                    </li>
+                    <li>
+                        <i class="fas fa-eye"></i>
+                        <div>
+                            <strong>Transaction Monitoring</strong> — Live monitoring stream, analytics dashboard, automated SAR generation
+                            <div class="update-date">2026-03-12</div>
+                        </div>
+                    </li>
+                    <li>
+                        <i class="fas fa-server"></i>
+                        <div>
+                            <strong>Three-Environment Strategy</strong> — Dev (5173/2637), Test (5174/2638), Preprod (8089/2639), Live (80/443)
+                            <div class="update-date">2026-03-12</div>
+                        </div>
+                    </li>
+                </ul>
             </div>
 
             <!-- Horizontal Cards Row -->
@@ -1889,8 +1943,8 @@
     <script src="js/skills-management.js"></script>
     
     <!-- Footer -->
-    <footer style="position: fixed; bottom: 0; right: 0; padding: 6px 12px; font-size: 0.5rem; color: var(--text-muted, #888); opacity: 0.35; z-index: 100; pointer-events: none; font-weight: 300;">
-        Powered by Hokeka
+    <footer style="position: fixed; bottom: 0; right: 0; padding: 6px 12px; font-size: 0.5rem; color: var(--text-muted, #888); opacity: 0.5; z-index: 100; pointer-events: none; font-weight: 300;">
+        Powered by Hokeka <span style="margin-left: 8px;">| Test Environment v2.1 (2026-03-15)</span>
     </footer>
 </body>
 
