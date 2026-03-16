@@ -18,11 +18,9 @@ import {
 import {
   Dashboard as DashboardIcon,
   FolderOpen as CasesIcon,
-  Description as SarIcon,
   Notifications as AlertsIcon,
   TrendingUp as RiskIcon,
   CalendarToday as CalendarIcon,
-  Receipt as ReportsIcon,
   Business as MerchantsIcon,
   Visibility as MonitoringIcon,
   Search as ScreeningIcon,
@@ -42,8 +40,8 @@ import {
   ChevronLeft as ChevronLeftIcon,
 } from "@mui/icons-material";
 
-const drawerWidth = 280;
-const miniDrawerWidth = 80;
+const drawerWidth = 240;
+const miniDrawerWidth = 64;
 
 interface NavSection {
   title?: string;
@@ -76,13 +74,6 @@ const navSections: NavSection[] = [
         badge: 0,
       },
       {
-        id: "sar",
-        label: "SAR Reports",
-        icon: <SarIcon />,
-        path: "/sar",
-        badge: 0,
-      },
-      {
         id: "alerts",
         label: "Alerts",
         icon: <AlertsIcon />,
@@ -100,12 +91,6 @@ const navSections: NavSection[] = [
         label: "Compliance Calendar",
         icon: <CalendarIcon />,
         path: "/compliance-calendar",
-      },
-      {
-        id: "regulatory-reports",
-        label: "Regulatory Reports",
-        icon: <ReportsIcon />,
-        path: "/regulatory-reports",
       },
       {
         id: "merchants",
@@ -166,6 +151,20 @@ const navSections: NavSection[] = [
         label: "Reports",
         icon: <ChartsIcon />,
         path: "/reports",
+        children: [
+          {
+            id: "reports-summary",
+            label: "Summary",
+            icon: <ChartsIcon />,
+            path: "/reports",
+          },
+          {
+            id: "reports-center",
+            label: "Reports Center",
+            icon: <ChartsIcon />,
+            path: "/reports-center",
+          },
+        ],
       },
       {
         id: "audit",
@@ -263,15 +262,15 @@ export default function Sidebar() {
         },
       }}
     >
-      <Box sx={{ p: collapsed ? 2 : 3, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+      <Box sx={{ p: collapsed ? 1.5 : 2, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
         {!collapsed && (
           <>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Box
                 sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "12px",
+                  width: 36,
+                  height: 36,
+                  borderRadius: "10px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -289,10 +288,10 @@ export default function Sidebar() {
                 />
               </Box>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 800, fontSize: "1.1rem", lineHeight: 1.2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "0.95rem", lineHeight: 1.2 }}>
                   AML Fraud Detector
                 </Typography>
-                <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem", display: "block" }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.65rem", display: "block" }}>
                   Powered by Hokeka
                 </Typography>
               </Box>
@@ -303,15 +302,15 @@ export default function Sidebar() {
           <Box
             sx={{
               background: "linear-gradient(135deg, #a93226 0%, #d4ac0d 100%)",
-              borderRadius: "12px",
-              p: 0.8,
+              borderRadius: "10px",
+              p: 0.6,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               mx: "auto"
             }}
           >
-            <ShieldIcon sx={{ color: "#fff", fontSize: 24 }} />
+            <ShieldIcon sx={{ color: "#fff", fontSize: 20 }} />
           </Box>
         )}
         <Tooltip title={collapsed ? "Expand sidebar" : "Collapse sidebar"} arrow placement="right">
@@ -330,16 +329,16 @@ export default function Sidebar() {
 
       <Box sx={{ overflow: "auto", flex: 1, px: 2 }}>
         {navSections.map((section, idx) => (
-          <Box key={idx} sx={{ mb: 3 }}>
+          <Box key={idx} sx={{ mb: 2 }}>
             {section.title && !collapsed && (
               <Typography
                 variant="caption"
                 sx={{
                   px: 2,
-                  py: 1,
+                  py: 0.5,
                   display: "block",
                   color: "text.secondary",
-                  fontSize: "0.75rem",
+                  fontSize: "0.7rem",
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.5px"
@@ -356,7 +355,7 @@ export default function Sidebar() {
                 const isOpen = openSections[item.id] || false;
 
                 return (
-                  <Box key={item.id} sx={{ mb: 0.5 }}>
+                  <Box key={item.id} sx={{ mb: 0.25 }}>
                     <ListItem disablePadding>
                       <Tooltip title={item.label} placement="right" arrow>
                         <ListItemButton
@@ -369,11 +368,12 @@ export default function Sidebar() {
                           }}
                           selected={active && !hasChildren}
                           sx={{
-                            borderRadius: "12px",
-                            mb: 0.5,
-                            py: 1.2,
+                            borderRadius: "10px",
+                            mb: 0.25,
+                            py: 0.8,
                             px: collapsed ? 1.5 : 2,
                             justifyContent: collapsed ? "center" : "flex-start",
+                            minHeight: 40,
                             "&.Mui-selected": {
                               backgroundColor: "rgba(169, 50, 38, 0.1)",
                               color: "#a93226",
@@ -385,7 +385,7 @@ export default function Sidebar() {
                             },
                           }}
                         >
-                          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 36, color: active ? "#a93226" : "text.secondary" }}>
+                          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32, color: active ? "#a93226" : "text.secondary" }}>
                             {item.icon}
                           </ListItemIcon>
                           {!collapsed && (
@@ -394,7 +394,7 @@ export default function Sidebar() {
                                 primary={item.label}
                                 primaryTypographyProps={{
                                   sx: {
-                                    fontSize: "0.9rem",
+                                    fontSize: "0.85rem",
                                     fontWeight: active ? 600 : 500
                                   }
                                 }}
@@ -415,18 +415,20 @@ export default function Sidebar() {
                             <Tooltip key={child.id} title={child.label} placement="right" arrow>
                               <ListItemButton
                                 sx={{
-                                  pl: 6,
-                                  borderRadius: "10px",
-                                  mb: 0.2,
+                                  pl: 5,
+                                  borderRadius: "8px",
+                                  mb: 0.1,
+                                  py: 0.6,
+                                  minHeight: 32,
                                   "&.Mui-selected": { color: "#6C5DD3", bgcolor: "transparent" }
                                 }}
                                 selected={isActive(child.path)}
                                 onClick={() => navigate(child.path)}
                               >
-                                <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: isActive(child.path) ? "#6C5DD3" : "rgba(0,0,0,0.2)", mr: 2 }} />
+                                <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: isActive(child.path) ? "#6C5DD3" : "rgba(0,0,0,0.2)", mr: 1.5 }} />
                                 <ListItemText
                                   primary={child.label}
-                                  primaryTypographyProps={{ sx: { fontSize: "0.85rem" } }}
+                                  primaryTypographyProps={{ sx: { fontSize: "0.8rem" } }}
                                 />
                               </ListItemButton>
                             </Tooltip>

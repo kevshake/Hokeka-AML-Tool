@@ -27,7 +27,7 @@ export default function TabNavigation({ tabs, basePath }: TabNavigationProps) {
     };
 
     return (
-        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
             <Tabs
                 value={currentTab}
                 onChange={handleChange}

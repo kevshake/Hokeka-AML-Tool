@@ -12,11 +12,11 @@ export default function ReportsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Reports
       </Typography>
 
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid item xs={12} md={4}>
           <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <CardContent>
@@ -117,7 +117,7 @@ export default function ReportsPage() {
         </Grid>
       </Grid>
 
-      <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+      <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
           Daily Trends
         </Typography>

@@ -194,7 +194,7 @@ export default function UsersTab() {
 
     return (
         <Box>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
                 <Tooltip title="Create a new user account in the system. Opens a form where you can specify the username, email, password, assign a role (which determines permissions), optionally assign to a Payment Service Provider (PSP), and set the account status. The new user will be able to log in immediately if enabled." arrow enterDelay={2000}>
                     <Button
                         variant="contained"
@@ -224,7 +224,7 @@ export default function UsersTab() {
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
                                     Loading users...
                                 </TableCell>
                             </TableRow>
@@ -289,7 +289,7 @@ export default function UsersTab() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
                                     No users found
                                 </TableCell>
                             </TableRow>

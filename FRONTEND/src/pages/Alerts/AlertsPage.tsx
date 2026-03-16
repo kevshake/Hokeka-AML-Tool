@@ -41,7 +41,7 @@ export default function AlertsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
           Alerts
         </Typography>
@@ -68,13 +68,13 @@ export default function AlertsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             ) : isError ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ color: "#e74c3c", py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ color: "#e74c3c", py: 2 }}>
                   Error loading alerts: {error instanceof Error ? error.message : "Unknown error"}
                 </TableCell>
               </TableRow>
@@ -122,7 +122,7 @@ export default function AlertsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   No alerts found
                 </TableCell>
               </TableRow>

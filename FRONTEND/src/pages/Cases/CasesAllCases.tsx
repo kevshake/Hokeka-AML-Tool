@@ -49,7 +49,7 @@ export default function CasesAllCases() {
 
     return (
         <Box>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 2 }}>
                 <Box sx={{ display: "flex", gap: 2 }}>
                     <Tooltip title="Filter the cases list by their current workflow status. Options include: New (recently created), Assigned (assigned to an analyst), Investigating (under active review), Pending Review (awaiting supervisor approval), Resolved (completed), and Escalated (requires higher-level attention). Select 'All' to show cases in all statuses." arrow placement="top" enterDelay={2000}>
                         <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -99,13 +99,13 @@ export default function CasesAllCases() {
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                                     <CircularProgress size={24} />
                                 </TableCell>
                             </TableRow>
                         ) : isError ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ color: "#e74c3c", py: 4 }}>
+                                <TableCell colSpan={7} align="center" sx={{ color: "#e74c3c", py: 2 }}>
                                     Error loading cases: {error instanceof Error ? error.message : "Unknown error"}
                                 </TableCell>
                             </TableRow>
@@ -155,7 +155,7 @@ export default function CasesAllCases() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                                     No cases found
                                 </TableCell>
                             </TableRow>
