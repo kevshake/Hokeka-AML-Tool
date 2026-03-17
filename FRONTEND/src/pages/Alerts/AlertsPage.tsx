@@ -56,13 +56,13 @@ export default function AlertsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ color: "text.secondary" }}>ID</TableCell>
-              <TableCell sx={{ color: "text.secondary" }}>Type</TableCell>
-              <TableCell sx={{ color: "text.secondary" }}>Priority</TableCell>
-              <TableCell sx={{ color: "text.secondary" }}>Status</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 80 }}>ID</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 150 }}>Type</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 100 }}>Priority</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 100 }}>Status</TableCell>
               <TableCell sx={{ color: "text.secondary" }}>Description</TableCell>
-              <TableCell sx={{ color: "text.secondary" }}>Created</TableCell>
-              <TableCell sx={{ color: "text.secondary" }}>Actions</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 120 }}>Created</TableCell>
+              <TableCell sx={{ color: "text.secondary", width: 100 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -105,8 +105,8 @@ export default function AlertsPage() {
                       }}
                     />
                   </TableCell>
-                  <TableCell sx={{ color: "text.primary", maxWidth: 300 }}>
-                    {alert.description}
+                  <TableCell sx={{ color: "text.primary" }}>
+                    {alert.description || "No description"}
                   </TableCell>
                   <TableCell sx={{ color: "text.secondary" }}>
                     {new Date(alert.createdAt).toLocaleDateString()}
