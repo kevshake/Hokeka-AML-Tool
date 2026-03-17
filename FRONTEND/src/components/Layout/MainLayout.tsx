@@ -16,17 +16,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
           flexGrow: 1,
           width: "calc(100% - 240px)",
           ml: 0,
-          p: 0.5,
+          pt: "64px",
+          minHeight: "100vh",
+          backgroundColor: "background.default",
         }}
       >
         <Header />
-        <Box
-          sx={{
-            mt: "40px",
-            width: "100%",
-            height: "calc(100vh - 48px)",
-          }}
-        >
+        <Box sx={{ p: 3 }}>
           {children}
         </Box>
       </Box>
