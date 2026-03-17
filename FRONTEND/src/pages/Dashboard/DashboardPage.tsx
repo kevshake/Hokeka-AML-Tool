@@ -328,38 +328,98 @@ export default function DashboardPage() {
         {/* Quick Actions */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3, borderRadius: 2, border: "1px solid rgba(0,0,0,0.08)", backgroundColor: "#fafafa" }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
               Quick Actions
             </Typography>
-            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-              <Button
-                variant="contained"
-                onClick={() => navigate("/cases/create")}
-                sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" } }}
-              >
-                Create Case
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => navigate("/transaction-monitoring")}
-                sx={{ borderColor: "#8B4049", color: "#8B4049" }}
-              >
-                Monitor Transactions
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => navigate("/reports")}
-                sx={{ borderColor: "#8B4049", color: "#8B4049" }}
-              >
-                Generate Report
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => navigate("/merchants")}
-                sx={{ borderColor: "#8B4049", color: "#8B4049" }}
-              >
-                View Merchants
-              </Button>
+            
+            {/* Create Actions */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ color: "text.secondary", mb: 2, fontWeight: 600 }}>
+                CREATE NEW
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AssignmentIcon />}
+                  onClick={() => navigate("/cases/create")}
+                  sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" } }}
+                >
+                  Create Case
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<TrendingUpIcon />}
+                  onClick={() => navigate("/transaction-monitoring/live")}
+                  sx={{ backgroundColor: "#27ae60", "&:hover": { backgroundColor: "#219a52" } }}
+                >
+                  Create Transaction
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AccountBalanceIcon />}
+                  onClick={() => navigate("/merchants/add")}
+                  sx={{ backgroundColor: "#3498db", "&:hover": { backgroundColor: "#2980b9" } }}
+                >
+                  Create Merchant
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<NotificationsIcon />}
+                  onClick={() => navigate("/alerts/create")}
+                  sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
+                >
+                  Create Alert
+                </Button>
+              </Box>
+            </Box>
+
+            {/* View Pages */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ color: "text.secondary", mb: 2, fontWeight: 600 }}>
+                VIEW PAGES
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <Button
+                  variant="outlined"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => navigate("/cases")}
+                  sx={{ borderColor: "#8B4049", color: "#8B4049" }}
+                >
+                  View Cases
+                </Button>
+                <Button
+                  variant="outlined"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => navigate("/transaction-monitoring")}
+                  sx={{ borderColor: "#27ae60", color: "#27ae60" }}
+                >
+                  View Transactions
+                </Button>
+                <Button
+                  variant="outlined"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => navigate("/merchants")}
+                  sx={{ borderColor: "#3498db", color: "#3498db" }}
+                >
+                  View Merchants
+                </Button>
+                <Button
+                  variant="outlined"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => navigate("/alerts")}
+                  sx={{ borderColor: "#e74c3c", color: "#e74c3c" }}
+                >
+                  View Alerts
+                </Button>
+                <Button
+                  variant="outlined"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={() => navigate("/reports")}
+                  sx={{ borderColor: "#9b59b6", color: "#9b59b6" }}
+                >
+                  View Reports
+                </Button>
+              </Box>
             </Box>
           </Paper>
         </Grid>
