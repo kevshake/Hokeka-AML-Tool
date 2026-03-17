@@ -41,7 +41,7 @@ export default function AlertsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, pb: 2, borderBottom: "1px solid", borderColor: "divider" }}>
         <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
           Alerts
         </Typography>
@@ -52,7 +52,7 @@ export default function AlertsPage() {
         </Tooltip>
       </Box>
 
-      <TableContainer component={Paper} sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+      <TableContainer component={Paper} sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
         <Table>
           <TableHead>
             <TableRow>

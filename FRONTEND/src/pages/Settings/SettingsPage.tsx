@@ -220,11 +220,11 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
+      <Typography variant="h4" sx={{ color: "text.primary", mb: 1, fontWeight: 600 }}>
         Settings
       </Typography>
 
-      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 2 }}>
+      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         <Tab label="PSP Theme Management" />
         {isSuperAdmin && <Tab label="System Settings" />}
       </Tabs>
