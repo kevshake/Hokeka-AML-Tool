@@ -27,16 +27,19 @@ export default function TabNavigation({ tabs, basePath }: TabNavigationProps) {
     };
 
     return (
-        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
             <Tabs
                 value={currentTab}
                 onChange={handleChange}
                 sx={{
+                    minHeight: 48,
                     "& .MuiTab-root": {
                         textTransform: "none",
                         fontWeight: 500,
-                        fontSize: "0.9rem",
+                        fontSize: "0.875rem",
                         color: "text.secondary",
+                        minHeight: 48,
+                        px: 3,
                         "&.Mui-selected": {
                             color: "#8B4049",
                             fontWeight: 600,
@@ -44,8 +47,8 @@ export default function TabNavigation({ tabs, basePath }: TabNavigationProps) {
                     },
                     "& .MuiTabs-indicator": {
                         backgroundColor: "#8B4049",
-                        height: 3,
-                        borderRadius: "3px 3px 0 0",
+                        height: 2.5,
+                        borderRadius: "2px 2px 0 0",
                     },
                 }}
             >

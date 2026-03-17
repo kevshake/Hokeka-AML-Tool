@@ -13,7 +13,7 @@ export default function CasesPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
+      <Typography variant="h4" sx={{ color: "text.primary", mb: 1, fontWeight: 600 }}>
         Cases
       </Typography>
 
@@ -29,4 +29,3 @@ export default function CasesPage() {
     </Box>
   );
 }
-
