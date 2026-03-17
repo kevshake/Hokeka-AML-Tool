@@ -102,6 +102,31 @@ services:
           cpus: '1'
           memory: 2G
 
+  # Marketing Website (Production - Public)
+  website-prod:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    container_name: hokeka-website
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   # Frontend (Production - nginx serves static)
   frontend-prod:
     build:
@@ -142,6 +167,8 @@ services:
       - ./nginx-prod.conf:/etc/nginx/conf.d/default.conf:ro
       - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates here
     depends_on:
+      website-prod:
+        condition: service_healthy
       frontend-prod:
         condition: service_healthy
       backend-prod:
