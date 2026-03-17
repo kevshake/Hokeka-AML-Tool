@@ -15,8 +15,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
         sx={{
           flexGrow: 1,
           width: "calc(100% - 240px)",
-          ml: "12px",
-          p: 1.5,
+          ml: 0,
+          p: 1,
         }}
       >
         <Header />
