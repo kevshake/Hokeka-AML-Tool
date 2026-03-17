@@ -1,6 +1,31 @@
+@import "tailwindcss";
+
 /* HOKEKA Marketing Website - Burgundy & Gold Theme */
 
 :root {
+  /* shadcn/ui variables */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 346 100% 25%;
+  --primary-foreground: 51 100% 50%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 346 100% 25%;
+  --radius: 0.5rem;
+  
+  /* HOKEKA brand colors */
   --burgundy: #800020;
   --burgundy-dark: #6d1d2c;
   --burgundy-darker: #3d0a14;
@@ -19,6 +44,16 @@
   --gray-900: #111827;
 }
 
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Original HOKEKA styles preserved */
 * {
   margin: 0;
   padding: 0;
@@ -93,6 +128,38 @@ body {
   background-clip: text;
 }
 
+/* Gradient backgrounds */
+.gradient-burgundy {
+  background: linear-gradient(135deg, var(--burgundy-darker) 0%, var(--burgundy) 100%);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.section-padding {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .section-padding {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section-padding {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* Rest of the original styles... */
 /* Navbar */
 .navbar {
   position: fixed;
