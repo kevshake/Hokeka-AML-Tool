@@ -10,8 +10,10 @@ import {
     IconButton,
     CircularProgress,
     Tooltip,
+    Link,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
+import { Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function LoginPage() {
@@ -158,7 +160,29 @@ export default function LoginPage() {
                             </Button>
                         </span>
                     </Tooltip>
+
+                    {/* Forgot Password Link */}
+                    <Box sx={{ mt: 2, textAlign: "center" }}>
+                        <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => alert("Please contact your administrator to reset your password.")}
+                            sx={{ color: "#8B4049", textTransform: "none" }}
+                        >
+                            Forgot Password?
+                        </Button>
+                    </Box>
                 </form>
+
+                {/* Sign Up Link */}
+                <Box sx={{ mt: 2, textAlign: "center" }}>
+                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                        Don't have an account?{" "}
+                        <Link component={RouterLink} to="/signup" sx={{ color: "#8B4049", fontWeight: 600 }}>
+                            Sign Up
+                        </Link>
+                    </Typography>
+                </Box>
 
                 {/* Footer */}
                 <Box sx={{ mt: 3, textAlign: "center" }}>
