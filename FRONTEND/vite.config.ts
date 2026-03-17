@@ -9,7 +9,8 @@ export default defineConfig({
         allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1'],
         proxy: {
             '/api/v1': {
-                target: 'http://localhost:2637',
+                // Use Docker service name when in container, localhost otherwise
+                target: process.env.VITE_PROXY_TARGET || 'http://localhost:2637',
                 changeOrigin: true,
                 secure: false,
                 cookieDomainRewrite: 'localhost',

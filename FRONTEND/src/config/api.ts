@@ -1,6 +1,7 @@
 // Environment-aware API configuration
 // In both development and production, we use relative URLs
-// - Dev: Vite dev server proxies /api/v1 to localhost:2637
+// - Local Dev: Vite dev server proxies /api/v1 to localhost:2637
+// - Docker Dev: Vite dev server proxies /api/v1 to backend-dev:2637 (via VITE_PROXY_TARGET)
 // - Prod: Nginx proxies /api to the backend container
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
