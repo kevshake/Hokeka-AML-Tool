@@ -58,7 +58,7 @@ export default function AnalyticsPage() {
     return (
         <Box>
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600, mb: 1 }}>
+                <Typography variant="h5" sx={{ color: "text.primary", fontWeight: 600, mb: 1 }}>
                     Analytics & Monitoring
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>

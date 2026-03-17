@@ -34,7 +34,7 @@ export default function MerchantsPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ color: "text.primary", fontWeight: 600 }}>
           Merchants
         </Typography>
         <Tooltip title="Create and onboard a new merchant to the system. This opens a form where you can enter merchant business details, KYC information, risk assessment data, and configure transaction limits. The merchant will go through the onboarding workflow after submission." arrow enterDelay={2000}>

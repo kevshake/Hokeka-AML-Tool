@@ -8,7 +8,7 @@ export default function ComplianceCalendarPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ color: "text.primary", fontWeight: 600 }}>
           Compliance Calendar
         </Typography>
         <Button variant="contained" sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}>

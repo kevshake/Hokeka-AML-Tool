@@ -82,7 +82,7 @@ export default function LoginPage() {
                             }}
                         />
                     </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: "#3D2C2E", mb: 0.5 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: "#3D2C2E", mb: 0.5 }}>
                         AML Fraud Detector
                     </Typography>
                     <Typography variant="body2" sx={{ color: "text.secondary" }}>

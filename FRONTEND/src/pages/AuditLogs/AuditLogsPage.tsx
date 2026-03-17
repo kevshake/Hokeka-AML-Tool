@@ -58,7 +58,7 @@ export default function AuditLogsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
+      <Typography variant="h5" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Audit Logs
       </Typography>
 

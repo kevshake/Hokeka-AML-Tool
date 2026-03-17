@@ -16,7 +16,7 @@ export default function TransactionMonitoringPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
+      <Typography variant="h5" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Transaction Monitoring
       </Typography>
 

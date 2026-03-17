@@ -135,7 +135,7 @@ export default function ProfilePage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h5" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
         My Profile
       </Typography>
 

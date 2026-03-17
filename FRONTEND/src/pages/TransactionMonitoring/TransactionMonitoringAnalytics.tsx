@@ -106,7 +106,7 @@ export default function TransactionMonitoringAnalytics() {
                     key={idx}
                     sx={{
                       p: 2,
-                      mb: 1,
+                      mb: 0.5,
                       backgroundColor: "background.paper",
                       borderRadius: 1,
                       border: "1px solid rgba(0,0,0,0.1)",

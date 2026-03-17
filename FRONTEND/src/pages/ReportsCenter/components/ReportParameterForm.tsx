@@ -78,7 +78,7 @@ export default function ReportParameterForm({
       case "daterange":
         return (
           <Box key={param.name}>
-            <Typography variant="caption" sx={{ mb: 1, display: "block", color: "text.secondary" }}>
+            <Typography variant="caption" sx={{ mb: 0.5, display: "block", color: "text.secondary" }}>
               {param.label}
             </Typography>
             <Grid container spacing={2}>
