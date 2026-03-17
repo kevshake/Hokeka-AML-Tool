@@ -40,7 +40,7 @@ export default function RiskAnalyticsPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Risk Analytics
         </Typography>
         <Box sx={{ display: "flex", gap: 2 }}>

@@ -306,7 +306,7 @@ export default function ReportsCenterPage() {
             </Box>
             <Box>
               <Typography
-                variant="h4"
+                variant="h6"
                 sx={{
                   fontWeight: 700,
                   color: "#2c3e50",

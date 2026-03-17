@@ -42,7 +42,7 @@ export default function AlertsPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, pb: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Alerts
         </Typography>
         <Tooltip title="Perform bulk actions on multiple selected alerts simultaneously. You can mark multiple alerts as resolved, assign priority levels, or apply status changes to all selected items at once. Select alerts using the checkboxes in the table before using this feature." arrow enterDelay={2000}>

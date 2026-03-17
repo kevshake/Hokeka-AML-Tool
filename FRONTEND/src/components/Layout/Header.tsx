@@ -52,16 +52,16 @@ export default function Header() {
     <AppBar
       position="fixed"
       sx={{
-        width: `calc(100% - 280px)`,
-        ml: "280px",
-        backgroundColor: "rgba(255,255,255,0.8)", // Glassmorphism white
+        width: `calc(100% - 248px)`,
+        ml: "248px",
+        backgroundColor: "rgba(255,255,255,0.8)",
         backdropFilter: "blur(12px)",
         borderBottom: "none",
         boxShadow: "none",
         color: "text.primary",
-        mt: 2, // Align with floating sidebar top
-        mr: 3, // Align with floating sidebar right
-        borderRadius: "20px", // Floating header to match sidebar
+        mt: 0.5,
+        borderRadius: "8px",
+        height: "40px",
       }}
     >
       <Toolbar>
@@ -152,7 +152,7 @@ export default function Header() {
               {userInitials}
             </Avatar>
             <Box sx={{ display: { xs: "none", sm: "block" } }}>
-              <Typography variant="body2" sx={{ color: "text.primary", fontWeight: 600, lineHeight: 1.2 }}>
+              <Typography variant="subtitle2" sx={{ color: "text.primary", fontWeight: 600, lineHeight: 1.2 }}>
                 {userName}
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem", display: "block", lineHeight: 1 }}>

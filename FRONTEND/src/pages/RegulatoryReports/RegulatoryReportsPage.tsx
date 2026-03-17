@@ -19,7 +19,7 @@ export default function RegulatoryReportsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
         Regulatory Reports
       </Typography>
 
@@ -75,7 +75,7 @@ export default function RegulatoryReportsPage() {
                     <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                       Total Transactions
                     </Typography>
-                    <Typography variant="h4" sx={{ color: "text.primary" }}>
+                    <Typography variant="h6" sx={{ color: "text.primary" }}>
                       {report.totalTransactions || report.transactionCount || 0}
                     </Typography>
                   </CardContent>
@@ -87,7 +87,7 @@ export default function RegulatoryReportsPage() {
                     <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                       Total Amount
                     </Typography>
-                    <Typography variant="h4" sx={{ color: "text.primary" }}>
+                    <Typography variant="h6" sx={{ color: "text.primary" }}>
                       ${report.totalAmount ? (report.totalAmount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </Typography>
                   </CardContent>

@@ -20,7 +20,7 @@ export default function RolesPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Role Management
         </Typography>
         <Tooltip title="Create a new role with custom permissions and access levels" arrow>

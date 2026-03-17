@@ -28,10 +28,10 @@ export default function TransactionMonitoringLive() {
             <Grid item xs={12} sm={6} md={3} key={key}>
               <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
                 <CardContent>
-                  <Typography variant="body2" sx={{ color: "text.secondary", mb: 1, textTransform: "capitalize" }}>
+                  <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5, textTransform: "capitalize" }}>
                     {key.replace(/([A-Z])/g, " $1").trim()}
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {typeof value === "number" ? value.toLocaleString() : String(value)}
                   </Typography>
                 </CardContent>
@@ -126,7 +126,7 @@ export default function TransactionMonitoringLive() {
                     key={idx}
                     sx={{
                       p: 1.5,
-                      mb: 1,
+                      mb: 0.5,
                       backgroundColor: "background.paper",
                       borderRadius: 1,
                       border: "1px solid rgba(0,0,0,0.1)",
