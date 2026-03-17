@@ -43,7 +43,7 @@ export default function TransactionMonitoringReports() {
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                 Total Transactions
               </Typography>
-              <Typography variant="h5" sx={{ color: "text.primary" }}>
+              <Typography variant="h6" sx={{ color: "text.primary" }}>
                 {totalTransactions.toLocaleString()}
               </Typography>
             </CardContent>
@@ -55,7 +55,7 @@ export default function TransactionMonitoringReports() {
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                 Blocked Transactions
               </Typography>
-              <Typography variant="h5" sx={{ color: "#e74c3c" }}>
+              <Typography variant="h6" sx={{ color: "#e74c3c" }}>
                 {blockedTransactions.toLocaleString()}
               </Typography>
             </CardContent>
@@ -67,7 +67,7 @@ export default function TransactionMonitoringReports() {
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                 Total Amount
               </Typography>
-              <Typography variant="h5" sx={{ color: "text.primary" }}>
+              <Typography variant="h6" sx={{ color: "text.primary" }}>
                 ${(totalAmount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
             </CardContent>
@@ -79,7 +79,7 @@ export default function TransactionMonitoringReports() {
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                 Blocked Amount
               </Typography>
-              <Typography variant="h5" sx={{ color: "#e74c3c" }}>
+              <Typography variant="h6" sx={{ color: "#e74c3c" }}>
                 ${(blockedAmount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
             </CardContent>
@@ -96,7 +96,7 @@ export default function TransactionMonitoringReports() {
             <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
               Block Rate
             </Typography>
-            <Typography variant="h5" sx={{ color: "text.primary" }}>
+            <Typography variant="h6" sx={{ color: "text.primary" }}>
               {totalTransactions > 0 ? ((blockedTransactions / totalTransactions) * 100).toFixed(2) : 0}%
             </Typography>
           </Grid>
@@ -104,7 +104,7 @@ export default function TransactionMonitoringReports() {
             <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
               Hold Rate
             </Typography>
-            <Typography variant="h5" sx={{ color: "text.primary" }}>
+            <Typography variant="h6" sx={{ color: "text.primary" }}>
               {totalTransactions > 0 ? ((heldTransactions / totalTransactions) * 100).toFixed(2) : 0}%
             </Typography>
           </Grid>

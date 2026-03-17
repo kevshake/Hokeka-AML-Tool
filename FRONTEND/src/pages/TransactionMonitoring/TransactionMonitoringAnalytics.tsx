@@ -52,7 +52,7 @@ export default function TransactionMonitoringAnalytics() {
                     <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                       {indicator.name || indicator.type || "Risk Indicator"}
                     </Typography>
-                    <Typography variant="h5" sx={{ color: "text.primary" }}>
+                    <Typography variant="h6" sx={{ color: "text.primary" }}>
                       {indicator.value || indicator.count || 0}
                     </Typography>
                     {indicator.percentage && (

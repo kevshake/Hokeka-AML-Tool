@@ -61,7 +61,7 @@ export default function Header() {
         color: "text.primary",
         mt: 0.5,
         borderRadius: "8px",
-        height: "48px",
+        height: "40px",
       }}
     >
       <Toolbar>

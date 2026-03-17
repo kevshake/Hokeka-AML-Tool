@@ -31,7 +31,7 @@ export default function TransactionMonitoringLive() {
                   <Typography variant="body2" sx={{ color: "text.secondary", mb: 0.5, textTransform: "capitalize" }}>
                     {key.replace(/([A-Z])/g, " $1").trim()}
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {typeof value === "number" ? value.toLocaleString() : String(value)}
                   </Typography>
                 </CardContent>

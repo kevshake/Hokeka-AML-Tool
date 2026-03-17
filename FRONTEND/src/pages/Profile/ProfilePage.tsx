@@ -135,7 +135,7 @@ export default function ProfilePage() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
         My Profile
       </Typography>
 
@@ -156,7 +156,7 @@ export default function ProfilePage() {
               {getInitials()}
             </Avatar>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                 {user?.firstName} {user?.lastName}
               </Typography>
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>

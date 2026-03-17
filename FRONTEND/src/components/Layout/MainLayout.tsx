@@ -22,9 +22,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
         <Header />
         <Box
           sx={{
-            mt: "48px",
+            mt: "40px",
             width: "100%",
-            height: "calc(100vh - 56px)",
+            height: "calc(100vh - 48px)",
           }}
         >
           {children}

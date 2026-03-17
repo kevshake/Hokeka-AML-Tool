@@ -161,7 +161,7 @@ export default function DashboardPage() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
+      <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
         Dashboard
       </Typography>
 
