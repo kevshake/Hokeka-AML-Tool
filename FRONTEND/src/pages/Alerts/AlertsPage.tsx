@@ -81,9 +81,9 @@ export default function AlertsPage() {
             ) : alerts?.content && alerts.content.length > 0 ? (
               alerts.content.map((alert) => (
                 <TableRow key={alert.id} hover>
-                  <TableCell sx={{ color: "text.primary" }}>#{alert.id}</TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>{alert.alertType}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>#{alert.id}</TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{alert.alertType}</TableCell>
+                  <TableCell sx={{ py: 2 }}>
                     <Chip
                       label={alert.priority}
                       size="small"
@@ -91,10 +91,11 @@ export default function AlertsPage() {
                         backgroundColor: priorityColors[alert.priority] + "20",
                         color: priorityColors[alert.priority],
                         border: `1px solid ${priorityColors[alert.priority]}`,
+                        fontWeight: 600,
                       }}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ py: 2 }}>
                     <Chip
                       label={alert.status}
                       size="small"
@@ -102,16 +103,17 @@ export default function AlertsPage() {
                         backgroundColor: statusColors[alert.status] + "20",
                         color: statusColors[alert.status],
                         border: `1px solid ${statusColors[alert.status]}`,
+                        fontWeight: 600,
                       }}
                     />
                   </TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>
-                    {alert.description || "No description"}
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>
+                    {alert.description || "-"}
                   </TableCell>
-                  <TableCell sx={{ color: "text.secondary" }}>
+                  <TableCell sx={{ color: "text.secondary", py: 2 }}>
                     {new Date(alert.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ py: 2 }}>
                     <Tooltip title="View comprehensive details about this alert including transaction information, risk score, merchant details, investigation history, and all related case information. Opens a detailed view panel with full alert context." arrow enterDelay={2000}>
                       <Button size="small" sx={{ color: "#a93226" }}>
                         View
