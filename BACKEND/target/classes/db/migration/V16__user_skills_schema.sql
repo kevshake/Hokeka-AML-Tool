@@ -17,12 +17,12 @@ CREATE TABLE IF NOT EXISTS skill_types (
 -- User Skills - Links users to their skills with proficiency levels
 CREATE TABLE IF NOT EXISTS user_skills (
     id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES platform_users(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES psp_users(user_id) ON DELETE CASCADE,
     skill_type_id BIGINT NOT NULL REFERENCES skill_types(id) ON DELETE CASCADE,
     proficiency_level INTEGER NOT NULL DEFAULT 1 CHECK (proficiency_level BETWEEN 1 AND 5),
     certified BOOLEAN DEFAULT false,
     certified_at TIMESTAMP,
-    certified_by BIGINT REFERENCES platform_users(id),
+    certified_by BIGINT REFERENCES psp_users(user_id),
     expires_at TIMESTAMP,  -- Skill certification expiration
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

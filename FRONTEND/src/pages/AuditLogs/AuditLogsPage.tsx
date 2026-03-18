@@ -58,12 +58,12 @@ export default function AuditLogsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
+      <Typography variant="h6" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
         Audit Logs
       </Typography>
 
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+      <Paper sx={{ p: 2, mb: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={isSuperAdmin ? 2 : 3}>
             <Tooltip title="Select the start date for the audit log search range. Only audit log entries created on or after this date will be displayed. Use this to narrow down the time period you want to review." arrow enterDelay={2000}>
@@ -182,7 +182,7 @@ export default function AuditLogsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   Loading audit logs...
                 </TableCell>
               </TableRow>
@@ -222,7 +222,7 @@ export default function AuditLogsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   No audit logs found for the selected period
                 </TableCell>
               </TableRow>

@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS merchant_transaction_limits (
     created_by BIGINT,
     updated_by BIGINT,
     CONSTRAINT fk_merchant_limits_merchant FOREIGN KEY (merchant_id) REFERENCES merchants(merchant_id) ON DELETE CASCADE,
-    CONSTRAINT fk_merchant_limits_created_by FOREIGN KEY (created_by) REFERENCES platform_users(id),
-    CONSTRAINT fk_merchant_limits_updated_by FOREIGN KEY (updated_by) REFERENCES platform_users(id),
+    CONSTRAINT fk_merchant_limits_created_by FOREIGN KEY (created_by) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_merchant_limits_updated_by FOREIGN KEY (updated_by) REFERENCES psp_users(user_id),
     CONSTRAINT unique_merchant_limit UNIQUE (merchant_id)
 );
 
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS global_limits (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
-    CONSTRAINT fk_global_limits_created_by FOREIGN KEY (created_by) REFERENCES platform_users(id),
-    CONSTRAINT fk_global_limits_updated_by FOREIGN KEY (updated_by) REFERENCES platform_users(id),
+    CONSTRAINT fk_global_limits_created_by FOREIGN KEY (created_by) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_global_limits_updated_by FOREIGN KEY (updated_by) REFERENCES psp_users(user_id),
     CONSTRAINT unique_global_limit_name UNIQUE (name)
 );
 
@@ -59,8 +59,8 @@ CREATE TABLE IF NOT EXISTS risk_thresholds (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
-    CONSTRAINT fk_risk_thresholds_created_by FOREIGN KEY (created_by) REFERENCES platform_users(id),
-    CONSTRAINT fk_risk_thresholds_updated_by FOREIGN KEY (updated_by) REFERENCES platform_users(id),
+    CONSTRAINT fk_risk_thresholds_created_by FOREIGN KEY (created_by) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_risk_thresholds_updated_by FOREIGN KEY (updated_by) REFERENCES psp_users(user_id),
     CONSTRAINT unique_risk_level UNIQUE (risk_level)
 );
 
@@ -83,8 +83,8 @@ CREATE TABLE IF NOT EXISTS velocity_rules (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
-    CONSTRAINT fk_velocity_rules_created_by FOREIGN KEY (created_by) REFERENCES platform_users(id),
-    CONSTRAINT fk_velocity_rules_updated_by FOREIGN KEY (updated_by) REFERENCES platform_users(id),
+    CONSTRAINT fk_velocity_rules_created_by FOREIGN KEY (created_by) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_velocity_rules_updated_by FOREIGN KEY (updated_by) REFERENCES psp_users(user_id),
     CONSTRAINT unique_velocity_rule_name UNIQUE (rule_name)
 );
 
@@ -104,8 +104,8 @@ CREATE TABLE IF NOT EXISTS country_compliance_rules (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
-    CONSTRAINT fk_country_compliance_created_by FOREIGN KEY (created_by) REFERENCES platform_users(id),
-    CONSTRAINT fk_country_compliance_updated_by FOREIGN KEY (updated_by) REFERENCES platform_users(id),
+    CONSTRAINT fk_country_compliance_created_by FOREIGN KEY (created_by) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_country_compliance_updated_by FOREIGN KEY (updated_by) REFERENCES psp_users(user_id),
     CONSTRAINT unique_country_code UNIQUE (country_code)
 );
 

@@ -85,7 +85,10 @@ services:
     working_dir: /app
     command: sh -c "npm install && npm run dev -- --host"
     environment:
-      VITE_API_URL: http://localhost:2637/api
+      # Use relative URLs - Vite proxy handles routing to backend
+      VITE_API_URL:
+      # Vite proxy target for Docker networking (backend service name)
+      VITE_PROXY_TARGET: http://backend-dev:2637
       NODE_ENV: development
     ports:
       - "5173:5173"

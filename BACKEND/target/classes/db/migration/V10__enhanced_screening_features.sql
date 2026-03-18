@@ -1,6 +1,10 @@
 -- V10__enhanced_screening_features.sql
 -- Adds tables for enhanced screening features
 
+-- Fix: Add missing columns to alerts table
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS disposed_at TIMESTAMP;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS disposition VARCHAR(50);
+
 -- Screening Whitelist Table
 CREATE TABLE IF NOT EXISTS screening_whitelist (
     id BIGSERIAL PRIMARY KEY,
@@ -106,7 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_rule ON false_positive_feedback(rule_nam
 CREATE TABLE IF NOT EXISTS alert_tuning_recommendations (
     id BIGSERIAL PRIMARY KEY,
     rule_name VARCHAR(255) NOT NULL,
-    false_positive_rate DECIMAL(5,4),
+    false_positive_rate FLOAT,
     recommendation TEXT,
     priority VARCHAR(50),
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',

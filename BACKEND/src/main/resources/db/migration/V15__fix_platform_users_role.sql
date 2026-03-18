@@ -1,5 +1,5 @@
--- Fix for platform_users table violating not-null constraint on 'role' column
+-- Fix for psp_users table violating not-null constraint on 'role' column
 -- This column is a vestige of previous schema (string role) and conflicts with the new 'role_id' foreign key.
 
-ALTER TABLE platform_users DROP COLUMN IF EXISTS role;
+ALTER TABLE psp_users DROP COLUMN IF EXISTS role;
 

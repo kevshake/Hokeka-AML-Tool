@@ -15,12 +15,12 @@ import {
   Tooltip,
   Collapse,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import {
   PlayArrow as GenerateIcon,
   Schedule as ScheduleIcon,
   ExpandMore as ExpandIcon,
-  ExpandLess as CollapseIcon,
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
   Assessment as ExcelIcon,
@@ -32,13 +32,14 @@ import {
 import type {
   ReportDefinition,
   ReportType,
-} from "../../types/reports/reportDefinitions";
+} from "../../../types/reports/reportDefinitions";
 import ReportParameterForm from "./ReportParameterForm";
 
 interface ReportCardProps {
   report: ReportDefinition;
   onGenerate: (reportId: string, params: Record<string, unknown>, format: string) => void;
   onSchedule: (report: ReportDefinition) => void;
+  isGenerating?: boolean;
 }
 
 const TYPE_ICONS: Record<ReportType, typeof RegulatoryIcon> = {
@@ -75,16 +76,23 @@ export default function ReportCard({
   report,
   onGenerate,
   onSchedule,
+  isGenerating = false,
 }: ReportCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
   const [selectedFormat, setSelectedFormat] = useState(report.supportsExport[0]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const TypeIcon = TYPE_ICONS[report.type];
   const typeColors = TYPE_COLORS[report.type];
 
-  const handleGenerate = () => {
-    onGenerate(report.id, parameters, selectedFormat);
+  const handleGenerate = async () => {
+    setIsLoading(true);
+    try {
+      await onGenerate(report.id, parameters, selectedFormat);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -94,6 +102,8 @@ export default function ReportCard({
         boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
         transition: "all 0.3s ease",
         border: `1px solid ${expanded ? "#800020" : "transparent"}`,
+        opacity: isGenerating && !isLoading ? 0.7 : 1,
+        pointerEvents: isGenerating && !isLoading ? "none" : "auto",
         "&: hover": {
           boxShadow: "0 8px 30px rgba(0, 0, 0, 0.1)",
           transform: "translateY(-2px)",
@@ -191,6 +201,7 @@ export default function ReportCard({
                 <IconButton
                   size="small"
                   onClick={() => setSelectedFormat("PDF")}
+                  disabled={isLoading}
                   sx={{
                     color: selectedFormat === "PDF" ? "#800020" : "text.secondary",
                     backgroundColor:
@@ -206,6 +217,7 @@ export default function ReportCard({
                 <IconButton
                   size="small"
                   onClick={() => setSelectedFormat("CSV")}
+                  disabled={isLoading}
                   sx={{
                     color: selectedFormat === "CSV" ? "#800020" : "text.secondary",
                     backgroundColor:
@@ -221,6 +233,7 @@ export default function ReportCard({
                 <IconButton
                   size="small"
                   onClick={() => setSelectedFormat("Excel")}
+                  disabled={isLoading}
                   sx={{
                     color: selectedFormat === "Excel" ? "#800020" : "text.secondary",
                     backgroundColor:
@@ -240,6 +253,7 @@ export default function ReportCard({
             size="small"
             startIcon={<ScheduleIcon sx={{ color: "#C9A961" }} />}
             onClick={() => onSchedule(report)}
+            disabled={isLoading || isGenerating}
             sx={{
               borderColor: "rgba(201, 169, 97, 0.5)",
               color: "#8B6914",
@@ -258,8 +272,15 @@ export default function ReportCard({
           <Button
             variant="contained"
             size="small"
-            startIcon={<GenerateIcon />}
+            startIcon={
+              isLoading ? (
+                <CircularProgress size={16} sx={{ color: "inherit" }} />
+              ) : (
+                <GenerateIcon />
+              )
+            }
             onClick={handleGenerate}
+            disabled={isLoading || isGenerating}
             sx={{
               backgroundColor: "#800020",
               borderRadius: "10px",
@@ -270,7 +291,7 @@ export default function ReportCard({
               },
             }}
           >
-            Generate
+            {isLoading ? "Generating..." : "Generate"}
           </Button>
 
           {report.parameters.length > 0 && (
@@ -278,6 +299,7 @@ export default function ReportCard({
               <IconButton
                 size="small"
                 onClick={() => setExpanded(!expanded)}
+                disabled={isLoading}
                 sx={{
                   transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
                   transition: "transform 0.3s ease",

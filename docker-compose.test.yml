@@ -1,30 +1,7 @@
 # Test / UAT Environment
-# Ports: Backend 2638, Frontend 5174, Postgres 15432, Aerospike 3002
-
-version: '3.8'
+# Ports: Backend 2638, Frontend 5174, Postgres 15432 (external), Aerospike 3002
 
 services:
-  # PostgreSQL Database (Test) - Port 15432
-  postgres-test:
-    image: postgres:15-alpine
-    container_name: fd-test-postgres
-    environment:
-      POSTGRES_DB: fraud_detector_test
-      POSTGRES_USER: fd_test
-      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-test_secure_2024}
-    volumes:
-      - postgres_test_data:/var/lib/postgresql/data
-    ports:
-      - "15432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fd_test -d fraud_detector_test"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - fd-test-network
-    restart: unless-stopped
-
   # Aerospike Cache (Test) - Port 3002
   aerospike-test:
     image: aerospike/aerospike-server:6.4
@@ -33,6 +10,10 @@ services:
       - "3002:3000"
     volumes:
       - aerospike_test_data:/opt/aerospike/data
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     healthcheck:
       test: ["CMD", "asinfo", "-p", "3000", "-v", "status"]
       interval: 10s
@@ -46,21 +27,22 @@ services:
   backend-test:
     build:
       context: ./BACKEND
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
     container_name: fd-test-backend
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres-test:5432/fraud_detector_test
-      DATABASE_USERNAME: fd_test
-      DATABASE_PASSWORD: ${TEST_DB_PASSWORD:-test_secure_2024}
-      AEROSPIKE_HOSTS: aerospike-test:3000
+      DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
+      DATABASE_USERNAME: fraud_detector_test
+      DATABASE_PASSWORD: test_password_secure
+      AEROSPIKE_HOSTS: fd-test-aerospike:3000
       SERVER_PORT: 2638
       SPRING_PROFILES_ACTIVE: test
       CORS_ALLOWED_ORIGINS: https://testaml.hokeka.com,https://testapi.hokeka.com
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_FLYWAY_ENABLED: "false"
+      JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseG1GC"
     ports:
       - "2638:2638"
     depends_on:
-      postgres-test:
-        condition: service_healthy
       aerospike-test:
         condition: service_healthy
     healthcheck:
@@ -71,6 +53,7 @@ services:
       start_period: 60s
     networks:
       - fd-test-network
+      - test_fraud-detector-test
     restart: unless-stopped
 
   # Frontend (Test) - Port 5174
@@ -86,15 +69,17 @@ services:
     ports:
       - "5174:80"
     depends_on:
-      - backend-test
+      backend-test:
+        condition: service_healthy
     networks:
       - fd-test-network
     restart: unless-stopped
 
 volumes:
-  postgres_test_data:
   aerospike_test_data:
 
 networks:
   fd-test-network:
     driver: bridge
+  test_fraud-detector-test:
+    external: true

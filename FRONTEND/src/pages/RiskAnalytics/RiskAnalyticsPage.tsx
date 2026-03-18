@@ -39,8 +39,8 @@ export default function RiskAnalyticsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Risk Analytics
         </Typography>
         <Box sx={{ display: "flex", gap: 2 }}>
@@ -73,15 +73,15 @@ export default function RiskAnalyticsPage() {
         </Box>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
               Risk Heatmap - {heatmapType.charAt(0).toUpperCase() + heatmapType.slice(1)}
             </Typography>
             {heatmap ? (
               <Box sx={{ p: 2, backgroundColor: "background.paper", borderRadius: 1 }}>
-                <Grid container spacing={2}>
+                <Grid container spacing={1}>
                   {Object.entries(heatmap).slice(0, 20).map(([key, value]: [string, any]) => (
                     <Grid item xs={6} sm={4} md={3} key={key}>
                       <Box
@@ -123,7 +123,7 @@ export default function RiskAnalyticsPage() {
           </Paper>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
               Risk Trends ({period} days)
             </Typography>

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS case_activities (
     related_entity_id BIGINT,
     related_entity_type VARCHAR(50),
     CONSTRAINT fk_case_activities_case FOREIGN KEY (case_id) REFERENCES compliance_cases(case_id) ON DELETE CASCADE,
-    CONSTRAINT fk_case_activities_user FOREIGN KEY (performed_by) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_activities_user FOREIGN KEY (performed_by) REFERENCES psp_users(user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_case_activities_case ON case_activities(case_id, performed_at DESC);
@@ -46,8 +46,8 @@ CREATE TABLE IF NOT EXISTS case_mentions (
     mentioned_at TIMESTAMP NOT NULL,
     read BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_case_mentions_case FOREIGN KEY (case_id) REFERENCES compliance_cases(case_id) ON DELETE CASCADE,
-    CONSTRAINT fk_case_mentions_mentioned FOREIGN KEY (mentioned_user_id) REFERENCES platform_users(id),
-    CONSTRAINT fk_case_mentions_by FOREIGN KEY (mentioned_by_user_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_mentions_mentioned FOREIGN KEY (mentioned_user_id) REFERENCES psp_users(user_id),
+    CONSTRAINT fk_case_mentions_by FOREIGN KEY (mentioned_by_user_id) REFERENCES psp_users(user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_case_mentions_user ON case_mentions(mentioned_user_id, read);
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS escalation_rules (
     escalate_to_user_id BIGINT,
     reason_template TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_escalation_rules_user FOREIGN KEY (escalate_to_user_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_escalation_rules_user FOREIGN KEY (escalate_to_user_id) REFERENCES psp_users(user_id)
 );
 
 -- Case Transactions (for timeline)
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS case_transactions (
     added_by BIGINT,
     CONSTRAINT fk_case_transactions_case FOREIGN KEY (case_id) REFERENCES compliance_cases(case_id) ON DELETE CASCADE,
     CONSTRAINT fk_case_transactions_txn FOREIGN KEY (transaction_id) REFERENCES transactions(txn_id),
-    CONSTRAINT fk_case_transactions_user FOREIGN KEY (added_by) REFERENCES platform_users(id)
+    CONSTRAINT fk_case_transactions_user FOREIGN KEY (added_by) REFERENCES psp_users(user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_case_transactions_case ON case_transactions(case_id);
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS case_note_mentions (
     mentioned_user_id BIGINT NOT NULL,
     PRIMARY KEY (note_id, mentioned_user_id),
     CONSTRAINT fk_note_mentions_note FOREIGN KEY (note_id) REFERENCES case_notes(id) ON DELETE CASCADE,
-    CONSTRAINT fk_note_mentions_user FOREIGN KEY (mentioned_user_id) REFERENCES platform_users(id)
+    CONSTRAINT fk_note_mentions_user FOREIGN KEY (mentioned_user_id) REFERENCES psp_users(user_id)
 );
 
 -- Update case_evidence to add more fields

@@ -205,8 +205,8 @@ export default function RulesGenerationPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h4" sx={{ color: "text.primary", fontWeight: 600 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Rules Generation
         </Typography>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
@@ -1143,7 +1143,7 @@ function EffectivenessDialog({
                   <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                     Total Executions
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {effectiveness.totalExecutions || 0}
                   </Typography>
                 </CardContent>
@@ -1155,7 +1155,7 @@ function EffectivenessDialog({
                   <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                     Triggered Count
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {effectiveness.triggeredCount || 0}
                   </Typography>
                 </CardContent>
@@ -1167,7 +1167,7 @@ function EffectivenessDialog({
                   <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                     False Positive Rate
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {effectiveness.falsePositiveRate
                       ? (effectiveness.falsePositiveRate * 100).toFixed(2)
                       : 0}
@@ -1182,7 +1182,7 @@ function EffectivenessDialog({
                   <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
                     Avg Execution Time
                   </Typography>
-                  <Typography variant="h5" sx={{ color: "text.primary" }}>
+                  <Typography variant="h6" sx={{ color: "text.primary" }}>
                     {effectiveness.averageExecutionTime
                       ? `${effectiveness.averageExecutionTime.toFixed(2)}ms`
                       : "N/A"}

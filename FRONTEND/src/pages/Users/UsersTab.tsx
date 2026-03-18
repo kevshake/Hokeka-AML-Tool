@@ -194,7 +194,7 @@ export default function UsersTab() {
 
     return (
         <Box>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
                 <Tooltip title="Create a new user account in the system. Opens a form where you can specify the username, email, password, assign a role (which determines permissions), optionally assign to a Payment Service Provider (PSP), and set the account status. The new user will be able to log in immediately if enabled." arrow enterDelay={2000}>
                     <Button
                         variant="contained"
@@ -224,19 +224,19 @@ export default function UsersTab() {
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
                                     Loading users...
                                 </TableCell>
                             </TableRow>
                         ) : users && users.length > 0 ? (
                             users.map((user) => (
                                 <TableRow key={user.id} hover>
-                                    <TableCell sx={{ color: "text.primary", fontWeight: 500 }}>{user.username}</TableCell>
-                                    <TableCell sx={{ color: "text.primary" }}>
+                                    <TableCell sx={{ color: "text.primary", fontWeight: 500, py: 2 }}>{user.username}</TableCell>
+                                    <TableCell sx={{ color: "text.primary", py: 2 }}>
                                         {user.firstName} {user.lastName}
                                     </TableCell>
-                                    <TableCell sx={{ color: "text.primary" }}>{user.email}</TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ color: "text.primary", py: 2 }}>{user.email}</TableCell>
+                                    <TableCell sx={{ py: 2 }}>
                                         <Chip
                                             label={user.role.name}
                                             size="small"
@@ -244,11 +244,12 @@ export default function UsersTab() {
                                                 backgroundColor: "#8B404920",
                                                 color: "#8B4049",
                                                 border: "1px solid #8B4049",
+                                                fontWeight: 600,
                                             }}
                                         />
                                     </TableCell>
-                                    <TableCell sx={{ color: "text.primary" }}>{user.psp?.name || "System"}</TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ color: "text.primary", py: 2 }}>{user.psp?.name || "System"}</TableCell>
+                                    <TableCell sx={{ py: 2 }}>
                                         <Chip
                                             label={user.enabled ? "Active" : "Disabled"}
                                             size="small"
@@ -256,13 +257,14 @@ export default function UsersTab() {
                                                 backgroundColor: user.enabled ? "#2ecc7120" : "#95a5a620",
                                                 color: user.enabled ? "#2ecc71" : "#95a5a6",
                                                 border: `1px solid ${user.enabled ? "#2ecc71" : "#95a5a6"}`,
+                                                fontWeight: 600,
                                             }}
                                         />
                                     </TableCell>
-                                    <TableCell sx={{ color: "text.secondary", fontSize: "0.875rem" }}>
+                                    <TableCell sx={{ color: "text.secondary", fontSize: "0.875rem", py: 2 }}>
                                         {new Date(user.createdAt).toLocaleDateString()}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ py: 2 }}>
                                         <Box sx={{ display: "flex", gap: 0.5 }}>
                                             <Tooltip title="Edit this user's account details including name, email, role assignment, PSP assignment, and account status. Opens the user edit dialog with pre-filled information. Note: Username cannot be changed after account creation." arrow enterDelay={2000}>
                                                 <IconButton size="small" onClick={() => handleOpenDialog(user)} sx={{ color: "#8B4049" }}>
@@ -289,7 +291,7 @@ export default function UsersTab() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
                                     No users found
                                 </TableCell>
                             </TableRow>

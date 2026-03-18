@@ -20,13 +20,12 @@ import {
   Chip,
   FormControlLabel,
   Checkbox,
-  OutlinedInput,
   Grid,
 } from "@mui/material";
 import {
   Schedule as ScheduleIcon,
 } from "@mui/icons-material";
-import type { ScheduleConfig, ExportFormat } from "../../types/reports/reportDefinitions";
+import type { ScheduleConfig, ExportFormat } from "../../../types/reports/reportDefinitions";
 
 interface ScheduleReportDialogProps {
   open: boolean;
@@ -229,7 +228,7 @@ export default function ScheduleReportDialog({
 
           {/* Export Formats */}
           <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: "text.secondary" }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5, color: "text.secondary" }}>
               Export Formats
             </Typography>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -262,7 +261,7 @@ export default function ScheduleReportDialog({
 
           {/* Recipients */}
           <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: "text.secondary" }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5, color: "text.secondary" }}>
               Email Recipients
             </Typography>
             <Box sx={{ display: "flex", gap: 1, mb: 2 }}>

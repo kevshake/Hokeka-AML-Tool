@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type {
   Case,
@@ -10,6 +10,7 @@ import type {
   DashboardStats,
   User,
   Role,
+  PageResponse,
 } from "../../types";
 
 // Dashboard
@@ -304,14 +305,6 @@ export const useOverdueDeadlines = () => {
   return useQuery({
     queryKey: ["compliance", "calendar", "overdue"],
     queryFn: () => apiClient.get("compliance/calendar/overdue"),
-  });
-};
-
-// Regulatory Reports
-export const useRegulatoryReport = (type: "ctr" | "lctr" | "iftr") => {
-  return useQuery({
-    queryKey: ["regulatory", type],
-    queryFn: () => apiClient.get(`reporting/regulatory/${type}`),
   });
 };
 

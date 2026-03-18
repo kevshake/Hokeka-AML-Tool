@@ -19,9 +19,7 @@ import {
   OutlinedInput,
   InputAdornment,
 } from "@mui/material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { DateRangePicker } from "@mui/x-date-pickers-pro/DateRangePicker";
-import type { ReportParameter } from "../../types/reports/reportDefinitions";
+import type { ReportParameter } from "../../../types/reports/reportDefinitions";
 
 interface ReportParameterFormProps {
   parameters: ReportParameter[];
@@ -80,7 +78,7 @@ export default function ReportParameterForm({
       case "daterange":
         return (
           <Box key={param.name}>
-            <Typography variant="caption" sx={{ mb: 1, display: "block", color: "text.secondary" }}>
+            <Typography variant="caption" sx={{ mb: 0.5, display: "block", color: "text.secondary" }}>
               {param.label}
             </Typography>
             <Grid container spacing={2}>
