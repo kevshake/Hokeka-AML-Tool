@@ -23,6 +23,11 @@ const riskColors: Record<string, string> = {
   HIGH: "#e74c3c",
 };
 
+const formatScore = (score: number | null | undefined): string => {
+  if (score === null || score === undefined || isNaN(score)) return "-";
+  return score.toFixed(1);
+};
+
 export default function MerchantsPage() {
   const [page, setPage] = useState({ index: 0, size: 25 });
   
@@ -69,11 +74,11 @@ export default function MerchantsPage() {
             ) : merchants?.content && merchants.content.length > 0 ? (
               merchants.content.map((merchant) => (
                 <TableRow key={merchant.id} hover>
-                  <TableCell sx={{ color: "text.primary" }}>{merchant.merchantId}</TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>{merchant.businessName}</TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>{merchant.mcc || "N/A"}</TableCell>
-                  <TableCell>
-                    {merchant.riskLevel && (
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{merchant.merchantId}</TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{merchant.businessName}</TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{merchant.mcc || "-"}</TableCell>
+                  <TableCell sx={{ py: 2 }}>
+                    {merchant.riskLevel ? (
                       <Chip
                         label={merchant.riskLevel}
                         size="small"
@@ -81,19 +86,20 @@ export default function MerchantsPage() {
                           backgroundColor: riskColors[merchant.riskLevel] + "20",
                           color: riskColors[merchant.riskLevel],
                           border: `1px solid ${riskColors[merchant.riskLevel]}`,
+                          fontWeight: 600,
                         }}
                       />
-                    )}
+                    ) : "-"}
                   </TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>{merchant.krs?.toFixed(1) || "N/A"}</TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>{merchant.cra?.toFixed(1) || "N/A"}</TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>
-                    {merchant.kycStatus || "N/A"}
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{formatScore(merchant.krs)}</TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>{formatScore(merchant.cra)}</TableCell>
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>
+                    {merchant.kycStatus || "-"}
                   </TableCell>
-                  <TableCell sx={{ color: "text.primary" }}>
-                    {merchant.contractStatus || "N/A"}
+                  <TableCell sx={{ color: "text.primary", py: 2 }}>
+                    {merchant.contractStatus || "-"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ py: 2 }}>
                     <Tooltip title="View complete merchant profile including business information, KYC status, risk scores (KRS and CRA), transaction history, compliance status, contract details, and all associated alerts and cases. Opens a detailed merchant dashboard." arrow enterDelay={2000}>
                       <Button size="small" sx={{ color: "#a93226" }}>
                         View

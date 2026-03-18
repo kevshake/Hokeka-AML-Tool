@@ -70,12 +70,12 @@ export default function TransactionMonitoringLive() {
                   ) : transactions?.content && transactions.content.length > 0 ? (
                     transactions.content.map((txn: any, idx: number) => (
                       <TableRow key={idx} hover>
-                        <TableCell sx={{ color: "text.primary" }}>#{txn.txnId || txn.transactionId || txn.id || idx}</TableCell>
-                        <TableCell sx={{ color: "text.primary" }}>{txn.merchantId || "N/A"}</TableCell>
-                        <TableCell sx={{ color: "text.primary" }}>
-                          {txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "N/A"}
+                        <TableCell sx={{ color: "text.primary", py: 2 }}>#{txn.txnId || txn.transactionId || txn.id || idx}</TableCell>
+                        <TableCell sx={{ color: "text.primary", py: 2 }}>{txn.merchantId || "-"}</TableCell>
+                        <TableCell sx={{ color: "text.primary", py: 2 }}>
+                          {txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ py: 2 }}>
                           <Chip
                             label={txn.decision || "ALLOW"}
                             size="small"
@@ -83,11 +83,12 @@ export default function TransactionMonitoringLive() {
                               backgroundColor: txn.decision === "BLOCK" ? "#e74c3c20" : "#2ecc7120",
                               color: txn.decision === "BLOCK" ? "#e74c3c" : "#2ecc71",
                               border: `1px solid ${txn.decision === "BLOCK" ? "#e74c3c" : "#2ecc71"}`,
+                              fontWeight: 600,
                             }}
                           />
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary" }}>
-                          {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "N/A"}
+                        <TableCell sx={{ color: "text.secondary", py: 2 }}>
+                          {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "-"}
                         </TableCell>
                       </TableRow>
                     ))

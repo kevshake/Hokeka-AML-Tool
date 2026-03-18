@@ -8,6 +8,7 @@ import MainLayout from "./components/Layout/MainLayout";
 
 // Pages
 import LoginPage from "./pages/Auth/LoginPage";
+import SignupPage from "./pages/Auth/SignupPage";
 import DashboardPage from "./pages/Dashboard/DashboardPage";
 import CasesPage from "./pages/Cases/CasesPage";
 import AlertsPage from "./pages/Alerts/AlertsPage";
@@ -43,6 +44,7 @@ function App() {
             <CssBaseline />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               <Route
                 path="/*"
                 element={
