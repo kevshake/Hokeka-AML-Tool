@@ -83,6 +83,9 @@ services:
       LOGGING_LEVEL_ROOT: WARN
       # JVM optimization for production
       JAVA_OPTS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom -XshowSettings:vm"
+    # Exposed for host nginx proxy
+    ports:
+      - "127.0.0.1:2637:2637"
     depends_on:
       postgres-prod:
         condition: service_healthy
@@ -141,6 +144,9 @@ services:
     container_name: fraud-detector-frontend-prod
     environment:
       VITE_API_URL: /api
+    # Exposed for host nginx proxy
+    ports:
+      - "127.0.0.1:8088:80"
     depends_on:
       - backend-prod
     healthcheck:
@@ -160,34 +166,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Nginx Reverse Proxy (Production with SSL)
-  nginx-prod:
-    image: nginx:1.25-alpine
-    container_name: fraud-detector-nginx-prod
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx-prod.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates here
-    depends_on:
-      website-prod:
-        condition: service_healthy
-      frontend-prod:
-        condition: service_healthy
-      backend-prod:
-        condition: service_healthy
-    networks:
-      - fraud-detector-prod-network
-    restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+  # Note: Host nginx handles SSL termination and reverse proxy
+  # Backend exposed on 127.0.0.1:2637, Frontend on 127.0.0.1:8088
 
 volumes:
   postgres_prod_data:
