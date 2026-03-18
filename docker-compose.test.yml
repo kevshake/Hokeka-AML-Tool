@@ -42,7 +42,7 @@ services:
       - fd-test-network
     restart: unless-stopped
 
-  # Backend API (Test) - Internal only
+  # Backend API (Test) - Exposed for external clients, internal for dashboard
   backend-test:
     build:
       context: ./BACKEND
@@ -55,12 +55,14 @@ services:
       AEROSPIKE_HOSTS: fd-test-aerospike:3000
       SERVER_PORT: 2638
       SPRING_PROFILES_ACTIVE: test
-      # CORS - allow internal nginx and localhost for dev
-      CORS_ALLOWED_ORIGINS: http://localhost:5174,http://localhost
+      # CORS - allow external domains and internal nginx
+      CORS_ALLOWED_ORIGINS: https://testaml.hokeka.com,https://testapi.hokeka.com,http://localhost:5174,http://localhost
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_FLYWAY_ENABLED: "false"
       JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseG1GC"
-    # No external port exposed - only accessible via nginx internally
+    # Exposed for external API clients (e.g., PSP integrations)
+    ports:
+      - "2638:2638"
     depends_on:
       aerospike-test:
         condition: service_healthy

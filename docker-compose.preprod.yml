@@ -61,7 +61,7 @@ services:
       - fd-preprod-network
     restart: unless-stopped
 
-  # Backend API (Preprod) - Internal only
+  # Backend API (Preprod) - Exposed for external clients, internal for dashboard
   backend-preprod:
     build:
       context: ./BACKEND
@@ -74,9 +74,11 @@ services:
       AEROSPIKE_HOSTS: aerospike-preprod:3000
       SERVER_PORT: 2639
       SPRING_PROFILES_ACTIVE: preprod
-      # CORS - allow internal nginx and localhost for dev
-      CORS_ALLOWED_ORIGINS: http://localhost:8089,http://localhost
-    # No external port exposed - only accessible via nginx internally
+      # CORS - allow external domains and internal nginx
+      CORS_ALLOWED_ORIGINS: https://preprod-aml.hokeka.com,https://preprod-api.hokeka.com,http://localhost:8089,http://localhost
+    # Exposed for external API clients (e.g., PSP integrations)
+    ports:
+      - "2639:2639"
     depends_on:
       postgres-preprod:
         condition: service_healthy
