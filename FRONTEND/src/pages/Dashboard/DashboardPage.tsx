@@ -1,4 +1,4 @@
-import { Box, Typography, Grid, Card, CardContent, Chip, Button, CircularProgress, Alert, Paper, Avatar } from "@mui/material";
+import { Box, Typography, Grid, Card, CardContent, Chip, Button, CircularProgress, Paper, Avatar } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import {
   useDashboardStats,
@@ -110,8 +110,8 @@ export default function DashboardPage() {
   const { data: liveAlerts } = useLiveAlerts(5);
 
   // Calculate stats
-  const totalCases = Object.values(stats?.casesByStatus || {}).reduce((a, b) => a + b, 0) || 0;
-  const openCases = stats?.casesByStatus?.NEW || 0 + stats?.casesByStatus?.ASSIGNED || 0 + stats?.casesByStatus?.INVESTIGATING || 0;
+  const totalCases = Object.values(stats?.casesByStatus || {}).reduce((a: number, b: number) => a + b, 0) || 0;
+  const openCases = (stats?.casesByStatus?.NEW || 0) + (stats?.casesByStatus?.ASSIGNED || 0) + (stats?.casesByStatus?.INVESTIGATING || 0);
   const pendingAlerts = alertsData?.totalElements || 0;
   const recentAuditCount = stats?.auditLast24h || 0;
 
@@ -198,9 +198,9 @@ export default function DashboardPage() {
               </Button>
             </Box>
             {liveAlerts && liveAlerts.length > 0 ? (
-              liveAlerts.map((alert: any, idx: number) => (
+              liveAlerts.map((alert: any) => (
                 <ActivityItem
-                  key={idx}
+                  key={alert.id}
                   title={alert.description || `Alert #${alert.id}`}
                   time={new Date(alert.createdAt).toLocaleString()}
                   type="alert"
@@ -252,7 +252,7 @@ export default function DashboardPage() {
                       {caseItem.caseReference}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      {caseItem.description?.substring(0, 50)}...
+                      {caseItem.description ? `${caseItem.description.substring(0, 50)}...` : ""}
                     </Typography>
                   </Box>
                   <Chip 
@@ -297,10 +297,10 @@ export default function DashboardPage() {
             </Box>
             {recentTransactions && recentTransactions.length > 0 ? (
               <Box sx={{ display: "flex", gap: 2, overflowX: "auto", pb: 1 }}>
-                {recentTransactions.map((txn: any, idx: number) => (
-                  <Card key={idx} sx={{ minWidth: 200, p: 2 }}>
+  {recentTransactions.map((txn: any) => (
+                   <Card key={txn.txnId || txn.id} sx={{ minWidth: 200, p: 2 }}>
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      Transaction #{txn.txnId || txn.id || idx}
+                      Transaction #{txn.txnId || txn.id || "N/A"}
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, my: 1 }}>
                       {txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}
