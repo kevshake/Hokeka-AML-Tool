@@ -28,6 +28,7 @@ import {
 } from "@mui/material";
 import { useCases } from "../../features/api/queries";
 import { useCreateCase } from "../../features/api/mutations";
+import { useAuth } from "../../contexts/AuthContext";
 import type { CaseStatus, Priority } from "../../types";
 
 const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
@@ -52,6 +53,7 @@ export default function CasesAllCases() {
     const [createOpen, setCreateOpen] = useState(false);
     const [newCase, setNewCase] = useState({ caseReference: "", description: "", priority: "MEDIUM" as Priority });
 
+    const { user } = useAuth();
     const { data: cases, isLoading, isError, error } = useCases({
         page: page.index,
         size: page.size,
@@ -62,7 +64,7 @@ export default function CasesAllCases() {
 
     const handleCreateCase = () => {
         if (!newCase.caseReference.trim()) return;
-        createCase.mutate(newCase, {
+        createCase.mutate({ ...newCase, creatorUserId: user?.id }, {
             onSuccess: () => {
                 setCreateOpen(false);
                 setNewCase({ caseReference: "", description: "", priority: "MEDIUM" });
