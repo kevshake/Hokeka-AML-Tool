@@ -20,8 +20,14 @@ import {
     Avatar,
     Typography,
     Stack,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
 } from "@mui/material";
 import { useCases } from "../../features/api/queries";
+import { useCreateCase } from "../../features/api/mutations";
 import type { CaseStatus, Priority } from "../../types";
 
 const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
@@ -43,12 +49,26 @@ const priorityConfig: Record<string, { color: string; bgColor: string; label: st
 export default function CasesAllCases() {
     const [statusFilter, setStatusFilter] = useState<string>("");
     const [page, setPage] = useState({ index: 0, size: 25 });
-    
+    const [createOpen, setCreateOpen] = useState(false);
+    const [newCase, setNewCase] = useState({ caseReference: "", description: "", priority: "MEDIUM" as Priority });
+
     const { data: cases, isLoading, isError, error } = useCases({
         page: page.index,
         size: page.size,
         status: statusFilter || undefined,
     });
+
+    const createCase = useCreateCase();
+
+    const handleCreateCase = () => {
+        if (!newCase.caseReference.trim()) return;
+        createCase.mutate(newCase, {
+            onSuccess: () => {
+                setCreateOpen(false);
+                setNewCase({ caseReference: "", description: "", priority: "MEDIUM" });
+            },
+        });
+    };
 
     return (
         <Box sx={{ mt: 1 }}>
@@ -93,10 +113,11 @@ export default function CasesAllCases() {
                             </Select>
                         </FormControl>
                     </Tooltip>
-                    <Button 
-                        variant="contained" 
-                        sx={{ 
-                            backgroundColor: "#8B4049", 
+                    <Button
+                        variant="contained"
+                        onClick={() => setCreateOpen(true)}
+                        sx={{
+                            backgroundColor: "#8B4049",
                             "&:hover": { backgroundColor: "#6B3037" },
                             textTransform: "none",
                             borderRadius: 1.5,
@@ -248,6 +269,53 @@ export default function CasesAllCases() {
                     }}
                 />
             </TableContainer>
+
+            <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Create New Case</DialogTitle>
+                <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+                    <TextField
+                        label="Case Reference"
+                        value={newCase.caseReference}
+                        onChange={(e) => setNewCase(prev => ({ ...prev, caseReference: e.target.value }))}
+                        required
+                        fullWidth
+                        size="small"
+                    />
+                    <TextField
+                        label="Description"
+                        value={newCase.description}
+                        onChange={(e) => setNewCase(prev => ({ ...prev, description: e.target.value }))}
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={3}
+                    />
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Priority</InputLabel>
+                        <Select
+                            value={newCase.priority}
+                            label="Priority"
+                            onChange={(e) => setNewCase(prev => ({ ...prev, priority: e.target.value as Priority }))}
+                        >
+                            <MenuItem value="CRITICAL">Critical</MenuItem>
+                            <MenuItem value="HIGH">High</MenuItem>
+                            <MenuItem value="MEDIUM">Medium</MenuItem>
+                            <MenuItem value="LOW">Low</MenuItem>
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCreateOpen(false)} sx={{ textTransform: "none" }}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleCreateCase}
+                        disabled={!newCase.caseReference.trim() || createCase.isPending}
+                        sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" }, textTransform: "none" }}
+                    >
+                        {createCase.isPending ? "Creating..." : "Create Case"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

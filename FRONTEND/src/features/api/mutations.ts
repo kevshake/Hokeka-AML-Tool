@@ -1,6 +1,26 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type { AmlRule, VelocityRule, RiskThreshold } from "../../types/rules";
+import type { Priority } from "../../types";
+
+// Case Mutations
+export interface CreateCaseRequest {
+  caseReference: string;
+  description: string;
+  priority: Priority;
+  creatorUserId?: number;
+}
+
+export const useCreateCase = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateCaseRequest) =>
+      apiClient.post("compliance/cases/workflow/create", req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    },
+  });
+};
 
 // AML Rules Mutations
 export const useCreateAmlRule = () => {
