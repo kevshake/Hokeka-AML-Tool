@@ -74,7 +74,7 @@ export default function SettingsPage() {
   // Fetch all PSPs
   const { data: psps, isLoading: isLoadingPsps } = useQuery<Psp[]>({
     queryKey: ["settings", "psps"],
-    queryFn: () => apiClient.get<Psp[]>("settings/psps"),
+    queryFn: () => apiClient.get<Psp[]>("settings/psps").then(res => res.data),
   });
 
   // Fetch theme presets
@@ -100,8 +100,9 @@ export default function SettingsPage() {
   // Update theme mutation
   const updateThemeMutation = useMutation({
     mutationFn: async (data: Partial<PspTheme>) => {
-      return apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data);
-    },
+  const res = await apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data);
+  return res.data;
+},
     onSuccess: () => {
       setSuccessMessage("Theme updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["settings", "psps", selectedPspId, "theme"] });
@@ -248,7 +249,7 @@ export default function SettingsPage() {
                 <FormControl fullWidth>
                   <InputLabel>Select PSP</InputLabel>
                   <Select
-                    value={selectedPspId || ""}
+                    value={selectedPspId ?? ""}
                     onChange={(e) => handlePspChange(e.target.value as number)}
                     label="Select PSP"
                     disabled={isLoadingPsps}
