@@ -36,7 +36,7 @@ import {
 } from "@mui/icons-material";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { User, Role, Psp } from "../../types/userManagement";
-import { useUsers } from "../../features/api/queries";
+import { useUsers, useRoles, useAllPsps } from "../../features/api/queries";
 
 export default function UsersTab() {
     const queryClient = useQueryClient();
@@ -64,10 +64,9 @@ export default function UsersTab() {
     // Extract users from paginated response
     const users = usersPage?.content || [];
 
-    // Fetch roles for dropdown
-    import { useRoles, useAllPsps } from "../../features/api/queries";
-const { data: roles } = useRoles();
-const { data: psps } = useAllPsps();
+    // Fetch roles and PSPs for dropdowns
+    const { data: roles } = useRoles();
+    const { data: psps } = useAllPsps();
 
     // Create/Update user mutation
     const saveUserMutation = useMutation({
