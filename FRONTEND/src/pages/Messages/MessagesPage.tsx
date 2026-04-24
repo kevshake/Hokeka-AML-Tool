@@ -3,9 +3,22 @@ import { apiClient } from "../../lib/apiClient";
 import { useQuery } from "@tanstack/react-query";
 
 export default function MessagesPage() {
-  const { data: messages, isLoading } = useQuery({
+  interface Message {
+  id: string; // or number, depending on your data
+  subject?: string;
+  title?: string;
+  body?: string;
+  content?: string;
+  read?: boolean;
+}
+
+const { data: messages, isLoading, isError, error } = useQuery<Message[]>({ ... });
+// Then, display error if needed:
+{isError && (
+  <Typography sx={{ color: "text.error" }}>Error: {error instanceof Error ? error.message : 'Unknown error'}</Typography>
+)}
     queryKey: ["messages"],
-    queryFn: () => apiClient.get("messages"),
+    queryFn: () => apiClient.get("messages").then(res => res.data),
   });
 
   return (
@@ -21,9 +34,9 @@ export default function MessagesPage() {
           </Box>
         ) : messages && Array.isArray(messages) && messages.length > 0 ? (
           <List>
-            {messages.map((message: any, idx: number) => (
+            {messages.map((message) => (
               <ListItem
-                key={idx}
+                key={message.id}
                 sx={{
                   borderBottom: "1px solid rgba(0,0,0,0.1)",
                   "&:hover": { backgroundColor: "rgba(255,255,255,0.05)" },
