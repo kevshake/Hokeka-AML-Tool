@@ -132,16 +132,17 @@
         <form action="perform_login" method="POST" id="loginForm">
             <input type="hidden" name="_csrf" id="csrfToken">
             <div class="form-group">
-                <input type="text" name="username" class="form-control" placeholder="Username" required autofocus>
-            </div>
-            <div class="form-group">
-                <input type="password" name="password" class="form-control" placeholder="Password" required>
+              <label for="username" style="display:none">Username</label>
+<input type="text" id="username" name="username" class="form-control" placeholder="Username" autocomplete="username" required autofocus>
+
+<label for="password" style="display:none">Password</label>
+<input type="password" id="password" name="password" class="form-control" placeholder="Password" autocomplete="current-password" required> 
             </div>
             <button type="submit" class="btn-login">Sign In</button>
         </form>
 
         <div style="margin-top: 14px; text-align: center; font-size: 0.95rem;">
-            <a href="password-reset.html" style="color: var(--accent-color); text-decoration: none;">
+            <a href="/password-reset.html" style="color: var(--accent-color); text-decoration: none;">
                 <i class="fas fa-unlock-alt"></i> Forgot password?
             </a>
         </div>
@@ -156,8 +157,9 @@
                 }
             })
             .catch(() => {
-                // CSRF token fetch failed, form will still work
-            });
+    document.querySelector('.btn-login').disabled = true;
+    document.querySelector('.btn-login').textContent = 'Login unavailable';
+});
 
         // Handle error messages from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
@@ -188,7 +190,9 @@
                     break;
                 default:
                     // Show the actual error code for debugging
-                    msg = '<i class="fas fa-exclamation-triangle"></i> Authentication failed: ' + error;
+                    const safeError = document.createElement('span');
+safeError.textContent = error;
+msg = '<i class="fas fa-exclamation-triangle"></i> Authentication failed: ' + safeError.innerHTML;
             }
 
             errorMsgDiv.innerHTML = msg;
@@ -196,7 +200,7 @@
         }
 
         // Handle expired session message
-        if (urlParams.get('expired')) {
+        else if (urlParams.get('expired')) {
             const expiredMsg = document.createElement('div');
             expiredMsg.className = 'alert-error';
             expiredMsg.style.display = 'block';
@@ -205,7 +209,7 @@
         }
 
         // Handle invalid session message
-        if (urlParams.get('invalid')) {
+        else if (urlParams.get('invalid')) {
             const invalidMsg = document.createElement('div');
             invalidMsg.className = 'alert-error';
             invalidMsg.style.display = 'block';
@@ -218,10 +222,10 @@
             const redirectPath = sessionStorage.getItem('redirectAfterLogin');
             if (redirectPath) {
                 // Add hidden field to preserve redirect
-                const redirectInput = document.createElement('input');
-                redirectInput.type = 'hidden';
-                redirectInput.name = 'redirect';
-                redirectInput.value = redirectPath;
+                const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+const safePath = redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/dashboard';
+...
+redirectInput.value = safePath;
                 this.appendChild(redirectInput);
             }
         });
