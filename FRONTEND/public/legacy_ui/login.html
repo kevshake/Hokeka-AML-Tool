@@ -132,12 +132,13 @@
         <form action="perform_login" method="POST" id="loginForm">
             <input type="hidden" name="_csrf" id="csrfToken">
             <div class="form-group">
-              <label for="username" style="display:none">Username</label>
-<input type="text" id="username" name="username" class="form-control" placeholder="Username" autocomplete="username" required autofocus>
-
-<label for="password" style="display:none">Password</label>
-<input type="password" id="password" name="password" class="form-control" placeholder="Password" autocomplete="current-password" required> 
-            </div>
+    <label for="username" style="display:none">Username</label>
+    <input type="text" id="username" name="username" class="form-control" placeholder="Username" autocomplete="username" required autofocus>
+</div>
+<div class="form-group">
+    <label for="password" style="display:none">Password</label>
+    <input type="password" id="password" name="password" class="form-control" placeholder="Password" autocomplete="current-password" required>
+</div>
             <button type="submit" class="btn-login">Sign In</button>
         </form>
 
@@ -219,14 +220,13 @@ msg = '<i class="fas fa-exclamation-triangle"></i> Authentication failed: ' + sa
 
         // Handle successful login redirect
         document.getElementById('loginForm').addEventListener('submit', function (e) {
+const redirectPath = sessionStorage.getItem('redirectAfterLogin');
 const safePath = redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/dashboard';
 const redirectInput = document.createElement('input');
 redirectInput.type = 'hidden';
 redirectInput.name = 'redirect';
 redirectInput.value = safePath;
 this.appendChild(redirectInput);
-redirectInput.value = sa
-            }
         });
     </script>
     
