@@ -2,8 +2,7 @@ import { Box, Paper, Typography, List, ListItem, ListItemText, Chip } from "@mui
 import { apiClient } from "../../lib/apiClient";
 import { useQuery } from "@tanstack/react-query";
 
-export default function MessagesPage() {
-  interface Message {
+interface Message {
   id: string; // or number, depending on your data
   subject?: string;
   title?: string;
@@ -12,14 +11,11 @@ export default function MessagesPage() {
   read?: boolean;
 }
 
-const { data: messages, isLoading, isError, error } = useQuery<Message[]>({ ... });
-// Then, display error if needed:
-{isError && (
-  <Typography sx={{ color: "text.error" }}>Error: {error instanceof Error ? error.message : 'Unknown error'}</Typography>
-)}
-    queryKey: ["messages"],
-    queryFn: () => apiClient.get("messages").then(res => res.data),
-  });
+export default function MessagesPage() {
+const { data: messages, isLoading, isError, error } = useQuery<Message[]>({
+  queryKey: ["messages"],
+  queryFn: () => apiClient.get("messages").then(res => res.data),
+});
 
   return (
     <Box>
