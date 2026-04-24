@@ -1,64 +1,53 @@
 /* ==========================================================================
-   AML Fraud Detector - Light Blue Dark Theme
+   Hokeka AML Intelligence Platform — Luxury Dark Theme
    Glassmorphism / Frosted Glass Design
-   
+
    CUSTOMIZATION: Each PSP/Bank can override the :root variables below
    to create their own branded theme.
    ========================================================================== */
 
 /* ==========================================================================
-   THEME VARIABLES - Customize these for each PSP/Bank
-   ========================================================================== */
-/* ==========================================================================
-   THEME VARIABLES - Customize these for each PSP/Bank
-   ========================================================================== */
-/* ==========================================================================
-   THEME VARIABLES - Customize these for each PSP/Bank
+   THEME VARIABLES - Luxury Navy & Champagne Gold
    ========================================================================== */
 :root {
-    /* Primary Brand Colors - Deep Reds/Burgundy */
-    --primary-color: #a93226;
-    /* Deep Burgundy/Red */
-    --primary-light: #cd6155;
-    /* Lighter Red */
-    --primary-dark: #7b241c;
-    /* Dark Burgundy */
+    /* Primary Brand Colors - Deep Navy */
+    --primary-color: #1e3a5f;
+    --primary-light: #2d5a8e;
+    --primary-dark: #0f2035;
 
-    /* Accent Colors - Mustard Yellow/Gold */
-    --accent-color: #f1c40f;
-    /* Mustard Gold */
-    --accent-light: #f4d03f;
-    --accent-glow: rgba(241, 196, 15, 0.4);
+    /* Accent Colors - Champagne Gold */
+    --accent-color: #c9a84c;
+    --accent-light: #e8c870;
+    --accent-glow: rgba(201, 168, 76, 0.35);
 
-    /* Background Gradient - Deep Void */
-    --bg-gradient-start: #050507;
-    --bg-gradient-end: #0a0a0f;
-    --bg-gradient: radial-gradient(circle at top left, #1c0b0b 0%, #050507 100%);
-    /* Slight red tint in void */
+    /* Background Gradient - Midnight Navy */
+    --bg-gradient-start: #060b14;
+    --bg-gradient-end: #0d1525;
+    --bg-gradient: radial-gradient(circle at top left, #0f1e35 0%, #060b14 100%);
 
-    /* Glassmorphism Properties - Enhanced for Depth */
-    --glass-bg: rgba(20, 20, 28, 0.4);
-    --glass-bg-hover: rgba(35, 30, 35, 0.6);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    /* Glassmorphism Properties - Navy-tinted Frosted Glass */
+    --glass-bg: rgba(13, 25, 45, 0.45);
+    --glass-bg-hover: rgba(20, 38, 65, 0.65);
+    --glass-border: rgba(201, 168, 76, 0.12);
     --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7);
-    --inner-glow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+    --inner-glow: inset 0 1px 1px 0 rgba(201, 168, 76, 0.06);
     --glass-blur: blur(20px);
 
     /* Elevations / Depth Tiers */
-    --elevation-low: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    --elevation-mid: 0 12px 24px -6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    --elevation-high: 0 20px 48px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    --elevation-low: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(201, 168, 76, 0.05);
+    --elevation-mid: 0 12px 24px -6px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(201, 168, 76, 0.07);
+    --elevation-high: 0 20px 48px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(201, 168, 76, 0.1);
 
     /* Sidebar */
     --sidebar-width: 260px;
-    --sidebar-bg: rgba(10, 10, 15, 0.85);
-    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --sidebar-bg: rgba(8, 16, 30, 0.88);
+    --sidebar-border: rgba(201, 168, 76, 0.1);
 
     /* Text Colors */
-    --text-primary: #ffffff;
-    --text-secondary: #bdc3c7;
-    --text-muted: #7f8c8d;
-    --text-accent: #f1c40f;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #4a6080;
+    --text-accent: #c9a84c;
 
     /* Spacing */
     --spacing-xs: 0.25rem;
@@ -79,11 +68,11 @@
     --transition-bounce: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
     /* Dashboard Specific Colors */
-    --card-bg-color: #1a1a24;
-    --text-color: #ffffff;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --border-color-light: rgba(255, 255, 255, 0.05);
-    --bg-color-dark: #050507;
+    --card-bg-color: #0f1e35;
+    --text-color: #e2e8f0;
+    --border-color: rgba(201, 168, 76, 0.12);
+    --border-color-light: rgba(201, 168, 76, 0.06);
+    --bg-color-dark: #060b14;
 }
 
 /* Global Select & Dropdown Visibility Improvements */
@@ -92,9 +81,8 @@ select {
 }
 
 select option {
-    background-color: #1a1a24;
-    /* Solid background for visibility */
-    color: #ffffff;
+    background-color: #0f1e35;
+    color: #e2e8f0;
     padding: 10px;
 }
 
@@ -109,14 +97,14 @@ select option {
 
 html,
 body {
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 15px;
     line-height: 1.6;
     color: var(--text-primary);
     background:
-        radial-gradient(at 0% 0%, rgba(169, 50, 38, 0.1) 0, transparent 40%),
-        radial-gradient(at 100% 0%, rgba(241, 196, 15, 0.05) 0, transparent 40%),
-        radial-gradient(at 50% 100%, rgba(123, 36, 28, 0.15) 0, transparent 50%),
+        radial-gradient(ellipse at 0% 0%, rgba(201, 168, 76, 0.05) 0, transparent 45%),
+        radial-gradient(ellipse at 100% 0%, rgba(30, 58, 95, 0.3) 0, transparent 45%),
+        radial-gradient(ellipse at 50% 100%, rgba(15, 32, 53, 0.4) 0, transparent 55%),
         var(--bg-gradient);
     background-attachment: fixed;
     min-height: 100vh;
@@ -209,14 +197,14 @@ body {
 }
 
 .nav-item.active {
-    background: linear-gradient(90deg, rgba(169, 50, 38, 0.2), rgba(169, 50, 38, 0));
-    color: #fff;
-    border: 1px solid rgba(169, 50, 38, 0.3);
-    box-shadow: 0 0 15px rgba(169, 50, 38, 0.1);
+    background: linear-gradient(90deg, rgba(201, 168, 76, 0.12), rgba(201, 168, 76, 0.02));
+    color: #e2e8f0;
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    box-shadow: 0 0 16px rgba(201, 168, 76, 0.08);
 }
 
 .nav-item.active i {
-    color: var(--primary-light);
+    color: var(--accent-color);
 }
 
 .nav-item i {
@@ -264,8 +252,8 @@ body {
 .nav-subitem.active {
     color: var(--accent-color);
     font-weight: 600;
-    background: rgba(169, 50, 38, 0.15);
-    border-left: 3px solid var(--primary-color);
+    background: rgba(201, 168, 76, 0.08);
+    border-left: 3px solid var(--accent-color);
     padding-left: calc(52px - 3px);
 }
 
@@ -324,9 +312,9 @@ body {
 }
 
 .search-box:focus-within {
-    border-color: var(--primary-light);
-    box-shadow: 0 0 0 2px rgba(169, 50, 38, 0.2);
-    background: rgba(40, 40, 55, 0.8);
+    border-color: rgba(201, 168, 76, 0.4);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+    background: rgba(13, 25, 45, 0.8);
 }
 
 .search-box i {
@@ -371,10 +359,11 @@ body {
 }
 
 .header-icon:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
+    background: rgba(201, 168, 76, 0.12);
+    border-color: rgba(201, 168, 76, 0.4);
+    color: var(--accent-color);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(169, 50, 38, 0.4);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.15);
 }
 
 .user-profile {
@@ -400,7 +389,7 @@ body {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    border: 2px solid var(--primary-light);
+    border: 2px solid var(--accent-color);
 }
 
 .user-profile span {
@@ -521,10 +510,10 @@ body {
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
     opacity: 0;
     transition: opacity var(--transition-normal);
 }
@@ -730,9 +719,9 @@ body {
 
 .chart-tabs .tab:hover,
 .chart-tabs .tab.active {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
-    color: white;
+    background: rgba(201, 168, 76, 0.15);
+    border-color: rgba(201, 168, 76, 0.35);
+    color: var(--accent-color);
 }
 
 .card-actions {
@@ -788,28 +777,30 @@ body {
 }
 
 .table-card .card-header h3 i {
-    color: var(--primary-color);
+    color: var(--accent-color);
 }
 
 .btn-primary {
-    background: var(--primary-color);
-    color: white;
+    background: linear-gradient(135deg, #b8924a 0%, #c9a84c 50%, #d4b660 100%);
+    color: #060b14;
     border: none;
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--radius-md);
     font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     cursor: pointer;
     transition: all var(--transition-bounce);
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    box-shadow: var(--elevation-low);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2), var(--elevation-low);
 }
 
 .btn-primary:hover {
-    background: var(--primary-dark);
+    background: linear-gradient(135deg, #b8924a 0%, #c9a84c 100%);
     transform: translateY(-2px);
-    box-shadow: var(--elevation-mid);
+    box-shadow: 0 8px 20px rgba(201, 168, 76, 0.25), var(--elevation-mid);
 }
 
 .btn-secondary {
@@ -864,7 +855,7 @@ body {
 }
 
 .case-id {
-    color: var(--primary-light);
+    color: var(--accent-color);
     font-weight: 500;
 }
 
@@ -932,9 +923,9 @@ body {
 }
 
 .action-btn:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
-    color: white;
+    background: rgba(201, 168, 76, 0.15);
+    border-color: rgba(201, 168, 76, 0.4);
+    color: var(--accent-color);
 }
 
 /* ==========================================================================
@@ -1088,10 +1079,11 @@ body {
 .activity-dot {
     width: 10px;
     height: 10px;
-    background: var(--primary-color);
+    background: var(--accent-color);
     border-radius: 50%;
     flex-shrink: 0;
     margin-top: 4px;
+    box-shadow: 0 0 6px rgba(201, 168, 76, 0.4);
 }
 
 .activity-content {
@@ -1100,7 +1092,7 @@ body {
 }
 
 .activity-user {
-    color: var(--primary-light);
+    color: var(--accent-color);
     font-weight: 500;
 }
 
@@ -1136,8 +1128,9 @@ body {
 }
 
 .settings-widget:hover {
-    background: var(--primary-color);
-    color: white;
+    background: rgba(201, 168, 76, 0.12);
+    border-color: rgba(201, 168, 76, 0.3);
+    color: var(--accent-color);
 }
 
 .settings-widget i {
@@ -1351,7 +1344,8 @@ body {
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-    border-color: var(--primary-color);
+    border-color: rgba(201, 168, 76, 0.5);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
 }
 
 .checkbox-grid {
@@ -1492,8 +1486,8 @@ body {
 }
 
 .regulatory-report-table thead {
-    background: rgba(169, 50, 38, 0.2);
-    border-bottom: 2px solid var(--primary-color);
+    background: rgba(201, 168, 76, 0.08);
+    border-bottom: 2px solid rgba(201, 168, 76, 0.3);
 }
 
 .regulatory-report-table th {
@@ -1612,13 +1606,13 @@ body {
 }
 
 .transaction-row.new-transaction {
-    background-color: rgba(169, 50, 38, 0.2);
+    background-color: rgba(201, 168, 76, 0.08);
     animation: highlightNew 2s ease-out;
 }
 
 @keyframes highlightNew {
     0% {
-        background-color: rgba(169, 50, 38, 0.4);
+        background-color: rgba(201, 168, 76, 0.18);
     }
 
     100% {
@@ -1742,7 +1736,7 @@ body {
 }
 
 .calendar-day.is-today {
-    box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.28);
+    box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.35);
 }
 
 .calendar-day-number {
@@ -1762,8 +1756,8 @@ body {
     font-size: 0.7rem;
     padding: 2px 8px;
     border-radius: 999px;
-    background: rgba(241, 196, 15, 0.14);
-    border: 1px solid rgba(241, 196, 15, 0.22);
+    background: rgba(201, 168, 76, 0.12);
+    border: 1px solid rgba(201, 168, 76, 0.22);
     color: var(--accent-light);
 }
 
@@ -1815,7 +1809,7 @@ body {
 }
 
 .merchant-section h3 {
-    color: var(--primary-color);
+    color: var(--accent-color);
     margin-bottom: 15px;
     font-size: 1.2rem;
 }
@@ -1862,8 +1856,8 @@ body {
 }
 
 .risk-badge.medium {
-    background: #f1c40f;
-    color: #333;
+    background: rgba(201, 168, 76, 0.2);
+    color: #c9a84c;
 }
 
 .risk-badge.low {
@@ -1923,10 +1917,10 @@ body {
 }
 
 .owner-card {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(201, 168, 76, 0.04);
     border-radius: 8px;
     padding: 15px;
-    border-left: 3px solid var(--primary-color);
+    border-left: 3px solid var(--accent-color);
 }
 
 .owner-card h4 {

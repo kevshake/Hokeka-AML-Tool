@@ -936,7 +936,7 @@ window.exportNetworkGraphPng = function() {
 // Get node color based on type
 function getNodeColor(type) {
     const colors = {
-        'CASE': { background: '#a93226', border: '#7b241c' },
+        'CASE': { background: '#1e3a5f', border: '#2d5a8e' },
         'TRANSACTION': { background: '#e67e22', border: '#d35400' },
         'SAR': { background: '#2980b9', border: '#1f618d' },
         'MERCHANT': { background: '#16a085', border: '#138d75' },

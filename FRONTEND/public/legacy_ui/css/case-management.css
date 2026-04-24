@@ -43,8 +43,8 @@
 }
 
 .tab-btn.active {
-    color: var(--primary-color);
-    border-bottom-color: var(--primary-color);
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
 }
 
 .case-tab-content {
@@ -185,8 +185,8 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: linear-gradient(to bottom, var(--primary-color), transparent);
-    opacity: 0.3;
+    background: linear-gradient(to bottom, var(--accent-color), transparent);
+    opacity: 0.25;
 }
 
 .timeline-event {
@@ -289,7 +289,8 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: var(--primary-color);
+    background: var(--accent-color);
+    box-shadow: 0 0 6px rgba(201, 168, 76, 0.45);
     margin-top: 5px;
     flex-shrink: 0;
 }
@@ -404,7 +405,7 @@
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.case-color { background: #a93226; }
+.case-color { background: #2d5a8e; }
 .transaction-color { background: #e67e22; }
 .sar-color { background: #2980b9; }
 .merchant-color { background: #16a085; }
@@ -440,7 +441,7 @@
 .network-loading i {
     font-size: 2rem;
     margin-bottom: var(--spacing-sm);
-    color: var(--primary-color);
+    color: var(--accent-color);
 }
 
 .network-error {
@@ -489,7 +490,7 @@
     text-transform: uppercase;
 }
 
-.node-type-badge.case { background: rgba(169, 50, 38, 0.3); color: #a93226; }
+.node-type-badge.case { background: rgba(45, 90, 142, 0.3); color: #5b9bd5; }
 .node-type-badge.transaction { background: rgba(230, 126, 34, 0.3); color: #e67e22; }
 .node-type-badge.sar { background: rgba(41, 128, 185, 0.3); color: #2980b9; }
 .node-type-badge.merchant { background: rgba(22, 160, 133, 0.3); color: #16a085; }
@@ -548,7 +549,7 @@
 }
 
 .network-node.case {
-    border-color: var(--primary-color);
+    border-color: #2d5a8e;
 }
 
 .network-node.transaction {
@@ -681,12 +682,13 @@
     border-radius: var(--radius-sm);
     border: none;
     cursor: pointer;
-    background: var(--primary-color);
-    color: white;
+    background: linear-gradient(135deg, #b8924a, #c9a84c);
+    color: #060b14;
     transition: var(--transition-normal);
 }
 
 .btn-small:hover {
-    background: var(--primary-dark);
+    background: linear-gradient(135deg, #c9a84c, #d4b660);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.25);
 }
 

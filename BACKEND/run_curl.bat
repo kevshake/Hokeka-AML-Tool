@@ -1,1 +1,0 @@
-curl -v -H "Content-Type: application/json" -H "X-XSRF-TOKEN: 3dc09df4-d05e-451d-9080-0765b5a5a5cf" -b cookies_headless.txt -c cookies_headless.txt -d "{\"merchantId\":\"6\",\"terminalId\":\"TERM-HEADLESS\",\"amountCents\":50000,\"currency\":\"USD\",\"pan\":\"4111111111111111\",\"direction\":\"INBOUND\"}" http://127.0.0.1:2637/api/v1/transactions/ingest > response.json 2>&1

@@ -4,152 +4,419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - AML Fraud Detector</title>
+    <title>Hokeka — Secure Access</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            /* Deep Void Background */
-            --bg-gradient-start: #050507;
-            --bg-gradient-end: #1a1a1c;
+            --midnight: #060b14;
+            --deep-navy: #0d1b2a;
+            --navy: #112240;
+            --navy-light: #1a2f4a;
 
-            /* Theme Colors */
-            --primary-color: #a93226;
-            /* Deep Burgundy */
-            --accent-color: #f1c40f;
-            /* Mustard Gold */
-            --text-secondary: #bdc3c7;
+            --gold: #c9a84c;
+            --gold-light: #e8c870;
+            --gold-pale: #f5e6b8;
+            --gold-dim: rgba(201, 168, 76, 0.15);
+            --gold-glow: rgba(201, 168, 76, 0.25);
 
-            /* Glassmorphism */
-            --glass-bg: rgba(20, 20, 30, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.08);
+            --platinum: #e2e8f0;
+            --silver: #94a3b8;
+            --muted: #4a6080;
+
+            --glass-bg: rgba(13, 27, 42, 0.65);
+            --glass-border: rgba(201, 168, 76, 0.18);
+            --glass-blur: blur(20px);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
-            height: 100vh;
+            min-height: 100vh;
             background:
-                radial-gradient(at 0% 0%, rgba(169, 50, 38, 0.1) 0, transparent 40%),
-                radial-gradient(at 100% 0%, rgba(241, 196, 15, 0.1) 0, transparent 40%),
-                linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+                radial-gradient(ellipse at 15% 20%, rgba(201, 168, 76, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 80%, rgba(17, 34, 64, 0.8) 0%, transparent 60%),
+                radial-gradient(ellipse at 50% 50%, rgba(13, 27, 42, 0.5) 0%, transparent 70%),
+                linear-gradient(145deg, var(--midnight) 0%, #091525 50%, #060d18 100%);
             background-attachment: fixed;
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: var(--platinum);
+            overflow: hidden;
         }
 
-        .login-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            padding: 3rem;
-            border-radius: 16px;
+        /* Subtle animated grid overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(201, 168, 76, 0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(201, 168, 76, 0.025) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Floating orb accent */
+        body::after {
+            content: '';
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(201, 168, 76, 0.04) 0%, transparent 70%);
+            top: -200px;
+            right: -200px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
             width: 100%;
-            max-width: 400px;
-            box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            max-width: 440px;
+            padding: 1.5rem;
         }
 
-        .login-header {
+        /* Brand mark above card */
+        .brand-mark {
             text-align: center;
             margin-bottom: 2rem;
         }
 
-        .login-header h1 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
+        .brand-mark .shield-icon {
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.875rem;
+            box-shadow:
+                0 0 0 1px rgba(201, 168, 76, 0.3),
+                0 8px 24px rgba(201, 168, 76, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
         }
 
-        .login-header p {
-            color: #94a3b8;
-            margin: 0;
+        .brand-mark .shield-icon i {
+            font-size: 1.4rem;
+            color: var(--midnight);
+        }
+
+        .brand-mark .brand-name {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 1.75rem;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            color: var(--platinum);
+            display: block;
+            line-height: 1;
+        }
+
+        .brand-mark .brand-tagline {
+            font-size: 0.7rem;
+            font-weight: 400;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--gold);
+            display: block;
+            margin-top: 0.5rem;
+        }
+
+        .login-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            padding: 2.75rem 2.5rem;
+            border-radius: 20px;
+            box-shadow:
+                0 32px 64px -16px rgba(0, 0, 0, 0.7),
+                0 0 0 1px rgba(201, 168, 76, 0.06),
+                inset 0 1px 0 rgba(201, 168, 76, 0.12),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle top shimmer line */
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.5), transparent);
+        }
+
+        .login-card-header {
+            margin-bottom: 2rem;
+        }
+
+        .login-card-header h2 {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 1.35rem;
+            font-weight: 500;
+            color: var(--platinum);
+            letter-spacing: 0.02em;
+            margin-bottom: 0.35rem;
+        }
+
+        .login-card-header p {
+            font-size: 0.8rem;
+            color: var(--silver);
+            font-weight: 300;
+            letter-spacing: 0.03em;
         }
 
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 0.5rem;
         }
 
         .form-control {
             width: 100%;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: white;
-            font-size: 1rem;
-            box-sizing: border-box;
+            padding: 0.8rem 1rem;
+            background: rgba(6, 11, 20, 0.5);
+            border: 1px solid rgba(201, 168, 76, 0.15);
+            border-radius: 10px;
+            color: var(--platinum);
+            font-size: 0.9rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            letter-spacing: 0.02em;
+        }
+
+        .form-control::placeholder {
+            color: var(--muted);
+            font-weight: 300;
         }
 
         .form-control:focus {
             outline: none;
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.2);
+            border-color: rgba(201, 168, 76, 0.5);
+            background: rgba(6, 11, 20, 0.7);
+            box-shadow:
+                0 0 0 3px rgba(201, 168, 76, 0.08),
+                inset 0 1px 3px rgba(0, 0, 0, 0.3);
         }
 
         .btn-login {
             width: 100%;
-            padding: 12px;
-            background: var(--primary-color);
-            color: white;
+            padding: 0.875rem;
+            background: linear-gradient(135deg, #b8924a 0%, #c9a84c 40%, #d4b660 100%);
+            color: var(--midnight);
             border: none;
-            border-radius: 8px;
-            font-size: 1rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
             font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow:
+                0 4px 16px rgba(201, 168, 76, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+            margin-top: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-login::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.2s;
         }
 
         .btn-login:hover {
-            background: #c0392b;
-            box-shadow: 0 0 15px rgba(169, 50, 38, 0.4);
             transform: translateY(-1px);
+            box-shadow:
+                0 8px 24px rgba(201, 168, 76, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-login:hover::before {
+            opacity: 1;
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(201, 168, 76, 0.2);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0 1.25rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(201, 168, 76, 0.12);
+        }
+
+        .forgot-link {
+            display: block;
+            text-align: center;
+            font-size: 0.78rem;
+            color: var(--silver);
+            text-decoration: none;
+            letter-spacing: 0.03em;
+            transition: color 0.2s;
+        }
+
+        .forgot-link i {
+            margin-right: 0.35rem;
+            font-size: 0.7rem;
+            color: var(--gold);
+        }
+
+        .forgot-link:hover {
+            color: var(--gold-light);
         }
 
         .alert-error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.5);
-            color: #fca5a5;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            text-align: center;
+            background: rgba(220, 53, 69, 0.08);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #f1a1a9;
+            padding: 0.875rem 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.25rem;
+            font-size: 0.82rem;
+            letter-spacing: 0.02em;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .alert-error i {
+            margin-top: 1px;
+            flex-shrink: 0;
+            color: #f87171;
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(201, 168, 76, 0.08);
+        }
+
+        .security-badge span {
+            font-size: 0.65rem;
+            color: var(--muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 400;
+        }
+
+        .security-badge i {
+            font-size: 0.6rem;
+            color: rgba(201, 168, 76, 0.4);
         }
     </style>
 </head>
 
 <body>
-    <div class="login-card">
-        <div class="login-header">
-            <h1><i class="fas fa-shield-alt"></i> AML Detector</h1>
-            <p>Secure Access Portal</p>
+    <div class="login-wrapper">
+        <div class="brand-mark">
+            <div class="shield-icon">
+                <i class="fas fa-shield-halved"></i>
+            </div>
+            <span class="brand-name">Hokeka</span>
+            <span class="brand-tagline">AML Intelligence Platform</span>
         </div>
 
-        <!-- Error Message Placeholder -->
-        <div id="error-msg" class="alert-error" style="display: none;">
-            Invalid username or password
-        </div>
+        <div class="login-card">
+            <div class="login-card-header">
+                <h2>Welcome back</h2>
+                <p>Sign in to access your compliance dashboard</p>
+            </div>
 
-        <form action="perform_login" method="POST" id="loginForm">
-            <input type="hidden" name="_csrf" id="csrfToken">
-            <div class="form-group">
-    <label for="username" style="display:none">Username</label>
-    <input type="text" id="username" name="username" class="form-control" placeholder="Username" autocomplete="username" required autofocus>
-</div>
-<div class="form-group">
-    <label for="password" style="display:none">Password</label>
-    <input type="password" id="password" name="password" class="form-control" placeholder="Password" autocomplete="current-password" required>
-</div>
-            <button type="submit" class="btn-login">Sign In</button>
-        </form>
+            <div id="error-msg" class="alert-error" style="display: none;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>Invalid credentials. Please try again.</span>
+            </div>
 
-        <div style="margin-top: 14px; text-align: center; font-size: 0.95rem;">
-            <a href="/password-reset.html" style="color: var(--accent-color); text-decoration: none;">
-                <i class="fas fa-unlock-alt"></i> Forgot password?
+            <form action="perform_login" method="POST" id="loginForm">
+                <input type="hidden" name="_csrf" id="csrfToken">
+
+                <div class="form-group">
+                    <label class="form-label" for="username">Username</label>
+                    <input type="text" id="username" name="username" class="form-control"
+                        placeholder="Enter your username" autocomplete="username" required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-control"
+                        placeholder="Enter your password" autocomplete="current-password" required>
+                </div>
+
+                <button type="submit" class="btn-login">
+                    <i class="fas fa-arrow-right-to-bracket" style="margin-right: 0.5rem;"></i>
+                    Sign In
+                </button>
+            </form>
+
+            <div class="divider"></div>
+
+            <a href="/password-reset.html" class="forgot-link">
+                <i class="fas fa-key"></i>
+                Forgot your password?
             </a>
+
+            <div class="security-badge">
+                <i class="fas fa-lock"></i>
+                <span>256-bit encrypted &nbsp;·&nbsp; ISO 27001 compliant</span>
+            </div>
         </div>
     </div>
+
+    <div style="position: fixed; bottom: 1rem; right: 1.25rem; font-size: 0.6rem; color: rgba(201, 168, 76, 0.25); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 300;">
+        Powered by Hokeka
+    </div>
+
     <script>
-        // Get CSRF token
         fetch('auth/csrf', { credentials: 'include' })
             .then(res => res.json())
             .then(data => {
@@ -158,82 +425,66 @@
                 }
             })
             .catch(() => {
-    document.querySelector('.btn-login').disabled = true;
-    document.querySelector('.btn-login').textContent = 'Login unavailable';
-});
+                const btn = document.querySelector('.btn-login');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:0.5rem"></i>Login unavailable';
+            });
 
-        // Handle error messages from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const error = urlParams.get('error');
 
         if (error) {
             const errorMsgDiv = document.getElementById('error-msg');
-            let msg = '<i class="fas fa-exclamation-circle"></i> Login failed';
+            let msg = '';
 
             switch (error) {
                 case 'bad_credentials':
-                    msg = '<i class="fas fa-times-circle"></i> Invalid username or password.';
+                    msg = 'Invalid username or password. Please try again.';
                     break;
                 case 'disabled':
-                    msg = '<i class="fas fa-ban"></i> Account is disabled. Please contact support.';
+                    msg = 'Your account is disabled. Please contact your administrator.';
                     break;
                 case 'locked':
-                    msg = '<i class="fas fa-lock"></i> Account is locked. Please contact support.';
+                    msg = 'Your account is locked due to multiple failed attempts.';
                     break;
                 case 'system_error':
-                    msg = '<i class="fas fa-server"></i> System error. Please try again later.';
+                    msg = 'A system error occurred. Please try again later.';
                     break;
                 case 'user_not_found':
-                    msg = '<i class="fas fa-user-slash"></i> User not found. Check your username.';
+                    msg = 'No account found with that username.';
                     break;
                 case 'expired':
-                    msg = '<i class="fas fa-clock"></i> Account credentials have expired.';
+                    msg = 'Your credentials have expired. Please contact your administrator.';
                     break;
                 default:
-                    // Show the actual error code for debugging
                     const safeError = document.createElement('span');
-safeError.textContent = error;
-msg = '<i class="fas fa-exclamation-triangle"></i> Authentication failed: ' + safeError.innerHTML;
+                    safeError.textContent = error;
+                    msg = 'Authentication failed: ' + safeError.textContent;
             }
 
-            errorMsgDiv.innerHTML = msg;
-            errorMsgDiv.style.display = 'block';
+            errorMsgDiv.querySelector('span').textContent = msg;
+            errorMsgDiv.style.display = 'flex';
+        } else if (urlParams.get('expired')) {
+            const errorMsgDiv = document.getElementById('error-msg');
+            errorMsgDiv.querySelector('i').className = 'fas fa-clock';
+            errorMsgDiv.querySelector('span').textContent = 'Your session has expired. Please sign in again.';
+            errorMsgDiv.style.display = 'flex';
+        } else if (urlParams.get('invalid')) {
+            const errorMsgDiv = document.getElementById('error-msg');
+            errorMsgDiv.querySelector('span').textContent = 'Invalid session. Please sign in again.';
+            errorMsgDiv.style.display = 'flex';
         }
 
-        // Handle expired session message
-        else if (urlParams.get('expired')) {
-            const expiredMsg = document.createElement('div');
-            expiredMsg.className = 'alert-error';
-            expiredMsg.style.display = 'block';
-            expiredMsg.innerHTML = '<i class="fas fa-clock"></i> Your session has expired. Please log in again.';
-            document.querySelector('.login-card').insertBefore(expiredMsg, document.getElementById('error-msg'));
-        }
-
-        // Handle invalid session message
-        else if (urlParams.get('invalid')) {
-            const invalidMsg = document.createElement('div');
-            invalidMsg.className = 'alert-error';
-            invalidMsg.style.display = 'block';
-            invalidMsg.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Invalid session. Please log in again.';
-            document.querySelector('.login-card').insertBefore(invalidMsg, document.getElementById('error-msg'));
-        }
-
-        // Handle successful login redirect
         document.getElementById('loginForm').addEventListener('submit', function (e) {
-const redirectPath = sessionStorage.getItem('redirectAfterLogin');
-const safePath = redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/dashboard';
-const redirectInput = document.createElement('input');
-redirectInput.type = 'hidden';
-redirectInput.name = 'redirect';
-redirectInput.value = safePath;
-this.appendChild(redirectInput);
+            const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+            const safePath = redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/dashboard';
+            const redirectInput = document.createElement('input');
+            redirectInput.type = 'hidden';
+            redirectInput.name = 'redirect';
+            redirectInput.value = safePath;
+            this.appendChild(redirectInput);
         });
     </script>
-    
-    <!-- Footer -->
-    <div style="position: fixed; bottom: 8px; right: 8px; font-size: 0.5rem; color: rgba(255, 255, 255, 0.3); opacity: 0.4; font-weight: 300;">
-        Powered by Hokeka
-    </div>
 </body>
 
 </html>
