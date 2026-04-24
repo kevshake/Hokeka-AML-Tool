@@ -34,7 +34,7 @@ import {
     PersonOff as DisableIcon,
     PersonAdd as EnableIcon,
 } from "@mui/icons-material";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { User, Role, Psp } from "../../types/userManagement";
 import { useUsers } from "../../features/api/queries";
 
@@ -65,24 +65,9 @@ export default function UsersTab() {
     const users = usersPage?.content || [];
 
     // Fetch roles for dropdown
-    const { data: roles } = useQuery<Role[]>({
-        queryKey: ["roles"],
-        queryFn: async () => {
-            const response = await fetch("/api/v1/roles");
-            if (!response.ok) throw new Error("Failed to fetch roles");
-            return response.json();
-        },
-    });
-
-    // Fetch PSPs for dropdown
-    const { data: psps } = useQuery<Psp[]>({
-        queryKey: ["psps"],
-        queryFn: async () => {
-            const response = await fetch("/api/v1/psp");
-            if (!response.ok) throw new Error("Failed to fetch PSPs");
-            return response.json();
-        },
-    });
+    import { useRoles, useAllPsps } from "../../features/api/queries";
+const { data: roles } = useRoles();
+const { data: psps } = useAllPsps();
 
     // Create/Update user mutation
     const saveUserMutation = useMutation({
@@ -165,7 +150,8 @@ export default function UsersTab() {
     };
 
     const handleSave = () => {
-        const userData: any = {
+    if (!formData.username || !formData.firstName || !formData.lastName || !formData.email || !formData.roleId) return;
+    const userData: any = {
             username: formData.username,
             email: formData.email,
             firstName: formData.firstName,
