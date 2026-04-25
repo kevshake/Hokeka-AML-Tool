@@ -341,7 +341,7 @@ export default function DashboardPage() {
                 <Button
                   variant="contained"
                   startIcon={<AssignmentIcon />}
-                  onClick={() => navigate("/cases/create")}
+                  onClick={() => navigate("/cases/all")}
                   sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" } }}
                 >
                   Create Case
@@ -352,23 +352,23 @@ export default function DashboardPage() {
                   onClick={() => navigate("/transaction-monitoring/live")}
                   sx={{ backgroundColor: "#27ae60", "&:hover": { backgroundColor: "#219a52" } }}
                 >
-                  Create Transaction
+                  Monitor Transactions
                 </Button>
                 <Button
                   variant="contained"
                   startIcon={<AccountBalanceIcon />}
-                  onClick={() => navigate("/merchants/add")}
+                  onClick={() => navigate("/merchants")}
                   sx={{ backgroundColor: "#3498db", "&:hover": { backgroundColor: "#2980b9" } }}
                 >
-                  Create Merchant
+                  Add Merchant
                 </Button>
                 <Button
                   variant="contained"
                   startIcon={<NotificationsIcon />}
-                  onClick={() => navigate("/alerts/create")}
+                  onClick={() => navigate("/alerts")}
                   sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
                 >
-                  Create Alert
+                  View Alerts
                 </Button>
               </Box>
             </Box>
