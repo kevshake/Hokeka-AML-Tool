@@ -145,7 +145,7 @@ export default function RegulatoryReportsPage() {
                   </TableHead>
                   <TableBody>
                     {report.transactions.slice(0, 20).map((txn: any, idx: number) => (
-                      <TableRow key={idx} hover>
+                      <TableRow key={txn.id || txn.transactionId || idx} hover>
                         <TableCell sx={{ color: "text.primary" }}>#{txn.id || txn.transactionId || idx}</TableCell>
                         <TableCell sx={{ color: "text.primary" }}>{txn.merchantId || "N/A"}</TableCell>
                         <TableCell sx={{ color: "text.primary" }}>

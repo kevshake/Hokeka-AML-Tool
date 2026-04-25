@@ -46,7 +46,7 @@ export default function TransactionMonitoringAnalytics() {
         {riskIndicators && Array.isArray(riskIndicators) && riskIndicators.length > 0 && (
           <>
             {riskIndicators.slice(0, 4).map((indicator: any, idx: number) => (
-              <Grid item xs={12} sm={6} md={3} key={idx}>
+              <Grid item xs={12} sm={6} md={3} key={indicator.id || indicator.name || idx}>
                 <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
                   <CardContent>
                     <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
@@ -103,7 +103,7 @@ export default function TransactionMonitoringAnalytics() {
               <Box>
                 {riskIndicators.map((indicator: any, idx: number) => (
                   <Box
-                    key={idx}
+                    key={indicator.id || indicator.name || idx}
                     sx={{
                       p: 2,
                       mb: 0.5,

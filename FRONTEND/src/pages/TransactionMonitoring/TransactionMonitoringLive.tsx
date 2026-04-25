@@ -69,7 +69,7 @@ export default function TransactionMonitoringLive() {
                     </TableRow>
                   ) : transactions?.content && transactions.content.length > 0 ? (
                     transactions.content.map((txn: any, idx: number) => (
-                      <TableRow key={idx} hover>
+                      <TableRow key={txn.txnId || txn.transactionId || txn.id || idx} hover>
                         <TableCell sx={{ color: "text.primary", py: 2 }}>#{txn.txnId || txn.transactionId || txn.id || idx}</TableCell>
                         <TableCell sx={{ color: "text.primary", py: 2 }}>{txn.merchantId || "-"}</TableCell>
                         <TableCell sx={{ color: "text.primary", py: 2 }}>
@@ -124,7 +124,7 @@ export default function TransactionMonitoringLive() {
               <Box>
                 {recentActivity.slice(0, 10).map((activity: any, idx: number) => (
                   <Box
-                    key={idx}
+                    key={activity.id || activity.timestamp || idx}
                     sx={{
                       p: 1.5,
                       mb: 0.5,
