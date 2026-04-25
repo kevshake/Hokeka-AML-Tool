@@ -13,10 +13,16 @@ import {
   Tooltip,
   TablePagination,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid,
+  Divider,
 } from "@mui/material";
 import { useState } from "react";
 import { useAlerts } from "../../features/api/queries";
-import type { Priority } from "../../types";
+import type { Alert, Priority } from "../../types";
 
 const priorityColors: Record<Priority, string> = {
   CRITICAL: "#e74c3c",
@@ -33,7 +39,8 @@ const statusColors: Record<string, string> = {
 
 export default function AlertsPage() {
   const [page, setPage] = useState({ index: 0, size: 25 });
-  
+  const [viewAlert, setViewAlert] = useState<Alert | null>(null);
+
   const { data: alerts, isLoading, isError, error } = useAlerts({
     page: page.index,
     size: page.size,
@@ -45,7 +52,7 @@ export default function AlertsPage() {
         <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
           Alerts
         </Typography>
-        <Tooltip title="Perform bulk actions on multiple selected alerts simultaneously. You can mark multiple alerts as resolved, assign priority levels, or apply status changes to all selected items at once. Select alerts using the checkboxes in the table before using this feature." arrow enterDelay={2000}>
+        <Tooltip title="Perform bulk actions on multiple selected alerts simultaneously." arrow enterDelay={2000}>
           <Button variant="contained" sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}>
             Bulk Actions
           </Button>
@@ -114,11 +121,9 @@ export default function AlertsPage() {
                     {new Date(alert.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell sx={{ py: 2 }}>
-                    <Tooltip title="View comprehensive details about this alert including transaction information, risk score, merchant details, investigation history, and all related case information. Opens a detailed view panel with full alert context." arrow enterDelay={2000}>
-                      <Button size="small" sx={{ color: "#a93226" }}>
-                        View
-                      </Button>
-                    </Tooltip>
+                    <Button size="small" sx={{ color: "#a93226", textTransform: "none" }} onClick={() => setViewAlert(alert)}>
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -141,7 +146,86 @@ export default function AlertsPage() {
           onRowsPerPageChange={(e) => setPage({ index: 0, size: parseInt(e.target.value, 10) })}
         />
       </TableContainer>
+
+      {/* Alert Detail Modal */}
+      <Dialog open={!!viewAlert} onClose={() => setViewAlert(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Box>
+            <Typography variant="h6">Alert #{viewAlert?.id}</Typography>
+            <Typography variant="caption" color="text.secondary">{viewAlert?.alertType}</Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {viewAlert && (
+              <Chip
+                label={viewAlert.priority}
+                size="small"
+                sx={{
+                  backgroundColor: priorityColors[viewAlert.priority] + "20",
+                  color: priorityColors[viewAlert.priority],
+                  fontWeight: 600,
+                }}
+              />
+            )}
+            {viewAlert && (
+              <Chip
+                label={viewAlert.status}
+                size="small"
+                sx={{
+                  backgroundColor: statusColors[viewAlert.status] + "20",
+                  color: statusColors[viewAlert.status],
+                  fontWeight: 600,
+                }}
+              />
+            )}
+          </Box>
+        </DialogTitle>
+        <Divider />
+        {viewAlert && (
+          <DialogContent sx={{ pt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="overline" color="text.secondary">Description</Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.6 }}>
+                  {viewAlert.description || "No description provided."}
+                </Typography>
+              </Grid>
+              {viewAlert.transactionId && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="overline" color="text.secondary">Transaction ID</Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, fontFamily: "monospace" }}>
+                    #{viewAlert.transactionId}
+                  </Typography>
+                </Grid>
+              )}
+              {viewAlert.caseId && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="overline" color="text.secondary">Linked Case</Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, fontFamily: "monospace" }}>
+                    Case #{viewAlert.caseId}
+                  </Typography>
+                </Grid>
+              )}
+              <Grid item xs={12} sm={6}>
+                <Typography variant="overline" color="text.secondary">Created</Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {new Date(viewAlert.createdAt).toLocaleString()}
+                </Typography>
+              </Grid>
+              {viewAlert.resolvedAt && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="overline" color="text.secondary">Resolved</Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, color: "#2ecc71" }}>
+                    {new Date(viewAlert.resolvedAt).toLocaleString()}
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={() => setViewAlert(null)} sx={{ textTransform: "none" }}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
-
