@@ -56,11 +56,48 @@ export default function AuditLogsPage() {
 
   const actionTypes = ["LOGIN", "LOGOUT", "CREATE", "UPDATE", "DELETE", "VIEW", "EXPORT", "OVERRIDE"];
 
+  const handleExportCSV = () => {
+    const content = (logs as any)?.content || [];
+    if (!content.length) return;
+    const headers = ["ID", "Action", "Entity Type", "Entity ID", "Username", "Role", "PSP ID", "Timestamp", "Success", "Reason"];
+    const rows = content.map((log: any) => [
+      log.id,
+      log.actionType,
+      log.entityType || "",
+      log.entityId || "",
+      log.username || "",
+      log.userRole || "",
+      log.pspId ?? "",
+      log.timestamp ? new Date(log.timestamp).toISOString() : "",
+      log.success ?? "",
+      (log.reason || "").replace(/,/g, ";"),
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-logs-${filters.startDate}-to-${filters.endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
-        Audit Logs
-      </Typography>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
+          Audit Logs
+        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={!(logs as any)?.content?.length}
+          onClick={handleExportCSV}
+          sx={{ textTransform: "none", color: "text.secondary", borderColor: "rgba(0,0,0,0.2)", fontSize: "0.75rem" }}
+        >
+          Export CSV
+        </Button>
+      </Box>
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
