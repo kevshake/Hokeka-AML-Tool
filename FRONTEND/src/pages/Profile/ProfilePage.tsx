@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Grid,
@@ -93,7 +93,7 @@ export default function ProfilePage() {
   });
 
   // Initialize form when user data loads
-  useState(() => {
+  useEffect(() => {
     if (user) {
       setProfileData({
         firstName: user.firstName || "",
@@ -101,7 +101,7 @@ export default function ProfilePage() {
         email: user.email || "",
       });
     }
-  });
+  }, [user]);
 
   const handleUpdateProfile = () => {
     updateProfileMutation.mutate(profileData);
