@@ -1,0 +1,6 @@
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/model/AmlResult.java
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/controller/AmlCheckController.java
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/config/AerospikeConfig.java
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/service/AmlCheckService.java
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/AmlMicroserviceApplication.java
+/home/ubuntu/aml-microservice/src/main/java/com/hokeka/aml/model/TransactionRequest.java

@@ -1,0 +1,6 @@
+com/hokeka/aml/controller/AmlCheckController.class
+com/hokeka/aml/model/AmlResult.class
+com/hokeka/aml/model/TransactionRequest.class
+com/hokeka/aml/AmlMicroserviceApplication.class
+com/hokeka/aml/config/AerospikeConfig.class
+com/hokeka/aml/service/AmlCheckService.class
