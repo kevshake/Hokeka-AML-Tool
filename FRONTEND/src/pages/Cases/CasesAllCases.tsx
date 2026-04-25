@@ -26,12 +26,14 @@ import {
     DialogActions,
     TextField,
     Alert,
+    Divider,
+    Grid,
 } from "@mui/material";
 import { useCases } from "../../features/api/queries";
 import { useCreateCase } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
 import type { ApiError } from "../../lib/apiClient";
-import type { Priority } from "../../types";
+import type { Case, Priority } from "../../types";
 
 const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
     NEW: { color: "#3498db", bgColor: "#ebf5fb", label: "New" },
@@ -54,6 +56,7 @@ export default function CasesAllCases() {
     const [page, setPage] = useState({ index: 0, size: 25 });
     const [createOpen, setCreateOpen] = useState(false);
     const [newCase, setNewCase] = useState({ caseReference: "", description: "", priority: "MEDIUM" as Priority });
+    const [viewCase, setViewCase] = useState<Case | null>(null);
 
     const { user } = useAuth();
     const { data: cases, isLoading, isError, error } = useCases({
@@ -243,6 +246,7 @@ export default function CasesAllCases() {
                                                     borderColor: "#8B4049",
                                                 }
                                             }}
+                                            onClick={() => setViewCase(caseItem)}
                                         >
                                             View
                                         </Button>
@@ -331,6 +335,111 @@ export default function CasesAllCases() {
                     >
                         {createCase.isPending ? "Creating..." : "Create Case"}
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Case Detail Modal */}
+            <Dialog open={!!viewCase} onClose={() => setViewCase(null)} maxWidth="md" fullWidth>
+                <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Box>
+                        <Typography variant="h6" sx={{ fontFamily: "monospace", fontWeight: 700 }}>
+                            {viewCase?.caseReference}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Case Details</Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                        {viewCase && (
+                            <Chip
+                                label={statusConfig[viewCase.status]?.label || viewCase.status}
+                                size="small"
+                                sx={{
+                                    backgroundColor: statusConfig[viewCase.status]?.bgColor || "#f5f5f5",
+                                    color: statusConfig[viewCase.status]?.color || "#666",
+                                    fontWeight: 600,
+                                }}
+                            />
+                        )}
+                        {viewCase && (
+                            <Chip
+                                label={priorityConfig[viewCase.priority]?.label || viewCase.priority}
+                                size="small"
+                                sx={{
+                                    backgroundColor: priorityConfig[viewCase.priority]?.bgColor || "#f5f5f5",
+                                    color: priorityConfig[viewCase.priority]?.color || "#666",
+                                    fontWeight: 600,
+                                    fontSize: "0.7rem",
+                                }}
+                            />
+                        )}
+                    </Box>
+                </DialogTitle>
+                <Divider />
+                {viewCase && (
+                    <DialogContent sx={{ pt: 2 }}>
+                        <Grid container spacing={3}>
+                            <Grid item xs={12}>
+                                <Typography variant="overline" color="text.secondary">Description</Typography>
+                                <Typography variant="body2" sx={{ mt: 0.5, color: "text.primary", lineHeight: 1.6 }}>
+                                    {viewCase.description || "No description provided."}
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="overline" color="text.secondary">Assigned To</Typography>
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                    {viewCase.assignedTo
+                                        ? `${viewCase.assignedTo.firstName || ""} ${viewCase.assignedTo.lastName || ""}`.trim() || viewCase.assignedTo.username
+                                        : "Unassigned"}
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="overline" color="text.secondary">Created By</Typography>
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                    {viewCase.createdBy
+                                        ? `${viewCase.createdBy.firstName || ""} ${viewCase.createdBy.lastName || ""}`.trim() || viewCase.createdBy.username
+                                        : "—"}
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="overline" color="text.secondary">Created</Typography>
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                    {new Date(viewCase.createdAt).toLocaleString()}
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Typography variant="overline" color="text.secondary">Last Updated</Typography>
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                    {new Date(viewCase.updatedAt).toLocaleString()}
+                                </Typography>
+                            </Grid>
+                            {viewCase.slaDeadline && (
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="overline" color="text.secondary">SLA Deadline</Typography>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            mt: 0.5,
+                                            color: new Date(viewCase.slaDeadline) < new Date() ? "#e74c3c" : "text.primary",
+                                            fontWeight: new Date(viewCase.slaDeadline) < new Date() ? 600 : 400,
+                                        }}
+                                    >
+                                        {new Date(viewCase.slaDeadline).toLocaleString()}
+                                        {new Date(viewCase.slaDeadline) < new Date() && " (OVERDUE)"}
+                                    </Typography>
+                                </Grid>
+                            )}
+                            {viewCase.daysOpen !== undefined && (
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="overline" color="text.secondary">Age</Typography>
+                                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                        {viewCase.daysOpen === 0 ? "Today" : `${viewCase.daysOpen} day${viewCase.daysOpen !== 1 ? "s" : ""}`}
+                                    </Typography>
+                                </Grid>
+                            )}
+                        </Grid>
+                    </DialogContent>
+                )}
+                <DialogActions>
+                    <Button onClick={() => setViewCase(null)} sx={{ textTransform: "none" }}>Close</Button>
                 </DialogActions>
             </Dialog>
         </Box>
