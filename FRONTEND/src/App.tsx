@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import MainLayout from "./components/Layout/MainLayout";
+import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
 
 // Auth pages — small, load eagerly so login is instant
 import LoginPage from "./pages/Auth/LoginPage";
@@ -64,7 +65,8 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MainLayout>
-                      <Suspense fallback={<PageLoader />}>
+                      <RouteErrorBoundary>
+                        <Suspense fallback={<PageLoader />}>
                         <Routes>
                           <Route path="/" element={<Navigate to="/dashboard" replace />} />
                           <Route path="/dashboard/*" element={<DashboardPage />} />
@@ -85,7 +87,8 @@ function App() {
                           <Route path="/rules-generation" element={<RulesGenerationPage />} />
                           <Route path="/kyc-documents" element={<KycDocumentsPage />} />
                         </Routes>
-                      </Suspense>
+                        </Suspense>
+                      </RouteErrorBoundary>
                     </MainLayout>
                   </ProtectedRoute>
                 }
