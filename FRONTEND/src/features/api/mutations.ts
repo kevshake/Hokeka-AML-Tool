@@ -155,3 +155,22 @@ export const useCreateMerchant = () => {
     },
   });
 };
+
+// Compliance Calendar Mutations
+export interface CreateDeadlineRequest {
+  title: string;
+  description?: string;
+  dueDate: string;
+  deadlineType?: string;
+}
+
+export const useCreateDeadline = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateDeadlineRequest) =>
+      apiClient.post("compliance/calendar", req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compliance", "calendar"] });
+    },
+  });
+};
