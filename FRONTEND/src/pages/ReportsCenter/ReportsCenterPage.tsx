@@ -191,7 +191,6 @@ export default function ReportsCenterPage() {
       } catch (error) {
         const apiError = error as ReportApiError;
         showError(apiError.message || "Failed to generate report");
-        console.error("Generate report error:", error);
       }
     },
     [generateMutation, showSuccess, showError, refetchHistory]
@@ -224,7 +223,6 @@ export default function ReportsCenterPage() {
       } catch (error) {
         const apiError = error as ReportApiError;
         showError(apiError.message || "Failed to schedule report");
-        console.error("Schedule report error:", error);
       }
     },
     [scheduleMutation, selectedReport, showSuccess, showError]
@@ -245,7 +243,6 @@ export default function ReportsCenterPage() {
       } catch (error) {
         const apiError = error as ReportApiError;
         showError(apiError.message || "Failed to download report");
-        console.error("Download report error:", error);
       }
     },
     [downloadMutation, showSuccess, showError]
@@ -260,7 +257,6 @@ export default function ReportsCenterPage() {
       } catch (error) {
         const apiError = error as ReportApiError;
         showError(apiError.message || "Failed to delete report");
-        console.error("Delete report error:", error);
       }
     },
     [deleteMutation, showSuccess, showError, refetchHistory]

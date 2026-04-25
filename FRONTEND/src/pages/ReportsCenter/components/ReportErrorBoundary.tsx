@@ -32,7 +32,6 @@ export default class ReportErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Report Error Boundary caught an error:", error, errorInfo);
     this.setState({ error, errorInfo });
   }
 
