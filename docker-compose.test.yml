@@ -1,0 +1,111 @@
+# Test / UAT Environment
+# Ports: Nginx 5174 (Frontend), Backend 2638 (internal only), Aerospike 3002
+# Note: Uses external postgres (fraud-detector-postgres-test)
+
+version: '3.8'
+
+services:
+  # Nginx Reverse Proxy (Test)
+  nginx-test:
+    image: nginx:1.25-alpine
+    container_name: fd-test-nginx
+    ports:
+      - "5174:80"
+    volumes:
+      - ./nginx-test.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend-test:
+        condition: service_started
+      backend-test:
+        condition: service_started
+    networks:
+      - fd-test-network
+      - test_fraud-detector-test
+    restart: unless-stopped
+
+  # Aerospike Cache (Test) - Port 3002
+  aerospike-test:
+    image: aerospike/aerospike-server:6.4
+    container_name: fd-test-aerospike
+    ports:
+      - "3002:3000"
+    volumes:
+      - aerospike_test_data:/opt/aerospike/data
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD", "asinfo", "-p", "3000", "-v", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fd-test-network
+    restart: always
+
+  # Backend API (Test) - Exposed for external clients, internal for dashboard
+  backend-test:
+    build:
+      context: ./BACKEND
+      dockerfile: Dockerfile.test
+    container_name: fd-test-backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
+      DATABASE_USERNAME: fraud_detector_test
+      DATABASE_PASSWORD: test_password_secure
+      AEROSPIKE_HOSTS: fd-test-aerospike:3000
+      AEROSPIKE_ENABLED: "true"
+      AEROSPIKE_NAMESPACE: aml_fraud
+      SERVER_PORT: 2638
+      SPRING_PROFILES_ACTIVE: test
+      # CORS - allow external domains and internal nginx
+      CORS_ALLOWED_ORIGINS: https://testaml.hokeka.com,https://testapi.hokeka.com,http://localhost:5174,http://localhost
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_FLYWAY_ENABLED: "false"
+      JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseG1GC"
+    # Exposed for external API clients (e.g., PSP integrations)
+    ports:
+      - "2638:2638"
+    depends_on:
+      aerospike-test:
+        condition: service_healthy
+    # Health check using TCP socket since actuator may not be available
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:2638/api/v1/health || nc -z localhost 2638"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+    networks:
+      - fd-test-network
+      - test_fraud-detector-test
+    restart: unless-stopped
+
+  # Frontend (Test) - Internal only, served via nginx
+  frontend-test:
+    build:
+      context: ./FRONTEND
+      dockerfile: Dockerfile
+      args:
+        # Use relative URL - nginx will proxy /api to backend
+        VITE_API_URL: /api
+    container_name: fd-test-frontend
+    environment:
+      VITE_API_URL: /api
+    # No external port exposed - only accessible via nginx
+    depends_on:
+      backend-test:
+        condition: service_started
+    networks:
+      - fd-test-network
+    restart: unless-stopped
+
+volumes:
+  aerospike_test_data:
+
+networks:
+  fd-test-network:
+    driver: bridge
+  test_fraud-detector-test:
+    external: true
