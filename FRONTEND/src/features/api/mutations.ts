@@ -124,6 +124,18 @@ export const useCreateRiskThreshold = () => {
   });
 };
 
+// Alert Mutations
+export const useUpdateAlertStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiClient.put(`alerts/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+};
+
 // Merchant Mutations
 export interface CreateMerchantRequest {
   merchantId: string;
