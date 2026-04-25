@@ -16,8 +16,24 @@ export default function TransactionMonitoringReports() {
     .reduce((sum, t) => sum + (t.amountCents || 0), 0);
 
   const handleExport = () => {
-    // TODO: Implement export functionality
-    alert("Export functionality will be implemented");
+    if (!transactionList.length) return;
+    const headers = ["ID", "Merchant ID", "Decision", "Amount (USD)", "Currency", "Timestamp"];
+    const rows = transactionList.map(t => [
+      t.id,
+      t.merchantId || "",
+      t.decision || "",
+      t.amountCents != null ? (t.amountCents / 100).toFixed(2) : "",
+      t.currency || "",
+      t.txnTs ? new Date(t.txnTs).toISOString() : "",
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transaction-report-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

@@ -13,8 +13,31 @@ export default function RegulatoryReportsPage() {
   };
 
   const handleExport = () => {
-    // TODO: Implement export functionality
-    alert(`Exporting ${reportType.toUpperCase()} report...`);
+    if (!report) return;
+    const today = new Date().toISOString().split("T")[0];
+    const transactions = report.transactions && Array.isArray(report.transactions) ? report.transactions : [];
+    const headers = ["Transaction ID", "Merchant ID", "Amount (USD)", "Date"];
+    const rows = transactions.map((txn: any) => [
+      txn.id || txn.transactionId || "",
+      txn.merchantId || "",
+      txn.amountCents != null ? (txn.amountCents / 100).toFixed(2) : "0.00",
+      txn.txnTs || txn.timestamp ? new Date(txn.txnTs || txn.timestamp).toISOString().split("T")[0] : "",
+    ]);
+    const summary = [
+      `${reportType.toUpperCase()} Report`,
+      `Total Transactions,${report.totalTransactions || report.transactionCount || 0}`,
+      `Total Amount,$${report.totalAmount ? (report.totalAmount / 100).toFixed(2) : "0.00"}`,
+      "",
+      headers.join(","),
+      ...rows.map((r: string[]) => r.join(",")),
+    ].join("\n");
+    const blob = new Blob([summary], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${reportType.toUpperCase()}-report-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

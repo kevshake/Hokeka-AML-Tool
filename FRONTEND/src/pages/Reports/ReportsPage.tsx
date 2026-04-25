@@ -6,8 +6,30 @@ export default function ReportsPage() {
   const { data: stats, isLoading } = useDashboardStats();
 
   const handleExport = (reportType: string) => {
-    // TODO: Implement export functionality
-    alert(`Exporting ${reportType} report...`);
+    if (!stats) return;
+    let csv = "";
+    const today = new Date().toISOString().split("T")[0];
+
+    if (reportType === "cases") {
+      const statusRows = stats.casesByStatus ? Object.entries(stats.casesByStatus).map(([s, c]) => `${s},${c}`) : [];
+      const trendRows = stats.casesLast7d ? Object.entries(stats.casesLast7d).map(([d, c]) => `${d},${c}`) : [];
+      csv = `Cases by Status\nStatus,Count\n${statusRows.join("\n")}\n\nCases Last 7 Days\nDate,Count\n${trendRows.join("\n")}`;
+    } else if (reportType === "sars") {
+      const statusRows = stats.sarsByStatus ? Object.entries(stats.sarsByStatus).map(([s, c]) => `${s},${c}`) : [];
+      const trendRows = stats.sarsLast7d ? Object.entries(stats.sarsLast7d).map(([d, c]) => `${d},${c}`) : [];
+      csv = `SARs by Status\nStatus,Count\n${statusRows.join("\n")}\n\nSARs Last 7 Days\nDate,Count\n${trendRows.join("\n")}`;
+    } else if (reportType === "audit") {
+      csv = `Audit Activity Summary\nMetric,Value\nLast 24h Events,${stats.auditLast24h || 0}`;
+    }
+
+    if (!csv) return;
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${reportType}-report-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

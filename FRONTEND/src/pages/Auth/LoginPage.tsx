@@ -11,6 +11,7 @@ import {
     CircularProgress,
     Tooltip,
     Link,
+    Snackbar,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
 import { Link as RouterLink } from "react-router-dom";
@@ -23,6 +24,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [infoSnackbar, setInfoSnackbar] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +41,7 @@ export default function LoginPage() {
     };
 
     return (
+        <>
         <Box
             sx={{
                 minHeight: "100vh",
@@ -166,7 +169,7 @@ export default function LoginPage() {
                         <Button
                             variant="text"
                             size="small"
-                            onClick={() => alert("Please contact your administrator to reset your password.")}
+                            onClick={() => setInfoSnackbar("Please contact your administrator to reset your password.")}
                             sx={{ color: "#8B4049", textTransform: "none" }}
                         >
                             Forgot Password?
@@ -192,5 +195,17 @@ export default function LoginPage() {
                 </Box>
             </Paper>
         </Box>
+
+        <Snackbar
+            open={!!infoSnackbar}
+            autoHideDuration={6000}
+            onClose={() => setInfoSnackbar("")}
+            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        >
+            <Alert severity="info" onClose={() => setInfoSnackbar("")} sx={{ width: "100%" }}>
+                {infoSnackbar}
+            </Alert>
+        </Snackbar>
+        </>
     );
 }

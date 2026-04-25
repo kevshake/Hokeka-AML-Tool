@@ -28,6 +28,8 @@ import {
   CardContent,
   Switch,
   FormControlLabel,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -64,6 +66,7 @@ export default function RulesGenerationPage() {
   const [editingRule, setEditingRule] = useState<any>(null);
   const [effectivenessDialog, setEffectivenessDialog] = useState<number | null>(null);
   const [filterBy, setFilterBy] = useState<"all" | "super-admin" | "my-psp">("all");
+  const [errorSnackbar, setErrorSnackbar] = useState("");
 
   const { data: currentUser } = useCurrentUser();
   const { data: psps } = useAllPsps();
@@ -199,7 +202,7 @@ export default function RulesGenerationPage() {
       setEditingRule(null);
     } catch (error: any) {
       console.error("Error saving rule:", error);
-      alert(error?.message || "Failed to save rule. Please check if the API endpoint is available.");
+      setErrorSnackbar(error?.message || "Failed to save rule. Please check if the API endpoint is available.");
     }
   };
 
@@ -711,6 +714,17 @@ export default function RulesGenerationPage() {
         onClose={() => setEffectivenessDialog(null)}
         effectiveness={effectiveness}
       />
+
+      <Snackbar
+        open={!!errorSnackbar}
+        autoHideDuration={8000}
+        onClose={() => setErrorSnackbar("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="error" onClose={() => setErrorSnackbar("")} sx={{ width: "100%" }}>
+          {errorSnackbar}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
