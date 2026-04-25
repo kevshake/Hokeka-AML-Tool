@@ -19,9 +19,14 @@ import {
   DialogActions,
   Grid,
   Divider,
+  TextField,
+  MenuItem,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { useState } from "react";
 import { useMerchants } from "../../features/api/queries";
+import { useCreateMerchant, type CreateMerchantRequest } from "../../features/api/mutations";
 import type { Merchant } from "../../types";
 
 const riskColors: Record<string, string> = {
@@ -35,14 +40,30 @@ const formatScore = (score: number | null | undefined): string => {
   return score.toFixed(1);
 };
 
+const kycStatuses = ["PENDING", "VERIFIED", "REJECTED", "UNDER_REVIEW"];
+const contractStatuses = ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"];
+
 export default function MerchantsPage() {
   const [page, setPage] = useState({ index: 0, size: 25 });
   const [viewMerchant, setViewMerchant] = useState<Merchant | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [formData, setFormData] = useState<CreateMerchantRequest>({
+    merchantId: "",
+    businessName: "",
+    mcc: "",
+    kycStatus: "",
+    contractStatus: "",
+  });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+    open: false, message: "", severity: "success",
+  });
 
-  const { data: merchants, isLoading } = useMerchants({
+  const { data: merchants, isLoading, isError, error } = useMerchants({
     page: page.index,
     size: page.size,
   });
+
+  const createMerchant = useCreateMerchant();
 
   const handleExportCSV = () => {
     const content = merchants?.content || [];
@@ -68,6 +89,18 @@ export default function MerchantsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleAddMerchant = async () => {
+    if (!formData.merchantId.trim() || !formData.businessName.trim()) return;
+    try {
+      await createMerchant.mutateAsync(formData);
+      setAddOpen(false);
+      setFormData({ merchantId: "", businessName: "", mcc: "", kycStatus: "", contractStatus: "" });
+      setSnackbar({ open: true, message: "Merchant onboarded successfully.", severity: "success" });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err?.message || "Failed to onboard merchant.", severity: "error" });
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -86,7 +119,11 @@ export default function MerchantsPage() {
           </Button>
         </Box>
         <Tooltip title="Onboard a new merchant to the system." arrow enterDelay={2000}>
-          <Button variant="contained" sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}>
+          <Button
+            variant="contained"
+            onClick={() => setAddOpen(true)}
+            sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
+          >
             Add Merchant
           </Button>
         </Tooltip>
@@ -112,6 +149,12 @@ export default function MerchantsPage() {
               <TableRow>
                 <TableCell colSpan={9} align="center" sx={{ color: "text.disabled", py: 2 }}>
                   <CircularProgress size={24} />
+                </TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={9} align="center" sx={{ color: "#e74c3c", py: 2 }}>
+                  Error loading merchants: {error instanceof Error ? error.message : "Unknown error"}
                 </TableCell>
               </TableRow>
             ) : merchants?.content && merchants.content.length > 0 ? (
@@ -231,6 +274,95 @@ export default function MerchantsPage() {
           <Button onClick={() => setViewMerchant(null)} sx={{ textTransform: "none" }}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Add Merchant Modal */}
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Onboard New Merchant</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Merchant ID"
+                value={formData.merchantId}
+                onChange={(e) => setFormData(prev => ({ ...prev, merchantId: e.target.value }))}
+                fullWidth
+                size="small"
+                required
+                placeholder="e.g. MRC-00123"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Business Name"
+                value={formData.businessName}
+                onChange={(e) => setFormData(prev => ({ ...prev, businessName: e.target.value }))}
+                fullWidth
+                size="small"
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="MCC Code"
+                value={formData.mcc}
+                onChange={(e) => setFormData(prev => ({ ...prev, mcc: e.target.value }))}
+                fullWidth
+                size="small"
+                placeholder="e.g. 5411"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                label="KYC Status"
+                value={formData.kycStatus}
+                onChange={(e) => setFormData(prev => ({ ...prev, kycStatus: e.target.value }))}
+                fullWidth
+                size="small"
+              >
+                <MenuItem value="">Not Set</MenuItem>
+                {kycStatuses.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                label="Contract Status"
+                value={formData.contractStatus}
+                onChange={(e) => setFormData(prev => ({ ...prev, contractStatus: e.target.value }))}
+                fullWidth
+                size="small"
+              >
+                <MenuItem value="">Not Set</MenuItem>
+                {contractStatuses.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+              </TextField>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)} sx={{ textTransform: "none" }}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleAddMerchant}
+            disabled={!formData.merchantId.trim() || !formData.businessName.trim() || createMerchant.isPending}
+            sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" }, textTransform: "none" }}
+          >
+            {createMerchant.isPending ? <CircularProgress size={18} sx={{ color: "white" }} /> : "Onboard Merchant"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

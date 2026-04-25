@@ -123,3 +123,23 @@ export const useCreateRiskThreshold = () => {
     },
   });
 };
+
+// Merchant Mutations
+export interface CreateMerchantRequest {
+  merchantId: string;
+  businessName: string;
+  mcc?: string;
+  kycStatus?: string;
+  contractStatus?: string;
+}
+
+export const useCreateMerchant = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateMerchantRequest) =>
+      apiClient.post("merchants", req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+    },
+  });
+};
