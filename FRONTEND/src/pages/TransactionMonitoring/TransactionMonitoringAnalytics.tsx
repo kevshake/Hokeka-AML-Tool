@@ -82,7 +82,7 @@ export default function TransactionMonitoringAnalytics() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: { position: "bottom", labels: { color: "text.primary", padding: 15 } },
+                      legend: { position: "bottom", labels: { color: "#94a3b8", padding: 15 } },
                     },
                   }}
                 />

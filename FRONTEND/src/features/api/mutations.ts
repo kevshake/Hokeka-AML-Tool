@@ -26,10 +26,7 @@ export const useCreateCase = () => {
 export const useCreateAmlRule = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (rule: AmlRule) => apiClient.post<AmlRule>("rules", rule).catch((err) => {
-      console.error("AML Rules API may not be implemented yet:", err);
-      throw err;
-    }),
+    mutationFn: (rule: AmlRule) => apiClient.post<AmlRule>("rules", rule),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
     },

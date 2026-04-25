@@ -320,6 +320,7 @@ export const useMonitoringDashboardStats = () => {
   return useQuery<Record<string, unknown>>({
     queryKey: ["monitoring", "dashboard-stats"],
     queryFn: () => apiClient.get<Record<string, unknown>>("monitoring/dashboard/stats").catch(() => ({})),
+    refetchInterval: 30_000,
   });
 };
 
@@ -341,6 +342,7 @@ export const useMonitoringRecentActivity = () => {
   return useQuery<any[]>({
     queryKey: ["monitoring", "recent-activity"],
     queryFn: () => apiClient.get<any[]>("monitoring/recent-activity").catch(() => []),
+    refetchInterval: 30_000,
   });
 };
 
@@ -363,6 +365,7 @@ export const useMonitoringTransactions = (params?: MonitoringTransactionQueryPar
   return useQuery<PageResponse<any>>({
     queryKey: ["monitoring", "transactions", queryParams],
     queryFn: () => apiClient.get<PageResponse<any>>(`monitoring/transactions${queryString ? `?${queryString}` : ""}`),
+    refetchInterval: 30_000,
   });
 };
 
