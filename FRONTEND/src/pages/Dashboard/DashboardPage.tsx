@@ -6,6 +6,7 @@ import {
   useAlerts,
   useRecentTransactions,
   useLiveAlerts,
+  useMonitoringTransactions,
 } from "../../features/api/queries";
 import {
   Warning as WarningIcon,
@@ -108,6 +109,7 @@ export default function DashboardPage() {
   const { data: alertsData } = useAlerts({ page: 0, size: 5 });
   const { data: recentTransactions } = useRecentTransactions(5);
   const { data: liveAlerts } = useLiveAlerts(5);
+  const { data: txnPage } = useMonitoringTransactions({ page: 0, size: 1 });
 
   // Calculate stats
   const totalCases = Object.values(stats?.casesByStatus || {}).reduce((a: number, b: number) => a + b, 0) || 0;
@@ -157,8 +159,8 @@ export default function DashboardPage() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Transactions"
-            value={recentTransactions?.length || 0}
-            subtitle="Recent activity"
+            value={txnPage?.totalElements?.toLocaleString() ?? (recentTransactions?.length || 0)}
+            subtitle="Total monitored"
             icon={<TrendingUpIcon />}
             color="#27ae60"
             onClick={() => navigate("/transaction-monitoring")}

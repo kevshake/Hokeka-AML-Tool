@@ -9,6 +9,7 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    TablePagination,
     Chip,
     CircularProgress,
     Alert,
@@ -159,17 +160,24 @@ function DocumentsDialog({ merchantId, merchantName, open, onClose }: DocumentsD
 
 export default function KycDocumentsPage() {
     const [search, setSearch] = useState("");
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
     const [selectedMerchant, setSelectedMerchant] = useState<{ id: number; name: string } | null>(null);
 
+    const queryString = [
+        `page=${page}`,
+        `size=${rowsPerPage}`,
+        search ? `search=${encodeURIComponent(search)}` : "",
+    ].filter(Boolean).join("&");
+
     const { data: merchantsPage, isLoading, isError } = useQuery<MerchantsPage>({
-        queryKey: ["merchants-kyc"],
-        queryFn: () => apiClient.get<MerchantsPage>("merchants?page=0&size=50"),
+        queryKey: ["merchants-kyc", page, rowsPerPage, search],
+        queryFn: () => apiClient.get<MerchantsPage>(`merchants?${queryString}`),
+        placeholderData: (prev) => prev,
     });
 
     const merchants = merchantsPage?.content || [];
-    const filtered = merchants.filter((m) =>
-        m.businessName.toLowerCase().includes(search.toLowerCase())
-    );
+    const totalElements = merchantsPage?.totalElements || 0;
 
     return (
         <Box>
@@ -185,7 +193,7 @@ export default function KycDocumentsPage() {
                     size="small"
                     placeholder="Search merchants..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                     sx={{ width: 280 }}
                     InputProps={{
                         startAdornment: (
@@ -220,8 +228,8 @@ export default function KycDocumentsPage() {
                                     <CircularProgress size={32} sx={{ color: "#8B4049" }} />
                                 </TableCell>
                             </TableRow>
-                        ) : filtered.length > 0 ? (
-                            filtered.map((merchant) => {
+                        ) : merchants.length > 0 ? (
+                            merchants.map((merchant) => {
                                 const kycCfg = kycStatusConfig[merchant.kycStatus] || { color: "#666", bgColor: "#f5f5f5", label: merchant.kycStatus };
                                 return (
                                     <TableRow key={merchant.id} hover sx={{ "&:hover": { backgroundColor: "rgba(139,64,73,0.04)" } }}>
@@ -285,6 +293,15 @@ export default function KycDocumentsPage() {
                         )}
                     </TableBody>
                 </Table>
+                <TablePagination
+                    rowsPerPageOptions={[10, 25, 50]}
+                    component="div"
+                    count={totalElements}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(_, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+                />
             </TableContainer>
 
             {selectedMerchant && (
