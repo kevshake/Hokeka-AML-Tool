@@ -108,6 +108,12 @@ export default function Sidebar() {
           path: "/risk-analytics",
         },
         {
+          id: "analytics",
+          label: "Analytics",
+          icon: <ChartsIcon />,
+          path: "/analytics",
+        },
+        {
           id: "compliance-calendar",
           label: "Compliance Calendar",
           icon: <CalendarIcon />,

@@ -14,14 +14,42 @@ import {
     Alert,
     TextField,
     InputAdornment,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    List,
+    ListItem,
+    ListItemText,
+    ListItemIcon,
+    Divider,
 } from "@mui/material";
-import { Search as SearchIcon, Description as DocIcon } from "@mui/icons-material";
+import {
+    Search as SearchIcon,
+    Description as DocIcon,
+    InsertDriveFile as FileIcon,
+    OpenInNew as OpenIcon,
+} from "@mui/icons-material";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 
 interface MerchantsPage {
     content: Array<{ id: number; businessName: string; kycStatus: string; riskLevel: string }>;
     totalElements: number;
+}
+
+interface MerchantDocument {
+    id: number;
+    fileName?: string;
+    name?: string;
+    documentType?: string;
+    type?: string;
+    status?: string;
+    uploadedAt?: string;
+    createdAt?: string;
+    url?: string;
+    fileUrl?: string;
 }
 
 const kycStatusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
@@ -32,8 +60,106 @@ const kycStatusConfig: Record<string, { color: string; bgColor: string; label: s
     EXPIRED: { color: "#7f8c8d", bgColor: "#f4f6f7", label: "Expired" },
 };
 
+interface DocumentsDialogProps {
+    merchantId: number;
+    merchantName: string;
+    open: boolean;
+    onClose: () => void;
+}
+
+function DocumentsDialog({ merchantId, merchantName, open, onClose }: DocumentsDialogProps) {
+    const { data: documents, isLoading, isError } = useQuery<MerchantDocument[]>({
+        queryKey: ["merchant-documents", merchantId],
+        queryFn: () =>
+            apiClient.get<MerchantDocument[]>(`merchants/${merchantId}/documents`).catch(() => []),
+        enabled: open,
+    });
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ fontWeight: 600 }}>
+                KYC Documents — {merchantName}
+            </DialogTitle>
+            <DialogContent dividers sx={{ p: 0 }}>
+                {isLoading ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                        <CircularProgress size={28} sx={{ color: "#8B4049" }} />
+                    </Box>
+                ) : isError ? (
+                    <Box sx={{ p: 3 }}>
+                        <Alert severity="error">Failed to load documents.</Alert>
+                    </Box>
+                ) : documents && documents.length > 0 ? (
+                    <List disablePadding>
+                        {documents.map((doc, idx) => {
+                            const name = doc.fileName || doc.name || `Document ${doc.id}`;
+                            const type = doc.documentType || doc.type || "Document";
+                            const date = doc.uploadedAt || doc.createdAt;
+                            const url = doc.url || doc.fileUrl;
+                            return (
+                                <Box key={doc.id}>
+                                    {idx > 0 && <Divider />}
+                                    <ListItem
+                                        secondaryAction={
+                                            url ? (
+                                                <Button
+                                                    size="small"
+                                                    endIcon={<OpenIcon />}
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    sx={{ color: "#8B4049" }}
+                                                >
+                                                    Open
+                                                </Button>
+                                            ) : undefined
+                                        }
+                                    >
+                                        <ListItemIcon sx={{ minWidth: 36 }}>
+                                            <FileIcon sx={{ color: "#8B4049", opacity: 0.8 }} />
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={name}
+                                            secondary={
+                                                <Box component="span" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                                                    <span>{type}</span>
+                                                    {date && (
+                                                        <span style={{ color: "#999" }}>
+                                                            · {new Date(date).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                    {doc.status && (
+                                                        <Chip
+                                                            label={doc.status}
+                                                            size="small"
+                                                            sx={{ height: 18, fontSize: "0.65rem" }}
+                                                        />
+                                                    )}
+                                                </Box>
+                                            }
+                                        />
+                                    </ListItem>
+                                </Box>
+                            );
+                        })}
+                    </List>
+                ) : (
+                    <Box sx={{ py: 5, textAlign: "center", color: "text.disabled" }}>
+                        <FileIcon sx={{ fontSize: 40, mb: 1, opacity: 0.4 }} />
+                        <Typography variant="body2">No documents on file for this merchant.</Typography>
+                    </Box>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Close</Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
 export default function KycDocumentsPage() {
     const [search, setSearch] = useState("");
+    const [selectedMerchant, setSelectedMerchant] = useState<{ id: number; name: string } | null>(null);
 
     const { data: merchantsPage, isLoading, isError } = useQuery<MerchantsPage>({
         queryKey: ["merchants-kyc"],
@@ -127,9 +253,25 @@ export default function KycDocumentsPage() {
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
-                                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                                                View documents →
-                                            </Typography>
+                                            <Button
+                                                size="small"
+                                                variant="text"
+                                                startIcon={<FileIcon sx={{ fontSize: 16 }} />}
+                                                onClick={() =>
+                                                    setSelectedMerchant({
+                                                        id: merchant.id,
+                                                        name: merchant.businessName,
+                                                    })
+                                                }
+                                                sx={{
+                                                    color: "#8B4049",
+                                                    textTransform: "none",
+                                                    fontSize: "0.8rem",
+                                                    "&:hover": { backgroundColor: "rgba(139,64,73,0.08)" },
+                                                }}
+                                            >
+                                                View documents
+                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -144,6 +286,15 @@ export default function KycDocumentsPage() {
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {selectedMerchant && (
+                <DocumentsDialog
+                    merchantId={selectedMerchant.id}
+                    merchantName={selectedMerchant.name}
+                    open={true}
+                    onClose={() => setSelectedMerchant(null)}
+                />
+            )}
         </Box>
     );
 }

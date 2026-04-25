@@ -30,6 +30,7 @@ const ReportsCenterPage = lazy(() => import("./pages/ReportsCenter/ReportsCenter
 const AuditLogsPage = lazy(() => import("./pages/AuditLogs/AuditLogsPage"));
 const RulesGenerationPage = lazy(() => import("./pages/RulesGeneration/RulesGenerationPage"));
 const KycDocumentsPage = lazy(() => import("./pages/KycDocuments/KycDocumentsPage"));
+const AnalyticsPage = lazy(() => import("./pages/Analytics/AnalyticsPage"));
 
 function PageLoader() {
   return (
@@ -86,6 +87,7 @@ function App() {
                           <Route path="/audit" element={<AuditLogsPage />} />
                           <Route path="/rules-generation" element={<RulesGenerationPage />} />
                           <Route path="/kyc-documents" element={<KycDocumentsPage />} />
+                          <Route path="/analytics" element={<AnalyticsPage />} />
                         </Routes>
                         </Suspense>
                       </RouteErrorBoundary>
