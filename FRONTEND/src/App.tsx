@@ -69,25 +69,25 @@ function App() {
                       <RouteErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
                         <Routes>
-                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                          <Route path="/dashboard/*" element={<DashboardPage />} />
-                          <Route path="/cases/*" element={<CasesPage />} />
-                          <Route path="/alerts" element={<AlertsPage />} />
-                          <Route path="/risk-analytics" element={<RiskAnalyticsPage />} />
-                          <Route path="/compliance-calendar" element={<ComplianceCalendarPage />} />
-                          <Route path="/merchants" element={<MerchantsPage />} />
-                          <Route path="/transaction-monitoring/*" element={<TransactionMonitoringPage />} />
-                          <Route path="/screening" element={<ScreeningPage />} />
-                          <Route path="/profile" element={<ProfilePage />} />
-                          <Route path="/messages" element={<MessagesPage />} />
-                          <Route path="/settings" element={<SettingsPage />} />
-                          <Route path="/users/*" element={<UsersPage />} />
-                          <Route path="/reports" element={<ReportsPage />} />
-                          <Route path="/reports-center" element={<ReportsCenterPage />} />
-                          <Route path="/audit" element={<AuditLogsPage />} />
-                          <Route path="/rules-generation" element={<RulesGenerationPage />} />
-                          <Route path="/kyc-documents" element={<KycDocumentsPage />} />
-                          <Route path="/analytics" element={<AnalyticsPage />} />
+                          <Route index element={<Navigate to="/dashboard" replace />} />
+                          <Route path="dashboard/*" element={<DashboardPage />} />
+                          <Route path="cases/*" element={<CasesPage />} />
+                          <Route path="alerts" element={<AlertsPage />} />
+                          <Route path="risk-analytics" element={<RiskAnalyticsPage />} />
+                          <Route path="compliance-calendar" element={<ComplianceCalendarPage />} />
+                          <Route path="merchants" element={<MerchantsPage />} />
+                          <Route path="transaction-monitoring/*" element={<TransactionMonitoringPage />} />
+                          <Route path="screening" element={<ScreeningPage />} />
+                          <Route path="profile" element={<ProfilePage />} />
+                          <Route path="messages" element={<MessagesPage />} />
+                          <Route path="settings" element={<SettingsPage />} />
+                          <Route path="users/*" element={<UsersPage />} />
+                          <Route path="reports" element={<ReportsPage />} />
+                          <Route path="reports-center" element={<ReportsCenterPage />} />
+                          <Route path="audit" element={<AuditLogsPage />} />
+                          <Route path="rules-generation" element={<RulesGenerationPage />} />
+                          <Route path="kyc-documents" element={<KycDocumentsPage />} />
+                          <Route path="analytics" element={<AnalyticsPage />} />
                         </Routes>
                         </Suspense>
                       </RouteErrorBoundary>
