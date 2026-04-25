@@ -37,6 +37,9 @@ import {
   ChevronLeft as ChevronLeftIcon,
   VerifiedUser as KycIcon,
 } from "@mui/icons-material";
+import { useAlerts, useCases } from "../../features/api/queries";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../../lib/apiClient";
 
 const drawerWidth = 240;
 const miniDrawerWidth = 64;
@@ -55,131 +58,6 @@ interface NavItem {
   children?: NavItem[];
 }
 
-const navSections: NavSection[] = [
-  {
-    items: [
-      {
-        id: "dashboard",
-        label: "Dashboard",
-        icon: <DashboardIcon />,
-        path: "/dashboard",
-      },
-      {
-        id: "cases",
-        label: "Cases",
-        icon: <CasesIcon />,
-        path: "/cases",
-        badge: 0,
-      },
-      {
-        id: "alerts",
-        label: "Alerts",
-        icon: <AlertsIcon />,
-        path: "/alerts",
-        badge: 0,
-      },
-      {
-        id: "risk-analytics",
-        label: "Risk Analytics",
-        icon: <RiskIcon />,
-        path: "/risk-analytics",
-      },
-      {
-        id: "compliance-calendar",
-        label: "Compliance Calendar",
-        icon: <CalendarIcon />,
-        path: "/compliance-calendar",
-      },
-      {
-        id: "merchants",
-        label: "Merchants",
-        icon: <MerchantsIcon />,
-        path: "/merchants",
-      },
-      {
-        id: "transaction-monitoring",
-        label: "Transaction Monitoring",
-        icon: <MonitoringIcon />,
-        path: "/transaction-monitoring",
-      },
-      {
-        id: "screening",
-        label: "Screening",
-        icon: <ScreeningIcon />,
-        path: "/screening",
-      },
-      {
-        id: "kyc-documents",
-        label: "KYC / Documents",
-        icon: <KycIcon />,
-        path: "/kyc-documents",
-      },
-      {
-        id: "rules-generation",
-        label: "Limits & AML Rules",
-        icon: <RulesIcon />,
-        path: "/rules-generation",
-      },
-      {
-        id: "profile",
-        label: "Profile",
-        icon: <ProfileIcon />,
-        path: "/profile",
-      },
-      {
-        id: "messages",
-        label: "Messages",
-        icon: <MessagesIcon />,
-        path: "/messages",
-        badge: 0,
-      },
-    ],
-  },
-  {
-    title: "ADMINISTRATION",
-    items: [
-      {
-        id: "settings",
-        label: "Settings",
-        icon: <SettingsIcon />,
-        path: "/settings",
-      },
-      {
-        id: "users",
-        label: "User Management",
-        icon: <UsersIcon />,
-        path: "/users",
-      },
-      {
-        id: "reports",
-        label: "Reports",
-        icon: <ChartsIcon />,
-        path: "/reports",
-        children: [
-          {
-            id: "reports-summary",
-            label: "Summary",
-            icon: <ChartsIcon />,
-            path: "/reports",
-          },
-          {
-            id: "reports-center",
-            label: "Reports Center",
-            icon: <ChartsIcon />,
-            path: "/reports-center",
-          },
-        ],
-      },
-      {
-        id: "audit",
-        label: "Audit Logs",
-        icon: <AuditIcon />,
-        path: "/audit",
-      },
-    ],
-  },
-];
-
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -187,6 +65,143 @@ export default function Sidebar() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     dashboard: true,
   });
+
+  // Fetch live badge counts — data cached with staleTime=30s so no extra load
+  const { data: alertsData } = useAlerts({ page: 0, size: 1, status: "OPEN" });
+  const { data: casesData } = useCases({ page: 0, size: 1, status: "NEW" });
+  const { data: messagesData } = useQuery<{ unreadCount?: number }>({
+    queryKey: ["messages", "unread-count"],
+    queryFn: () => apiClient.get<{ unreadCount?: number }>("messages/unread-count").catch(() => ({ unreadCount: 0 })),
+  });
+
+  const openAlertsCount = alertsData?.totalElements || 0;
+  const newCasesCount = casesData?.totalElements || 0;
+  const unreadMessages = messagesData?.unreadCount || 0;
+
+  const navSections: NavSection[] = [
+    {
+      items: [
+        {
+          id: "dashboard",
+          label: "Dashboard",
+          icon: <DashboardIcon />,
+          path: "/dashboard",
+        },
+        {
+          id: "cases",
+          label: "Cases",
+          icon: <CasesIcon />,
+          path: "/cases",
+          badge: newCasesCount,
+        },
+        {
+          id: "alerts",
+          label: "Alerts",
+          icon: <AlertsIcon />,
+          path: "/alerts",
+          badge: openAlertsCount,
+        },
+        {
+          id: "risk-analytics",
+          label: "Risk Analytics",
+          icon: <RiskIcon />,
+          path: "/risk-analytics",
+        },
+        {
+          id: "compliance-calendar",
+          label: "Compliance Calendar",
+          icon: <CalendarIcon />,
+          path: "/compliance-calendar",
+        },
+        {
+          id: "merchants",
+          label: "Merchants",
+          icon: <MerchantsIcon />,
+          path: "/merchants",
+        },
+        {
+          id: "transaction-monitoring",
+          label: "Transaction Monitoring",
+          icon: <MonitoringIcon />,
+          path: "/transaction-monitoring",
+        },
+        {
+          id: "screening",
+          label: "Screening",
+          icon: <ScreeningIcon />,
+          path: "/screening",
+        },
+        {
+          id: "kyc-documents",
+          label: "KYC / Documents",
+          icon: <KycIcon />,
+          path: "/kyc-documents",
+        },
+        {
+          id: "rules-generation",
+          label: "Limits & AML Rules",
+          icon: <RulesIcon />,
+          path: "/rules-generation",
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          icon: <ProfileIcon />,
+          path: "/profile",
+        },
+        {
+          id: "messages",
+          label: "Messages",
+          icon: <MessagesIcon />,
+          path: "/messages",
+          badge: unreadMessages,
+        },
+      ],
+    },
+    {
+      title: "ADMINISTRATION",
+      items: [
+        {
+          id: "settings",
+          label: "Settings",
+          icon: <SettingsIcon />,
+          path: "/settings",
+        },
+        {
+          id: "users",
+          label: "User Management",
+          icon: <UsersIcon />,
+          path: "/users",
+        },
+        {
+          id: "reports",
+          label: "Reports",
+          icon: <ChartsIcon />,
+          path: "/reports",
+          children: [
+            {
+              id: "reports-summary",
+              label: "Summary",
+              icon: <ChartsIcon />,
+              path: "/reports",
+            },
+            {
+              id: "reports-center",
+              label: "Reports Center",
+              icon: <ChartsIcon />,
+              path: "/reports-center",
+            },
+          ],
+        },
+        {
+          id: "audit",
+          label: "Audit Logs",
+          icon: <AuditIcon />,
+          path: "/audit",
+        },
+      ],
+    },
+  ];
 
   const toggleSection = (sectionId: string) => {
     setOpenSections((prev) => ({
@@ -197,51 +212,6 @@ export default function Sidebar() {
 
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + "/");
-  };
-
-  const renderNavItem = (item: NavItem, level: number = 0) => {
-    const hasChildren = item.children && item.children.length > 0;
-    const isOpen = openSections[item.id] || false;
-    const active = isActive(item.path);
-
-    return (
-      <Box key={item.id}>
-        <ListItem disablePadding sx={{ pl: level * 2 }}>
-          <ListItemButton
-            onClick={() => {
-              if (hasChildren) {
-                toggleSection(item.id);
-              } else {
-                navigate(item.path);
-              }
-            }}
-            selected={active && !hasChildren}
-            sx={{
-              "&.Mui-selected": {
-                backgroundColor: "rgba(169, 50, 38, 0.2)",
-                borderLeft: "3px solid #a93226",
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: active ? "#a93226" : "inherit" }}>
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText primary={item.label} />
-            {item.badge !== undefined && item.badge > 0 && (
-              <Badge badgeContent={item.badge} color="error" sx={{ mr: 1 }} />
-            )}
-            {hasChildren && (isOpen ? <ExpandLess /> : <ExpandMore />)}
-          </ListItemButton>
-        </ListItem>
-        {hasChildren && (
-          <Collapse in={isOpen} timeout="auto" unmountOnExit>
-            <List component="div" disablePadding>
-              {item.children!.map((child) => renderNavItem(child, level + 1))}
-            </List>
-          </Collapse>
-        )}
-      </Box>
-    );
   };
 
   return (
@@ -353,7 +323,6 @@ export default function Sidebar() {
             )}
             <List disablePadding>
               {section.items.map((item) => {
-                // Custom render logic for cleaner list items
                 const active = isActive(item.path);
                 const hasChildren = item.children && item.children.length > 0;
                 const isOpen = openSections[item.id] || false;
@@ -390,7 +359,13 @@ export default function Sidebar() {
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32, color: active ? "#a93226" : "text.secondary" }}>
-                            {item.icon}
+                            {item.badge !== undefined && item.badge > 0 ? (
+                              <Badge badgeContent={item.badge > 99 ? "99+" : item.badge} color="error" max={999}>
+                                {item.icon}
+                              </Badge>
+                            ) : (
+                              item.icon
+                            )}
                           </ListItemIcon>
                           {!collapsed && (
                             <>
@@ -403,9 +378,6 @@ export default function Sidebar() {
                                   }
                                 }}
                               />
-                              {item.badge !== undefined && item.badge > 0 && (
-                                <Badge badgeContent={item.badge} color="primary" sx={{ mr: 1 }} />
-                              )}
                               {hasChildren && (isOpen ? <ExpandLess sx={{ opacity: 0.5 }} /> : <ExpandMore sx={{ opacity: 0.5 }} />)}
                             </>
                           )}
