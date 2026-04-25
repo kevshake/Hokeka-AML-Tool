@@ -67,6 +67,29 @@ export default function CasesAllCases() {
 
     const createCase = useCreateCase();
 
+    const handleExportCSV = () => {
+        const content = cases?.content || [];
+        if (!content.length) return;
+        const headers = ["Reference", "Status", "Priority", "Description", "Assigned To", "Created", "Days Open"];
+        const rows = content.map(c => [
+            c.caseReference,
+            c.status,
+            c.priority,
+            (c.description || "").replace(/,/g, ";"),
+            c.assignedTo ? (c.assignedTo.firstName || c.assignedTo.username || "") : "Unassigned",
+            new Date(c.createdAt).toISOString().split("T")[0],
+            String(c.daysOpen ?? ""),
+        ]);
+        const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `cases-${new Date().toISOString().split("T")[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const handleCreateCase = () => {
         if (!newCase.caseReference.trim()) return;
         createCase.mutate({ ...newCase, creatorUserId: user?.id }, {
@@ -88,9 +111,20 @@ export default function CasesAllCases() {
                 borderBottom: "1px solid",
                 borderColor: "divider",
             }}>
-                <Typography variant="body2" color="text.secondary">
-                    {cases?.totalElements || 0} cases total
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        {cases?.totalElements || 0} cases total
+                    </Typography>
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={!cases?.content?.length}
+                        onClick={handleExportCSV}
+                        sx={{ textTransform: "none", color: "text.secondary", borderColor: "rgba(0,0,0,0.2)", fontSize: "0.75rem" }}
+                    >
+                        Export CSV
+                    </Button>
+                </Box>
                 
                 <Box sx={{ display: "flex", gap: 2 }}>
                     <Tooltip title="Filter the cases list by their current workflow status." arrow placement="top">
