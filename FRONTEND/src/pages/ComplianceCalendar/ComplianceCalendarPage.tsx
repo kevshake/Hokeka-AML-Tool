@@ -59,8 +59,8 @@ export default function ComplianceCalendarPage() {
           </Typography>
           {overdue && Array.isArray(overdue) && overdue.length > 0 ? (
             <List>
-              {overdue.map((deadline: any, idx: number) => (
-                <ListItem key={idx} sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}>
+              {overdue.map((deadline: any) => (
+                <ListItem key={deadline.id ?? deadline.title ?? deadline.dueDate} sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}>
                   <ListItemText
                     primary={deadline.title || deadline.description || "Deadline"}
                     secondary={deadline.dueDate ? new Date(deadline.dueDate).toLocaleDateString() : ""}
@@ -82,8 +82,8 @@ export default function ComplianceCalendarPage() {
           </Typography>
           {upcoming && Array.isArray(upcoming) && upcoming.length > 0 ? (
             <List>
-              {upcoming.map((deadline: any, idx: number) => (
-                <ListItem key={idx} sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}>
+              {upcoming.map((deadline: any) => (
+                <ListItem key={deadline.id ?? deadline.title ?? deadline.dueDate} sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}>
                   <ListItemText
                     primary={deadline.title || deadline.description || "Deadline"}
                     secondary={deadline.dueDate ? new Date(deadline.dueDate).toLocaleDateString() : ""}

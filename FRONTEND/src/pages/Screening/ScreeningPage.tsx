@@ -93,8 +93,8 @@ export default function ScreeningPage() {
             <Divider sx={{ mb: 2 }} />
             {result.matches && Array.isArray(result.matches) && result.matches.length > 0 ? (
               <Grid container spacing={1}>
-                {result.matches.map((match: any, idx: number) => (
-                  <Grid item xs={12} key={idx}>
+                {result.matches.map((match: any) => (
+                  <Grid item xs={12} key={match.id ?? match.name ?? match.fullName}>
                     <Paper variant="outlined" sx={{ p: 1.5, borderColor: "#e74c3c40" }}>
                       <Typography variant="body2" sx={{ color: "text.primary", fontWeight: 600 }}>
                         {match.name || match.fullName || "Unknown"}

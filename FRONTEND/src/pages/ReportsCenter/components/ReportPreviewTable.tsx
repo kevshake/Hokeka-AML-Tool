@@ -206,7 +206,7 @@ export default function ReportPreviewTable({
           <TableBody>
             {paginatedData.map((row, index) => (
               <TableRow
-                key={index}
+                key={String(row.id ?? row.transactionId ?? row.caseId ?? index)}
                 sx={{
                   "&:nth-of-type(odd)": {
                     backgroundColor: "rgba(128, 0, 32, 0.02)",

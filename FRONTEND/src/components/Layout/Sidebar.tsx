@@ -302,8 +302,8 @@ export default function Sidebar() {
       </Box>
 
       <Box sx={{ overflow: "auto", flex: 1, px: 2 }}>
-        {navSections.map((section, idx) => (
-          <Box key={idx} sx={{ mb: 2 }}>
+        {navSections.map((section) => (
+          <Box key={section.items[0]?.id ?? section.title ?? "section"} sx={{ mb: 2 }}>
             {section.title && !collapsed && (
               <Typography
                 variant="caption"
