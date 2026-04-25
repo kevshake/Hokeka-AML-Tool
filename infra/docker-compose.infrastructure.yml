@@ -1,0 +1,192 @@
+version: "3.8"
+
+# Architecture V2 - Infrastructure Only
+# Includes: Kafka, Zookeeper, Redis, PostgreSQL (partitioned), ClickHouse
+# Backend services are separate
+
+services:
+  # ============================================================
+  # ZOOKEEPER (Kafka coordination)
+  # ============================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: aml-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    # Internal only - no external port mapping
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    restart: unless-stopped
+    networks:
+      - aml-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # KAFKA BROKER
+  # ============================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: aml-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      # Performance tuning
+      KAFKA_NUM_NETWORK_THREADS: 3
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+    # Internal only - no external port mapping
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    restart: unless-stopped
+    networks:
+      - aml-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # KAFKA UI (Management)
+  # ============================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: aml-kafka-ui
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8085:8080"
+    networks:
+      - aml-network
+
+  # ============================================================
+  # REDIS (Feature Cache)
+  # ============================================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: aml-redis
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    # Internal only - no external port mapping
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - aml-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # REDIS COMMANDER (Redis UI)
+  # ============================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: aml-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8086:8081"
+    depends_on:
+      - redis
+    networks:
+      - aml-network
+
+  # ============================================================
+  # POSTGRESQL (Partitioned Tables)
+  # ============================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: aml-postgres
+    environment:
+      POSTGRES_USER: fraud_user
+      POSTGRES_PASSWORD: fraud_secure_2024
+      POSTGRES_DB: fraud_detector
+      # Performance tuning
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    # Internal only - no external port mapping
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d/:ro
+    command: >
+      postgres
+      -c shared_buffers=2GB
+      -c effective_cache_size=4GB
+      -c maintenance_work_mem=512MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10485kB
+      -c min_wal_size=2GB
+      -c max_wal_size=8GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_parallel_maintenance_workers=2
+    restart: unless-stopped
+    networks:
+      - aml-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraud_user -d fraud_detector"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # CLICKHOUSE (Analytics)
+  # ============================================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: aml-clickhouse
+    environment:
+      CLICKHOUSE_DB: fraud_analytics
+      CLICKHOUSE_USER: analytics
+      CLICKHOUSE_PASSWORD: analytics_secure_2024
+      CLICKHOUSE_DEFAULT_ACCESS_MANIT: 1
+    ports:
+      - "8123:8123"  # HTTP interface (for queries)
+    # Port 9000 (native) - internal only
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - aml-network
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+networks:
+  aml-network:
+    driver: bridge
+
+volumes:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  redis_data:
+  postgres_data:
+  clickhouse_data:
