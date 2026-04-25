@@ -9,9 +9,6 @@ import {
   Avatar,
   Chip,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
   Alert,
   Tab,
   Tabs,
@@ -38,7 +35,7 @@ import {
 import { useCurrentUser } from "../../features/api/queries";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
-import { PERMISSION_LABELS } from "../../types/userManagement";
+import { PERMISSION_LABELS, Permission } from "../../types/userManagement";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -454,7 +451,7 @@ export default function ProfilePage() {
                   <TableBody>
                     {user.role.permissions.map((permission) => (
                       <TableRow key={permission}>
-                        <TableCell>{PERMISSION_LABELS[permission] || permission}</TableCell>
+                        <TableCell>{PERMISSION_LABELS[permission as Permission] || permission}</TableCell>
                         <TableCell>
                           <Chip
                             label="Granted"

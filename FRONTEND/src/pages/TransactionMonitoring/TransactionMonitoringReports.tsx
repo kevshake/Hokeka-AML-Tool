@@ -1,6 +1,5 @@
 import { Box, Typography, Grid, Card, CardContent, Paper, Button } from "@mui/material";
 import { useTransactions } from "../../features/api/queries";
-import { format } from "date-fns";
 
 export default function TransactionMonitoringReports() {
   // Load first page with large size for statistics (up to 1000 records)

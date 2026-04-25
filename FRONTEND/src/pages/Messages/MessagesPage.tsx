@@ -12,9 +12,9 @@ interface Message {
 }
 
 export default function MessagesPage() {
-const { data: messages, isLoading, isError, error } = useQuery<Message[]>({
+const { data: messages, isLoading } = useQuery<Message[]>({
   queryKey: ["messages"],
-  queryFn: () => apiClient.get("messages").then(res => res.data),
+  queryFn: () => apiClient.get<Message[]>("messages").catch(() => []),
 });
 
   return (

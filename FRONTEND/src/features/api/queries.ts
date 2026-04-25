@@ -9,9 +9,10 @@ import type {
   AuditLog,
   DashboardStats,
   User,
-  Role,
+  Psp,
   PageResponse,
 } from "../../types";
+import type { User as UserManagementUser, Role as UserManagementRole } from "../../types/userManagement";
 
 // Dashboard
 export const useDashboardStats = () => {
@@ -43,16 +44,16 @@ export const useRiskDistribution = () => {
 };
 
 export const useLiveAlerts = (limit: number = 5) => {
-  return useQuery({
+  return useQuery<Alert[]>({
     queryKey: ["dashboard", "live-alerts", limit],
-    queryFn: () => apiClient.get(`dashboard/live-alerts?limit=${limit}`),
+    queryFn: () => apiClient.get<Alert[]>(`dashboard/live-alerts?limit=${limit}`).catch(() => []),
   });
 };
 
 export const useRecentTransactions = (limit: number = 5) => {
-  return useQuery({
+  return useQuery<Transaction[]>({
     queryKey: ["dashboard", "recent-transactions", limit],
-    queryFn: () => apiClient.get(`dashboard/recent-transactions?limit=${limit}`),
+    queryFn: () => apiClient.get<Transaction[]>(`dashboard/recent-transactions?limit=${limit}`).catch(() => []),
   });
 };
 
@@ -210,18 +211,18 @@ export const useUsers = (params?: UserQueryParams) => {
     .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
     .join('&');
 
-  return useQuery<PageResponse<User>>({
+  return useQuery<PageResponse<UserManagementUser>>({
     queryKey: ["users", queryParams],
     queryFn: () =>
-      apiClient.get<PageResponse<User>>(`users${queryString ? `?${queryString}` : ""}`),
+      apiClient.get<PageResponse<UserManagementUser>>(`users${queryString ? `?${queryString}` : ""}`),
   });
 };
 
 // Roles
 export const useRoles = () => {
-  return useQuery<Role[]>({
+  return useQuery<UserManagementRole[]>({
     queryKey: ["roles"],
-    queryFn: () => apiClient.get<Role[]>("roles"),
+    queryFn: () => apiClient.get<UserManagementRole[]>("roles"),
   });
 };
 
@@ -280,16 +281,22 @@ export const useGrafanaDashboards = () => {
 
 // Risk Analytics
 export const useRiskHeatmap = (type: "customer" | "merchant") => {
-  return useQuery({
+  return useQuery<Record<string, number>>({
     queryKey: ["risk", "heatmap", type],
-    queryFn: () => apiClient.get(`analytics/risk/heatmap/${type}`),
+    queryFn: () => apiClient.get<Record<string, number>>(`analytics/risk/heatmap/${type}`).catch(() => ({})),
   });
 };
 
+interface RiskTrends {
+  labels?: string[];
+  data?: number[];
+  [key: string]: unknown;
+}
+
 export const useRiskTrends = (days: number = 30) => {
-  return useQuery({
+  return useQuery<RiskTrends>({
     queryKey: ["risk", "trends", days],
-    queryFn: () => apiClient.get(`analytics/risk/trends?days=${days}`),
+    queryFn: () => apiClient.get<RiskTrends>(`analytics/risk/trends?days=${days}`).catch(() => ({})),
   });
 };
 
@@ -310,30 +317,30 @@ export const useOverdueDeadlines = () => {
 
 // Transaction Monitoring
 export const useMonitoringDashboardStats = () => {
-  return useQuery({
+  return useQuery<Record<string, unknown>>({
     queryKey: ["monitoring", "dashboard-stats"],
-    queryFn: () => apiClient.get("monitoring/dashboard/stats"),
+    queryFn: () => apiClient.get<Record<string, unknown>>("monitoring/dashboard/stats").catch(() => ({})),
   });
 };
 
 export const useMonitoringRiskDistribution = () => {
-  return useQuery({
+  return useQuery<Record<string, number>>({
     queryKey: ["monitoring", "risk-distribution"],
-    queryFn: () => apiClient.get("monitoring/risk-distribution"),
+    queryFn: () => apiClient.get<Record<string, number>>("monitoring/risk-distribution").catch(() => ({})),
   });
 };
 
 export const useMonitoringRiskIndicators = () => {
-  return useQuery({
+  return useQuery<any[]>({
     queryKey: ["monitoring", "risk-indicators"],
-    queryFn: () => apiClient.get("monitoring/risk-indicators"),
+    queryFn: () => apiClient.get<any[]>("monitoring/risk-indicators").catch(() => []),
   });
 };
 
 export const useMonitoringRecentActivity = () => {
-  return useQuery({
+  return useQuery<any[]>({
     queryKey: ["monitoring", "recent-activity"],
-    queryFn: () => apiClient.get("monitoring/recent-activity"),
+    queryFn: () => apiClient.get<any[]>("monitoring/recent-activity").catch(() => []),
   });
 };
 
@@ -427,9 +434,16 @@ export const usePsp = (pspId: number) => {
   });
 };
 
+export const useRegulatoryReport = (reportType: string) => {
+  return useQuery<any>({
+    queryKey: ["regulatory-report", reportType],
+    queryFn: () => apiClient.get<any>(`reporting/regulatory/${reportType.toUpperCase()}`).catch(() => null),
+  });
+};
+
 export const useAllPsps = () => {
-  return useQuery({
+  return useQuery<Psp[]>({
     queryKey: ["psps"],
-    queryFn: () => apiClient.get("psps").catch(() => []),
+    queryFn: () => apiClient.get<Psp[]>("psps").catch(() => []),
   });
 };

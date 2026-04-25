@@ -8,7 +8,10 @@ export interface User {
   lastName?: string;
   role?: Role;
   pspId?: number;
-  active: boolean;
+  psp?: Psp;
+  active?: boolean;
+  enabled?: boolean;
+  createdAt?: string;
 }
 
 export interface Role {
@@ -136,9 +139,12 @@ export interface DashboardStats {
 }
 
 export interface Psp {
-  pspId: number;
-  pspCode: string;
-  legalName: string;
+  id?: number;
+  pspId?: number;
+  pspCode?: string;
+  code?: string;
+  name?: string;
+  legalName?: string;
   tradingName?: string;
   primaryColor?: string;
   secondaryColor?: string;

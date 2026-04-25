@@ -31,7 +31,7 @@ import { useCases } from "../../features/api/queries";
 import { useCreateCase } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
 import type { ApiError } from "../../lib/apiClient";
-import type { CaseStatus, Priority } from "../../types";
+import type { Priority } from "../../types";
 
 const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
     NEW: { color: "#3498db", bgColor: "#ebf5fb", label: "New" },

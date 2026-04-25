@@ -16,6 +16,8 @@ export interface Role {
     description: string;
     psp: Psp | null;
     permissions: Permission[];
+    global?: boolean;
+    pspId?: number;
 }
 
 export interface Psp {

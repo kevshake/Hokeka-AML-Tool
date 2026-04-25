@@ -74,7 +74,7 @@ export default function SettingsPage() {
   // Fetch all PSPs
   const { data: psps, isLoading: isLoadingPsps } = useQuery<Psp[]>({
     queryKey: ["settings", "psps"],
-    queryFn: () => apiClient.get<Psp[]>("settings/psps").then(res => res.data),
+    queryFn: () => apiClient.get<Psp[]>("settings/psps"),
   });
 
   // Fetch theme presets
@@ -99,10 +99,8 @@ export default function SettingsPage() {
 
   // Update theme mutation
   const updateThemeMutation = useMutation({
-    mutationFn: async (data: Partial<PspTheme>) => {
-  const res = await apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data);
-  return res.data;
-},
+    mutationFn: (data: Partial<PspTheme>) =>
+      apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data),
     onSuccess: () => {
       setSuccessMessage("Theme updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["settings", "psps", selectedPspId, "theme"] });

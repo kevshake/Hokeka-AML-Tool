@@ -151,7 +151,7 @@ export default function RolesTab() {
         }));
     };
 
-    const handleCategoryToggle = (category: string, categoryPermissions: Permission[]) => {
+    const handleCategoryToggle = (_category: string, categoryPermissions: Permission[]) => {
         const allSelected = categoryPermissions.every((p) => formData.permissions.includes(p));
         setFormData((prev) => ({
             ...prev,

@@ -23,7 +23,6 @@ import {
     MenuItem,
     Switch,
     FormControlLabel,
-    Typography,
     Alert,
     Tooltip,
 } from "@mui/material";
@@ -35,7 +34,7 @@ import {
     PersonAdd as EnableIcon,
 } from "@mui/icons-material";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { User, Role, Psp } from "../../types/userManagement";
+import { User } from "../../types/userManagement";
 import { useUsers, useRoles, useAllPsps } from "../../features/api/queries";
 
 export default function UsersTab() {
@@ -384,7 +383,7 @@ export default function UsersTab() {
                                 >
                                     <MenuItem value="">None (System User)</MenuItem>
                                     {psps?.map((psp) => (
-                                        <MenuItem key={psp.id} value={psp.id.toString()}>
+                                        <MenuItem key={psp.id ?? psp.pspId} value={String(psp.id ?? psp.pspId ?? "")}>
                                             {psp.name}
                                         </MenuItem>
                                     ))}

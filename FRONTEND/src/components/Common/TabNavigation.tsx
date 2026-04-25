@@ -12,7 +12,7 @@ interface TabNavigationProps {
     basePath?: string;
 }
 
-export default function TabNavigation({ tabs, basePath }: TabNavigationProps) {
+export default function TabNavigation({ tabs }: TabNavigationProps) {
     const navigate = useNavigate();
     const location = useLocation();
 

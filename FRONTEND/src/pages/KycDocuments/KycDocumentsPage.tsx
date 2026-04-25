@@ -19,17 +19,6 @@ import { Search as SearchIcon, Description as DocIcon } from "@mui/icons-materia
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 
-interface MerchantDocument {
-    id: number;
-    merchantId: number;
-    merchantName: string;
-    documentType: string;
-    fileName: string;
-    status: string;
-    expiryDate?: string;
-    uploadedAt: string;
-}
-
 interface MerchantsPage {
     content: Array<{ id: number; businessName: string; kycStatus: string; riskLevel: string }>;
     totalElements: number;
