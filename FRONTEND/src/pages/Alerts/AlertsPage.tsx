@@ -46,12 +46,48 @@ export default function AlertsPage() {
     size: page.size,
   });
 
+  const handleExportCSV = () => {
+    const content = alerts?.content || [];
+    if (!content.length) return;
+    const headers = ["ID", "Type", "Priority", "Status", "Description", "Transaction ID", "Case ID", "Created", "Resolved"];
+    const rows = content.map(a => [
+      a.id,
+      a.alertType,
+      a.priority,
+      a.status,
+      (a.description || "").replace(/,/g, ";"),
+      a.transactionId ?? "",
+      a.caseId ?? "",
+      new Date(a.createdAt).toISOString().split("T")[0],
+      a.resolvedAt ? new Date(a.resolvedAt).toISOString().split("T")[0] : "",
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `alerts-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, pb: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-          Alerts
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
+            Alerts
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={!alerts?.content?.length}
+            onClick={handleExportCSV}
+            sx={{ textTransform: "none", color: "text.secondary", borderColor: "rgba(0,0,0,0.2)", fontSize: "0.75rem" }}
+          >
+            Export CSV
+          </Button>
+        </Box>
         <Tooltip title="Perform bulk actions on multiple selected alerts simultaneously." arrow enterDelay={2000}>
           <Button variant="contained" sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}>
             Bulk Actions
