@@ -30,6 +30,7 @@ import {
 import { useCases } from "../../features/api/queries";
 import { useCreateCase } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
+import type { ApiError } from "../../lib/apiClient";
 import type { CaseStatus, Priority } from "../../types";
 
 const statusConfig: Record<string, { color: string; bgColor: string; label: string }> = {
@@ -278,7 +279,15 @@ export default function CasesAllCases() {
                 <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
                     {createCase.isError && (
                         <Alert severity="error">
-                            Failed to create case. Please check your input and try again.
+                            {(() => {
+                                const err = createCase.error as ApiError | Error | null;
+                                if (err && "status" in err) {
+                                    if (err.status === 503) return "Service temporarily unavailable. Please try again in a moment.";
+                                    if (err.status === 403) return "You do not have permission to create cases.";
+                                    if (err.message) return err.message;
+                                }
+                                return "Failed to create case. Please try again.";
+                            })()}
                         </Alert>
                     )}
                     <TextField
