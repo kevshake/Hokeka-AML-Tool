@@ -69,14 +69,14 @@ export default function Sidebar() {
   // Fetch live badge counts — data cached with staleTime=30s so no extra load
   const { data: alertsData } = useAlerts({ page: 0, size: 1, status: "OPEN" });
   const { data: casesData } = useCases({ page: 0, size: 1, status: "NEW" });
-  const { data: messagesData } = useQuery<{ unreadCount?: number }>({
+  const { data: messagesData } = useQuery<{ count?: number }>({
     queryKey: ["messages", "unread-count"],
-    queryFn: () => apiClient.get<{ unreadCount?: number }>("messages/unread-count").catch(() => ({ unreadCount: 0 })),
+    queryFn: () => apiClient.get<{ count?: number }>("messages/unread/count").catch(() => ({ count: 0 })),
   });
 
   const openAlertsCount = alertsData?.totalElements || 0;
   const newCasesCount = casesData?.totalElements || 0;
-  const unreadMessages = messagesData?.unreadCount || 0;
+  const unreadMessages = messagesData?.count || 0;
 
   const navSections: NavSection[] = [
     {
