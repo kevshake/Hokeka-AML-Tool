@@ -26,8 +26,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
     return { hasError: true, isChunkError };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Route error boundary caught:", error, info);
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // error rendered in fallback UI
   }
 
   handleReload = () => {

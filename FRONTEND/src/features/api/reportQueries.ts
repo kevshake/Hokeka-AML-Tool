@@ -113,9 +113,7 @@ export const useReportDefinitions = (options?: Partial<UseQueryOptions<ReportDef
         // Try to fetch from API first
         const definitions = await apiClient.get<ReportDefinition[]>("reports/definitions");
         return definitions.length > 0 ? definitions : REPORT_DEFINITIONS;
-      } catch (error) {
-        // Fallback to local definitions
-        console.warn("Failed to fetch report definitions from API, using local definitions");
+      } catch {
         return REPORT_DEFINITIONS;
       }
     },

@@ -184,8 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const redirectUrl = data.redirectUrl || "/dashboard";
             navigate(redirectUrl, { replace: true });
         } catch (error: any) {
-            console.error("Login error:", error);
-            // Re-throw with user-friendly message
             throw new Error(error.message || "Invalid username or password");
         }
     };

@@ -201,7 +201,6 @@ export default function RulesGenerationPage() {
       setOpenDialog(false);
       setEditingRule(null);
     } catch (error: any) {
-      console.error("Error saving rule:", error);
       setErrorSnackbar(error?.message || "Failed to save rule. Please check if the API endpoint is available.");
     }
   };
