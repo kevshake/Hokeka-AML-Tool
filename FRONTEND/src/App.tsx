@@ -1,31 +1,42 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CssBaseline } from "@mui/material";
+import { CssBaseline, CircularProgress, Box } from "@mui/material";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import MainLayout from "./components/Layout/MainLayout";
 
-// Pages
+// Auth pages — small, load eagerly so login is instant
 import LoginPage from "./pages/Auth/LoginPage";
 import SignupPage from "./pages/Auth/SignupPage";
-import DashboardPage from "./pages/Dashboard/DashboardPage";
-import CasesPage from "./pages/Cases/CasesPage";
-import AlertsPage from "./pages/Alerts/AlertsPage";
-import RiskAnalyticsPage from "./pages/RiskAnalytics/RiskAnalyticsPage";
-import ComplianceCalendarPage from "./pages/ComplianceCalendar/ComplianceCalendarPage";
-import MerchantsPage from "./pages/Merchants/MerchantsPage";
-import TransactionMonitoringPage from "./pages/TransactionMonitoring/TransactionMonitoringPage";
-import ScreeningPage from "./pages/Screening/ScreeningPage";
-import ProfilePage from "./pages/Profile/ProfilePage";
-import MessagesPage from "./pages/Messages/MessagesPage";
-import SettingsPage from "./pages/Settings/SettingsPage";
-import UsersPage from "./pages/Users/UsersPage";
-import ReportsPage from "./pages/Reports/ReportsPage";
-import ReportsCenterPage from "./pages/ReportsCenter/ReportsCenterPage";
-import AuditLogsPage from "./pages/AuditLogs/AuditLogsPage";
-import RulesGenerationPage from "./pages/RulesGeneration/RulesGenerationPage";
-import KycDocumentsPage from "./pages/KycDocuments/KycDocumentsPage";
+
+// All other pages lazy-loaded so each route is its own chunk
+const DashboardPage = lazy(() => import("./pages/Dashboard/DashboardPage"));
+const CasesPage = lazy(() => import("./pages/Cases/CasesPage"));
+const AlertsPage = lazy(() => import("./pages/Alerts/AlertsPage"));
+const RiskAnalyticsPage = lazy(() => import("./pages/RiskAnalytics/RiskAnalyticsPage"));
+const ComplianceCalendarPage = lazy(() => import("./pages/ComplianceCalendar/ComplianceCalendarPage"));
+const MerchantsPage = lazy(() => import("./pages/Merchants/MerchantsPage"));
+const TransactionMonitoringPage = lazy(() => import("./pages/TransactionMonitoring/TransactionMonitoringPage"));
+const ScreeningPage = lazy(() => import("./pages/Screening/ScreeningPage"));
+const ProfilePage = lazy(() => import("./pages/Profile/ProfilePage"));
+const MessagesPage = lazy(() => import("./pages/Messages/MessagesPage"));
+const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
+const UsersPage = lazy(() => import("./pages/Users/UsersPage"));
+const ReportsPage = lazy(() => import("./pages/Reports/ReportsPage"));
+const ReportsCenterPage = lazy(() => import("./pages/ReportsCenter/ReportsCenterPage"));
+const AuditLogsPage = lazy(() => import("./pages/AuditLogs/AuditLogsPage"));
+const RulesGenerationPage = lazy(() => import("./pages/RulesGeneration/RulesGenerationPage"));
+const KycDocumentsPage = lazy(() => import("./pages/KycDocuments/KycDocumentsPage"));
+
+function PageLoader() {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+      <CircularProgress size={32} sx={{ color: "#8B4049" }} />
+    </Box>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,26 +62,28 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MainLayout>
-                      <Routes>
-                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                        <Route path="/dashboard/*" element={<DashboardPage />} />
-                        <Route path="/cases/*" element={<CasesPage />} />
-                        <Route path="/alerts" element={<AlertsPage />} />
-                        <Route path="/risk-analytics" element={<RiskAnalyticsPage />} />
-                        <Route path="/compliance-calendar" element={<ComplianceCalendarPage />} />
-                        <Route path="/merchants" element={<MerchantsPage />} />
-                        <Route path="/transaction-monitoring/*" element={<TransactionMonitoringPage />} />
-                        <Route path="/screening" element={<ScreeningPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
-                        <Route path="/messages" element={<MessagesPage />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="/users/*" element={<UsersPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                        <Route path="/reports-center" element={<ReportsCenterPage />} />
-                        <Route path="/audit" element={<AuditLogsPage />} />
-                        <Route path="/rules-generation" element={<RulesGenerationPage />} />
-                        <Route path="/kyc-documents" element={<KycDocumentsPage />} />
-                      </Routes>
+                      <Suspense fallback={<PageLoader />}>
+                        <Routes>
+                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                          <Route path="/dashboard/*" element={<DashboardPage />} />
+                          <Route path="/cases/*" element={<CasesPage />} />
+                          <Route path="/alerts" element={<AlertsPage />} />
+                          <Route path="/risk-analytics" element={<RiskAnalyticsPage />} />
+                          <Route path="/compliance-calendar" element={<ComplianceCalendarPage />} />
+                          <Route path="/merchants" element={<MerchantsPage />} />
+                          <Route path="/transaction-monitoring/*" element={<TransactionMonitoringPage />} />
+                          <Route path="/screening" element={<ScreeningPage />} />
+                          <Route path="/profile" element={<ProfilePage />} />
+                          <Route path="/messages" element={<MessagesPage />} />
+                          <Route path="/settings" element={<SettingsPage />} />
+                          <Route path="/users/*" element={<UsersPage />} />
+                          <Route path="/reports" element={<ReportsPage />} />
+                          <Route path="/reports-center" element={<ReportsCenterPage />} />
+                          <Route path="/audit" element={<AuditLogsPage />} />
+                          <Route path="/rules-generation" element={<RulesGenerationPage />} />
+                          <Route path="/kyc-documents" element={<KycDocumentsPage />} />
+                        </Routes>
+                      </Suspense>
                     </MainLayout>
                   </ProtectedRoute>
                 }
