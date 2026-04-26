@@ -134,9 +134,9 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
 
     /**
      * Batch status counts for a PSP — one GROUP BY query replaces N×countByPspIdAndStatus calls.
-     * Returns [{case_status, count}] rows.
+     * Returns [{status, count}] rows.
      */
-    @Query(value = "SELECT case_status, COUNT(*) FROM compliance_cases WHERE psp_id = :pspId GROUP BY case_status",
+    @Query(value = "SELECT status, COUNT(*) FROM compliance_cases WHERE psp_id = :pspId GROUP BY status",
            nativeQuery = true)
     List<Object[]> countByPspIdGroupByStatus(@Param("pspId") Long pspId);
 
@@ -150,7 +150,7 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
     /**
      * Global batch status counts (admin view).
      */
-    @Query(value = "SELECT case_status, COUNT(*) FROM compliance_cases GROUP BY case_status",
+    @Query(value = "SELECT status, COUNT(*) FROM compliance_cases GROUP BY status",
            nativeQuery = true)
     List<Object[]> countAllGroupByStatus();
 
