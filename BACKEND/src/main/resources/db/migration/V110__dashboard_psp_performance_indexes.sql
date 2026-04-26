@@ -12,7 +12,7 @@ CREATE INDEX IF NOT EXISTS idx_merchant_psp_risk
 
 -- compliance_cases: PSP-filtered status and priority counts
 CREATE INDEX IF NOT EXISTS idx_case_psp_status
-    ON compliance_cases(psp_id, case_status);
+    ON compliance_cases(psp_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_case_psp_priority
     ON compliance_cases(psp_id, priority);
