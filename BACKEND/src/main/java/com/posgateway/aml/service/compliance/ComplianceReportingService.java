@@ -9,6 +9,7 @@ import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.model.SarStatus;
 import com.posgateway.aml.mapper.SarMapper;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,46 +24,39 @@ public class ComplianceReportingService {
     private final SuspiciousActivityReportRepository sarRepository;
     private final ObjectMapper objectMapper;
     private final SarMapper sarMapper;
-    private final com.posgateway.aml.repository.UserRepository userRepository;
+    private final PspIsolationService pspIsolationService;
 
     public ComplianceReportingService(SuspiciousActivityReportRepository sarRepository,
             ObjectMapper objectMapper,
             SarMapper sarMapper,
-            com.posgateway.aml.repository.UserRepository userRepository) {
+            PspIsolationService pspIsolationService) {
         this.sarRepository = sarRepository;
         this.objectMapper = objectMapper;
         this.sarMapper = sarMapper;
-        this.userRepository = userRepository;
-    }
-
-    private com.posgateway.aml.entity.User getCurrentUser() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (auth == null)
-            return null;
-        return userRepository.findByUsername(auth.getName()).orElse(null);
+        this.pspIsolationService = pspIsolationService;
     }
 
     @Transactional(readOnly = true)
     public java.util.List<SarResponse> getAllSars(String status) {
-        // HOK-39: filter by current user's PSP
-        com.posgateway.aml.entity.User currentUser = getCurrentUser();
-        Long pspId = (currentUser != null && currentUser.getPsp() != null) ? currentUser.getPsp().getPspId() : null;
+        // HOK-61: use PspIsolationService for reliable PSP resolution.
+        // pspId == 0 means platform admin (sees all); pspId > 0 means PSP user (scoped).
+        Long pspId = pspIsolationService.getCurrentUserPspId();
+        boolean isPlatformAdmin = pspIsolationService.isPlatformAdministrator();
 
         java.util.List<SuspiciousActivityReport> sars;
         if (status != null && !status.isEmpty()) {
             try {
                 SarStatus sarStatus = SarStatus.valueOf(status);
-                sars = (pspId != null)
-                    ? sarRepository.findByPspIdAndStatus(pspId, sarStatus)
-                    : sarRepository.findByStatus(sarStatus);
+                sars = isPlatformAdmin
+                    ? sarRepository.findByStatus(sarStatus)
+                    : sarRepository.findByPspIdAndStatus(pspId, sarStatus);
             } catch (IllegalArgumentException e) {
                 sars = java.util.List.of();
             }
         } else {
-            sars = (pspId != null)
-                ? sarRepository.findByPspId(pspId)
-                : sarRepository.findAll();
+            sars = isPlatformAdmin
+                ? sarRepository.findAll()
+                : sarRepository.findByPspId(pspId);
         }
         return sars.stream()
                 .map(sarMapper::toResponse)
@@ -73,24 +67,8 @@ public class ComplianceReportingService {
     public SarResponse createSar(CreateSarRequest request) {
         log.info("Creating new SAR (caseId={} merchantId={})", request.getCaseId(), request.getMerchantId());
 
-        com.posgateway.aml.entity.User user = getCurrentUser();
-        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
+        Long pspId = pspIsolationService.getCurrentUserPspId();
 
-        if (pspId != null) {
-            // Verify merchant belongs to this PSP
-            // Assuming merchantId is a String reference, we might need to look it up if
-            // it's not the DB ID.
-            // If it is the DB ID (Long) passed as String, good. If it is
-            // 'registrationNumber', need lookup.
-            // ComplianceCase uses String merchantId. Let's assume trusting the request vs
-            // PSP check
-            // OR ideally we check if a merchant with this ID exists with this PSP.
-            // Since merchantId is String, let's leave flexible but enforce pspId stamp.
-            // Strict check:
-            // boolean exists = merchantRepository.findByPspId(pspId).stream().anyMatch(m ->
-            // m.getMerchantId().equals(request.getMerchantId()));
-            // This is expensive. For now, just stamping the SAR with the PSP ID is crucial.
-        }
 
         SuspiciousActivityReport sar = SuspiciousActivityReport.builder()
                 .sarReference("SAR-" + UUID.randomUUID())
@@ -110,11 +88,11 @@ public class ComplianceReportingService {
         SuspiciousActivityReport sar = sarRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("SAR not found: " + id));
 
-        com.posgateway.aml.entity.User user = getCurrentUser();
-        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
-
-        if (pspId != null && !pspId.equals(sar.getPspId())) {
-            throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+        if (!pspIsolationService.isPlatformAdministrator()) {
+            Long pspId = pspIsolationService.getCurrentUserPspId();
+            if (!pspId.equals(sar.getPspId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+            }
         }
 
         if (request.getStatus() != null) {
@@ -133,11 +111,11 @@ public class ComplianceReportingService {
         SuspiciousActivityReport sar = sarRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("SAR not found: " + id));
 
-        com.posgateway.aml.entity.User user = getCurrentUser();
-        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
-
-        if (pspId != null && !pspId.equals(sar.getPspId())) {
-            throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+        if (!pspIsolationService.isPlatformAdministrator()) {
+            Long pspId = pspIsolationService.getCurrentUserPspId();
+            if (!pspId.equals(sar.getPspId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+            }
         }
 
         if (sar.getStatus() == SarStatus.FILED) {
@@ -157,11 +135,11 @@ public class ComplianceReportingService {
         SuspiciousActivityReport sar = sarRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("SAR not found: " + id));
 
-        com.posgateway.aml.entity.User user = getCurrentUser();
-        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
-
-        if (pspId != null && !pspId.equals(sar.getPspId())) {
-            throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+        if (!pspIsolationService.isPlatformAdministrator()) {
+            Long pspId = pspIsolationService.getCurrentUserPspId();
+            if (!pspId.equals(sar.getPspId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
+            }
         }
 
         // Simplified mock XML generation

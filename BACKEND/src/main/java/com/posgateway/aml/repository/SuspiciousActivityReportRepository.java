@@ -42,4 +42,7 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
     // HOK-39 fix: filter SAR list by PSP
     List<SuspiciousActivityReport> findByPspId(Long pspId);
     List<SuspiciousActivityReport> findByPspIdAndStatus(Long pspId, SarStatus status);
+
+    // HOK-61: PSP-scoped count for count/not-exported endpoint
+    long countByPspId(Long pspId);
 }
