@@ -14,6 +14,7 @@
             --glass-bg: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
             --success-color: #27ae60;
+            --text-primary: #f1f5f9;
         }
 
         * {
@@ -252,7 +253,20 @@
             </div>
         </div>
     </div>
+/* ADD THIS BLOCK - clears all cookies and local storage on logout */
+function clearSession() {
+    // Clear all cookies
+    document.cookie.split(";").forEach(cookie => {
+        const name = cookie.split("=")[0].trim();
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    });
 
+    // Clear local and session storage
+    localStorage.clear();
+    sessionStorage.clear();
+}
+
+clearSession(); // ← Call it immediately when the page loads
     <script>
         // Create animated particles
         function createParticles() {
@@ -287,11 +301,10 @@
         createParticles();
 
         // Allow manual navigation
-        document.querySelector('.btn-login').addEventListener('click', (e) => {
-            e.preventDefault();
-            clearInterval(countdownInterval);
-            window.location.href = 'login.html';
-        });
+        document.querySelector('.btn-login').addEventListener('click', () => {
+    clearInterval(countdownInterval);
+    // Let the <a href="login.html"> handle navigation naturally
+});
     </script>
     
     <!-- Footer -->
