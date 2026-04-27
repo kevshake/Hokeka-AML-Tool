@@ -151,7 +151,7 @@
             cursor: pointer;
         }
 
-        .btn-login:hover {
+        .btn-logout:hover {
             background: #5541d7;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
@@ -243,13 +243,13 @@
                 </div>
             </div>
 
-            <a href="login.html" class="btn-login">
+            <a href="logout.html" class="btn-logout">
                 <i class="fas fa-sign-in-alt"></i>
-                Return to Login
+                 Return to Log out
             </a>
 
             <div class="countdown">
-                Redirecting to login in <strong id="countdown">5</strong> seconds...
+                Redirecting to logout in <strong id="countdown">5</strong> seconds...
             </div>
         </div>
     </div>
@@ -293,7 +293,7 @@ clearSession(); // ← Call it immediately when the page loads
             }
             if (countdown <= 0) {
                 clearInterval(countdownInterval);
-                window.location.href = 'login.html';
+                window.location.href = 'logout.html';
             }
         }, 1000);
 
@@ -301,9 +301,8 @@ clearSession(); // ← Call it immediately when the page loads
         createParticles();
 
         // Allow manual navigation
-        document.querySelector('.btn-login').addEventListener('click', () => {
+        document.querySelector('.btn-logout').addEventListener('click', () => {
     clearInterval(countdownInterval);
-    // Let the <a href="login.html"> handle navigation naturally
 });
     </script>
     
