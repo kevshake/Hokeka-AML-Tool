@@ -39,15 +39,27 @@ export default function SignupPage() {
         setSuccess("");
 
         // Validation
+        // Validation
+if (!formData.username || !formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+    setError("All fields are required");
+    return;
+}
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!emailRegex.test(formData.email)) {
+    setError("Please enter a valid email address");
+    return;
+}
+
+if (formData.password !== formData.confirmPassword) {
         if (formData.password !== formData.confirmPassword) {
             setError("Passwords do not match");
             return;
         }
-
-        if (formData.password.length < 8) {
-            setError("Password must be at least 8 characters long");
-            return;
-        }
+if (!formData.username || !formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+    setError("All fields are required");
+    return;
+        
 
         setIsLoading(true);
 
