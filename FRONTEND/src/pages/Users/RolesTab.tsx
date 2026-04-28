@@ -90,14 +90,17 @@ export default function RolesTab() {
 
     // Delete role mutation
     const deleteRoleMutation = useMutation({
-        mutationFn: async (roleId: number) => {
-            const response = await fetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
-            if (!response.ok) throw new Error("Failed to delete role");
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["roles"] });
-        },
-    });
+    mutationFn: async (roleId: number) => {
+        const response = await fetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("Failed to delete role");
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["roles"] });
+    },
+    onError: () => {
+        alert("Failed to delete role. Please try again.");
+    },
+});
 
     const handleOpenDialog = (role?: Role) => {
         if (role) {
@@ -126,8 +129,9 @@ export default function RolesTab() {
     };
 
     const handleSave = () => {
-        const roleData = {
-            name: formData.name,
+    if (!formData.name) return;
+    const roleData = {
+        name: formData.name,
             description: formData.description,
             pspId: formData.pspId ? parseInt(formData.pspId) : null,
             permissions: formData.permissions,
@@ -136,11 +140,17 @@ export default function RolesTab() {
         saveRoleMutation.mutate(roleData);
     };
 
-    const handleDelete = (roleId: number) => {
-        if (window.confirm("Are you sure you want to delete this role? Users with this role will need to be reassigned.")) {
-            deleteRoleMutation.mutate(roleId);
-        }
-    };
+ // ✅ Replace with
+const handleDelete = (roleId: number) => {
+    setDeleteConfirmId(roleId);
+};
+
+const handleConfirmDelete = () => {
+    if (deleteConfirmId !== null) {
+        deleteRoleMutation.mutate(deleteConfirmId);
+        setDeleteConfirmId(null);
+    }
+};   
 
     const handlePermissionToggle = (permission: Permission) => {
         setFormData((prev) => ({
@@ -343,7 +353,65 @@ export default function RolesTab() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+            </Dialog>  {/* ← end of Create/Edit Dialog */}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
+                <DialogTitle>Delete Role</DialogTitle>
+                <DialogContent>
+                    Are you sure you want to delete this role? Users with this role will need to be reassigned.
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+                    <Button
+                        onClick={handleConfirmDelete}
+                        variant="contained"
+                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+</Dialog>  {/* ← end of Create/Edit Dialog */}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
+                <DialogTitle>Delete Role</DialogTitle>
+                <DialogContent>
+                    Are you sure you want to delete this role? Users with this role will need to be reassigned.
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+                    <Button
+                        onClick={handleConfirmDelete}
+                        variant="contained"
+                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+</Dialog>  {/* ← end of Create/Edit Dialog */}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
+                <DialogTitle>Delete Role</DialogTitle>
+                <DialogContent>
+                    Are you sure you want to delete this role? Users with this role will need to be reassigned.
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+                    <Button
+                        onClick={handleConfirmDelete}
+                        variant="contained"
+                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>  {/* ← end of root Box */}
     );
+}
 }
 
