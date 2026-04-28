@@ -18,13 +18,11 @@ export default function UsersPage() {
 
       <TabNavigation tabs={tabs} />
 
-      <Routes>
-        <Route path="/" element={<Navigate to="list" replace />} />
-        // ✅ Correct
-<Route path="list" element={<UsersTab />} />
-<Route path="roles" element={<RolesTab />} />
-<Route path="/" element={<Navigate to="list" replace />} />
-      </Routes>
+  <Routes>
+  <Route path="/" element={<Navigate to="list" replace />} />
+  <Route path="list" element={<UsersTab />} />
+  <Route path="roles" element={<RolesTab />} />
+</Routes>
     </Box>
   );
 }
