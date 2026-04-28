@@ -102,16 +102,16 @@ public class ComplianceReportingController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSar(@PathVariable Long id) {
         log.info("Delete SAR: {}", id);
-        return sarRepository.findById(id)
-                .map(sar -> {
-                    if (!pspIsolationService.isPlatformAdministrator()
-                            && !pspIsolationService.getCurrentUserPspId().equals(sar.getPspId())) {
-                        return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
-                    }
-                    sarRepository.delete(sar);
-                    return ResponseEntity.<Void>noContent().<Void>build();
-                })
-                .orElse(ResponseEntity.<Void>notFound().build());
+        SuspiciousActivityReport sar = sarRepository.findById(id).orElse(null);
+        if (sar == null) {
+            return ResponseEntity.<Void>notFound().build();
+        }
+        if (!pspIsolationService.isPlatformAdministrator()
+                && !pspIsolationService.getCurrentUserPspId().equals(sar.getPspId())) {
+            return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
+        }
+        sarRepository.delete(sar);
+        return ResponseEntity.<Void>noContent().build();
     }
 
     /**

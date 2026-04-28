@@ -183,4 +183,6 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
 
     org.springframework.data.domain.Page<TransactionEntity> findAll(
             org.springframework.data.domain.Pageable pageable);
+
+    List<TransactionEntity> findByPspIdAndTxnTsBetween(Long pspId, LocalDateTime start, LocalDateTime end);
 }
