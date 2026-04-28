@@ -3,8 +3,11 @@ import {
   Box, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, Chip, Dialog, DialogTitle,
   DialogContent, DialogActions, Button, Grid, Divider,
+  TextField, MenuItem, Alert, Stack,
 } from "@mui/material";
 import { useSarReports } from "../../features/api/queries";
+import { useCreateSar } from "../../features/api/mutations";
+import { useAuth } from "../../contexts/AuthContext";
 import type { SarReport } from "../../types";
 
 const statusColors: Record<string, string> = {
@@ -16,17 +19,81 @@ const statusColors: Record<string, string> = {
   AMENDED: "#8e44ad",
 };
 
+const SAR_ACTIVITY_TYPES = [
+  "Transaction Structuring",
+  "Money Laundering",
+  "Fraud",
+  "Terrorism Financing",
+  "Sanctions Evasion",
+  "Other Transaction Activity",
+];
+
+const defaultForm = {
+  sarReference: "",
+  suspiciousActivityType: "",
+  narrative: "",
+  jurisdiction: "",
+};
+
 export default function TransactionMonitoringSars() {
   const { data: sars, isLoading } = useSarReports();
   const [viewSar, setViewSar] = useState<SarReport | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState(defaultForm);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { user } = useAuth();
+  const createSar = useCreateSar();
 
   const transactionSars = sars?.filter((sar) => sar.suspiciousActivityType?.toLowerCase().includes("transaction")) || [];
 
+  const handleCreate = () => {
+    if (!form.sarReference.trim() || !form.suspiciousActivityType || !form.narrative.trim()) {
+      setFormError("Reference, Activity Type, and Narrative are required.");
+      return;
+    }
+    setFormError(null);
+    createSar.mutate(
+      {
+        sarReference: form.sarReference.trim(),
+        suspiciousActivityType: form.suspiciousActivityType,
+        narrative: form.narrative.trim(),
+        jurisdiction: form.jurisdiction.trim() || undefined,
+        sarType: "INITIAL",
+        creatorUserId: user!.id,
+      },
+      {
+        onSuccess: () => {
+          setCreateOpen(false);
+          setForm(defaultForm);
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { message?: string })?.message || "Failed to create SAR.";
+          setFormError(msg);
+        },
+      }
+    );
+  };
+
   return (
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3 }}>
-        Transaction-Related SAR Reports
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+        <Typography variant="h6" sx={{ color: "text.primary" }}>
+          Transaction-Related SAR Reports
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => { setCreateOpen(true); setFormError(null); setForm(defaultForm); }}
+          sx={{
+            backgroundColor: "#a93226",
+            "&:hover": { backgroundColor: "#922b21" },
+            textTransform: "none",
+            fontWeight: 600,
+          }}
+        >
+          + Create SAR
+        </Button>
+      </Stack>
 
       <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <TableContainer>
@@ -87,6 +154,79 @@ export default function TransactionMonitoringSars() {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Create SAR Dialog */}
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Create SAR</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                label="SAR Reference"
+                fullWidth
+                required
+                value={form.sarReference}
+                onChange={(e) => setForm((f) => ({ ...f, sarReference: e.target.value }))}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Activity Type"
+                fullWidth
+                required
+                select
+                value={form.suspiciousActivityType}
+                onChange={(e) => setForm((f) => ({ ...f, suspiciousActivityType: e.target.value }))}
+                size="small"
+              >
+                {SAR_ACTIVITY_TYPES.map((t) => (
+                  <MenuItem key={t} value={t}>{t}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Narrative"
+                fullWidth
+                required
+                multiline
+                rows={4}
+                value={form.narrative}
+                onChange={(e) => setForm((f) => ({ ...f, narrative: e.target.value }))}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Jurisdiction (optional)"
+                fullWidth
+                value={form.jurisdiction}
+                onChange={(e) => setForm((f) => ({ ...f, jurisdiction: e.target.value }))}
+                size="small"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCreateOpen(false)} sx={{ textTransform: "none" }}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreate}
+            disabled={createSar.isPending}
+            sx={{
+              backgroundColor: "#a93226",
+              "&:hover": { backgroundColor: "#922b21" },
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            {createSar.isPending ? "Creating..." : "Create SAR"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* SAR Detail Modal */}
       <Dialog open={!!viewSar} onClose={() => setViewSar(null)} maxWidth="sm" fullWidth>

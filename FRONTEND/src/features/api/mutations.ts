@@ -153,6 +153,27 @@ export const useCreateMerchant = () => {
   });
 };
 
+// SAR Mutations
+export interface CreateSarRequest {
+  sarReference: string;
+  narrative: string;
+  suspiciousActivityType: string;
+  jurisdiction?: string;
+  sarType?: string;
+  creatorUserId: number;
+}
+
+export const useCreateSar = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateSarRequest) =>
+      apiClient.post("compliance/sar/workflow/create", req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sar"] });
+    },
+  });
+};
+
 // Compliance Calendar Mutations
 export interface CreateDeadlineRequest {
   title: string;
