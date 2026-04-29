@@ -151,7 +151,7 @@
             cursor: pointer;
         }
 
-        .btn-logout:hover {
+        .btn-login:hover {
             background: #5541d7;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
@@ -243,7 +243,7 @@
                 </div>
             </div>
 
-            <a href="logout.html" class="btn-logout">
+            <a href="logout.html" class="btn-login">
                 <i class="fas fa-sign-in-alt"></i>
                  Return to Log out
             </a>
@@ -253,22 +253,17 @@
             </div>
         </div>
     </div>
-/* ADD THIS BLOCK - clears all cookies and local storage on logout */
-function clearSession() {
-    // Clear all cookies
-    document.cookie.split(";").forEach(cookie => {
-        const name = cookie.split("=")[0].trim();
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    });
-
-    // Clear local and session storage
-    localStorage.clear();
-    sessionStorage.clear();
-}
-
-clearSession(); // ← Call it immediately when the page loads
-    <script>
-        // Create animated particles
+<script>
+        function clearSession() {
+            document.cookie.split(";").forEach(cookie => {
+                const name = cookie.split("=")[0].trim();
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            });
+            localStorage.clear();
+            sessionStorage.clear();
+        }
+        clearSession();
+    
         function createParticles() {
             const particlesContainer = document.getElementById('particles');
             const particleCount = 20;
@@ -301,7 +296,7 @@ clearSession(); // ← Call it immediately when the page loads
         createParticles();
 
         // Allow manual navigation
-        document.querySelector('.btn-logout').addEventListener('click', () => {
+        document.querySelector('.btn-login').addEventListener('click', () => {
     clearInterval(countdownInterval);
 });
     </script>
