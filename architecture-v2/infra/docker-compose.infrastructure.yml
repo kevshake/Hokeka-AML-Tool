@@ -1,0 +1,141 @@
+version: '3.8'
+
+# AML Shared Infrastructure — v2
+# Manages all stateful backing services that app containers depend on.
+# Run with: docker compose -f architecture-v2/infra/docker-compose.infrastructure.yml up -d
+# After adding restart policy: docker compose -f ... up -d --force-recreate
+
+services:
+
+  # PostgreSQL — primary relational store
+  aml-postgres:
+    image: postgres:15-alpine
+    container_name: aml-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fraud_detector}
+      POSTGRES_USER: ${POSTGRES_USER:-aml_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - aml_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aml_user} -d ${POSTGRES_DB:-fraud_detector}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+
+  # Redis — session cache, rate-limit counters, short-TTL rule state
+  aml-redis:
+    image: redis:7-alpine
+    container_name: aml-redis
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --save ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - aml_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+
+  # Zookeeper — required by Kafka for cluster coordination
+  aml-zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: aml-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    volumes:
+      - aml_zookeeper_data:/var/lib/zookeeper/data
+      - aml_zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+
+  # Kafka — event streaming for case lifecycle, transaction events
+  aml-kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: aml-kafka
+    depends_on:
+      aml-zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: aml-zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://aml-kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "9092:9092"
+    volumes:
+      - aml_kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+
+  # Aerospike — sub-millisecond AML rule state, velocity checks, blacklists
+  aml-aerospike:
+    image: aerospike/aerospike-server:6.4
+    container_name: aml-aerospike
+    ports:
+      - "3000:3000"
+    volumes:
+      - aml_aerospike_data:/opt/aerospike/data
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD", "asinfo", "-p", "3000", "-v", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+
+volumes:
+  aml_postgres_data:
+  aml_redis_data:
+  aml_zookeeper_data:
+  aml_zookeeper_log:
+  aml_kafka_data:
+  aml_aerospike_data:
+
+networks:
+  aml-infra-network:
+    name: aml-infra-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

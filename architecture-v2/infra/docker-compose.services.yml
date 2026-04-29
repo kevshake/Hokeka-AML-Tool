@@ -1,0 +1,67 @@
+version: '3.8'
+
+# AML Application Services — v2
+# Deploys aml-txn-service + aml-rules-service onto the shared aml-infra-network
+# created by docker-compose.infrastructure.yml.
+#
+# Run order:
+#   1. docker compose -f architecture-v2/infra/docker-compose.infrastructure.yml up -d
+#   2. ./architecture-v2/infra/init-kafka-topics.sh
+#   3. docker compose -f architecture-v2/infra/docker-compose.services.yml up -d --build
+
+services:
+
+  aml-txn-service:
+    build:
+      context: ../../BACKEND/aml-txn-service
+      dockerfile: Dockerfile
+    image: hokeka/aml-txn-service:0.1.0
+    container_name: aml-txn-service
+    environment:
+      AML_PG_URL: jdbc:postgresql://aml-postgres:5432/${POSTGRES_DB:-fraud_detector}
+      AML_PG_USER: ${POSTGRES_USER:-aml_user}
+      AML_PG_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      AML_KAFKA_BOOTSTRAP: aml-kafka:29092
+      AML_AEROSPIKE_HOSTS: aml-aerospike:3000
+      AML_AEROSPIKE_NAMESPACE: aml
+    ports:
+      - "2637:2637"
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2637/actuator/health | grep -q '\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  aml-rules-service:
+    build:
+      context: ../../BACKEND/aml-rules-service
+      dockerfile: Dockerfile
+    image: hokeka/aml-rules-service:0.1.0
+    container_name: aml-rules-service
+    environment:
+      AML_PG_URL: jdbc:postgresql://aml-postgres:5432/${POSTGRES_DB:-fraud_detector}
+      AML_PG_USER: ${POSTGRES_USER:-aml_user}
+      AML_PG_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      AML_KAFKA_BOOTSTRAP: aml-kafka:29092
+      AML_AEROSPIKE_HOSTS: aml-aerospike:3000
+      AML_AEROSPIKE_NAMESPACE: aml
+    ports:
+      - "2640:2640"
+    networks:
+      - aml-infra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2640/actuator/health | grep -q '\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+networks:
+  aml-infra-network:
+    external: true
+    name: aml-infra-network
