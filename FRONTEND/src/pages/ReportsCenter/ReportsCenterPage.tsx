@@ -44,6 +44,7 @@ import {
   CheckCircle,
   Storage,
   CreditCard,
+  AccountBalance,
 } from "@mui/icons-material";
 import type { ReportDefinition, ExportFormat } from "../../types/reports/reportDefinitions";
 import {
@@ -70,6 +71,7 @@ import ReportPreviewDialog from "./components/ReportPreviewDialog";
 import ReportProgress from "./components/ReportProgress";
 import ReportErrorBoundary from "./components/ReportErrorBoundary";
 import EmptyState from "./components/EmptyState";
+import CbkSubmissionPanel from "./components/CbkSubmissionPanel";
 
 // Category Icons mapping
 const CATEGORY_ICONS: Record<string, typeof Gavel> = {
@@ -86,6 +88,7 @@ const CATEGORY_ICONS: Record<string, typeof Gavel> = {
   "compliance-management": CheckCircle,
   "data-quality": Storage,
   "chargeback-dispute": CreditCard,
+  "cbk-reporting": AccountBalance,
 };
 
 export default function ReportsCenterPage() {
@@ -605,6 +608,12 @@ export default function ReportsCenterPage() {
                   searchQuery={searchQuery}
                   onClearSearch={clearSearch}
                 />
+              )}
+
+              {selectedCategory === "cbk-reporting" && (
+                <Box sx={{ mt: 3 }}>
+                  <CbkSubmissionPanel onSubmitSuccess={refetchHistory} />
+                </Box>
               )}
             </Grid>
           </Grid>
