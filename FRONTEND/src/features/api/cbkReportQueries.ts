@@ -58,10 +58,10 @@ export const useCbkReports = (params: CbkReportParams, enabled = true) => {
 export const useCbkSubmit = () => {
   const queryClient = useQueryClient();
   return useMutation<CbkSubmitResponse, Error, CbkSubmitRequest>({
-    mutationFn: (req) =>
+   mutationFn: (req) =>
       apiClient.post<CbkSubmitResponse>("compliance/cbk/reports/submit", req),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cbk", "reports"] });
-    },
+    }, 
   });
 };
