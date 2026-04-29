@@ -42,6 +42,7 @@ export default function RolesTab() {
     const queryClient = useQueryClient();
     const [openDialog, setOpenDialog] = useState(false);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [formData, setFormData] = useState({
         name: "",
         description: "",
@@ -352,10 +353,9 @@ const handleConfirmDelete = () => {
                         {saveRoleMutation.isPending ? "Saving..." : "Save"}
                     </Button>
                 </DialogActions>
-            </Dialog>
-            </Dialog>  {/* ← end of Create/Edit Dialog */}
-
-            {/* Delete Confirmation Dialog */}
+          </Dialog>
+        
+            {/* Delete Confirmation Dialog - only ONE instance */}
             <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
                 <DialogTitle>Delete Role</DialogTitle>
                 <DialogContent>
@@ -372,46 +372,11 @@ const handleConfirmDelete = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-</Dialog>  {/* ← end of Create/Edit Dialog */}
 
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
-                <DialogTitle>Delete Role</DialogTitle>
-                <DialogContent>
-                    Are you sure you want to delete this role? Users with this role will need to be reassigned.
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
-                    <Button
-                        onClick={handleConfirmDelete}
-                        variant="contained"
-                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
-                    >
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
-</Dialog>  {/* ← end of Create/Edit Dialog */}
-
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)}>
-                <DialogTitle>Delete Role</DialogTitle>
-                <DialogContent>
-                    Are you sure you want to delete this role? Users with this role will need to be reassigned.
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
-                    <Button
-                        onClick={handleConfirmDelete}
-                        variant="contained"
-                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
-                    >
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>  {/* ← end of root Box */}
+        </Box> 
     );
 }
-}
 
+
+
+    
