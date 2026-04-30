@@ -24,7 +24,7 @@ import java.util.Map;
  * REST endpoints for regulatory submission management
  */
 @RestController
-@RequestMapping("/api/reports")
+@RequestMapping("/reports")
 public class RegulatorySubmissionController {
 
     private static final Logger logger = LoggerFactory.getLogger(RegulatorySubmissionController.class);

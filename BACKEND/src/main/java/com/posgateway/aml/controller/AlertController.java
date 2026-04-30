@@ -5,6 +5,7 @@ import com.posgateway.aml.model.AlertDisposition;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.service.alert.AlertDispositionService;
+import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import com.posgateway.aml.service.security.PspIsolationService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,13 +35,17 @@ public class AlertController {
     private final AlertDispositionService alertDispositionService;
     private final PspIsolationService pspIsolationService;
     private final MerchantRepository merchantRepository;
+    private final RuleEffectivenessService ruleEffectivenessService;
 
     @Autowired
-    public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService, PspIsolationService pspIsolationService, MerchantRepository merchantRepository) {
+    public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
+                           PspIsolationService pspIsolationService, MerchantRepository merchantRepository,
+                           RuleEffectivenessService ruleEffectivenessService) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
         this.merchantRepository = merchantRepository;
+        this.ruleEffectivenessService = ruleEffectivenessService;
     }
 
     /**
@@ -226,9 +231,57 @@ public class AlertController {
                     }
                     
                     Alert saved = alertRepository.save(alert);
+
+                    // Back-fill rule_execution_logs.disposition for this txn so
+                    // GET /rules/{id}/effectiveness reflects operator feedback.
+                    if (request != null && request.getDisposition() != null && saved.getTxnId() != null) {
+                        AlertDisposition d = request.getDisposition();
+                        String bucket = d.isTruePositive() ? "TRUE_POSITIVE"
+                                : d.isFalsePositive() ? "FALSE_POSITIVE"
+                                : "UNKNOWN";
+                        ruleEffectivenessService.recordDisposition(String.valueOf(saved.getTxnId()), bucket);
+                    }
+
                     return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Update alert status — used by Alerts page bulk actions and inline status changes.
+     * PUT /alerts/{id}/status   body: { "status": "open" | "resolved" | "false_positive" | ... }
+     */
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR')")
+    @SuppressWarnings("null")
+    public ResponseEntity<?> updateAlertStatus(
+            @PathVariable Long id,
+            @RequestBody UpdateAlertStatusRequest request) {
+        if (request == null || request.getStatus() == null || request.getStatus().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "status is required"));
+        }
+        Long userPspId = pspIsolationService.getCurrentUserPspId();
+        return alertRepository.findById(id)
+                .map(alert -> {
+                    if (userPspId != null && userPspId != 0L && alert.getMerchantId() != null) {
+                        boolean hasAccess = merchantRepository.findById(alert.getMerchantId())
+                                .map(merchant -> merchant.getPsp() != null && merchant.getPsp().getPspId().equals(userPspId))
+                                .orElse(false);
+                        if (!hasAccess) {
+                            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+                        }
+                    }
+                    alert.setStatus(request.getStatus());
+                    Alert saved = alertRepository.save(alert);
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    public static class UpdateAlertStatusRequest {
+        private String status;
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 
     /**

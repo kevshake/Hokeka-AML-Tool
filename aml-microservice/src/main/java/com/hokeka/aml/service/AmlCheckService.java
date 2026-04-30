@@ -20,28 +20,39 @@ public class AmlCheckService {
     private static final String NAMESPACE = "test";
     private static final String SET_NAME = "aml_transactions";
 
+    public static final String CACHE_LAYER_AEROSPIKE = "L1_AEROSPIKE";
+    public static final String CACHE_LAYER_COMPUTED = "COMPUTED";
+
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
 
+    public boolean isAerospikeConnected() {
+        return aerospikeClient != null && aerospikeClient.isConnected();
+    }
+
     public AmlResult check(TransactionRequest request) {
         long startTime = System.currentTimeMillis();
+        Long pspId = request.getPspId();
         String txnId = request.getTransactionId() != null ? request.getTransactionId()
                 : "TXN-" + System.currentTimeMillis();
+        // PSP-namespaced cache key prevents cross-PSP cache poisoning.
+        String cacheKey = pspId + ":" + txnId;
 
         // Try Aerospike cache first
-        if (aerospikeClient != null && aerospikeClient.isConnected()) {
+        if (isAerospikeConnected()) {
             try {
-                Key key = new Key(NAMESPACE, SET_NAME, txnId);
+                Key key = new Key(NAMESPACE, SET_NAME, cacheKey);
                 Record record = aerospikeClient.get(null, key);
                 if (record != null) {
                     double cachedScore = ((Number) record.getValue("risk_score")).doubleValue();
                     String cachedDecision = (String) record.getValue("decision");
                     long elapsed = System.currentTimeMillis() - startTime;
-                    return new AmlResult(txnId, cachedScore, cachedDecision,
-                            getRiskLevel(cachedScore), "aerospike_cache", elapsed);
+                    return new AmlResult(txnId, pspId, cachedScore, cachedDecision,
+                            getRiskLevel(cachedScore), "aerospike_cache", elapsed,
+                            CACHE_LAYER_AEROSPIKE);
                 }
             } catch (Exception e) {
-                log.warn("Aerospike lookup failed for {}: {}", txnId, e.getMessage());
+                log.warn("Aerospike lookup failed for {}: {}", cacheKey, e.getMessage());
             }
         }
 
@@ -50,23 +61,25 @@ public class AmlCheckService {
         String decision = riskScore >= 0.7 ? "BLOCK" : riskScore >= 0.4 ? "REVIEW" : "APPROVE";
 
         // Store result in Aerospike for future lookups
-        if (aerospikeClient != null && aerospikeClient.isConnected()) {
+        if (isAerospikeConnected()) {
             try {
-                Key key = new Key(NAMESPACE, SET_NAME, txnId);
+                Key key = new Key(NAMESPACE, SET_NAME, cacheKey);
                 WritePolicy wp = new WritePolicy();
                 wp.expiration = 3600; // TTL 1 hour
                 aerospikeClient.put(wp, key,
                         new Bin("risk_score", riskScore),
                         new Bin("decision", decision),
+                        new Bin("psp_id", pspId != null ? pspId : 0L),
                         new Bin("merchant_id", request.getMerchantId()),
                         new Bin("amount", request.getAmount() != null ? request.getAmount().doubleValue() : 0.0));
             } catch (Exception e) {
-                log.warn("Aerospike write failed for {}: {}", txnId, e.getMessage());
+                log.warn("Aerospike write failed for {}: {}", cacheKey, e.getMessage());
             }
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
-        return new AmlResult(txnId, riskScore, decision, getRiskLevel(riskScore), "computed", elapsed);
+        return new AmlResult(txnId, pspId, riskScore, decision, getRiskLevel(riskScore),
+                "computed", elapsed, CACHE_LAYER_COMPUTED);
     }
 
     private double computeRiskScore(TransactionRequest request) {
@@ -77,6 +90,11 @@ public class AmlCheckService {
             if (amount.compareTo(BigDecimal.valueOf(10000)) > 0) score += 0.3;
             else if (amount.compareTo(BigDecimal.valueOf(5000)) > 0) score += 0.15;
             else if (amount.compareTo(BigDecimal.valueOf(1000)) > 0) score += 0.05;
+        } else if (request.getAmountCents() != null) {
+            long cents = request.getAmountCents();
+            if (cents > 1_000_000_0L) score += 0.3;       // > $10k
+            else if (cents > 500_000_0L) score += 0.15;   // > $5k
+            else if (cents > 100_000_0L) score += 0.05;   // > $1k
         }
 
         String country = request.getCountry();

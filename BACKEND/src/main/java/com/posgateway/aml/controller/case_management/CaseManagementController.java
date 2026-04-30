@@ -72,25 +72,8 @@ public class CaseManagementController {
         this.caseRepository = caseRepository;
     }
 
-    /**
-     * Get case timeline
-     */
-    @Operation(
-            summary = "Get case timeline",
-            description = "Retrieves a chronological timeline of all events related to a specific case, including creation, assignments, notes, escalations, and transactions."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Timeline retrieved successfully",
-                    content = @Content(schema = @Schema(implementation = CaseTimelineService.CaseTimelineDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Case not found"),
-            @ApiResponse(responseCode = "403", description = "Access denied")
-    })
-    @GetMapping("/{caseId}/timeline")
-    public ResponseEntity<CaseTimelineService.CaseTimelineDTO> getCaseTimeline(
-            @Parameter(description = "Case ID", required = true, example = "1")
-            @PathVariable Long caseId) {
-        return ResponseEntity.ok(caseTimelineService.buildTimeline(caseId));
-    }
+    // Timeline endpoint moved to CaseWorkflowController (has @PreAuthorize + permissionService.canView).
+    // Removed here to resolve duplicate GET /cases/{id}/timeline mapping that breaks Spring boot.
 
     /**
      * Get case activity feed

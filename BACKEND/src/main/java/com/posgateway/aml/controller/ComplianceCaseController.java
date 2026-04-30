@@ -210,29 +210,22 @@ public class ComplianceCaseController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER')")
     public ResponseEntity<Void> deleteCase(@PathVariable Long id) {
-        // Need service injection here - currently only repo is injected.
-        // For simplicity, using repo directly or need to refactor to use Service.
-        // Ideally should use ComplianceCaseService.
-        // Let's assume we can add the service usage if we inject it.
-        // But the controller only has repo injected in constructor.
-        // We should update constructor to inject ComplianceCaseService.
-
-        // Since I can't easily change constructor dependencies safely without seeing
-        // full context effect (Spring might fail if circular),
-        // I'll try to use the repo directly for delete if simple, or better, Request
-        // ComplianceCaseService be added.
-        // I've already updated ComplianceCaseService. Let's update this Controller to
-        // use it.
-
-        // Re-writing this block assumes I will follow up with Constructor update.
-        // But doing it all in one block:
-
-        try {
-            complianceCaseRepository.deleteById(id);
-            return ResponseEntity.noContent().build();
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        // PSP-isolated delete: a PSP_ADMIN can only delete their own PSP's cases.
+        // Platform admins (psp == null) can delete anything.
+        return complianceCaseRepository.findById(id)
+                .map(existing -> {
+                    com.posgateway.aml.entity.User currentUser = getCurrentUser();
+                    if (currentUser != null && currentUser.getPsp() != null) {
+                        Long callerPsp = currentUser.getPsp().getPspId();
+                        Long caseLevelPsp = existing.getPspId();
+                        if (caseLevelPsp != null && !caseLevelPsp.equals(callerPsp)) {
+                            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).<Void>build();
+                        }
+                    }
+                    complianceCaseRepository.deleteById(id);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     public static class CaseStats {

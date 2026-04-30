@@ -105,6 +105,38 @@ public class LimitsManagementController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * AML limits — single endpoint the LimitsAml page POSTs to.
+     * Body: { transactionLimit?: number, dailyLimit?: number }
+     * Persists as two GlobalLimit rows (TRANSACTION, DAILY) scoped to current user.
+     */
+    @PostMapping("/aml")
+    public ResponseEntity<?> saveAmlLimits(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal org.springframework.security.core.userdetails.User authUser) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+        Long userId = user.getId();
+        java.util.List<GlobalLimit> saved = new java.util.ArrayList<>();
+        Object txn = body.get("transactionLimit");
+        Object daily = body.get("dailyLimit");
+        if (txn != null) {
+            GlobalLimit l = new GlobalLimit();
+            l.setLimitType("TRANSACTION");
+            l.setLimitValue(new java.math.BigDecimal(txn.toString()));
+            saved.add(limitsService.createGlobalLimit(l, userId));
+        }
+        if (daily != null) {
+            GlobalLimit l = new GlobalLimit();
+            l.setLimitType("DAILY");
+            l.setLimitValue(new java.math.BigDecimal(daily.toString()));
+            saved.add(limitsService.createGlobalLimit(l, userId));
+        }
+        return ResponseEntity.ok(Map.of("success", true, "saved", saved.size()));
+    }
+
     // Risk Thresholds
     @GetMapping("/risk-thresholds")
     public ResponseEntity<List<RiskThreshold>> getAllRiskThresholds() {

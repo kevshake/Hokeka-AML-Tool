@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/regulatory")
+@RequestMapping("/reporting/regulatory")
 public class RegulatoryReportingController {
 
     private static final Logger log = LoggerFactory.getLogger(RegulatoryReportingController.class);

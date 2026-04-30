@@ -30,6 +30,13 @@ public class ComplianceDeadline {
     @Column(name = "jurisdiction")
     private String jurisdiction;
 
+    /**
+     * PSP that owns this deadline. NULL = global / platform-wide deadline
+     * visible to every PSP (e.g. mandatory CBK filing windows).
+     */
+    @Column(name = "psp_id")
+    private Long pspId;
+
     @Column(nullable = false)
     private Boolean completed = false;
 
@@ -53,6 +60,8 @@ public class ComplianceDeadline {
     public void setDescription(String description) { this.description = description; }
     public String getJurisdiction() { return jurisdiction; }
     public void setJurisdiction(String jurisdiction) { this.jurisdiction = jurisdiction; }
+    public Long getPspId() { return pspId; }
+    public void setPspId(Long pspId) { this.pspId = pspId; }
     public Boolean getCompleted() { return completed; }
     public void setCompleted(Boolean completed) { this.completed = completed; }
     public LocalDateTime getCompletedAt() { return completedAt; }

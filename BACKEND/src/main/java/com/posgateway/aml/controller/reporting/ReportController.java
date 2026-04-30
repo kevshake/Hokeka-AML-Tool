@@ -25,7 +25,7 @@ import java.util.concurrent.CompletableFuture;
  * REST endpoints for report generation, preview, history, scheduling, and chart data
  */
 @RestController
-@RequestMapping("/api/reports")
+@RequestMapping("/reports")
 public class ReportController {
 
     private static final Logger logger = LoggerFactory.getLogger(ReportController.class);

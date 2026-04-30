@@ -1,6 +1,7 @@
 package com.posgateway.aml.service.rules;
 
 import com.posgateway.aml.entity.rules.RuleDefinition;
+import com.posgateway.aml.entity.rules.RuleExecutionLog;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.rules.RuleEvaluationResult;
 import com.posgateway.aml.rules.TransactionFact;
@@ -27,14 +28,17 @@ public class RulesExecutionService {
     private final RuleDefinitionRepository ruleRepository;
     private final DroolsRulesService droolsService;
     private final SpelRuleExecutor spelExecutor;
+    private final RuleEffectivenessService effectivenessService;
 
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
                                  DroolsRulesService droolsService,
-                                 SpelRuleExecutor spelExecutor) {
+                                 SpelRuleExecutor spelExecutor,
+                                 RuleEffectivenessService effectivenessService) {
         this.ruleRepository = ruleRepository;
         this.droolsService = droolsService;
         this.spelExecutor = spelExecutor;
+        this.effectivenessService = effectivenessService;
     }
 
     /**
@@ -60,11 +64,30 @@ public class RulesExecutionService {
         List<String> reasons = new ArrayList<>();
 
         // 3. Execute Rules
+        // Use the txnId as the rule_execution_logs.txn_id back-fill key.
+        String txnIdStr = txnId != null ? txnId.toString() : null;
+        Long pspId = null;
+        if (features != null && features.get("psp_id") instanceof Number) {
+            pspId = ((Number) features.get("psp_id")).longValue();
+        }
+
         for (RuleDefinition rule : allRules) {
             boolean matched = false;
 
             if ("SPEL".equals(rule.getRuleType())) {
-                matched = spelExecutor.evaluate(rule, fact);
+                long t0 = System.nanoTime();
+                RuleExecutionLog.Result result;
+                try {
+                    matched = spelExecutor.evaluate(rule, fact);
+                    result = matched ? RuleExecutionLog.Result.MATCH : RuleExecutionLog.Result.NO_MATCH;
+                } catch (Exception e) {
+                    logger.warn("SpEL rule {} threw: {}", rule.getName(), e.getMessage());
+                    result = RuleExecutionLog.Result.ERROR;
+                }
+                long elapsedMicros = (System.nanoTime() - t0) / 1_000L;
+                // Async fire-and-forget — must not slow the hot path.
+                effectivenessService.recordExecution(
+                        rule.getId(), pspId, txnIdStr, elapsedMicros, result);
             } else if ("DROOLS_DRL".equals(rule.getRuleType())) {
                 // Drools rules are typically executed in batch via DroolsService,
                 // but if defined individually, we might handle them differently.
@@ -72,7 +95,7 @@ public class RulesExecutionService {
                 // or we skip if DroolsService runs them separately.
                 // CURRENT STRATEGY: DroolsService runs *all* DRLs in one session.
                 // So we skip individual execution here to avoid double counting, unless we change strategy.
-                continue; 
+                continue;
             }
 
             if (matched) {

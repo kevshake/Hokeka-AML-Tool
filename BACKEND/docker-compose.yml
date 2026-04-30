@@ -1,5 +1,9 @@
 version: '3.8'
 
+# Aerospike removed: Aerospike is now run only by aml-microservice. See the
+# top-level docker-compose.test.yml / docker-compose.prod.yml for the aml-ms +
+# aerospike pair.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,15 +22,5 @@ services:
       timeout: 5s
       retries: 5
 
-  aerospike:
-    image: aerospike/aerospike-server:latest
-    container_name: fraud-detector-aerospike
-    ports:
-      - "3000:3000"
-    volumes:
-      - aerospike_data:/opt/aerospike/data
-    # Optional - can disable if not needed
-
 volumes:
   postgres_data:
-  aerospike_data:

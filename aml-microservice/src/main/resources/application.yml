@@ -9,6 +9,11 @@ aerospike:
   host: ${AEROSPIKE_HOST:fd-test-aerospike}
   port: ${AEROSPIKE_PORT:3000}
 
+aml:
+  # Shared symmetric key required by InternalAuthFilter on /internal/**.
+  # Empty => filter disabled (dev only). Production MUST set AML_MS_INTERNAL_KEY.
+  internal-auth-key: ${AML_MS_INTERNAL_KEY:}
+
 management:
   endpoints:
     web:

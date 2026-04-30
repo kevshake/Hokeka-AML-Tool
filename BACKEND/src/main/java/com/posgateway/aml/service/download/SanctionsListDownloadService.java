@@ -248,51 +248,23 @@ public class SanctionsListDownloadService {
     }
 
     /**
-     * Insert batch of entities to Aerospike
-     */
-    /**
-     * Insert batch of entities to Aerospike
+     * TODO(aerospike-removal): the original implementation pushed each batch into
+     * the Aerospike "sanctions/entities" set. Aerospike now lives in the
+     * aml-microservice; this writer is disabled until either:
+     *   (a) the microservice exposes a bulk-ingest endpoint we can POST into, OR
+     *   (b) we move the entire SanctionsListDownloadService into the microservice
+     *       (likely the right answer — sanctions data is a microservice concern).
+     * For now we just log so the scheduled job stays observable.
      */
     private void insertBatchToAerospike(List<SanctionEntity> batch) {
-        if (batch == null || batch.isEmpty())
-            return;
-
-        com.aerospike.client.AerospikeClient client = aerospikeService.getClient();
-        if (client == null) {
-            log.error("Aerospike client not available for batch insertion");
-            return;
+        if (batch == null || batch.isEmpty()) return;
+        if (aerospikeService != null) {
+            // Reference the field so the autowired stub stays alive in DI.
+            aerospikeService.isConnected();
         }
-
-        try {
-            com.aerospike.client.policy.WritePolicy policy = new com.aerospike.client.policy.WritePolicy();
-            policy.sendKey = true;
-            // policy.expiration = -1; // Never expire by default, or set retention
-
-            for (SanctionEntity entity : batch) {
-                // Key: phoneticCode (for fast lookup) + hash of name (collision avoidance)
-                String keyStr = entity.getPhoneticCode() + ":" + entity.getFullName().hashCode();
-                com.aerospike.client.Key key = new com.aerospike.client.Key("sanctions", "entities", keyStr);
-
-                com.aerospike.client.Bin nameBin = new com.aerospike.client.Bin("full_name", entity.getFullName());
-                com.aerospike.client.Bin typeBin = new com.aerospike.client.Bin("entity_type", entity.getEntityType());
-                com.aerospike.client.Bin phoneCodeBin = new com.aerospike.client.Bin("name_metaphone",
-                        entity.getPhoneticCode());
-                com.aerospike.client.Bin altCodeBin = new com.aerospike.client.Bin("name_alt_metaphone",
-                        entity.getAltPhoneticCode());
-                com.aerospike.client.Bin rawBin = new com.aerospike.client.Bin("raw_data", entity.getRawData());
-                com.aerospike.client.Bin updatedBin = new com.aerospike.client.Bin("updated_at",
-                        System.currentTimeMillis());
-
-                client.put(policy, key, nameBin, typeBin, phoneCodeBin, altCodeBin, rawBin, updatedBin);
-            }
-
-            log.debug("Inserted batch of {} entities to Aerospike", batch.size());
-
-        } catch (com.aerospike.client.AerospikeException e) {
-            log.error("Aerospike batch write error: {}", e.getMessage());
-            // In production, might want to retry individual records or throw to trigger
-            // global retry
-        }
+        log.warn("Sanctions batch write SKIPPED ({} entities) — Aerospike has moved to aml-microservice. "
+                + "TODO(aerospike-removal): wire to /internal/v1/aml/sanctions ingest endpoint.",
+                batch.size());
     }
 
     /**

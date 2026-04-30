@@ -65,6 +65,38 @@ services:
           cpus: '0.5'
           memory: 1G
 
+  # AML Microservice (Production) — owns Aerospike, no exposed ports
+  aml-ms-prod:
+    build:
+      context: ./aml-microservice
+      dockerfile: Dockerfile
+    container_name: fraud-detector-aml-ms-prod
+    environment:
+      AEROSPIKE_HOST: aerospike-prod
+      AEROSPIKE_PORT: 3000
+      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY}
+      JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75.0"
+    depends_on:
+      aerospike-prod:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8091/internal/v1/aml/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - fraud-detector-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   # Backend API (Production)
   backend-prod:
     build:
@@ -75,7 +107,10 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres-prod:5432/fraud_detector
       DATABASE_USERNAME: ${DATABASE_USERNAME}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      AEROSPIKE_HOSTS: aerospike-prod:3000
+      # Aerospike is no longer reachable from the API server — it lives in aml-ms-prod.
+      AML_MICROSERVICE_URL: http://aml-ms-prod:8091
+      AML_MICROSERVICE_ENABLED: "true"
+      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY}
       # application-production.properties reads ENCRYPTION_KEY (not SECURITY_ENCRYPTION_KEY)
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       # Required for JWT auth — must be set in .env or shell before docker-compose up
@@ -94,7 +129,7 @@ services:
     depends_on:
       postgres-prod:
         condition: service_healthy
-      aerospike-prod:
+      aml-ms-prod:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2637/actuator/health"]

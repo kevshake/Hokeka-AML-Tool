@@ -28,5 +28,29 @@ public interface ComplianceDeadlineRepository extends JpaRepository<ComplianceDe
      * Find deadlines by type
      */
     List<ComplianceDeadline> findByDeadlineType(String deadlineType);
+
+    /**
+     * PSP-scoped variants: include the PSP's own deadlines AND any global ones (psp_id IS NULL).
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT d FROM ComplianceDeadline d " +
+            "WHERE d.completed = false " +
+            "  AND d.deadlineDate BETWEEN :start AND :end " +
+            "  AND (d.pspId = :pspId OR d.pspId IS NULL) " +
+            "ORDER BY d.deadlineDate ASC")
+    List<ComplianceDeadline> findUpcomingForPsp(
+            @org.springframework.data.repository.query.Param("pspId") Long pspId,
+            @org.springframework.data.repository.query.Param("start") LocalDateTime start,
+            @org.springframework.data.repository.query.Param("end") LocalDateTime end);
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT d FROM ComplianceDeadline d " +
+            "WHERE d.completed = false " +
+            "  AND d.deadlineDate < :now " +
+            "  AND (d.pspId = :pspId OR d.pspId IS NULL) " +
+            "ORDER BY d.deadlineDate ASC")
+    List<ComplianceDeadline> findOverdueForPsp(
+            @org.springframework.data.repository.query.Param("pspId") Long pspId,
+            @org.springframework.data.repository.query.Param("now") LocalDateTime now);
 }
 

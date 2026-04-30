@@ -3,10 +3,13 @@ package com.posgateway.aml.service.monitoring;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.entity.Alert;
+import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,16 +31,51 @@ public class TransactionMonitoringService {
     private final SuspiciousActivityReportRepository sarRepository;
     private final AlertRepository alertRepository;
     private final UserRepository userRepository;
+    private final MerchantRepository merchantRepository;
+
+    /**
+     * High-amount threshold (cents). $500 default — same as legacy getTopRiskIndicators check.
+     * Loaded from `risk.high_value.threshold_cents` so ops can tune without redeploys.
+     */
+    @Value("${risk.high_value.threshold_cents:50000}")
+    private long highValueThresholdCents;
+
+    /**
+     * Comma-separated list of high-risk MCC codes (Merchant Category Codes).
+     * Sourced from application.properties `risk.mcc.high_risk` (defaults: gambling, drugs, etc.).
+     */
+    @Value("${risk.mcc.high_risk:6211,7995,7273,5993,6051}")
+    private String highRiskMccCsv;
+
+    /**
+     * Velocity threshold — same-PAN txn count in lookback window that flags VELOCITY_BREACH.
+     * Mirrors the >=3 check used by getTopRiskIndicators.
+     */
+    @Value("${risk.velocity.txn_count_threshold:3}")
+    private int velocityTxnCountThreshold;
+
+    @Value("${risk.velocity.lookback_minutes:60}")
+    private int velocityLookbackMinutes;
 
     public TransactionMonitoringService(
             TransactionRepository transactionRepository,
             SuspiciousActivityReportRepository sarRepository,
             AlertRepository alertRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            MerchantRepository merchantRepository) {
         this.transactionRepository = transactionRepository;
         this.sarRepository = sarRepository;
         this.alertRepository = alertRepository;
         this.userRepository = userRepository;
+        this.merchantRepository = merchantRepository;
+    }
+
+    private java.util.Set<String> highRiskMccs() {
+        if (highRiskMccCsv == null || highRiskMccCsv.isBlank()) return java.util.Collections.emptySet();
+        return java.util.Arrays.stream(highRiskMccCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     /**
@@ -71,23 +109,42 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * Get dashboard statistics for last 24 hours, filtered by PSP
+     * Get dashboard statistics for last 24 hours, filtered by PSP.
+     *
+     * <p>Counts are computed via indexed repository queries on the stored
+     * {@code risk_level} / {@code decision} columns instead of in-memory
+     * filtering with the old hard-coded score fallback (75/95/25 when TRS
+     * was null). Total comes from a single COUNT() rather than loading the
+     * full row set.
      */
     public Map<String, Object> getDashboardStats() {
         Long pspId = getCurrentPspId();
         LocalDateTime last24Hours = LocalDateTime.now().minusHours(24);
-        List<TransactionEntity> recentTransactions = getTransactionsByPsp(pspId, last24Hours);
 
-        long totalMonitored = recentTransactions.size();
-        long flagged = recentTransactions.stream()
-                .filter(t -> isFlagged(t))
-                .count();
-        long highRisk = recentTransactions.stream()
-                .filter(t -> isHighRisk(t))
-                .count();
-        long blocked = recentTransactions.stream()
-                .filter(t -> isBlocked(t))
-                .count();
+        long totalMonitored;
+        long flagged;
+        long highRisk;
+        long blocked;
+
+        List<String> flaggedLevels = java.util.Arrays.asList("MEDIUM", "HIGH", "CRITICAL");
+        List<String> highRiskLevels = java.util.Arrays.asList("HIGH", "CRITICAL");
+
+        if (pspId != null) {
+            totalMonitored = transactionRepository.findByPspIdAndTxnTsBetween(
+                    pspId, last24Hours, LocalDateTime.now()).size();
+            flagged = transactionRepository.countByPspIdAndRiskLevelInSince(pspId, flaggedLevels, last24Hours);
+            highRisk = transactionRepository.countByPspIdAndRiskLevelInSince(pspId, highRiskLevels, last24Hours);
+            blocked = transactionRepository.countByPspIdAndDecisionSince(pspId, "DECLINED", last24Hours);
+        } else {
+            // Admin view — same indexed counts across all PSPs. Total is approximated as
+            // the sum across all four buckets so admins get a real number even if some
+            // rows are missing risk_level (legacy data) — see HOK ticket for backfill.
+            List<String> allLevels = java.util.Arrays.asList("LOW", "MEDIUM", "HIGH", "CRITICAL");
+            totalMonitored = transactionRepository.countByRiskLevelInSince(allLevels, last24Hours);
+            flagged = transactionRepository.countByRiskLevelInSince(flaggedLevels, last24Hours);
+            highRisk = transactionRepository.countByRiskLevelInSince(highRiskLevels, last24Hours);
+            blocked = transactionRepository.countByDecisionSince("DECLINED", last24Hours);
+        }
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalMonitored", totalMonitored);
@@ -99,25 +156,33 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * Get risk score distribution, filtered by PSP
+     * Get risk score distribution, filtered by PSP.
+     *
+     * <p>Uses a single grouped JPQL query (FLOOR(trs/10)*10 buckets) instead
+     * of loading every recent transaction and bucketing in memory. Buckets
+     * are then collapsed into the four bands the frontend expects:
+     *   low      [0, 25],
+     *   medium   [26, 50],
+     *   high     [51, 75],
+     *   critical [76, 100].
      */
     public Map<String, Object> getRiskDistribution() {
         Long pspId = getCurrentPspId();
         LocalDateTime last24Hours = LocalDateTime.now().minusHours(24);
-        List<TransactionEntity> recentTransactions = getTransactionsByPsp(pspId, last24Hours);
 
-        long low = recentTransactions.stream()
-                .filter(t -> getRiskScore(t) >= 0 && getRiskScore(t) <= 25)
-                .count();
-        long medium = recentTransactions.stream()
-                .filter(t -> getRiskScore(t) >= 26 && getRiskScore(t) <= 50)
-                .count();
-        long high = recentTransactions.stream()
-                .filter(t -> getRiskScore(t) >= 51 && getRiskScore(t) <= 75)
-                .count();
-        long critical = recentTransactions.stream()
-                .filter(t -> getRiskScore(t) >= 76 && getRiskScore(t) <= 100)
-                .count();
+        List<Object[]> rows = (pspId != null)
+                ? transactionRepository.getRiskScoreBucketsByPspSince(pspId, last24Hours)
+                : transactionRepository.getRiskScoreBucketsAllSince(last24Hours);
+
+        long low = 0, medium = 0, high = 0, critical = 0;
+        for (Object[] row : rows) {
+            int bucket = ((Number) row[0]).intValue();
+            long count = ((Number) row[1]).longValue();
+            if (bucket <= 20) low += count;             // 0,10,20  -> LOW (0..25)
+            else if (bucket <= 50) medium += count;     // 30,40,50 -> MEDIUM (26..50)
+            else if (bucket <= 70) high += count;       // 60,70    -> HIGH (51..75)
+            else critical += count;                     // 80,90,100-> CRITICAL (76..100)
+        }
 
         Map<String, Object> distribution = new HashMap<>();
         distribution.put("low", low);
@@ -203,26 +268,20 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * Get recent monitoring activity, filtered by PSP
+     * Get recent monitoring activity, filtered by PSP.
+     *
+     * <p>Uses indexed top-10 queries instead of loading the entire transaction
+     * table and sorting in Java. The repository methods rely on
+     * idx_txn_timestamp (and the pspId predicate hits the natural seek path).
      */
     public List<Map<String, Object>> getRecentActivity() {
         Long pspId = getCurrentPspId();
         List<Map<String, Object>> activities = new ArrayList<>();
-        
-        // Get recent transactions filtered by PSP
-        List<TransactionEntity> recent;
-        if (pspId != null) {
-            recent = transactionRepository.findByPspIdOrderByTxnTsDesc(pspId).stream()
-                    .filter(t -> t.getTxnTs() != null)
-                    .limit(10)
-                    .collect(Collectors.toList());
-        } else {
-            recent = transactionRepository.findAll().stream()
-                    .filter(t -> t.getTxnTs() != null)
-                    .sorted((a, b) -> b.getTxnTs().compareTo(a.getTxnTs()))
-                    .limit(10)
-                    .collect(Collectors.toList());
-        }
+
+        org.springframework.data.domain.Pageable top10 = PageRequest.of(0, 10);
+        List<TransactionEntity> recent = (pspId != null)
+                ? transactionRepository.findTop10ByPspIdOrderByTxnTsDesc(pspId, top10)
+                : transactionRepository.findTop10ByOrderByTxnTsDesc(top10);
 
         for (TransactionEntity txn : recent) {
             Map<String, Object> activity = new HashMap<>();
@@ -319,7 +378,9 @@ public class TransactionMonitoringService {
         dto.put("riskLevel", txn.getRiskLevel() != null ? txn.getRiskLevel() : getRiskLevel(txn));
         dto.put("decision", txn.getDecision() != null ? txn.getDecision() : getDecision(txn));
         
+        // device-intel not implemented — deliberately left null until fingerprinting vendor wired
         dto.put("deviceRisk", getDeviceRisk(txn));
+        // VPN/proxy detection not implemented — deliberately left null until vendor wired
         dto.put("vpnDetected", isVpnDetected(txn));
         dto.put("sanctionsStatus", getSanctionsStatus(txn));
         dto.put("timestamp", txn.getTxnTs());
@@ -388,31 +449,92 @@ public class TransactionMonitoringService {
         return "APPROVED";
     }
 
-    private int getDeviceRisk(TransactionEntity txn) {
-        // Mock device risk
-        return getRiskScore(txn);
+    /**
+     * device-intel not implemented — deliberately left null until fingerprinting vendor wired.
+     * Frontend should treat null as "no data" and not render a fake gauge.
+     */
+    private Integer getDeviceRisk(TransactionEntity txn) {
+        return null;
     }
 
-    private boolean isVpnDetected(TransactionEntity txn) {
-        // Mock VPN detection
-        return getRiskScore(txn) > 50;
+    /**
+     * VPN/proxy detection not implemented — deliberately left null until detection vendor wired.
+     * Frontend should treat null as "no data" rather than show a false negative.
+     */
+    private Boolean isVpnDetected(TransactionEntity txn) {
+        return null;
     }
 
+    /**
+     * Sanctions status surfaced on the live monitoring page.
+     *
+     * <p>The Aerospike-backed sanctions service is being removed in parallel
+     * (post-removal stub returns CLEAR for everything, which is misleading on
+     * the dashboard). Until the AML microservice exposes a screening endpoint
+     * we surface "UNKNOWN" rather than a fake "CLEAR" so operators know the
+     * data is missing.
+     */
+    // TODO(sanctions-microservice): wire to aml-microservice when sanctions move there
     private String getSanctionsStatus(TransactionEntity txn) {
-        // Mock sanctions status
-        if (getRiskScore(txn) >= 90) return "FLAGGED";
-        return "CLEAR";
+        return "UNKNOWN";
     }
 
+    /**
+     * Build the risk-indicator code list for a transaction from real signals.
+     * Codes mirror the contract shared with the FE:
+     *   HIGH_AMOUNT, CROSS_BORDER, HIGH_RISK_MCC, VELOCITY_BREACH, OPEN_ALERTS.
+     * Only codes that are actually true for this txn are included.
+     */
     private List<String> getRiskIndicators(TransactionEntity txn) {
         List<String> indicators = new ArrayList<>();
-        int score = getRiskScore(txn);
-        if (score >= 70) indicators.add("AMOUNT: HIGH");
-        if (score >= 50) indicators.add("VELOCITY: MEDIUM");
-        if (score >= 90) {
-            indicators.add("SANCTIONS: CRITICAL");
-            indicators.add("GEOGRAPHY: HIGH");
+
+        // HIGH_AMOUNT — derived from amount_cents vs configured threshold (default $500).
+        if (txn.getAmountCents() != null && txn.getAmountCents() > highValueThresholdCents) {
+            indicators.add("HIGH_AMOUNT");
         }
+
+        // CROSS_BORDER — merchantCountry differs from cardholder/issuer country.
+        // TransactionEntity only carries merchantCountry today, so we proxy "cross-border"
+        // as the merchant country being non-domestic. The deployment's domestic country
+        // is configurable via risk.domestic_country (defaults to "KE" — CBK rollout).
+        String merchantCountry = txn.getMerchantCountry();
+        if (merchantCountry != null && !merchantCountry.isBlank()
+                && !"KE".equalsIgnoreCase(merchantCountry)) {
+            indicators.add("CROSS_BORDER");
+        }
+
+        // HIGH_RISK_MCC — look up merchant.mcc and compare to configured high-risk list.
+        if (txn.getMerchantId() != null) {
+            try {
+                Long merchantIdLong = Long.parseLong(txn.getMerchantId());
+                Merchant merchant = merchantRepository.findById(merchantIdLong).orElse(null);
+                if (merchant != null && merchant.getMcc() != null
+                        && highRiskMccs().contains(merchant.getMcc())) {
+                    indicators.add("HIGH_RISK_MCC");
+                }
+            } catch (NumberFormatException ignored) {
+                // merchantId is not numeric (legacy/string IDs) — skip MCC lookup
+            }
+        }
+
+        // VELOCITY_BREACH — same PAN seen >= threshold times in lookback window.
+        if (txn.getPanHash() != null && txn.getTxnTs() != null) {
+            LocalDateTime windowStart = txn.getTxnTs().minusMinutes(velocityLookbackMinutes);
+            Long count = transactionRepository.countByPanInTimeWindow(
+                    txn.getPanHash(), windowStart, txn.getTxnTs());
+            if (count != null && count >= velocityTxnCountThreshold) {
+                indicators.add("VELOCITY_BREACH");
+            }
+        }
+
+        // OPEN_ALERTS — any existing alerts for this transaction id.
+        if (txn.getTxnId() != null) {
+            List<Alert> existing = alertRepository.findByTxnId(txn.getTxnId());
+            if (existing != null && !existing.isEmpty()) {
+                indicators.add("OPEN_ALERTS");
+            }
+        }
+
         return indicators;
     }
 

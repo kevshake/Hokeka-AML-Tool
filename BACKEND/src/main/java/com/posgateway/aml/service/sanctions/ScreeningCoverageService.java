@@ -1,10 +1,5 @@
 package com.posgateway.aml.service.sanctions;
 
-import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.QueryPolicy;
-import com.aerospike.client.query.RecordSet;
-import com.aerospike.client.query.Statement;
 import com.posgateway.aml.entity.sanctions.WatchlistUpdate;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.sanctions.WatchlistUpdateRepository;
@@ -34,6 +29,7 @@ public class ScreeningCoverageService {
     private final WatchlistUpdateRepository watchlistUpdateRepository;
     private final AerospikeConnectionService aerospikeConnectionService;
 
+    @SuppressWarnings("unused") // TODO(aerospike-removal): drop when sanctions-stats endpoint is wired in.
     @Value("${aerospike.namespace:sanctions}")
     private String aerospikeNamespace;
 
@@ -92,100 +88,33 @@ public class ScreeningCoverageService {
     }
 
     /**
-     * Get sanctions list statistics from Aerospike
-     * Queries the actual sanctions data stored in Aerospike
+     * TODO(aerospike-removal): originally counted live entity rows from Aerospike.
+     * Aerospike now lives in aml-microservice; until that service exposes a
+     * sanctions-stats endpoint we fall back to the {@link WatchlistUpdate}
+     * metadata stored in PostgreSQL.
      */
     private Map<String, Long> getAerospikeSanctionsStatistics() {
         Map<String, Long> stats = new HashMap<>();
-        
-        AerospikeClient client = aerospikeConnectionService.getClient();
-        if (client == null || !aerospikeConnectionService.isConnected()) {
-            logger.warn("Aerospike not connected, falling back to metadata from PostgreSQL");
-            // Fallback to metadata
-            List<WatchlistUpdate> updates = watchlistUpdateRepository.findAll();
-            for (WatchlistUpdate update : updates) {
-                Long recordCount = update.getRecordCount();
-                stats.merge(update.getListName(), recordCount != null ? recordCount : 0L, (a, b) -> a + b);
-            }
-            return stats;
+        if (aerospikeConnectionService != null) {
+            // Reference retained so the autowired field isn't flagged unused;
+            // the stub always reports !isConnected() so we go straight to fallback.
+            logger.debug("aerospike connected={} — using WatchlistUpdate fallback for stats",
+                    aerospikeConnectionService.isConnected());
         }
-
-        try {
-            // Query Aerospike to count entities by type
-            Statement stmt = new Statement();
-            stmt.setNamespace(aerospikeNamespace);
-            stmt.setSetName("entities");
-            
-            // Scan all records to get statistics (in production, might use secondary index)
-            QueryPolicy policy = new QueryPolicy();
-            RecordSet recordSet = client.query(policy, stmt);
-            
-            long totalEntities = 0;
-            Map<String, Long> byEntityType = new HashMap<>();
-            
-            try {
-                while (recordSet.next()) {
-                    Record record = recordSet.getRecord();
-                    totalEntities++;
-                    
-                    String entityType = (String) record.bins.get("entity_type");
-                    if (entityType != null) {
-                        byEntityType.merge(entityType, 1L, (a, b) -> a + b);
-                    }
-                }
-            } finally {
-                recordSet.close();
-            }
-            
-            stats.put("TOTAL_ENTITIES", totalEntities);
-            stats.putAll(byEntityType);
-            
-            logger.debug("Retrieved Aerospike sanctions statistics: {} total entities", totalEntities);
-            
-        } catch (Exception e) {
-            logger.error("Error querying Aerospike for sanctions statistics: {}", e.getMessage(), e);
-            // Fallback to metadata
-            List<WatchlistUpdate> updates = watchlistUpdateRepository.findAll();
-            for (WatchlistUpdate update : updates) {
-                Long recordCount = update.getRecordCount();
-                stats.merge(update.getListName(), recordCount != null ? recordCount : 0L, (a, b) -> a + b);
-            }
+        List<WatchlistUpdate> updates = watchlistUpdateRepository.findAll();
+        for (WatchlistUpdate update : updates) {
+            Long recordCount = update.getRecordCount();
+            stats.merge(update.getListName(), recordCount != null ? recordCount : 0L, Long::sum);
         }
-        
         return stats;
     }
 
     /**
-     * Get total count of sanctions entities in Aerospike
+     * TODO(aerospike-removal): always returns 0 now — the live sanctions count
+     * lives behind the aml-microservice. Wire to a new endpoint when one exists.
      */
     public long getTotalSanctionsEntitiesInAerospike() {
-        AerospikeClient client = aerospikeConnectionService.getClient();
-        if (client == null || !aerospikeConnectionService.isConnected()) {
-            return 0;
-        }
-
-        try {
-            Statement stmt = new Statement();
-            stmt.setNamespace(aerospikeNamespace);
-            stmt.setSetName("entities");
-            
-            QueryPolicy policy = new QueryPolicy();
-            RecordSet recordSet = client.query(policy, stmt);
-            
-            long count = 0;
-            try {
-                while (recordSet.next()) {
-                    count++;
-                }
-            } finally {
-                recordSet.close();
-            }
-            
-            return count;
-        } catch (Exception e) {
-            logger.error("Error counting Aerospike sanctions entities: {}", e.getMessage(), e);
-            return 0;
-        }
+        return 0L;
     }
 
     /**

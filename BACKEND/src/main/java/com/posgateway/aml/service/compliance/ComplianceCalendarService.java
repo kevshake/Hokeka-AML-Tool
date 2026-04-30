@@ -38,19 +38,35 @@ public class ComplianceCalendarService {
     }
 
     /**
-     * Get upcoming deadlines
+     * Get upcoming deadlines for a PSP (plus any platform-wide deadlines with pspId=NULL).
+     * Pass null pspId for platform admins to see everything.
      */
-    public List<ComplianceDeadline> getUpcomingDeadlines(int daysAhead) {
+    public List<ComplianceDeadline> getUpcomingDeadlines(int daysAhead, Long pspId) {
         LocalDateTime endDate = LocalDateTime.now().plusDays(daysAhead);
-        return deadlineRepository.findByDeadlineDateBetweenAndCompletedFalse(
-                LocalDateTime.now(), endDate);
+        if (pspId == null) {
+            return deadlineRepository.findByDeadlineDateBetweenAndCompletedFalse(
+                    LocalDateTime.now(), endDate);
+        }
+        return deadlineRepository.findUpcomingForPsp(pspId, LocalDateTime.now(), endDate);
     }
 
     /**
-     * Get overdue deadlines
+     * Get overdue deadlines for a PSP (plus platform-wide).
      */
+    public List<ComplianceDeadline> getOverdueDeadlines(Long pspId) {
+        if (pspId == null) {
+            return deadlineRepository.findByDeadlineDateBeforeAndCompletedFalse(LocalDateTime.now());
+        }
+        return deadlineRepository.findOverdueForPsp(pspId, LocalDateTime.now());
+    }
+
+    // Backwards-compatible overloads (treats caller as platform admin — used by scheduled jobs).
+    public List<ComplianceDeadline> getUpcomingDeadlines(int daysAhead) {
+        return getUpcomingDeadlines(daysAhead, null);
+    }
+
     public List<ComplianceDeadline> getOverdueDeadlines() {
-        return deadlineRepository.findByDeadlineDateBeforeAndCompletedFalse(LocalDateTime.now());
+        return getOverdueDeadlines(null);
     }
 
     /**
@@ -73,19 +89,28 @@ public class ComplianceCalendarService {
     }
 
     /**
-     * Create compliance deadline
+     * Create compliance deadline scoped to a specific PSP.
+     * Pass pspId=null for a platform-wide deadline (visible to every tenant).
      */
     @Transactional
     public ComplianceDeadline createDeadline(String deadlineType, LocalDateTime deadlineDate,
-            String description, String jurisdiction) {
+            String description, String jurisdiction, Long pspId) {
         ComplianceDeadline deadline = new ComplianceDeadline();
         deadline.setDeadlineType(deadlineType);
         deadline.setDeadlineDate(deadlineDate);
         deadline.setDescription(description);
         deadline.setJurisdiction(jurisdiction);
+        deadline.setPspId(pspId);
         deadline.setCompleted(false);
 
         return deadlineRepository.save(deadline);
+    }
+
+    // Backwards-compatible overload (platform-wide).
+    @Transactional
+    public ComplianceDeadline createDeadline(String deadlineType, LocalDateTime deadlineDate,
+            String description, String jurisdiction) {
+        return createDeadline(deadlineType, deadlineDate, description, jurisdiction, null);
     }
 
     /**

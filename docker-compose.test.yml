@@ -44,6 +44,30 @@ services:
       - fd-test-network
     restart: always
 
+  # AML Microservice (Test) — owns Aerospike, exposed only inside the test network
+  aml-ms:
+    build:
+      context: ./aml-microservice
+      dockerfile: Dockerfile
+    container_name: fd-test-aml-ms
+    environment:
+      AEROSPIKE_HOST: fd-test-aerospike
+      AEROSPIKE_PORT: 3000
+      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY:-dev-internal-key-change-me}
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    depends_on:
+      aerospike-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8091/internal/v1/aml/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    networks:
+      - fd-test-network
+    restart: unless-stopped
+
   # Backend API (Test) - Exposed for external clients, internal for dashboard
   backend-test:
     build:
@@ -54,9 +78,10 @@ services:
       DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
       DATABASE_USERNAME: fraud_detector_test
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-test_password_secure}
-      AEROSPIKE_HOSTS: fd-test-aerospike:3000
-      AEROSPIKE_ENABLED: "true"
-      AEROSPIKE_NAMESPACE: aml_fraud
+      # Aerospike is no longer reachable from the API server — it lives in aml-ms.
+      AML_MICROSERVICE_URL: http://fd-test-aml-ms:8091
+      AML_MICROSERVICE_ENABLED: "true"
+      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY:-dev-internal-key-change-me}
       SERVER_PORT: 2638
       SPRING_PROFILES_ACTIVE: testenv
       KAFKA_ENABLED: "false"
@@ -69,7 +94,7 @@ services:
     ports:
       - "2638:2638"
     depends_on:
-      aerospike-test:
+      aml-ms:
         condition: service_healthy
     # Health check using TCP socket since actuator may not be available
     healthcheck:

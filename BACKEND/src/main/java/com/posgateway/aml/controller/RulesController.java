@@ -10,6 +10,7 @@ import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.service.ai.AiRuleGeneratorService;
 import com.posgateway.aml.service.rules.DroolsRulesService;
 import com.posgateway.aml.service.rules.DynamicRuleConverter;
+import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import com.posgateway.aml.service.security.PspIsolationService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +38,8 @@ public class RulesController {
     private final DynamicRuleConverter converter;
     private final PspIsolationService pspIsolationService;
     private final UserRepository userRepository;
-    
+    private final RuleEffectivenessService effectivenessService;
+
 
     @Autowired
     public RulesController(
@@ -46,13 +48,15 @@ public class RulesController {
             DroolsRulesService droolsService,
             DynamicRuleConverter converter,
             PspIsolationService pspIsolationService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            RuleEffectivenessService effectivenessService) {
         this.ruleRepository = ruleRepository;
         this.aiService = aiService;
         this.droolsService = droolsService;
         this.converter = converter;
         this.pspIsolationService = pspIsolationService;
         this.userRepository = userRepository;
+        this.effectivenessService = effectivenessService;
     }
 
     /**
@@ -277,19 +281,21 @@ public class RulesController {
         RuleDefinition rule = ruleRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Rule not found"));
 
-        // Calculate effectiveness metrics
-        // TODO: Implement real effectiveness calculation based on rule execution history
-        // For now, return mock data structure
+        // Real aggregation against rule_execution_logs (V119). Disposition is back-filled
+        // by AlertController#resolveAlert and AlertDispositionService#disposeAlert so the
+        // truePositives/falsePositives counts reflect operator feedback.
+        RuleEffectivenessService.RuleEffectivenessDTO metrics = effectivenessService.compute(rule.getId());
+
         Map<String, Object> effectiveness = new java.util.HashMap<>();
         effectiveness.put("ruleId", rule.getId());
         effectiveness.put("ruleName", rule.getName());
-        effectiveness.put("totalExecutions", 0L);
-        effectiveness.put("truePositives", 0L);
-        effectiveness.put("falsePositives", 0L);
-        effectiveness.put("falsePositiveRate", 0.0);
-        effectiveness.put("averageExecutionTime", 0.0);
-        effectiveness.put("lastExecuted", null);
-        
+        effectiveness.put("totalExecutions", metrics.getTotalExecutions());
+        effectiveness.put("truePositives", metrics.getTruePositives());
+        effectiveness.put("falsePositives", metrics.getFalsePositives());
+        effectiveness.put("falsePositiveRate", metrics.getFalsePositiveRate());
+        effectiveness.put("averageExecutionTime", metrics.getAverageExecutionTimeMs());
+        effectiveness.put("lastExecuted", metrics.getLastExecuted());
+
         return ResponseEntity.ok(effectiveness);
     }
 

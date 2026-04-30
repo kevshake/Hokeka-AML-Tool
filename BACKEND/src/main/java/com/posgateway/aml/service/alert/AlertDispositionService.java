@@ -4,6 +4,7 @@ import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.model.AlertDisposition;
 import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,14 +26,19 @@ public class AlertDispositionService {
     private static final Logger logger = LoggerFactory.getLogger(AlertDispositionService.class);
 
     private final AlertRepository alertRepository;
+    private final RuleEffectivenessService ruleEffectivenessService;
 
     @Autowired
-    public AlertDispositionService(AlertRepository alertRepository) {
+    public AlertDispositionService(AlertRepository alertRepository,
+                                   RuleEffectivenessService ruleEffectivenessService) {
         this.alertRepository = alertRepository;
+        this.ruleEffectivenessService = ruleEffectivenessService;
     }
 
     /**
-     * Dispose an alert
+     * Dispose an alert. Also back-fills the disposition on every matching
+     * row in {@code rule_execution_logs} so {@link RuleEffectivenessService}
+     * reflects the operator's verdict.
      */
     @Transactional
     public Alert disposeAlert(Long alertId, AlertDisposition disposition, String reason, User user) {
@@ -46,7 +52,30 @@ public class AlertDispositionService {
         alert.setStatus("closed");
 
         logger.info("Alert {} disposed as {} by {}", alertId, disposition, user.getUsername());
-        return alertRepository.save(alert);
+        Alert saved = alertRepository.save(alert);
+
+        // Back-fill rule_execution_logs.disposition for every MATCH row on this txn
+        backfillRuleExecutionDisposition(alert.getTxnId(), disposition);
+
+        return saved;
+    }
+
+    /**
+     * Translate the rich {@link AlertDisposition} enum into the coarse
+     * TRUE_POSITIVE / FALSE_POSITIVE / UNKNOWN bucket persisted on
+     * {@code rule_execution_logs.disposition}.
+     */
+    private void backfillRuleExecutionDisposition(Long txnId, AlertDisposition disposition) {
+        if (txnId == null || disposition == null) return;
+        String bucket;
+        if (disposition.isTruePositive()) {
+            bucket = "TRUE_POSITIVE";
+        } else if (disposition.isFalsePositive()) {
+            bucket = "FALSE_POSITIVE";
+        } else {
+            bucket = "UNKNOWN";
+        }
+        ruleEffectivenessService.recordDisposition(String.valueOf(txnId), bucket);
     }
 
     /**

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 // @RequiredArgsConstructor removed
 @RestController
 @RequestMapping("/compliance/cases/workflow")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'PSP_ADMIN', 'MLRO')")
 public class ComplianceCaseWorkflowController {
 
     private final CaseWorkflowService caseWorkflowService;
@@ -28,11 +29,10 @@ public class ComplianceCaseWorkflowController {
 
     @PostMapping("/create")
     public ResponseEntity<ComplianceCase> createCase(@RequestBody CreateCaseRequest request) {
-        User creator = request.getCreatorUserId() != null
-                ? fetchUser(request.getCreatorUserId())
-                : getAuthenticatedUser();
+        // Always derive creator from authenticated session — never trust client-supplied userId.
+        User creator = getAuthenticatedUser();
         if (creator == null) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(401).build();
         }
         ComplianceCase created = caseWorkflowService.createCase(
                 request.getCaseReference(),
@@ -50,32 +50,47 @@ public class ComplianceCaseWorkflowController {
 
     @PostMapping("/assign")
     public ResponseEntity<ComplianceCase> assignCase(@RequestBody AssignCaseRequest request) {
-        User assigner = fetchUser(request.getAssignerUserId());
+        User assigner = getAuthenticatedUser();
+        if (assigner == null) return ResponseEntity.status(401).build();
         ComplianceCase updated = caseWorkflowService.assignCase(
                 request.getCaseId(),
                 request.getAssigneeUserId(),
                 assigner);
+        if (assigner.getPsp() != null && updated.getPspId() != null
+                && !assigner.getPsp().getPspId().equals(updated.getPspId())) {
+            return ResponseEntity.status(403).build();
+        }
         return ResponseEntity.ok(updated);
     }
 
     @PostMapping("/status")
     public ResponseEntity<ComplianceCase> updateStatus(@RequestBody UpdateStatusRequest request) {
-        User user = fetchUser(request.getUserId());
+        User user = getAuthenticatedUser();
+        if (user == null) return ResponseEntity.status(401).build();
         ComplianceCase updated = caseWorkflowService.updateStatus(
                 request.getCaseId(),
                 CaseStatus.valueOf(request.getStatus()),
                 user);
+        if (user.getPsp() != null && updated.getPspId() != null
+                && !user.getPsp().getPspId().equals(updated.getPspId())) {
+            return ResponseEntity.status(403).build();
+        }
         return ResponseEntity.ok(updated);
     }
 
     @PostMapping("/escalate")
     public ResponseEntity<ComplianceCase> escalate(@RequestBody EscalateCaseRequest request) {
-        User user = fetchUser(request.getUserId());
+        User user = getAuthenticatedUser();
+        if (user == null) return ResponseEntity.status(401).build();
         ComplianceCase updated = caseWorkflowService.escalateCase(
                 request.getCaseId(),
                 request.getEscalatedToUserId(),
                 request.getReason(),
                 user);
+        if (user.getPsp() != null && updated.getPspId() != null
+                && !user.getPsp().getPspId().equals(updated.getPspId())) {
+            return ResponseEntity.status(403).build();
+        }
         return ResponseEntity.ok(updated);
     }
 

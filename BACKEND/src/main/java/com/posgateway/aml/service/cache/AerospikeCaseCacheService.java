@@ -1,6 +1,8 @@
 package com.posgateway.aml.service.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,46 +12,55 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 /**
- * Service for Caching Case Summaries in Aerospike (or Redis/Memory if
- * simplified).
- * Assuming Aerospike client or Spring Cache abstraction is available.
- * For this implementation, will use a placeholder or check existing Aerospike
- * configs.
- * Based on provided context, AerospikeGraphCacheService exists, so I will mimic
- * its pattern.
+ * Caches compliance-case summaries.
+ *
+ * <p>Originally backed by Aerospike. Aerospike was relocated to the standalone
+ * aml-microservice; this service now uses an in-process Caffeine cache.
+ *
+ * <p>TODO(aerospike-removal): if cross-instance cache visibility is required (e.g.
+ * round-robined replicas of the API server), route through AmlMicroserviceClient
+ * or stand up a Redis layer instead.
  */
 @Service
 public class AerospikeCaseCacheService {
 
     private static final Logger logger = LoggerFactory.getLogger(AerospikeCaseCacheService.class);
-    private static final String CACHE_SET = "case_summaries";
 
-    // Placeholder for actual Aerospike Client or Spring Cache Manager
-    // private final AerospikeClient aerospikeClient;
+    private final ObjectMapper objectMapper;
 
-    // In absence of actual Aerospike dependency in classpath during this turn,
-    // I will implement a basic structure that COULD call Aerospike.
+    private final Cache<Long, String> cache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(15))
+            .maximumSize(10_000)
+            .build();
 
     @Autowired
-    private ObjectMapper objectMapper;
+    public AerospikeCaseCacheService(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public void cacheCase(ComplianceCase cCase) {
+        if (cCase == null || cCase.getId() == null) return;
         try {
-            String json = objectMapper.writeValueAsString(cCase);
-            // aerospikeClient.put(..., cCase.getId(), json);
-            logger.debug("Cached case summary for {}", cCase.getCaseReference());
+            cache.put(cCase.getId(), objectMapper.writeValueAsString(cCase));
+            logger.debug("Cached case {}", cCase.getCaseReference());
         } catch (Exception e) {
             logger.warn("Failed to cache case {}", cCase.getCaseReference(), e);
         }
     }
 
     public ComplianceCase getCachedCase(Long caseId) {
-        // ... fetch from cache ...
-        // if (exists) return objectMapper.readValue(json, ComplianceCase.class);
-        return null;
+        if (caseId == null) return null;
+        String json = cache.getIfPresent(caseId);
+        if (json == null) return null;
+        try {
+            return objectMapper.readValue(json, ComplianceCase.class);
+        } catch (Exception e) {
+            logger.warn("Failed to deserialize cached case {}", caseId, e);
+            return null;
+        }
     }
 
     public void evictCase(Long caseId) {
-        // ... delete ...
+        if (caseId != null) cache.invalidate(caseId);
     }
 }

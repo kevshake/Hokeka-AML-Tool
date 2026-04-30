@@ -66,6 +66,7 @@ public class CaseWorkflowService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .daysOpen(0)
+                .pspId(creator.getPsp() != null ? creator.getPsp().getPspId() : null)
                 .build();
 
         // Calculate SLA deadline based on priority

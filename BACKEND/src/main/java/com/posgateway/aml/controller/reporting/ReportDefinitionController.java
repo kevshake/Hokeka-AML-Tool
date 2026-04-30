@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * REST endpoints for report definitions and categories
  */
 @RestController
-@RequestMapping("/api/reports/definitions")
+@RequestMapping("/reports/definitions")
 public class ReportDefinitionController {
 
     private static final Logger logger = LoggerFactory.getLogger(ReportDefinitionController.class);

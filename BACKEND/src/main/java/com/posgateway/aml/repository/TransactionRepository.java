@@ -185,4 +185,71 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             org.springframework.data.domain.Pageable pageable);
 
     List<TransactionEntity> findByPspIdAndTxnTsBetween(Long pspId, LocalDateTime start, LocalDateTime end);
+
+    // -----------------------------------------------------------------------
+    // Live monitoring page — indexed top-N queries (replace findAll() + filter)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Top 10 most-recent transactions for a single PSP — indexed by (psp_id, txn_ts).
+     * Replaces in-memory limit() of findByPspIdOrderByTxnTsDesc(pspId).
+     */
+    @Query("SELECT t FROM TransactionEntity t WHERE t.pspId = :pspId AND t.txnTs IS NOT NULL ORDER BY t.txnTs DESC")
+    List<TransactionEntity> findTop10ByPspIdOrderByTxnTsDesc(@Param("pspId") Long pspId,
+                                                             org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Top 10 most-recent transactions across all PSPs (platform admin view).
+     */
+    @Query("SELECT t FROM TransactionEntity t WHERE t.txnTs IS NOT NULL ORDER BY t.txnTs DESC")
+    List<TransactionEntity> findTop10ByOrderByTxnTsDesc(org.springframework.data.domain.Pageable pageable);
+
+    // -----------------------------------------------------------------------
+    // Decision counts (used by live monitoring dashboard stats)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Count transactions by stored decision since a cutoff (PSP-scoped).
+     * Replaces hard-coded fallback values (75/95/25) when TRS is null.
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t WHERE t.pspId = :pspId AND t.decision = :decision AND t.txnTs >= :since")
+    long countByPspIdAndDecisionSince(@Param("pspId") Long pspId,
+                                      @Param("decision") String decision,
+                                      @Param("since") LocalDateTime since);
+
+    /**
+     * Count transactions by stored decision since a cutoff (admin view, all PSPs).
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t WHERE t.decision = :decision AND t.txnTs >= :since")
+    long countByDecisionSince(@Param("decision") String decision, @Param("since") LocalDateTime since);
+
+    /**
+     * Count transactions by stored riskLevel since a cutoff (PSP-scoped).
+     * Used for the "flagged"/"highRisk" tiles when TRS is null.
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t WHERE t.pspId = :pspId AND t.riskLevel IN :levels AND t.txnTs >= :since")
+    long countByPspIdAndRiskLevelInSince(@Param("pspId") Long pspId,
+                                         @Param("levels") List<String> levels,
+                                         @Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(t) FROM TransactionEntity t WHERE t.riskLevel IN :levels AND t.txnTs >= :since")
+    long countByRiskLevelInSince(@Param("levels") List<String> levels, @Param("since") LocalDateTime since);
+
+    // -----------------------------------------------------------------------
+    // Risk-score distribution buckets — single grouped query, no in-memory bucketing
+    // Native query: bucket = floor(trs/10)*10 (covers 0..100 in steps of 10).
+    // -----------------------------------------------------------------------
+
+    @Query(value = "SELECT (FLOOR(COALESCE(t.trs, 0)/10)*10)::int AS bucket, COUNT(*) AS cnt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.txn_ts >= :since " +
+                   "GROUP BY bucket ORDER BY bucket", nativeQuery = true)
+    List<Object[]> getRiskScoreBucketsByPspSince(@Param("pspId") Long pspId,
+                                                  @Param("since") LocalDateTime since);
+
+    @Query(value = "SELECT (FLOOR(COALESCE(t.trs, 0)/10)*10)::int AS bucket, COUNT(*) AS cnt " +
+                   "FROM transactions t " +
+                   "WHERE t.txn_ts >= :since " +
+                   "GROUP BY bucket ORDER BY bucket", nativeQuery = true)
+    List<Object[]> getRiskScoreBucketsAllSince(@Param("since") LocalDateTime since);
 }
