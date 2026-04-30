@@ -177,15 +177,9 @@ export default function LoginPage() {
                     </Box>
                 </form>
 
-                {/* Sign Up Link */}
-                <Box sx={{ mt: 2, textAlign: "center" }}>
-                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                        Don't have an account?{" "}
-                        <Link component={RouterLink} to="/signup" sx={{ color: "#8B4049", fontWeight: 600 }}>
-                            Sign Up
-                        </Link>
-                    </Typography>
-                </Box>
+                {/* Operator accounts are provisioned by an administrator —
+                    self-signup is intentionally not exposed for an AML platform.
+                    PSP onboarding uses /clients/register and /psps/register. */}
 
                 {/* Footer */}
                 <Box sx={{ mt: 3, textAlign: "center" }}>

@@ -280,23 +280,75 @@ export const useGrafanaDashboards = () => {
 };
 
 // Risk Analytics
+export interface RiskHeatmapCell {
+  id: string;
+  type: string;
+  caseCount: number;
+  averageRiskScore: number;
+}
+
+/**
+ * Heatmap query — backend returns Map<String, RiskHeatmapCell>. We project each
+ * cell down to a 0-100 score so the existing UI can render it as a number.
+ */
 export const useRiskHeatmap = (type: "customer" | "merchant") => {
   return useQuery<Record<string, number>>({
     queryKey: ["risk", "heatmap", type],
-    queryFn: () => apiClient.get<Record<string, number>>(`analytics/risk/heatmap/${type}`).catch(() => ({})),
+    queryFn: async () => {
+      const raw = await apiClient
+        .get<Record<string, RiskHeatmapCell>>(`analytics/risk/heatmap/${type}`)
+        .catch(() => ({} as Record<string, RiskHeatmapCell>));
+      const projected: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        // averageRiskScore is in [0,1]; surface as 0-100 for the UI bands
+        projected[k] = Math.round((v?.averageRiskScore ?? 0) * 100);
+      }
+      return projected;
+    },
   });
 };
+
+interface RiskTrendBackend {
+  trendDirection?: string;
+  weeklyTrends?: Record<string, number>;
+  totalCases?: number;
+  highRiskCases?: number;
+}
 
 interface RiskTrends {
   labels?: string[];
   data?: number[];
-  [key: string]: unknown;
+  trendDirection?: string;
+  totalCases?: number;
+  highRiskCases?: number;
 }
 
+/**
+ * Trends query — backend accepts startDate/endDate; we compute a window from `days`
+ * client-side so the existing UI's "last N days" selector works without a backend
+ * contract change. Response is projected from {weeklyTrends:{label:count}} → {labels, data}.
+ */
 export const useRiskTrends = (days: number = 30) => {
   return useQuery<RiskTrends>({
     queryKey: ["risk", "trends", days],
-    queryFn: () => apiClient.get<RiskTrends>(`analytics/risk/trends?days=${days}`).catch(() => ({})),
+    queryFn: async () => {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+      const raw = await apiClient
+        .get<RiskTrendBackend>(
+          `analytics/risk/trends?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`,
+        )
+        .catch(() => ({} as RiskTrendBackend));
+      const labels = raw.weeklyTrends ? Object.keys(raw.weeklyTrends) : [];
+      const data = raw.weeklyTrends ? Object.values(raw.weeklyTrends).map((n) => Number(n) || 0) : [];
+      return {
+        labels,
+        data,
+        trendDirection: raw.trendDirection,
+        totalCases: raw.totalCases,
+        highRiskCases: raw.highRiskCases,
+      };
+    },
   });
 };
 
