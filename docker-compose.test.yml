@@ -53,7 +53,7 @@ services:
     environment:
       DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
       DATABASE_USERNAME: fraud_detector_test
-      DATABASE_PASSWORD: test_password_secure
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-test_password_secure}
       AEROSPIKE_HOSTS: fd-test-aerospike:3000
       AEROSPIKE_ENABLED: "true"
       AEROSPIKE_NAMESPACE: aml_fraud
