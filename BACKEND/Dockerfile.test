@@ -1,0 +1,45 @@
+# Build stage
+FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+
+WORKDIR /build
+
+# Copy pom.xml first for better layer caching
+COPY pom.xml .
+RUN mvn dependency:go-offline
+
+# Copy source and build
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Production stage - Using Ubuntu-based JRE to avoid Alpine native library issues
+FROM eclipse-temurin:17-jre
+
+WORKDIR /app
+
+# Create non-root user
+RUN groupadd -g 1001 spring && useradd -u 1001 -g spring spring
+
+# Install required libraries for DL4J/ND4J and quadmath
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    libquadmath0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy jar from builder
+COPY --from=builder /build/target/*.jar app.jar
+
+# Set ownership
+RUN chown -R spring:spring /app
+
+USER spring
+
+# JVM optimization for containers
+ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom"
+
+EXPOSE 2638
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:2638/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

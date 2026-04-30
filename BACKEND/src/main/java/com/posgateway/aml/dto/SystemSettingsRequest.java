@@ -1,0 +1,19 @@
+package com.posgateway.aml.dto;
+
+import lombok.Data;
+
+/**
+ * DTO for updating system settings configuration
+ */
+@Data
+public class SystemSettingsRequest {
+    private Boolean maintenanceMode;
+    private Boolean debugLogging;
+    private Integer riskThresholdHigh;
+    private Integer riskThresholdMedium;
+    private Integer auditRetentionDays;
+    private Boolean allowCrossBorderTxns;
+
+    public SystemSettingsRequest() {
+    }
+}

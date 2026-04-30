@@ -1,0 +1,146 @@
+package com.posgateway.aml.rules;
+
+// AML Regulatory Rules
+// These rules are evaluated by Drools for every transaction.
+// Rules have priority (salience) - higher priority rules fire first.
+// Results are cached in Aerospike for audit trails.
+
+import com.posgateway.aml.rules.TransactionFact;
+import java.math.BigDecimal;
+
+// ============================================================================
+// REGULATORY HARD STOPS - Highest Priority
+// ============================================================================
+
+rule "OFAC High-Risk Country Block"
+    salience 100
+    when
+        $tx : TransactionFact(isHighRiskCountry() == true)
+    then
+        $tx.setDecision("BLOCK");
+        $tx.setSarRequired(true);
+        $tx.addTriggeredRule("OFAC_HIGH_RISK_COUNTRY");
+        $tx.addReason("Transaction involves OFAC sanctioned or high-risk country: " + $tx.getCountryCode());
+end
+
+rule "CTR Threshold - $10,000 USD"
+    salience 90
+    when
+        $tx : TransactionFact(amount >= 10000, currency == "USD")
+    then
+        $tx.setCtrRequired(true);
+        $tx.addTriggeredRule("CTR_THRESHOLD_10K");
+        $tx.addReason("Transaction exceeds $10,000 CTR reporting threshold");
+end
+
+// ============================================================================
+// SAR DETECTION RULES
+// ============================================================================
+
+rule "SAR Structuring Detection"
+    salience 80
+    when
+        $tx : TransactionFact(
+            amount >= 9000, 
+            amount < 10000,
+            panTxnCount1h >= 3
+        )
+    then
+        $tx.setSarRequired(true);
+        if (!"BLOCK".equals($tx.getDecision())) {
+            $tx.setDecision("HOLD");
+        }
+        $tx.addTriggeredRule("SAR_STRUCTURING_DETECTION");
+        $tx.addReason("Potential structuring: multiple high-value transactions just under CTR threshold");
+end
+
+// ============================================================================
+// ML SCORE THRESHOLD RULES
+// ============================================================================
+
+rule "ML Score - High Risk Block"
+    salience 70
+    when
+        $tx : TransactionFact(mlScore > 0.9)
+    then
+        $tx.setDecision("BLOCK");
+        $tx.addTriggeredRule("ML_SCORE_HIGH_RISK");
+        $tx.addReason("ML risk score exceeds 0.9 threshold: " + String.format("%.3f", $tx.getMlScore()));
+end
+
+rule "ML Score - Medium Risk Hold"
+    salience 60
+    when
+        $tx : TransactionFact(
+            mlScore > 0.7, 
+            mlScore <= 0.9,
+            decision != "BLOCK"
+        )
+    then
+        $tx.setDecision("HOLD");
+        $tx.addTriggeredRule("ML_SCORE_MEDIUM_RISK");
+        $tx.addReason("ML risk score requires review: " + String.format("%.3f", $tx.getMlScore()));
+end
+
+// ============================================================================
+// GRAPH ANALYTICS RULES (from Neo4j GDS)
+// ============================================================================
+
+rule "High Betweenness Centrality - Potential Money Mule Hub"
+    salience 50
+    when
+        $tx : TransactionFact(
+            betweenness > 0.5,
+            decision != "BLOCK"
+        )
+    then
+        $tx.setDecision("HOLD");
+        $tx.addTriggeredRule("HIGH_BETWEENNESS_HUB");
+        $tx.addReason("Merchant has high betweenness centrality (potential hub): " + 
+                String.format("%.3f", $tx.getBetweenness()));
+end
+
+rule "High Influence + High Value Transaction"
+    salience 45
+    when
+        $tx : TransactionFact(
+            pageRank > 0.8,
+            isHighValueTransaction() == true
+        )
+    then
+        $tx.setSarRequired(true);
+        $tx.addTriggeredRule("HIGH_INFLUENCE_HIGH_VALUE");
+        $tx.addReason("High-influence merchant (PageRank: " + 
+                String.format("%.3f", $tx.getPageRank()) + ") with high-value transaction");
+end
+
+// ============================================================================
+// VELOCITY RULES
+// ============================================================================
+
+rule "Velocity Breach - Card Used Too Frequently"
+    salience 40
+    when
+        $tx : TransactionFact(
+            panTxnCount1h > 10,
+            decision != "BLOCK"
+        )
+    then
+        $tx.setDecision("HOLD");
+        $tx.addTriggeredRule("VELOCITY_BREACH_1H");
+        $tx.addReason("Card velocity breach: " + $tx.getPanTxnCount1h() + " transactions in 1 hour");
+end
+
+rule "High Daily Merchant Volume"
+    salience 35
+    when
+        $tx : TransactionFact(
+            merchantAmountSum24h > 100000,
+            decision != "BLOCK"
+        )
+    then
+        $tx.setDecision("HOLD");
+        $tx.addTriggeredRule("HIGH_MERCHANT_VOLUME_24H");
+        $tx.addReason("Merchant 24h volume exceeds $100,000: $" + 
+                String.format("%.2f", $tx.getMerchantAmountSum24h()));
+end
