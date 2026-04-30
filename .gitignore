@@ -1,0 +1,94 @@
+# =============================================================================
+# Build output
+# =============================================================================
+**/target/
+**/build/
+**/dist/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# =============================================================================
+# Node
+# =============================================================================
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.pnpm-debug.log*
+
+# =============================================================================
+# Logs and runtime artifacts
+# =============================================================================
+*.log
+**/logs/
+BACKEND/app_startup.log
+BACKEND/startup*.log
+BACKEND/build*.log
+BACKEND/compile*.log
+BACKEND/compile_error*.txt
+BACKEND/test_*.log
+BACKEND/test_results*.log
+BACKEND/debug_output*.txt
+BACKEND/debug_output*.log
+
+# =============================================================================
+# Local secrets / sessions / scratch
+# =============================================================================
+cookies*.txt
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+.env
+.env.*
+!.env.example
+BACKEND/temp_*.txt
+BACKEND/git_original_*.properties
+BACKEND/response*.json
+BACKEND/txn.json
+BACKEND/transactions.json
+
+# =============================================================================
+# Claude Code local
+# =============================================================================
+.claude/settings.local.json
+
+# =============================================================================
+# IDE / editor metadata
+# =============================================================================
+.idea/
+.vscode/
+*.iml
+.metadata/
+.recommenders/
+.classpath
+.project
+.factorypath
+.settings/
+.springBeans
+.apt_generated/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# =============================================================================
+# Maven / Gradle local
+# =============================================================================
+.mvn/wrapper/maven-wrapper.jar
+.gradle/
+
+# =============================================================================
+# Generated sources (Lombok delomboked mirror is a build artifact)
+# =============================================================================
+BACKEND/src/main/java-delomboked/
+
+# =============================================================================
+# Misc local artifacts
+# =============================================================================
+BACKEND/evidence_store/
+BACKEND/run_*.bat
