@@ -1,6 +1,10 @@
 package com.hokeka.aml.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class AmlResult {
     @JsonProperty("transactionId")
@@ -20,6 +24,10 @@ public class AmlResult {
     /** {@code L1_AEROSPIKE} when served from Aerospike, {@code COMPUTED} when freshly scored. */
     @JsonProperty("cacheLayer")
     private String cacheLayer;
+    /** Free-form risk indicators (e.g. SANCTIONS_FLAGGED). Empty when none apply. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JsonProperty("indicators")
+    private List<String> indicators = new ArrayList<>();
 
     public AmlResult() {}
 
@@ -43,6 +51,7 @@ public class AmlResult {
     public String getSource() { return source; }
     public long getProcessingTimeMs() { return processingTimeMs; }
     public String getCacheLayer() { return cacheLayer; }
+    public List<String> getIndicators() { return indicators; }
 
     public void setTransactionId(String v) { this.transactionId = v; }
     public void setPspId(Long v) { this.pspId = v; }
@@ -52,4 +61,10 @@ public class AmlResult {
     public void setSource(String v) { this.source = v; }
     public void setProcessingTimeMs(long v) { this.processingTimeMs = v; }
     public void setCacheLayer(String v) { this.cacheLayer = v; }
+    public void setIndicators(List<String> v) { this.indicators = v != null ? v : new ArrayList<>(); }
+    public void addIndicator(String i) {
+        if (i == null || i.isBlank()) return;
+        if (this.indicators == null) this.indicators = new ArrayList<>();
+        this.indicators.add(i);
+    }
 }

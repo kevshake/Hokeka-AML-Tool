@@ -26,6 +26,9 @@ public class TransactionRequest {
     /** Optional one-way hash of PAN — never carry the raw PAN across services. */
     @JsonProperty("panHash")
     private String panHash;
+    /** Optional sender / counterparty name for inline sanctions screening. */
+    @JsonProperty("senderName")
+    private String senderName;
 
     public String getTransactionId() { return transactionId; }
     public void setTransactionId(String v) { this.transactionId = v; }
@@ -47,4 +50,6 @@ public class TransactionRequest {
     public void setCustomerId(String v) { this.customerId = v; }
     public String getPanHash() { return panHash; }
     public void setPanHash(String v) { this.panHash = v; }
+    public String getSenderName() { return senderName; }
+    public void setSenderName(String v) { this.senderName = v; }
 }

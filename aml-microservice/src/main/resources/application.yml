@@ -14,6 +14,12 @@ aml:
   # Empty => filter disabled (dev only). Production MUST set AML_MS_INTERNAL_KEY.
   internal-auth-key: ${AML_MS_INTERNAL_KEY:}
 
+sanctions:
+  match:
+    similarity:
+      # Lower bound for emitting a match. Status FLAGGED at >=0.95, REVIEW in [threshold, 0.95).
+      threshold: ${SANCTIONS_SIMILARITY_THRESHOLD:0.8}
+
 management:
   endpoints:
     web:

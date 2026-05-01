@@ -6,6 +6,7 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.policy.WritePolicy;
 import com.hokeka.aml.model.AmlResult;
+import com.hokeka.aml.model.SanctionsScreenResponse;
 import com.hokeka.aml.model.TransactionRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,9 @@ public class AmlCheckService {
 
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
+
+    @Autowired(required = false)
+    private SanctionsService sanctionsService;
 
     public boolean isAerospikeConnected() {
         return aerospikeClient != null && aerospikeClient.isConnected();
@@ -77,9 +81,27 @@ public class AmlCheckService {
             }
         }
 
-        long elapsed = System.currentTimeMillis() - startTime;
-        return new AmlResult(txnId, pspId, riskScore, decision, getRiskLevel(riskScore),
-                "computed", elapsed, CACHE_LAYER_COMPUTED);
+        AmlResult result = new AmlResult(txnId, pspId, riskScore, decision, getRiskLevel(riskScore),
+                "computed", System.currentTimeMillis() - startTime, CACHE_LAYER_COMPUTED);
+
+        // Inline sanctions screen on the sender name (lightweight — only when provided).
+        // Adds SANCTIONS_FLAGGED indicator on FLAGGED, SANCTIONS_REVIEW on REVIEW.
+        String senderName = request.getSenderName();
+        if (sanctionsService != null && senderName != null && !senderName.isBlank()) {
+            try {
+                SanctionsScreenResponse sr = sanctionsService.screenName(senderName, null);
+                if (sr != null && "FLAGGED".equals(sr.getStatus())) {
+                    result.addIndicator("SANCTIONS_FLAGGED");
+                } else if (sr != null && "REVIEW".equals(sr.getStatus())) {
+                    result.addIndicator("SANCTIONS_REVIEW");
+                }
+            } catch (Exception e) {
+                log.warn("Inline sanctions screen failed for senderName='{}': {}", senderName, e.getMessage());
+            }
+        }
+
+        result.setProcessingTimeMs(System.currentTimeMillis() - startTime);
+        return result;
     }
 
     private double computeRiskScore(TransactionRequest request) {

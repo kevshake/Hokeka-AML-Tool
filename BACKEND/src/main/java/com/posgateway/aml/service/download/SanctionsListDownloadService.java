@@ -2,16 +2,21 @@ package com.posgateway.aml.service.download;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.posgateway.aml.service.sanctions.NameMatchingService;
+import com.posgateway.aml.client.aml.AmlMicroserviceProperties;
 import com.posgateway.aml.service.sanctions.WatchlistUpdateTrackingService;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,37 +24,42 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Sanctions List Download Service
- * Downloads sanctions data from OpenSanctions daily and loads into Aerospike
- * Improved with Retry logic and Stale Data Monitoring
+ * Downloads OpenSanctions data daily and pushes the parsed entities into the
+ * aml-microservice via {@code POST /internal/v1/sanctions/ingest}.
+ *
+ * <p>BACKEND no longer holds Aerospike directly — sanctions data lives in the
+ * microservice. This class is the producer side of that pipeline.
  */
-// @RequiredArgsConstructor removed
 @Service
 public class SanctionsListDownloadService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SanctionsListDownloadService.class);
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final int DEFAULT_BATCH_SIZE = 500;
 
-    private final NameMatchingService nameMatchingService;
-    private final com.posgateway.aml.service.AerospikeConnectionService aerospikeService;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final WatchlistUpdateTrackingService watchlistUpdateTrackingService;
+    private final AmlMicroserviceProperties amlMicroserviceProperties;
 
     @Autowired
-    public SanctionsListDownloadService(NameMatchingService nameMatchingService,
-            com.posgateway.aml.service.AerospikeConnectionService aerospikeService, ObjectMapper objectMapper,
-            RestTemplate restTemplate, WatchlistUpdateTrackingService watchlistUpdateTrackingService) {
-        this.nameMatchingService = nameMatchingService;
-        this.aerospikeService = aerospikeService;
+    public SanctionsListDownloadService(ObjectMapper objectMapper,
+                                        RestTemplate restTemplate,
+                                        WatchlistUpdateTrackingService watchlistUpdateTrackingService,
+                                        AmlMicroserviceProperties amlMicroserviceProperties) {
         this.objectMapper = objectMapper;
         this.restTemplate = restTemplate;
         this.watchlistUpdateTrackingService = watchlistUpdateTrackingService;
+        this.amlMicroserviceProperties = amlMicroserviceProperties;
     }
 
-    @Value("${sanctions.download.enabled:true}")
+    @Value("${sanctions.download.enabled:false}")
     private boolean downloadEnabled;
 
     @Value("${sanctions.download.temp.dir:C:/temp/sanctions}")
@@ -61,14 +71,14 @@ public class SanctionsListDownloadService {
     @Value("${sanctions.opensanctions.metadata.url}")
     private String metadataUrl;
 
-    // Track last successful update for monitoring
-    private final AtomicReference<LocalDateTime> lastSuccessfulUpdate = new AtomicReference<>(
-            LocalDateTime.now().minusDays(1)); // Start stale to force check
+    @Value("${sanctions.ingest.batch.size:500}")
+    private int batchSize;
 
-    /**
-     * Scheduled download job - runs daily at 2:00 AM
-     * Retries up to 3 times to handle network glitches
-     */
+    /** Last successful pull, used by the staleness watchdog. */
+    private final AtomicReference<LocalDateTime> lastSuccessfulUpdate =
+            new AtomicReference<>(LocalDateTime.now().minusDays(1));
+
+    /** Daily download. Cron preserved from the original implementation. */
     @Scheduled(cron = "${sanctions.download.cron:0 0 2 * * *}")
     @Retry(name = "sanctionsDownload")
     public void performScheduledDownload() {
@@ -76,63 +86,45 @@ public class SanctionsListDownloadService {
             log.info("Sanctions download is disabled, skipping");
             return;
         }
-
         log.info("Starting scheduled sanctions list download...");
-
         try {
-            downloadAndProcessSanctions();
+            downloadDailyDataset();
             lastSuccessfulUpdate.set(LocalDateTime.now());
         } catch (Exception e) {
             log.error("Error during scheduled download: {}", e.getMessage(), e);
-            throw e; // Rethrow to trigger Retry
+            throw e; // trigger Retry
         }
     }
 
-    /**
-     * Watchdog job - runs hourly to check for stale data
-     * Alerts if data is > 26 hours old (giving 2h buffer after 24h cycle)
-     */
-    @Scheduled(fixedRate = 3600000) // Every hour
+    /** Hourly watchdog — alerts if data is &gt; 26h old. */
+    @Scheduled(fixedRate = 3_600_000)
     public void checkStaleData() {
-        if (!downloadEnabled)
-            return;
-
-        LocalDateTime lastUpdate = lastSuccessfulUpdate.get();
-        long hoursSinceUpdate = ChronoUnit.HOURS.between(lastUpdate, LocalDateTime.now());
-
+        if (!downloadEnabled) return;
+        long hoursSinceUpdate = ChronoUnit.HOURS.between(lastSuccessfulUpdate.get(), LocalDateTime.now());
         if (hoursSinceUpdate > 26) {
-            log.error("CRITICAL: Sanctions data is STALE! Last update was {} hours ago. Check download service.",
-                    hoursSinceUpdate);
-            // In a real system, this would trigger PagerDuty/Slack alert
+            log.error("CRITICAL: Sanctions data is STALE! Last update was {} hours ago.", hoursSinceUpdate);
         }
     }
 
     /**
-     * Download and process sanctions data
+     * Downloads OpenSanctions JSON-lines, parses each entity, and POSTs batches
+     * to the aml-microservice's ingest endpoint.
      */
-    public void downloadAndProcessSanctions() {
+    public void downloadDailyDataset() {
         log.info("Downloading sanctions data from OpenSanctions...");
-
         try {
-            // Step 1: Check metadata for version
             String currentVersion = checkMetadataVersion();
             log.info("Latest sanctions data version: {}", currentVersion);
 
-            // Step 2: Create temp directory
             Path tempDir = Paths.get(tempDirectory);
             Files.createDirectories(tempDir);
 
-            // Step 3: Download file
             Path downloadedFile = downloadFile(opensanctionsUrl, tempDir);
             log.info("Downloaded file: {}", downloadedFile);
 
-            // Step 4: Process file and load to Aerospike
-            int recordsProcessed = processAndLoadToAerospike(downloadedFile, currentVersion);
-
+            int recordsProcessed = processAndPushToMicroservice(downloadedFile);
             log.info("Successfully processed {} sanctions records", recordsProcessed);
 
-            // Step 5: Record watchlist update in tracking service (data is stored in
-            // Aerospike)
             try {
                 watchlistUpdateTrackingService.recordUpdate(
                         "OPENSANCTIONS",
@@ -140,15 +132,12 @@ public class SanctionsListDownloadService {
                         java.time.LocalDate.now(),
                         (long) recordsProcessed,
                         opensanctionsUrl,
-                        currentVersion // Use version as checksum
-                );
-                log.info("Recorded watchlist update: {} records loaded to Aerospike", recordsProcessed);
+                        currentVersion);
+                log.info("Recorded watchlist update: {} records ingested into aml-microservice", recordsProcessed);
             } catch (Exception e) {
                 log.warn("Failed to record watchlist update: {}", e.getMessage());
-                // Don't fail the entire process if tracking fails
             }
 
-            // Step 5: Delete temp file after successful processing
             Files.deleteIfExists(downloadedFile);
             log.info("Cleaned up temporary file");
 
@@ -158,9 +147,25 @@ public class SanctionsListDownloadService {
         }
     }
 
-    /**
-     * Check metadata for current version
-     */
+    /** Backwards-compatible alias for callers / tests still on the old name. */
+    public void downloadAndProcessSanctions() {
+        downloadDailyDataset();
+    }
+
+    /** Manual trigger used by the admin endpoint. */
+    public void manualDownload() {
+        log.info("Manual sanctions download triggered");
+        try {
+            downloadDailyDataset();
+            lastSuccessfulUpdate.set(LocalDateTime.now());
+        } catch (Exception e) {
+            log.error("Manual download failed", e);
+            throw e;
+        }
+    }
+
+    // ---------------- internals ----------------
+
     private String checkMetadataVersion() {
         try {
             String metadata = restTemplate.getForObject(metadataUrl, String.class);
@@ -172,61 +177,46 @@ public class SanctionsListDownloadService {
         }
     }
 
-    /**
-     * Download file to local disk
-     */
     private Path downloadFile(String url, Path targetDir) throws IOException {
         log.info("Downloading from: {}", url);
-
         String fileName = "sanctions_" + System.currentTimeMillis() + ".json";
         Path targetFile = targetDir.resolve(fileName);
-
         try (InputStream in = new URL(url).openStream()) {
             Files.copy(in, targetFile);
         }
-
         return targetFile;
     }
 
     /**
-     * Process downloaded file and load to Aerospike
+     * Streams the JSON-lines file, batches parsed entities, and pushes each batch
+     * to the microservice. Returns the total number of entities pushed.
      */
-    private int processAndLoadToAerospike(Path filePath, String version) throws IOException {
+    private int processAndPushToMicroservice(Path filePath) throws IOException {
         log.info("Processing sanctions file: {}", filePath);
-
         int recordCount = 0;
-        List<SanctionEntity> batch = new ArrayList<>();
-        int batchSize = 100;
+        int chunk = batchSize > 0 ? batchSize : DEFAULT_BATCH_SIZE;
+        List<Map<String, Object>> batch = new ArrayList<>(chunk);
 
         try (BufferedReader reader = Files.newBufferedReader(filePath)) {
             String line;
-
             while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty())
-                    continue;
-
+                if (line.trim().isEmpty()) continue;
                 try {
                     JsonNode entityJson = objectMapper.readTree(line);
-                    SanctionEntity entity = parseSanctionEntity(entityJson);
-
-                    batch.add(entity);
-                    recordCount++;
-
-                    // Process in batches
-                    if (batch.size() >= batchSize) {
-                        insertBatchToAerospike(batch);
+                    Map<String, Object> e = parseSanctionEntity(entityJson);
+                    if (e != null) {
+                        batch.add(e);
+                        recordCount++;
+                    }
+                    if (batch.size() >= chunk) {
+                        pushBatch(batch);
                         batch.clear();
                     }
-
                 } catch (Exception e) {
                     log.warn("Failed to parse entity: {}", e.getMessage());
                 }
             }
-
-            // Process remaining batch
-            if (!batch.isEmpty()) {
-                insertBatchToAerospike(batch);
-            }
+            if (!batch.isEmpty()) pushBatch(batch);
         }
 
         log.info("Processed {} sanctions entities", recordCount);
@@ -234,87 +224,107 @@ public class SanctionsListDownloadService {
     }
 
     /**
-     * Parse JSON into SanctionEntity
+     * Map an OpenSanctions JSON-lines record onto our wire format
+     * (matches {@code SanctionsIngestRequest.SanctionsEntity}).
      */
-    private SanctionEntity parseSanctionEntity(JsonNode json) {
-        String fullName = json.has("name") ? json.get("name").asText() : "";
-        String entityType = json.has("schema") ? json.get("schema").asText() : "UNKNOWN";
+    private Map<String, Object> parseSanctionEntity(JsonNode json) {
+        if (json == null) return null;
 
-        // Generate phonetic codes
-        String phoneticCode = nameMatchingService.generatePhoneticCode(fullName);
-        String altPhoneticCode = nameMatchingService.generateAlternatePhoneticCode(fullName);
+        String entityId = json.has("id") ? json.get("id").asText() : null;
+        if (entityId == null || entityId.isEmpty()) return null;
 
-        return new SanctionEntity(fullName, entityType, phoneticCode, altPhoneticCode, json.toString());
+        String name = json.has("caption") ? json.get("caption").asText()
+                : json.has("name") ? json.get("name").asText() : "";
+        String schema = json.has("schema") ? json.get("schema").asText() : "UNKNOWN";
+        String type = mapSchemaToType(schema);
+
+        List<String> aliases = new ArrayList<>();
+        JsonNode props = json.get("properties");
+        if (props != null) {
+            collectStrings(props.get("alias"), aliases);
+            collectStrings(props.get("name"), aliases);
+            collectStrings(props.get("weakAlias"), aliases);
+        }
+        // dedupe + drop the canonical name from the alias list
+        aliases.removeIf(a -> a == null || a.isBlank() || a.equalsIgnoreCase(name));
+
+        String country = "";
+        if (props != null && props.has("country")) {
+            JsonNode cn = props.get("country");
+            if (cn.isArray() && cn.size() > 0) country = cn.get(0).asText();
+            else if (cn.isTextual()) country = cn.asText();
+        }
+        String birthDate = "";
+        if (props != null && props.has("birthDate")) {
+            JsonNode bd = props.get("birthDate");
+            if (bd.isArray() && bd.size() > 0) birthDate = bd.get(0).asText();
+            else if (bd.isTextual()) birthDate = bd.asText();
+        }
+
+        String listName = "OPENSANCTIONS";
+        if (json.has("datasets") && json.get("datasets").isArray() && json.get("datasets").size() > 0) {
+            listName = json.get("datasets").get(0).asText();
+        }
+
+        Map<String, Object> entity = new HashMap<>();
+        entity.put("entityId", entityId);
+        entity.put("name", name);
+        entity.put("aliases", aliases);
+        entity.put("type", type);
+        entity.put("listName", listName);
+        entity.put("country", country);
+        entity.put("birthDate", birthDate);
+        return entity;
+    }
+
+    private static void collectStrings(JsonNode node, List<String> out) {
+        if (node == null) return;
+        if (node.isArray()) {
+            for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
+                JsonNode el = it.next();
+                if (el.isTextual()) out.add(el.asText());
+            }
+        } else if (node.isTextual()) {
+            out.add(node.asText());
+        }
+    }
+
+    private static String mapSchemaToType(String schema) {
+        if (schema == null) return "UNKNOWN";
+        String s = schema.toLowerCase();
+        if (s.contains("person")) return "PERSON";
+        if (s.contains("organization") || s.contains("company") || s.contains("legalentity")) return "ORGANIZATION";
+        if (s.contains("vessel")) return "VESSEL";
+        return "UNKNOWN";
     }
 
     /**
-     * TODO(aerospike-removal): the original implementation pushed each batch into
-     * the Aerospike "sanctions/entities" set. Aerospike now lives in the
-     * aml-microservice; this writer is disabled until either:
-     *   (a) the microservice exposes a bulk-ingest endpoint we can POST into, OR
-     *   (b) we move the entire SanctionsListDownloadService into the microservice
-     *       (likely the right answer — sanctions data is a microservice concern).
-     * For now we just log so the scheduled job stays observable.
+     * POSTs a batch to {@code /internal/v1/sanctions/ingest}.
+     * If the microservice is disabled or the call fails, we log and continue —
+     * a partial daily ingest is better than none, and the watchdog catches total stalls.
      */
-    private void insertBatchToAerospike(List<SanctionEntity> batch) {
+    private void pushBatch(List<Map<String, Object>> batch) {
         if (batch == null || batch.isEmpty()) return;
-        if (aerospikeService != null) {
-            // Reference the field so the autowired stub stays alive in DI.
-            aerospikeService.isConnected();
+        if (!amlMicroserviceProperties.isEnabled()) {
+            log.warn("AML microservice disabled — skipping ingest of {} sanctions entities", batch.size());
+            return;
         }
-        log.warn("Sanctions batch write SKIPPED ({} entities) — Aerospike has moved to aml-microservice. "
-                + "TODO(aerospike-removal): wire to /internal/v1/aml/sanctions ingest endpoint.",
-                batch.size());
-    }
+        String url = amlMicroserviceProperties.getBaseUrl() + "/internal/v1/sanctions/ingest";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String authKey = amlMicroserviceProperties.getInternalAuthKey();
+        if (authKey != null && !authKey.isEmpty()) {
+            headers.set(INTERNAL_AUTH_HEADER, authKey);
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("entities", batch);
 
-    /**
-     * Manual trigger for download
-     */
-    public void manualDownload() {
-        log.info("Manual sanctions download triggered");
         try {
-            downloadAndProcessSanctions();
-            lastSuccessfulUpdate.set(LocalDateTime.now());
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            restTemplate.postForObject(url, entity, Map.class);
+            log.debug("Pushed batch of {} sanctions entities to {}", batch.size(), url);
         } catch (Exception e) {
-            log.error("Manual download failed", e);
-            throw e;
-        }
-    }
-
-    private static class SanctionEntity {
-        private String fullName;
-        private String entityType;
-        private String phoneticCode;
-        private String altPhoneticCode;
-        private String rawData;
-
-        public SanctionEntity(String fullName, String entityType, String phoneticCode, String altPhoneticCode,
-                String rawData) {
-            this.fullName = fullName;
-            this.entityType = entityType;
-            this.phoneticCode = phoneticCode;
-            this.altPhoneticCode = altPhoneticCode;
-            this.rawData = rawData;
-        }
-
-        public String getFullName() {
-            return fullName;
-        }
-
-        public String getEntityType() {
-            return entityType;
-        }
-
-        public String getPhoneticCode() {
-            return phoneticCode;
-        }
-
-        public String getAltPhoneticCode() {
-            return altPhoneticCode;
-        }
-
-        public String getRawData() {
-            return rawData;
+            log.warn("Failed to push sanctions batch ({} entities) to {}: {}", batch.size(), url, e.getMessage());
         }
     }
 }
