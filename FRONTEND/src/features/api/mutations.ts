@@ -22,6 +22,59 @@ export const useCreateCase = () => {
   });
 };
 
+// ---- AI Rule Generation ----
+// Calls POST /rules/generate. Returns a *preview* RuleDefinition that the operator
+// must review and explicitly save via useCreateAmlRule. Does NOT auto-persist.
+export interface GeneratedRulePreview {
+  id?: number;
+  name: string;
+  description?: string;
+  ruleType: "SPEL" | "DROOLS_DRL" | "JAVA_BEAN";
+  ruleExpression: string;
+  action?: "BLOCK" | "HOLD" | "ALERT" | "ALLOW";
+  score?: number;
+  priority?: number;
+  enabled?: boolean;
+  // Backend may include these depending on the model output
+  ruleJson?: string;
+  drlContent?: string;
+}
+
+export type GenerateRuleErrorKind = "not_configured" | "ai_failed" | "bad_request" | "unknown";
+
+export interface GenerateRuleError extends Error {
+  kind: GenerateRuleErrorKind;
+  details?: string;
+  hint?: string;
+  status?: number;
+}
+
+export const useGenerateRule = () => {
+  return useMutation<GeneratedRulePreview, GenerateRuleError, { prompt: string }>({
+    mutationFn: async ({ prompt }) => {
+      try {
+        // apiClient.post throws on non-2xx with the parsed error body attached.
+        return await apiClient.post<GeneratedRulePreview>("rules/generate", { prompt });
+      } catch (e: any) {
+        // apiClient throws the parsed ApiError-shaped body directly. Backend's /rules/generate
+        // returns { error, hint? , details? } on failure — read both shapes.
+        const status: number | undefined = e?.status;
+        const msg: string = e?.error ?? e?.message ?? "Failed to generate rule";
+        let kind: GenerateRuleErrorKind = "unknown";
+        if (status === 503) kind = "not_configured";
+        else if (status === 502) kind = "ai_failed";
+        else if (status === 400) kind = "bad_request";
+        const err = new Error(msg) as GenerateRuleError;
+        err.kind = kind;
+        err.status = status;
+        err.details = e?.details;
+        err.hint = e?.hint;
+        throw err;
+      }
+    },
+  });
+};
+
 // AML Rules Mutations
 export const useCreateAmlRule = () => {
   const queryClient = useQueryClient();

@@ -38,7 +38,9 @@ import {
   PlayArrow as EnableIcon,
   Stop as DisableIcon,
   Assessment as EffectivenessIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from "@mui/icons-material";
+import CircularProgress from "@mui/material/CircularProgress";
 import {
   useAmlRules,
   useVelocityRules,
@@ -57,6 +59,9 @@ import {
   useUpdateVelocityRule,
   useDeleteVelocityRule,
   useCreateRiskThreshold,
+  useGenerateRule,
+  type GeneratedRulePreview,
+  type GenerateRuleError,
 } from "../../features/api/mutations";
 import type { AmlRule, VelocityRule, RiskThreshold } from "../../types/rules";
 
@@ -67,6 +72,42 @@ export default function RulesGenerationPage() {
   const [effectivenessDialog, setEffectivenessDialog] = useState<number | null>(null);
   const [filterBy, setFilterBy] = useState<"all" | "super-admin" | "my-psp">("all");
   const [errorSnackbar, setErrorSnackbar] = useState("");
+
+  // AI rule generation state — preview only, never auto-saves.
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiPreview, setAiPreview] = useState<GeneratedRulePreview | null>(null);
+  const [aiError, setAiError] = useState<GenerateRuleError | null>(null);
+  const generateRule = useGenerateRule();
+
+  const handleGenerateFromPrompt = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiError(null);
+    setAiPreview(null);
+    try {
+      const preview = await generateRule.mutateAsync({ prompt: aiPrompt });
+      setAiPreview(preview);
+    } catch (err) {
+      setAiError(err as GenerateRuleError);
+    }
+  };
+
+  const handleUseGeneratedRule = () => {
+    if (!aiPreview) return;
+    // Pre-fill the existing AML rule form. Backend RuleDefinition uses `name`;
+    // FE AmlRule uses `ruleName` — translate here.
+    setEditingRule({
+      ruleName: aiPreview.name,
+      description: aiPreview.description ?? "",
+      ruleType: aiPreview.ruleType,
+      ruleExpression: aiPreview.ruleExpression,
+      priority: aiPreview.priority ?? 100,
+      action: aiPreview.action ?? "ALERT",
+      score: aiPreview.score,
+      enabled: aiPreview.enabled ?? false,
+    });
+    setTab(0); // ensure AML Rules tab is selected
+    setOpenDialog(true);
+  };
 
   const { data: currentUser } = useCurrentUser();
   const { data: psps } = useAllPsps();
@@ -256,6 +297,144 @@ export default function RulesGenerationPage() {
       {/* AML Rules Tab */}
       {tab === 0 && (
         <>
+          {/* AI Generate-from-Description panel — Phase 2 of AI rule generation flow.
+              Calls POST /rules/generate; the preview is NOT auto-saved. The operator
+              clicks "Use This Rule" to pre-fill the existing form for review/save. */}
+          <Paper sx={{ p: 2, mb: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <AutoAwesomeIcon sx={{ color: "#a93226" }} fontSize="small" />
+              <Typography variant="subtitle1" sx={{ color: "text.primary", fontWeight: 600 }}>
+                Generate from Description (AI)
+              </Typography>
+            </Box>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
+              Describe the fraud pattern in plain English. The AI will draft a rule preview that you can review and save.
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              maxRows={6}
+              placeholder='e.g. "Block transactions over $10,000 from new merchants in high-risk countries"'
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={generateRule.isPending}
+              sx={{
+                "& .MuiOutlinedInput-root": { color: "text.primary" },
+              }}
+            />
+            <Box sx={{ display: "flex", gap: 1, mt: 1, alignItems: "center" }}>
+              <Button
+                variant="contained"
+                onClick={handleGenerateFromPrompt}
+                disabled={!aiPrompt.trim() || generateRule.isPending}
+                startIcon={
+                  generateRule.isPending ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : (
+                    <AutoAwesomeIcon />
+                  )
+                }
+                sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
+              >
+                {generateRule.isPending ? "Generating..." : "Generate"}
+              </Button>
+              {(aiPreview || aiError) && (
+                <Button
+                  variant="text"
+                  onClick={() => {
+                    setAiPreview(null);
+                    setAiError(null);
+                  }}
+                  sx={{ color: "text.secondary" }}
+                >
+                  Clear
+                </Button>
+              )}
+            </Box>
+
+            {aiError && (
+              <Alert
+                severity={aiError.kind === "not_configured" ? "info" : "error"}
+                sx={{ mt: 2 }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {aiError.kind === "not_configured"
+                    ? "AI generation not configured"
+                    : aiError.kind === "ai_failed"
+                    ? "AI failed to produce a valid rule"
+                    : aiError.kind === "bad_request"
+                    ? "Invalid request"
+                    : "Generation error"}
+                </Typography>
+                {aiError.hint && (
+                  <Typography variant="caption" sx={{ display: "block" }}>
+                    {aiError.hint}
+                  </Typography>
+                )}
+                {aiError.details && (
+                  <Typography variant="caption" sx={{ display: "block", fontFamily: "monospace" }}>
+                    {aiError.details}
+                  </Typography>
+                )}
+                {!aiError.hint && !aiError.details && (
+                  <Typography variant="caption">{aiError.message}</Typography>
+                )}
+              </Alert>
+            )}
+
+            {aiPreview && (
+              <Card sx={{ mt: 2, border: "1px solid #a93226" }}>
+                <CardContent>
+                  <Typography variant="overline" sx={{ color: "#a93226", fontWeight: 600 }}>
+                    Preview (not saved)
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: "text.primary", mt: 0.5 }}>
+                    {aiPreview.name}
+                  </Typography>
+                  {aiPreview.description && (
+                    <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+                      {aiPreview.description}
+                    </Typography>
+                  )}
+                  <Box sx={{ display: "flex", gap: 1, mb: 1, flexWrap: "wrap" }}>
+                    <Chip label={`Type: ${aiPreview.ruleType}`} size="small" />
+                    {aiPreview.action && <Chip label={`Action: ${aiPreview.action}`} size="small" />}
+                    {typeof aiPreview.score === "number" && (
+                      <Chip label={`Score: ${aiPreview.score}`} size="small" />
+                    )}
+                    {typeof aiPreview.priority === "number" && (
+                      <Chip label={`Priority: ${aiPreview.priority}`} size="small" />
+                    )}
+                  </Box>
+                  <Box
+                    sx={{
+                      backgroundColor: "rgba(0,0,0,0.04)",
+                      p: 1,
+                      borderRadius: 1,
+                      fontFamily: "monospace",
+                      fontSize: "0.85rem",
+                      color: "text.primary",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {aiPreview.ruleExpression}
+                  </Box>
+                  <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+                    <Button
+                      variant="contained"
+                      onClick={handleUseGeneratedRule}
+                      sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
+                    >
+                      Use This Rule
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
+          </Paper>
+
           <Paper sx={{ p: 2, mb: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <Typography variant="body2" sx={{ color: "text.primary", mb: 1 }}>
               <strong>AML Rules:</strong> Create dynamic rules using SpEL expressions, Java Bean evaluators, or Drools DRL.

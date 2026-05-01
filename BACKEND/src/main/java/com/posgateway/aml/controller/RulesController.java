@@ -79,13 +79,31 @@ public class RulesController {
     }
 
     @PostMapping("/generate")
-    public ResponseEntity<RuleDefinition> generateRule(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> generateRule(@RequestBody Map<String, String> request) {
         String prompt = request.get("prompt");
         if (prompt == null || prompt.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "prompt is required"));
         }
         RuleDefinition rule = aiService.generateRuleFromText(prompt);
-        return ResponseEntity.ok(rule);
+        if (rule != null) {
+            // Preview-only response — DO NOT persist. The FE shows the preview and the
+            // operator clicks Save (POST /rules) to commit.
+            return ResponseEntity.ok(rule);
+        }
+        if (!aiService.isEnabled()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of(
+                            "error", "AI rule generation not configured",
+                            "hint", "set AI_RULE_GENERATOR_ENABLED=true and ANTHROPIC_API_KEY"
+                    ));
+        }
+        String detail = aiService.getLastErrorDetail();
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Map.of(
+                        "error", "AI rule generation failed",
+                        "details", detail != null ? detail : "see server logs"
+                ));
     }
 
     @PostMapping

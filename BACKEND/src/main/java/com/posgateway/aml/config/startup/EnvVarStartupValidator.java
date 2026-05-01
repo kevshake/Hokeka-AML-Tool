@@ -53,8 +53,30 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
             results.add(evaluate(spec, env));
         }
 
+        crossCheckSanctionsWiring(results);
+
         printBanner(profileLabel, results);
         writeEnvMissingFile(results);
+    }
+
+    /**
+     * Cross-check sanctions wiring: if {@code SANCTIONS_DOWNLOAD_ENABLED=true} but
+     * {@code AML_MICROSERVICE_BASE_URL} is unset, the daily ingest job will silently
+     * skip every batch. Promote that case to a WARN row in the banner.
+     */
+    private void crossCheckSanctionsWiring(List<EvaluatedVar> results) {
+        boolean sanctionsOn = Boolean.parseBoolean(System.getenv("SANCTIONS_DOWNLOAD_ENABLED"));
+        if (!sanctionsOn) return;
+        String msUrl = System.getenv("AML_MICROSERVICE_BASE_URL");
+        if (msUrl != null && !msUrl.isBlank()) return;
+        for (int i = 0; i < results.size(); i++) {
+            EvaluatedVar r = results.get(i);
+            if ("AML_MICROSERVICE_BASE_URL".equals(r.spec.name())) {
+                results.set(i, new EvaluatedVar(r.spec, Status.WARN,
+                        "SANCTIONS_DOWNLOAD_ENABLED=true but no microservice URL — daily ingest will be skipped"));
+                return;
+            }
+        }
     }
 
     /**
@@ -78,6 +100,8 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 Boolean.parseBoolean(e.getProperty("sanctions.download.enabled", "false"));
         Predicate<Environment> scoringEnabled = e ->
                 Boolean.parseBoolean(e.getProperty("scoring.service.enabled", "true"));
+        Predicate<Environment> aiRuleGeneratorEnabled = e ->
+                Boolean.parseBoolean(e.getProperty("ai.rule-generator.enabled", "false"));
 
         return List.of(
                 // --- Core: always required ---
@@ -127,6 +151,12 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                         "Sumsub API secret. Required if sumsub.enabled=true."),
 
                 // --- Sanctions / OpenSanctions ---
+                EnvVarSpec.recommended("SANCTIONS_DOWNLOAD_ENABLED",
+                        "Toggles the daily OpenSanctions downloader. When TRUE, BACKEND POSTs ingested "
+                                + "entities to ${AML_MICROSERVICE_URL}/internal/v1/sanctions/ingest, so "
+                                + "AML_MICROSERVICE_BASE_URL and AML_MS_INTERNAL_KEY must also be set. "
+                                + "If TRUE without AML_MICROSERVICE_BASE_URL the ingest will be skipped "
+                                + "and sanctions data will go stale — see startup WARN."),
                 EnvVarSpec.requiredWhen("SANCTIONS_OPENSANCTIONS_URL", sanctionsEnabled,
                         "OpenSanctions dataset URL. Required if sanctions.download.enabled=true."),
 
@@ -141,7 +171,13 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.recommended("MAIL_USERNAME",
                         "SMTP username. Goes with MAIL_HOST."),
                 EnvVarSpec.recommended("MAIL_PASSWORD",
-                        "SMTP password. Goes with MAIL_HOST.")
+                        "SMTP password. Goes with MAIL_HOST."),
+
+                // --- AI Rule Generator (Anthropic Claude) ---
+                EnvVarSpec.requiredWhen("ANTHROPIC_API_KEY", aiRuleGeneratorEnabled,
+                        "Anthropic API key for the AI rule generator. " +
+                                "Required when ai.rule-generator.enabled=true. " +
+                                "Without it, POST /api/v1/rules/generate returns 503.")
         );
     }
 
