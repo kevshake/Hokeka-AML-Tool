@@ -24,9 +24,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         pattern = "com\\.posgateway\\.aml\\.repository\\.graph\\..*"
     )
 )
-@org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories(
-    basePackages = "com.posgateway.aml.repository.graph"
-)
 public class AmlFraudDetectorApplication {
 
     public static void main(String[] args) {
