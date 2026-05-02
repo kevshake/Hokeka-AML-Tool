@@ -12,6 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * Canonical transaction read API per HOK-76.
+ * Aerospike-first reads with Postgres fallback.
+ * Replaces legacy {@link TxnController} ({@code /v1/txn}) for new integrations.
+ */
 @RestController
 @RequestMapping("/transactions")
 public class TransactionsController {

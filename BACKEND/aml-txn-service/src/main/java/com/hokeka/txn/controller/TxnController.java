@@ -10,6 +10,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Legacy ingest and PSP-scoped lookup API.
+ * Retained for backward compatibility with existing consumers.
+ * New integrations should use {@link TransactionsController} ({@code /transactions}).
+ */
 @RestController
 @RequestMapping("/v1/txn")
 public class TxnController {
