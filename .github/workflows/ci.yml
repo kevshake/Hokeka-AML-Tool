@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: [17, 21]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: temurin
+      - name: Build backend
+        run: mvn -B package -DskipTests -f BACKEND/pom.xml
+      - name: Check microservices compile
+        run: |
+          mvn -B compile -f BACKEND/aml-txn-service/pom.xml
+          mvn -B compile -f BACKEND/aml-rules-service/pom.xml
+          mvn -B compile -f BACKEND/aml-api-gateway/pom.xml
+
+  test:
+    needs: backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: fraud_detector_test
+          POSTGRES_USER: fraud_detector_test
+          POSTGRES_PASSWORD: test_password_secure
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+      - name: Run tests
+        run: mvn test -f BACKEND/pom.xml -Dspring.profiles.active=testenv -Dspring.datasource.url=jdbc:postgresql://localhost:5432/fraud_detector_test
