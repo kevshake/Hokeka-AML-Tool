@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
 import { Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -25,6 +25,10 @@ export default function LoginPage() {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [infoSnackbar, setInfoSnackbar] = useState("");
+    const [forgotOpen, setForgotOpen] = useState(false);
+const [resetEmail, setResetEmail] = useState("");
+const [resetError, setResetError] = useState("");
+const [resetLoading, setResetLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +43,24 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
+    const handleForgotClose = () => {
+    setForgotOpen(false);
+    setResetEmail("");
+    setResetError("");
+};
+
+const handleResetSubmit = async () => {
+    setResetLoading(true);
+    try {
+        // await yourApi.sendResetEmail(resetEmail);
+        handleForgotClose();
+        setInfoSnackbar("Reset instructions sent! Check your email.");
+    } catch (err: any) {
+        setResetError(err.message || "Failed to send reset email.");
+    } finally {
+        setResetLoading(false);
+    }
+};
 
     return (
         <>
@@ -169,7 +191,7 @@ export default function LoginPage() {
                         <Button
                             variant="text"
                             size="small"
-                            onClick={() => setInfoSnackbar("Please contact your administrator to reset your password.")}
+                            onClick={() => setForgotOpen(true)}
                             sx={{ color: "#8B4049", textTransform: "none" }}
                         >
                             Forgot Password?
@@ -232,8 +254,11 @@ export default function LoginPage() {
             {resetLoading ? "Sending..." : "Send Reset Instructions"}
         </Button>
     </DialogActions>
-</Dialog>
         </Snackbar>
+            <Dialog open={forgotOpen} onClose={handleForgotClose} maxWidth="xs" fullWidth>
+        
+        </Dialog>
+    </>
         </>
     );
 }
