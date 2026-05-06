@@ -51,19 +51,22 @@ public class OpenApiConfig {
                                 Use the login endpoint to obtain a JWT token, then include it in the Authorization header.
                                 """)
                         .contact(new Contact()
-                                .name("AML Fraud Detector Support")
-                                .email("support@posgateway.com")
-                                .url("https://posgateway.com"))
+                                .name("Hokeka AML Support")
+                                .email("support@hokeka.com")
+                                .url("https://hokeka.com"))
                         .license(new License()
                                 .name("Proprietary")
-                                .url("https://posgateway.com/license")))
+                                .url("https://hokeka.com/license")))
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:" + serverPort + contextPath)
-                                .description("Local Development Server"),
+                                .description("Local Development"),
                         new Server()
-                                .url("https://api.posgateway.com" + contextPath)
-                                .description("Production Server")
+                                .url("https://testapi.hokeka.com" + contextPath)
+                                .description("Test Environment"),
+                        new Server()
+                                .url("https://api.hokeka.com" + contextPath)
+                                .description("Production")
                 ))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
