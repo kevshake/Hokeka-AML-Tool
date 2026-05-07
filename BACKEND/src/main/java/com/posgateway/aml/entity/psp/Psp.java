@@ -99,6 +99,27 @@ public class Psp {
     @Column(name = "branding_theme", length = 50)
     private String brandingTheme = "default"; // e.g., "default", "burgundy", "emerald", "purple"
 
+    // =========================================================================
+    // Regulatory reporting (CBK GDI)
+    // =========================================================================
+    // CBK-issued PSP institution code (e.g. "0800015"). Required for CBK submissions.
+    @Column(name = "cbk_institution_code", length = 32)
+    private String cbkInstitutionCode;
+
+    // Master per-PSP toggle. When true and global cbk.enabled=true, scheduled
+    // CBK submissions for this PSP will fire.
+    @Column(name = "cbk_reporting_enabled")
+    private Boolean cbkReportingEnabled = false;
+
+    // Optional per-PSP OAuth2 credentials (CBK issues per-PSP client_id/secret in some
+    // deployments). Encrypted at rest by JPA-level converter (TODO: hook attribute
+    // converter in V124 follow-up). Falls back to global cbk.client-id/secret when null.
+    @Column(name = "cbk_client_id", length = 128)
+    private String cbkClientId;
+
+    @Column(name = "cbk_client_secret", length = 256)
+    private String cbkClientSecret;
+
     // Timestamps
     @Column(name = "onboarded_at")
     private LocalDateTime onboardedAt = LocalDateTime.now();
@@ -370,6 +391,38 @@ public class Psp {
 
     public void setBrandingTheme(String brandingTheme) {
         this.brandingTheme = brandingTheme;
+    }
+
+    public String getCbkInstitutionCode() {
+        return cbkInstitutionCode;
+    }
+
+    public void setCbkInstitutionCode(String cbkInstitutionCode) {
+        this.cbkInstitutionCode = cbkInstitutionCode;
+    }
+
+    public Boolean getCbkReportingEnabled() {
+        return cbkReportingEnabled;
+    }
+
+    public void setCbkReportingEnabled(Boolean cbkReportingEnabled) {
+        this.cbkReportingEnabled = cbkReportingEnabled;
+    }
+
+    public String getCbkClientId() {
+        return cbkClientId;
+    }
+
+    public void setCbkClientId(String cbkClientId) {
+        this.cbkClientId = cbkClientId;
+    }
+
+    public String getCbkClientSecret() {
+        return cbkClientSecret;
+    }
+
+    public void setCbkClientSecret(String cbkClientSecret) {
+        this.cbkClientSecret = cbkClientSecret;
     }
 
     public LocalDateTime getOnboardedAt() {
