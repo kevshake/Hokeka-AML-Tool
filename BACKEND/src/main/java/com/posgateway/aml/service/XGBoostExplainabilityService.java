@@ -1,11 +1,12 @@
 package com.posgateway.aml.service;
 
-import com.posgateway.aml.service.graph.AerospikeGraphCacheService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,7 +26,7 @@ public class XGBoostExplainabilityService {
 
     private static final Logger logger = LoggerFactory.getLogger(XGBoostExplainabilityService.class);
 
-    private final AerospikeGraphCacheService aerospikeCache;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     // Feature weights (simulated - in production, extract from XGBoost model)
     private static final Map<String, Double> FEATURE_WEIGHTS = Map.ofEntries(
@@ -46,9 +47,8 @@ public class XGBoostExplainabilityService {
             Map.entry("connectionCount", 0.03));
 
     @Autowired
-    public XGBoostExplainabilityService(
-            @Autowired(required = false) AerospikeGraphCacheService aerospikeCache) {
-        this.aerospikeCache = aerospikeCache;
+    public XGBoostExplainabilityService(RedisTemplate<String, Object> redisTemplate) {
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -193,9 +193,6 @@ public class XGBoostExplainabilityService {
     }
 
     private void cacheExplanation(Long txnId, ScoreExplanation explanation) {
-        if (aerospikeCache == null)
-            return;
-
         try {
             Map<String, Object> cacheData = new HashMap<>();
             cacheData.put("mlScore", explanation.mlScore);
@@ -203,9 +200,11 @@ public class XGBoostExplainabilityService {
                     .map(c -> c.featureName).collect(Collectors.joining(",")));
             cacheData.put("reasons", String.join("|", explanation.reasons));
             cacheData.put("timestamp", explanation.timestamp);
+            cacheData.put("updatedAt", System.currentTimeMillis());
 
-            aerospikeCache.cacheGraphMetrics("explain_" + txnId, cacheData);
-            logger.debug("Cached explanation for txn {} in Aerospike", txnId);
+            // Same namespace and 1h TTL as the prior graph-metrics cache
+            redisTemplate.opsForValue().set("graph:metrics:explain_" + txnId, cacheData, Duration.ofHours(1));
+            logger.debug("Cached explanation for txn {} in Redis", txnId);
         } catch (Exception e) {
             logger.warn("Error caching explanation for txn {}: {}", txnId, e.getMessage());
         }

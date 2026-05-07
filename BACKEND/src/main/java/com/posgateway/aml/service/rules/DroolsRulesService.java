@@ -4,7 +4,6 @@ import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.rules.RuleEvaluationResult;
 import com.posgateway.aml.rules.TransactionFact;
-import com.posgateway.aml.service.graph.AerospikeGraphCacheService;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
@@ -14,12 +13,15 @@ import org.kie.api.runtime.KieSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,17 +43,17 @@ public class DroolsRulesService {
 
     private static final Logger logger = LoggerFactory.getLogger(DroolsRulesService.class);
 
-    private final AerospikeGraphCacheService aerospikeCache;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final RuleDefinitionRepository ruleRepository;
-    
+
     private KieContainer kieContainer;
     private boolean droolsEnabled = false;
 
     @Autowired
     public DroolsRulesService(
-            @Autowired(required = false) AerospikeGraphCacheService aerospikeCache,
-            @Autowired RuleDefinitionRepository ruleRepository) {
-        this.aerospikeCache = aerospikeCache;
+            RedisTemplate<String, Object> redisTemplate,
+            RuleDefinitionRepository ruleRepository) {
+        this.redisTemplate = redisTemplate;
         this.ruleRepository = ruleRepository;
     }
 
@@ -141,14 +143,17 @@ public class DroolsRulesService {
                 rulesExecuted,
                 evaluationTime);
 
-        // Cache result in Aerospike for audit trail
-        if (aerospikeCache != null) {
-            aerospikeCache.cacheRiskDecision(
-                    txnId,
-                    fact.getDecision(),
-                    mlScore,
-                    fact.getReasons(),
-                    String.join(",", fact.getTriggeredRules()));
+        // Cache result in Redis for audit trail (24h TTL, mirrors prior decision-cache behavior)
+        try {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("decision", fact.getDecision());
+            entry.put("finalScore", mlScore);
+            entry.put("reasons", fact.getReasons() != null ? String.join("|", fact.getReasons()) : "");
+            entry.put("triggeredRules", String.join(",", fact.getTriggeredRules()));
+            entry.put("decidedAt", System.currentTimeMillis());
+            redisTemplate.opsForValue().set("graph:risk:" + txnId, entry, Duration.ofHours(24));
+        } catch (Exception e) {
+            logger.warn("Error caching risk decision for txn {}: {}", txnId, e.getMessage());
         }
 
         logger.info("Rules evaluated for txn {}: decision={}, rules={}, time={}ms",

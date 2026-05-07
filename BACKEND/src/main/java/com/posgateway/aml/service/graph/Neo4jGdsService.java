@@ -9,9 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,16 +38,19 @@ public class Neo4jGdsService {
     private static final Logger logger = LoggerFactory.getLogger(Neo4jGdsService.class);
 
     private final Driver neo4jDriver;
-    private final AerospikeGraphCacheService aerospikeCache;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     // Graph projection name
     private static final String GRAPH_NAME = "aml-merchant-graph";
 
     @Autowired
-    public Neo4jGdsService(Driver neo4jDriver,
-            @Autowired(required = false) AerospikeGraphCacheService aerospikeCache) {
+    public Neo4jGdsService(Driver neo4jDriver, RedisTemplate<String, Object> redisTemplate) {
         this.neo4jDriver = neo4jDriver;
-        this.aerospikeCache = aerospikeCache;
+        this.redisTemplate = redisTemplate;
+    }
+
+    private String metricsKey(String merchantId) {
+        return "graph:metrics:" + merchantId;
     }
 
     // =========================================================================
@@ -247,24 +252,25 @@ public class Neo4jGdsService {
 
     /**
      * Get computed graph metrics for a specific merchant.
-     * First checks Aerospike cache, then falls back to Neo4j.
+     * First checks Redis cache, then falls back to Neo4j.
      */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> getGraphMetrics(String merchantId) {
-        // 1. Check Aerospike cache first
-        if (aerospikeCache != null) {
-            Map<String, Object> cached = aerospikeCache.getGraphMetrics(merchantId);
-            if (cached != null) {
-                logger.debug("Graph metrics cache HIT for merchant {}", merchantId);
-                return cached;
-            }
+        // 1. Check Redis cache first
+        Object cached = redisTemplate.opsForValue().get(metricsKey(merchantId));
+        if (cached instanceof Map) {
+            logger.debug("Graph metrics cache HIT for merchant {}", merchantId);
+            return new HashMap<>((Map<String, Object>) cached);
         }
 
         // 2. Query Neo4j
         Map<String, Object> metrics = queryMerchantMetrics(merchantId);
 
-        // 3. Cache in Aerospike
-        if (aerospikeCache != null && metrics != null) {
-            aerospikeCache.cacheGraphMetrics(merchantId, metrics);
+        // 3. Cache in Redis (1h TTL, matching the prior graph-metrics behavior)
+        if (metrics != null) {
+            Map<String, Object> snap = new HashMap<>(metrics);
+            snap.put("updatedAt", System.currentTimeMillis());
+            redisTemplate.opsForValue().set(metricsKey(merchantId), snap, Duration.ofHours(1));
         }
 
         return metrics;
@@ -338,13 +344,9 @@ public class Neo4jGdsService {
     }
 
     /**
-     * Cache all merchant metrics in Aerospike for fast retrieval.
+     * Cache all merchant metrics in Redis for fast retrieval.
      */
     private void cacheAllMerchantMetrics() {
-        if (aerospikeCache == null) {
-            return;
-        }
-
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     MATCH (m:Merchant)
@@ -369,10 +371,11 @@ public class Neo4jGdsService {
                 metrics.put("connectionCount", record.get("connectionCount").asLong(0));
                 metrics.put("triangleCount", record.get("triangleCount").asLong(0));
                 metrics.put("localClusteringCoefficient", record.get("localClusteringCoefficient").asDouble(0.0));
-                aerospikeCache.cacheGraphMetrics(merchantId, metrics);
+                metrics.put("updatedAt", System.currentTimeMillis());
+                redisTemplate.opsForValue().set(metricsKey(merchantId), metrics, Duration.ofHours(1));
                 count++;
             }
-            logger.info("Cached graph metrics for {} merchants in Aerospike", count);
+            logger.info("Cached graph metrics for {} merchants in Redis", count);
 
         } catch (Exception e) {
             logger.error("Error caching merchant metrics: {}", e.getMessage());

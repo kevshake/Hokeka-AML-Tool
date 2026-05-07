@@ -4,8 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +23,7 @@ public class ScoringService {
 
     private final RestClientService restClientService;
     private final com.posgateway.aml.service.risk.SchemeSimulatorService schemeSimulatorService;
-    private final com.posgateway.aml.service.graph.AerospikeGraphCacheService aerospikeGraphCacheService;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final com.posgateway.aml.service.rules.DroolsRulesService droolsRulesService;
     private final com.posgateway.aml.service.deeplearning.DL4JAnomalyService dl4jAnomalyService;
 
@@ -40,12 +42,12 @@ public class ScoringService {
     @Autowired
     public ScoringService(RestClientService restClientService,
             com.posgateway.aml.service.risk.SchemeSimulatorService schemeSimulatorService,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) com.posgateway.aml.service.graph.AerospikeGraphCacheService aerospikeGraphCacheService,
+            RedisTemplate<String, Object> redisTemplate,
             @org.springframework.beans.factory.annotation.Autowired(required = false) com.posgateway.aml.service.rules.DroolsRulesService droolsRulesService,
             @org.springframework.beans.factory.annotation.Autowired(required = false) com.posgateway.aml.service.deeplearning.DL4JAnomalyService dl4jAnomalyService) {
         this.restClientService = restClientService;
         this.schemeSimulatorService = schemeSimulatorService;
-        this.aerospikeGraphCacheService = aerospikeGraphCacheService;
+        this.redisTemplate = redisTemplate;
         this.droolsRulesService = droolsRulesService;
         this.dl4jAnomalyService = dl4jAnomalyService;
     }
@@ -59,17 +61,22 @@ public class ScoringService {
      * @return Scoring result with score and latency
      */
     public ScoringResult scoreTransaction(Long txnId, Map<String, Object> features) {
-        // 0. Check Aerospike cache first for ultra-fast response
-        if (cacheEnabled && aerospikeGraphCacheService != null) {
-            Map<String, Object> cached = aerospikeGraphCacheService.getXGBoostScore(txnId);
-            if (cached != null) {
-                Double cachedScore = (Double) cached.get("score");
-                Long cachedLatency = (Long) cached.get("latencyMs");
+        // 0. Check Redis cache first for ultra-fast response (5 min TTL on writes below)
+        if (cacheEnabled) {
+            Object raw = redisTemplate.opsForValue().get("graph:xgboost:" + txnId);
+            if (raw instanceof Map) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> cachedRiskDetails = (Map<String, Object>) cached.get("riskDetails");
+                Map<String, Object> cached = (Map<String, Object>) raw;
+                Object scoreObj = cached.get("score");
+                Object latencyObj = cached.get("latencyMs");
+                Double cachedScore = scoreObj instanceof Number ? ((Number) scoreObj).doubleValue() : null;
+                Long cachedLatency = latencyObj instanceof Number ? ((Number) latencyObj).longValue() : 0L;
+                Object detailsObj = cached.get("riskDetails");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> cachedRiskDetails = detailsObj instanceof Map
+                        ? (Map<String, Object>) detailsObj : new HashMap<>();
                 logger.debug("Cache HIT for txn {} - score: {}", txnId, cachedScore);
-                return new ScoringResult(txnId, cachedScore, cachedLatency != null ? cachedLatency : 0L,
-                        cachedRiskDetails != null ? cachedRiskDetails : new HashMap<>());
+                return new ScoringResult(txnId, cachedScore, cachedLatency, cachedRiskDetails);
             }
         }
 
@@ -172,9 +179,14 @@ public class ScoringService {
                 }
                 // -----------------------------------------------------
 
-                // Cache result in Aerospike for fast subsequent lookups
-                if (cacheEnabled && aerospikeGraphCacheService != null) {
-                    aerospikeGraphCacheService.cacheXGBoostScore(txnId, score, latencyMs, riskDetails);
+                // Cache result in Redis for fast subsequent lookups (5 min TTL)
+                if (cacheEnabled) {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("score", score);
+                    entry.put("latencyMs", latencyMs);
+                    entry.put("scoredAt", System.currentTimeMillis());
+                    entry.put("riskDetails", riskDetails != null ? riskDetails : new HashMap<>());
+                    redisTemplate.opsForValue().set("graph:xgboost:" + txnId, entry, Duration.ofMinutes(5));
                 }
 
                 logger.info("Transaction {} scored: score={}, latency={}ms", txnId, score, latencyMs);

@@ -1,6 +1,5 @@
 package com.posgateway.aml.service.deeplearning;
 
-import com.posgateway.aml.service.graph.AerospikeGraphCacheService;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
@@ -16,9 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,7 +48,7 @@ public class DL4JAnomalyService {
     // Hidden layer sizes
     private static final int HIDDEN_SIZE = 14;
 
-    private final AerospikeGraphCacheService aerospikeCache;
+    private final RedisTemplate<String, Object> redisTemplate;
     private MultiLayerNetwork autoencoder;
 
     @Value("${dl4j.anomaly.threshold:0.5}")
@@ -57,8 +58,8 @@ public class DL4JAnomalyService {
     private boolean dl4jEnabled;
 
     @Autowired
-    public DL4JAnomalyService(@Autowired(required = false) AerospikeGraphCacheService aerospikeCache) {
-        this.aerospikeCache = aerospikeCache;
+    public DL4JAnomalyService(RedisTemplate<String, Object> redisTemplate) {
+        this.redisTemplate = redisTemplate;
     }
 
     @PostConstruct
@@ -150,10 +151,8 @@ public class DL4JAnomalyService {
                     isAnomaly ? "ANOMALY_DETECTED" : "NORMAL",
                     latencyMs);
 
-            // Cache in Aerospike
-            if (aerospikeCache != null) {
-                cacheAnomalyResult(txnId, result);
-            }
+            // Cache in Redis
+            cacheAnomalyResult(txnId, result);
 
             logger.debug("Anomaly detection for txn {}: score={}, isAnomaly={}, latency={}ms",
                     txnId, String.format("%.4f", anomalyScore), isAnomaly, latencyMs);
@@ -232,7 +231,7 @@ public class DL4JAnomalyService {
     }
 
     /**
-     * Cache anomaly result in Aerospike.
+     * Cache anomaly result in Redis under graph: namespace (1h TTL, mirrors prior graph-metrics behavior).
      */
     private void cacheAnomalyResult(Long txnId, AnomalyResult result) {
         try {
@@ -241,9 +240,9 @@ public class DL4JAnomalyService {
             cacheData.put("isAnomaly", result.isAnomaly() ? 1L : 0L);
             cacheData.put("reason", result.getReason());
             cacheData.put("latencyMs", result.getLatencyMs());
+            cacheData.put("updatedAt", System.currentTimeMillis());
 
-            // Use existing cache method with graph metrics set
-            aerospikeCache.cacheGraphMetrics("anomaly_" + txnId, cacheData);
+            redisTemplate.opsForValue().set("graph:metrics:anomaly_" + txnId, cacheData, Duration.ofHours(1));
         } catch (Exception e) {
             logger.warn("Error caching anomaly result for txn {}: {}", txnId, e.getMessage());
         }
