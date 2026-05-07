@@ -99,8 +99,10 @@ public class CbkGdiClient {
                 .doOnConnected(conn -> conn.addHandlerLast(
                         new ReadTimeoutHandler(properties.getReadTimeoutMs(), TimeUnit.MILLISECONDS)));
 
+        // No baseUrl baked in — each call resolves its base URL from the PSP context's
+        // liveEffective flag, so two PSPs configured for different environments can run
+        // concurrently against different CBK hosts.
         this.webClient = WebClient.builder()
-                .baseUrl(properties.getActiveBaseUrl())
                 .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
                 .build();
     }
@@ -258,22 +260,27 @@ public class CbkGdiClient {
     CbkSubmissionResult submit(PspCbkContext ctx, String endpointPath, String jsonBody) {
         long start = System.currentTimeMillis();
 
-        String token = tokenService.getToken(ctx.getPspId(), ctx.getClientId(), ctx.getClientSecret());
+        String token = tokenService.getToken(
+                ctx.getPspId(), ctx.getClientId(), ctx.getClientSecret(), ctx.isLiveEffective());
         CbkMultipartWrapper.Result mp = CbkMultipartWrapper.wrap(jsonBody);
 
-        String fullPath = properties.getPostPrefix() + endpointPath;
+        // Per-PSP routing: use the context's liveEffective flag to pick host + URL prefix.
+        String fullUrl = properties.baseUrlFor(ctx.isLiveEffective())
+                + properties.postPrefixFor(ctx.isLiveEffective())
+                + endpointPath;
 
-        log.debug("CBK GDI POST PSP={} path={}", ctx.getPspId(), fullPath);
+        log.debug("CBK GDI POST PSP={} env={} url={}",
+                ctx.getPspId(), ctx.isLiveEffective() ? "LIVE" : "preprod", fullUrl);
 
         try {
             String responseBody = webClient.post()
-                    .uri(fullPath)
+                    .uri(fullUrl)
                     .header("Authorization", "Bearer " + token)
                     .header("Content-Type", mp.getContentTypeHeaderValue())
                     .header("User-Agent", USER_AGENT)
                     .header("Accept-Encoding", ACCEPT_ENCODING)
                     .header("Connection", CONNECTION)
-                    .header("Host", properties.getActiveHost())
+                    .header("Host", properties.hostFor(ctx.isLiveEffective()))
                     .bodyValue(mp.getBody())
                     .retrieve()
                     .bodyToMono(String.class)
@@ -284,24 +291,24 @@ public class CbkGdiClient {
             String requestNo = parseRequestNo(responseBody);
             if (requestNo != null) {
                 log.info("CBK GDI success PSP={} path={} RequestNo={} ({}ms)",
-                        ctx.getPspId(), fullPath, requestNo, durationMs);
+                        ctx.getPspId(), fullUrl, requestNo, durationMs);
                 return CbkSubmissionResult.ok(requestNo, 200, responseBody, durationMs);
             } else {
                 // 200 but no RequestNo — treat as failure
-                log.warn("CBK GDI: 200 response but no RequestNo for PSP={} path={}", ctx.getPspId(), fullPath);
+                log.warn("CBK GDI: 200 response but no RequestNo for PSP={} path={}", ctx.getPspId(), fullUrl);
                 return CbkSubmissionResult.failure("No RequestNo in response", 200, responseBody, durationMs);
             }
 
         } catch (WebClientResponseException e) {
             long durationMs = System.currentTimeMillis() - start;
             log.warn("CBK GDI HTTP error PSP={} path={} status={}: {}",
-                    ctx.getPspId(), fullPath, e.getStatusCode(), e.getMessage());
+                    ctx.getPspId(), fullUrl, e.getStatusCode(), e.getMessage());
             // Re-throw so Resilience4j @Retry can decide whether to retry
             throw new CbkTokenService.CbkGdiException(
                     "HTTP " + e.getStatusCode().value() + " from CBK: " + e.getResponseBodyAsString(), e);
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
-            log.warn("CBK GDI error PSP={} path={}: {}", ctx.getPspId(), fullPath, e.getMessage());
+            log.warn("CBK GDI error PSP={} path={}: {}", ctx.getPspId(), fullUrl, e.getMessage());
             throw new CbkTokenService.CbkGdiException("CBK submission failed: " + e.getMessage(), e);
         }
     }

@@ -504,6 +504,30 @@ export const useAllPsps = () => {
 };
 
 // ─────────────────────────────────────────────
+// PSP CBK config (separate endpoint, returns env + allowLive + liveEffective)
+// ─────────────────────────────────────────────
+
+export interface PspCbkConfig {
+  pspId: number;
+  pspCode: string;
+  legalName: string;
+  cbkInstitutionCode: string | null;
+  cbkReportingEnabled: boolean | null;
+  cbkEnvironment: "preprod" | "live" | null;
+  cbkAllowLive: boolean | null;
+  cbkClientId: string | null;
+  hasClientSecret: boolean;
+  liveEffective: boolean;
+}
+
+export const usePspCbkConfig = (pspId: number | string) =>
+  useQuery<PspCbkConfig | null>({
+    queryKey: ["psp", pspId, "cbk-config"],
+    queryFn: () => apiClient.get<PspCbkConfig>(`psps/${pspId}/cbk-config`).catch(() => null),
+    enabled: !!pspId,
+  });
+
+// ─────────────────────────────────────────────
 // PSP child-entity queries
 // ─────────────────────────────────────────────
 

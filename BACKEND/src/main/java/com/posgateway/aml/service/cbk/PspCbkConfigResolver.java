@@ -73,8 +73,22 @@ public class PspCbkConfigResolver {
                 ? psp.getCbkClientSecret()
                 : cbkProperties.getClientSecret();
 
-        PspCbkContext context = new PspCbkContext(pspId, institutionCode, clientId, clientSecret);
-        log.debug("CBK config resolve: PSP {} resolved — institutionCode={}", pspId, institutionCode);
+        // Live-effective requires ALL three: global allow-live, per-PSP allow-live,
+        // per-PSP environment="live". Anything else routes to preprod.
+        boolean liveEffective =
+                cbkProperties.isAllowLive()
+                        && Boolean.TRUE.equals(psp.getCbkAllowLive())
+                        && "live".equalsIgnoreCase(psp.getCbkEnvironment());
+
+        if (!liveEffective && "live".equalsIgnoreCase(psp.getCbkEnvironment())) {
+            log.warn("CBK config resolve: PSP {} requested live but a guard is off " +
+                            "(global allow-live={}, psp allow-live={}). Routing to PREPROD.",
+                    pspId, cbkProperties.isAllowLive(), psp.getCbkAllowLive());
+        }
+
+        PspCbkContext context = new PspCbkContext(pspId, institutionCode, clientId, clientSecret, liveEffective);
+        log.debug("CBK config resolve: PSP {} resolved — institutionCode={} live={}",
+                pspId, institutionCode, liveEffective);
         return Optional.of(context);
     }
 

@@ -120,6 +120,16 @@ public class Psp {
     @Column(name = "cbk_client_secret", length = 256)
     private String cbkClientSecret;
 
+    // Per-PSP CBK environment. Platform admins (SUPER_ADMIN / ADMIN) set this; PSP_ADMIN
+    // cannot edit it. Values: "preprod" (sandbox/test) or "live" (production GDI host).
+    @Column(name = "cbk_environment", length = 32)
+    private String cbkEnvironment = "preprod";
+
+    // Per-PSP live-allow flag. Live submissions for this PSP fire only when BOTH this
+    // and the global cbk.allow-live are true AND cbkEnvironment="live". Default false.
+    @Column(name = "cbk_allow_live")
+    private Boolean cbkAllowLive = false;
+
     // Timestamps
     @Column(name = "onboarded_at")
     private LocalDateTime onboardedAt = LocalDateTime.now();
@@ -423,6 +433,22 @@ public class Psp {
 
     public void setCbkClientSecret(String cbkClientSecret) {
         this.cbkClientSecret = cbkClientSecret;
+    }
+
+    public String getCbkEnvironment() {
+        return cbkEnvironment;
+    }
+
+    public void setCbkEnvironment(String cbkEnvironment) {
+        this.cbkEnvironment = cbkEnvironment;
+    }
+
+    public Boolean getCbkAllowLive() {
+        return cbkAllowLive;
+    }
+
+    public void setCbkAllowLive(Boolean cbkAllowLive) {
+        this.cbkAllowLive = cbkAllowLive;
     }
 
     public LocalDateTime getOnboardedAt() {

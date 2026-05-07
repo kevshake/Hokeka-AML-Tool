@@ -256,15 +256,19 @@ export interface UpdatePspCbkConfigRequest {
   cbkReportingEnabled?: boolean;
   cbkClientId?: string;
   cbkClientSecret?: string;
+  // Platform-admin only — backend rejects PSP_ADMIN edits.
+  cbkEnvironment?: "preprod" | "live";
+  cbkAllowLive?: boolean;
 }
 
 export const useUpdatePspCbkConfig = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ pspId, ...body }: UpdatePspCbkConfigRequest) =>
-      apiClient.put(`psps/${pspId}`, body),
+      apiClient.put(`psps/${pspId}/cbk-config`, body),
     onSuccess: (_data, { pspId }) => {
       queryClient.invalidateQueries({ queryKey: ["psp", pspId] });
+      queryClient.invalidateQueries({ queryKey: ["psp", pspId, "cbk-config"] });
       queryClient.invalidateQueries({ queryKey: ["psps"] });
     },
   });

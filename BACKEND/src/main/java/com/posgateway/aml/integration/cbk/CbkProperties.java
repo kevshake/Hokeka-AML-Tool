@@ -121,6 +121,30 @@ public class CbkProperties {
         return "https://" + getActiveHost();
     }
 
+    // ---- per-PSP variants (driven by PspCbkContext.isLiveEffective) ----------
+    //
+    // Each PSP carries its own (cbkEnvironment, cbkAllowLive). The resolver folds
+    // those plus the global {@code allowLive} kill switch into a single
+    // {@code liveEffective} boolean on the context. Downstream code asks these
+    // helpers to compute the URL/scope for a SPECIFIC submission, so two PSPs
+    // can run in different environments simultaneously.
+
+    public String hostFor(boolean liveEffective) {
+        return liveEffective ? host.getLive() : host.getPreprod();
+    }
+
+    public String scopeFor(boolean liveEffective) {
+        return liveEffective ? scope.getLive() : scope.getPreprod();
+    }
+
+    public String postPrefixFor(boolean liveEffective) {
+        return liveEffective ? "" : "/preprod";
+    }
+
+    public String baseUrlFor(boolean liveEffective) {
+        return "https://" + hostFor(liveEffective);
+    }
+
     @PostConstruct
     void announceEnvironment() {
         if (!enabled) {

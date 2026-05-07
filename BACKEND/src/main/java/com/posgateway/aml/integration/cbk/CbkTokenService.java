@@ -36,8 +36,11 @@ public class CbkTokenService {
     private final CbkProperties properties;
     private final WebClient webClient;
 
-    /** Per-PSP token cache. */
-    private final ConcurrentHashMap<Long, CachedToken> tokenCache = new ConcurrentHashMap<>();
+    /**
+     * Token cache keyed by (pspId, env). The same PSP can in theory have
+     * separate live/preprod credentials and tokens, so we don't collapse them.
+     */
+    private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
     public CbkTokenService(CbkProperties properties) {
         this.properties = properties;
@@ -48,16 +51,15 @@ public class CbkTokenService {
                 .doOnConnected(conn -> conn.addHandlerLast(
                         new ReadTimeoutHandler(properties.getReadTimeoutMs(), TimeUnit.MILLISECONDS)));
 
+        // No baked-in baseUrl — token endpoint URL is built per call from the
+        // PSP's resolved environment so two PSPs in different envs share this client.
         this.webClient = WebClient.builder()
-                // Token endpoint lives on the active host — same host regardless of env,
-                // but note: pre-prod uses gdi.centralbank.go.ke, live uses gdicbk.centralbank.go.ke
-                .baseUrl(properties.getActiveBaseUrl())
                 .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
                 .build();
     }
 
     /**
-     * Returns a valid Bearer token for the given PSP.
+     * Returns a valid Bearer token for the given PSP and environment.
      *
      * <p>If {@code clientId} / {@code clientSecret} are null or blank the global
      * fallback credentials from {@link CbkProperties} are used.
@@ -65,24 +67,32 @@ public class CbkTokenService {
      * @param pspId        PSP identifier (cache key)
      * @param clientId     per-PSP OAuth2 client_id, or null to use global
      * @param clientSecret per-PSP OAuth2 client_secret, or null to use global
+     * @param liveEffective true → request a token from the live host; false → preprod
      * @return access_token string
      * @throws RuntimeException if token acquisition fails
      */
-    public String getToken(Long pspId, String clientId, String clientSecret) {
-        CachedToken cached = tokenCache.get(pspId);
+    public String getToken(Long pspId, String clientId, String clientSecret, boolean liveEffective) {
+        String cacheKey = pspId + ":" + (liveEffective ? "live" : "preprod");
+        CachedToken cached = tokenCache.get(cacheKey);
         if (cached != null && !cached.isExpired(properties.getTokenBufferSeconds())) {
             return cached.accessToken;
         }
-        // Fetch fresh token — synchronised per pspId to avoid thundering herd.
-        synchronized (("cbk-token-" + pspId).intern()) {
-            cached = tokenCache.get(pspId);
+        // Fetch fresh token — synchronised per cache key to avoid thundering herd.
+        synchronized (("cbk-token-" + cacheKey).intern()) {
+            cached = tokenCache.get(cacheKey);
             if (cached != null && !cached.isExpired(properties.getTokenBufferSeconds())) {
                 return cached.accessToken;
             }
-            CachedToken fresh = fetchToken(pspId, effectiveClientId(clientId), effectiveClientSecret(clientSecret));
-            tokenCache.put(pspId, fresh);
+            CachedToken fresh = fetchToken(pspId,
+                    effectiveClientId(clientId), effectiveClientSecret(clientSecret), liveEffective);
+            tokenCache.put(cacheKey, fresh);
             return fresh.accessToken;
         }
+    }
+
+    /** Backwards-compatible overload — defaults to preprod. */
+    public String getToken(Long pspId, String clientId, String clientSecret) {
+        return getToken(pspId, clientId, clientSecret, false);
     }
 
     // ---- private helpers ----
@@ -95,19 +105,22 @@ public class CbkTokenService {
         return (perPsp != null && !perPsp.isBlank()) ? perPsp : properties.getClientSecret();
     }
 
-    private CachedToken fetchToken(Long pspId, String clientId, String clientSecret) {
-        log.debug("Fetching CBK OAuth2 token for PSP {}", pspId);
+    private CachedToken fetchToken(Long pspId, String clientId, String clientSecret, boolean liveEffective) {
+        log.debug("Fetching CBK OAuth2 token for PSP {} (env={})",
+                pspId, liveEffective ? "LIVE" : "preprod");
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "client_credentials");
-        form.add("scope", properties.getActiveScope());
+        form.add("scope", properties.scopeFor(liveEffective));
         form.add("client_id", clientId);
         form.add("client_secret", clientSecret);
+
+        String tokenUrl = properties.baseUrlFor(liveEffective) + "/oauth2/v1/token";
 
         TokenResponse resp;
         try {
             resp = webClient.post()
-                    .uri("/oauth2/v1/token")
+                    .uri(tokenUrl)
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(BodyInserters.fromFormData(form))
                     .retrieve()
