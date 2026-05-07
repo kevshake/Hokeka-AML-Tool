@@ -12,10 +12,14 @@ import {
     Tooltip,
     Link,
     Snackbar,
+    Dialog,          
+    DialogTitle,     
+    DialogContent,   
+    DialogActions,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
 import { Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -25,6 +29,10 @@ export default function LoginPage() {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [infoSnackbar, setInfoSnackbar] = useState("");
+    const [forgotOpen, setForgotOpen] = useState(false);
+const [resetEmail, setResetEmail] = useState("");
+const [resetError, setResetError] = useState("");
+const [resetLoading, setResetLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +47,24 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
+    const handleForgotClose = () => {
+    setForgotOpen(false);
+    setResetEmail("");
+    setResetError("");
+};
+
+const handleResetSubmit = async () => {
+    setResetLoading(true);
+    try {
+        // await yourApi.sendResetEmail(resetEmail);
+        handleForgotClose();
+        setInfoSnackbar("Reset instructions sent! Check your email.");
+    } catch (err: any) {
+        setResetError(err.message || "Failed to send reset email.");
+    } finally {
+        setResetLoading(false);
+    }
+};
 
     return (
         <>
@@ -169,7 +195,7 @@ export default function LoginPage() {
                         <Button
                             variant="text"
                             size="small"
-                            onClick={() => setInfoSnackbar("Please contact your administrator to reset your password.")}
+                            onClick={() => setForgotOpen(true)}
                             sx={{ color: "#8B4049", textTransform: "none" }}
                         >
                             Forgot Password?
@@ -189,8 +215,7 @@ export default function LoginPage() {
                 </Box>
             </Paper>
         </Box>
-
-        <Snackbar
+<Snackbar
             open={!!infoSnackbar}
             autoHideDuration={6000}
             onClose={() => setInfoSnackbar("")}
@@ -200,6 +225,41 @@ export default function LoginPage() {
                 {infoSnackbar}
             </Alert>
         </Snackbar>
-        </>
+
+        <Dialog open={forgotOpen} onClose={handleForgotClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ fontWeight: 700, color: "#3D2C2E" }}>
+                Reset Your Password
+            </DialogTitle>
+            <DialogContent>
+                <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
+                    Enter your email and we'll send you reset instructions.
+                </Typography>
+                {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
+                <TextField
+                    fullWidth
+                    label="Email Address"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
+                />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 3 }}>
+                <Button onClick={handleForgotClose} sx={{ color: "#8B4049", textTransform: "none" }}>
+                    Cancel
+                </Button>
+                <Button
+                    onClick={handleResetSubmit}
+                    variant="contained"
+                    disabled={resetLoading}
+                    startIcon={resetLoading ? <CircularProgress size={18} /> : null}
+                    sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" }, textTransform: "none", fontWeight: 600 }}
+                >
+                    {resetLoading ? "Sending..." : "Send Reset Instructions"}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    </>
     );
 }

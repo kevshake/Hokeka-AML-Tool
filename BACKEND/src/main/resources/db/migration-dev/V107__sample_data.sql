@@ -211,3 +211,31 @@ ON CONFLICT (country_code) DO NOTHING;
 -- ============================================================================
 -- END OF SAMPLE DATA
 -- ============================================================================
+
+-- ============================================================================
+-- # Migration gating notes
+-- ============================================================================
+-- This file lives in db/migration-dev/, NOT db/migration/. It is loaded ONLY
+-- by the `dev` Spring profile via:
+--     spring.flyway.locations=classpath:db/migration,classpath:db/migration-dev
+--
+-- Production profiles (`prod`, `production`) load only classpath:db/migration
+-- and therefore NEVER apply this seed data.
+--
+-- Existing-prod deploy steps (DBs that previously ran V107 from db/migration/):
+--   1. The row for V107 already lives in flyway_schema_history.
+--   2. After this change, V107 no longer exists under classpath:db/migration.
+--   3. spring.flyway.ignore-missing-migrations=true (prod) tolerates the gap.
+--   4. No data change. No DELETE from flyway_schema_history is required.
+--   NOTE: if regulators require *removing* the seed rows from prod, do that
+--   via a NEW forward migration (e.g. V120__purge_dev_seed_data.sql) — never
+--   by editing or repairing flyway_schema_history.
+--
+-- Clean-prod deploy steps (fresh DB):
+--   1. V107 is simply absent from the active locations.
+--   2. flyway_schema_history will have a gap at version 107 (V108+ apply).
+--
+-- Existing-dev deploy steps (DBs that previously ran V107):
+--   1. V107 is still found, same checksum, same content. Re-validation passes
+--      (validate-on-migrate=false on dev).
+-- ============================================================================

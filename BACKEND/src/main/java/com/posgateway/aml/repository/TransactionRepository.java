@@ -252,4 +252,24 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
                    "WHERE t.txn_ts >= :since " +
                    "GROUP BY bucket ORDER BY bucket", nativeQuery = true)
     List<Object[]> getRiskScoreBucketsAllSince(@Param("since") LocalDateTime since);
+
+    // -----------------------------------------------------------------------
+    // Success-rate stats (LimitsManagementService.avgSuccessRate)
+    // Returns Object[] = [approved (Long), total (Long)]. Caller computes %.
+    // -----------------------------------------------------------------------
+
+    @Query("SELECT " +
+           "  COALESCE(SUM(CASE WHEN t.decision = 'APPROVED' THEN 1 ELSE 0 END), 0), " +
+           "  COUNT(t) " +
+           "FROM TransactionEntity t " +
+           "WHERE t.pspId = :pspId AND t.txnTs >= :since")
+    Object[] getApprovedAndTotalCountByPspSince(@Param("pspId") Long pspId,
+                                                @Param("since") LocalDateTime since);
+
+    @Query("SELECT " +
+           "  COALESCE(SUM(CASE WHEN t.decision = 'APPROVED' THEN 1 ELSE 0 END), 0), " +
+           "  COUNT(t) " +
+           "FROM TransactionEntity t " +
+           "WHERE t.txnTs >= :since")
+    Object[] getApprovedAndTotalCountSince(@Param("since") LocalDateTime since);
 }

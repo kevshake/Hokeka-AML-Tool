@@ -36,12 +36,11 @@ public class User implements UserDetails {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
-    @com.fasterxml.jackson.annotation.JsonBackReference("role-users")
     private Role role;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "psp_id", nullable = false)
-    @com.fasterxml.jackson.annotation.JsonBackReference("psp-users")
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"users", "hibernateLazyInitializer", "handler"})
     private com.posgateway.aml.entity.psp.Psp psp; // Required - PSP ID 0 for Super Admin, >0 for PSP users
 
     private boolean enabled = true;

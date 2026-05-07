@@ -59,6 +59,19 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/v1/merchants/health").permitAll()
                                                 .requestMatchers("/api/v1/pricing/**").permitAll()
                                                 .requestMatchers("/actuator/**").permitAll()
+                                                // Swagger / OpenAPI documentation (springdoc-openapi).
+                                                // Both forms — with and without the /api/v1 context path —
+                                                // because Spring Security matches the request URI before the
+                                                // servlet strips the context path on some setups.
+                                                .requestMatchers(
+                                                                "/swagger-ui.html", "/swagger-ui/**",
+                                                                "/api/v1/swagger-ui.html", "/api/v1/swagger-ui/**",
+                                                                "/api-docs", "/api-docs/**",
+                                                                "/api/v1/api-docs", "/api/v1/api-docs/**",
+                                                                "/v3/api-docs", "/v3/api-docs/**",
+                                                                "/api/v1/v3/api-docs", "/api/v1/v3/api-docs/**",
+                                                                "/swagger-resources/**", "/webjars/**")
+                                                .permitAll()
                                                 // Role-based access control examples
                                                 // Role-based access control
                                                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
