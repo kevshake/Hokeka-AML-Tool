@@ -76,8 +76,8 @@ services:
     container_name: fd-test-backend
     environment:
       DATABASE_URL: jdbc:postgresql://fraud-detector-postgres-test:5432/fraud_detector_test
-      DATABASE_USERNAME: fraud_detector_test
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-test_password_secure}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:?DATABASE_USERNAME must be set}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
       # Aerospike is no longer reachable from the API server — it lives in aml-ms.
       AML_MICROSERVICE_URL: http://fd-test-aml-ms:8091
       AML_MICROSERVICE_ENABLED: "true"

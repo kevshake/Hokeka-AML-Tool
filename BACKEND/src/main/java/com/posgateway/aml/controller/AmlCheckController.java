@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * AML check endpoint.
@@ -30,6 +31,7 @@ import java.util.Map;
  * down, slow, or returns null (circuit-breaker tripped) we fall through to the
  * existing in-process {@link FraudDetectionOrchestrator} pipeline unchanged.
  */
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/aml")
 public class AmlCheckController {

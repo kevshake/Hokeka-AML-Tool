@@ -23,6 +23,7 @@ import java.util.Map;
  * Regulatory Submission Controller
  * REST endpoints for regulatory submission management
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/reports")
 public class RegulatorySubmissionController {

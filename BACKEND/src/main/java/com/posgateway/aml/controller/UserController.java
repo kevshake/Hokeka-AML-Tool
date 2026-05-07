@@ -13,8 +13,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 // @RequiredArgsConstructor removed
+@PreAuthorize("hasAnyRole('ADMIN','MANAGE_USERS','MANAGE_ROLES')")
 @RestController
 @RequestMapping("/users")
 public class UserController {

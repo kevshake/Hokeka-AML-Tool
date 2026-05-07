@@ -10,7 +10,9 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -18,6 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
@@ -52,12 +55,54 @@ public class SumsubAmlService {
     @Value("${sumsub.cost.per.check:1.85}")
     private double costPerCheck;
 
+    private static final List<String> PROD_PROFILES = Arrays.asList("prod", "production");
+
     private final ObjectMapper objectMapper;
     private final AerospikeSanctionsScreeningService aerospikeService;
+    private final Environment environment;
 
-    public SumsubAmlService(ObjectMapper objectMapper, AerospikeSanctionsScreeningService aerospikeService) {
+    public SumsubAmlService(ObjectMapper objectMapper, AerospikeSanctionsScreeningService aerospikeService,
+                            Environment environment) {
         this.objectMapper = objectMapper;
         this.aerospikeService = aerospikeService;
+        this.environment = environment;
+    }
+
+    /**
+     * Validate Sumsub credentials at startup.
+     *
+     * <p>In {@code prod}/{@code production}: if {@code sumsub.enabled=true} and either
+     * {@code SUMSUB_API_KEY} or {@code SUMSUB_API_SECRET} is blank, abort the boot.
+     * Running with empty creds would silently call the Sumsub API with empty headers
+     * and a forgeable HMAC signature derived from an empty secret.
+     *
+     * <p>In any other profile: if creds are blank, log a WARN and force-disable the
+     * Sumsub integration so the fallback Aerospike screener is used. This keeps dev /
+     * testenv working without real vendor creds.
+     */
+    @PostConstruct
+    void validateCredentials() {
+        boolean isProd = Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(PROD_PROFILES::contains);
+        boolean keyBlank = (apiKey == null || apiKey.isBlank());
+        boolean secretBlank = (apiSecret == null || apiSecret.isBlank());
+
+        if (!keyBlank && !secretBlank) {
+            return;
+        }
+
+        if (enabled && isProd) {
+            throw new IllegalStateException(
+                    "sumsub.enabled=true on prod/production but SUMSUB_API_KEY or SUMSUB_API_SECRET is blank. " +
+                    "Set both env vars and restart, or set SUMSUB_ENABLED=false to disable the integration.");
+        }
+
+        if (enabled) {
+            log.warn("Sumsub is enabled but credentials are blank in non-prod profile {} — " +
+                            "force-disabling Sumsub integration. Screening will fall back to Aerospike.",
+                    Arrays.toString(environment.getActiveProfiles()));
+            this.enabled = false;
+        }
     }
     // Fallback
 

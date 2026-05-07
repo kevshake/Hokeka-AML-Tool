@@ -31,11 +31,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Case Management Controller
  * Provides endpoints for case management operations
  */
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/cases")
 @Tag(name = "Case Management", description = "APIs for managing compliance cases, timelines, assignments, and escalations")

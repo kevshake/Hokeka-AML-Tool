@@ -9,6 +9,7 @@ import com.posgateway.aml.service.CaseWorkflowService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * REST Controller for Compliance Case Workflow
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 // @RequiredArgsConstructor removed
 @RestController
 @RequestMapping("/compliance/cases/workflow")
-@org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'PSP_ADMIN', 'MLRO')")
+@PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'PSP_ADMIN', 'MLRO')")
 public class ComplianceCaseWorkflowController {
 
     private final CaseWorkflowService caseWorkflowService;

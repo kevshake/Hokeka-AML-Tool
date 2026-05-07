@@ -9,11 +9,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Concurrency Statistics Controller
  * Provides real-time concurrency and throughput statistics
  */
+@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping("/stats")
 public class ConcurrencyStatsController {

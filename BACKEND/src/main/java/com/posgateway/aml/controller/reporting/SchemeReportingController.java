@@ -21,6 +21,7 @@ import java.util.Map;
  * Scheme Reporting Controller
  * Exports reporting packs for Central Banks and Schemes
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/reporting/schemes")
 public class SchemeReportingController {

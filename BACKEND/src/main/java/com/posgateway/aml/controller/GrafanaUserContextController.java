@@ -14,12 +14,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Grafana User Context Controller
  * Provides user context information for Grafana dashboards
  * Used for role-based access control and PSP filtering
  */
+@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping("/grafana")
 public class GrafanaUserContextController {

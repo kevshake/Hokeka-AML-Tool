@@ -15,9 +15,11 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/billing")
 public class BillingController {

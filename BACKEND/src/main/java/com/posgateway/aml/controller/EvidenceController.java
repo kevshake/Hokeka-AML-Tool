@@ -21,7 +21,9 @@ import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/cases")
 public class EvidenceController {

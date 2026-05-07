@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
  * REST Controller for User Skills Management
  * Handles skill types and user skill assignments for skill-based case routing
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/skills")
 @Tag(name = "User Skills", description = "User skill management for skill-based case assignment")

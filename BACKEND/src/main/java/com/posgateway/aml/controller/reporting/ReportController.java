@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
  * Report Controller
  * REST endpoints for report generation, preview, history, scheduling, and chart data
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/reports")
 public class ReportController {

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/reporting/regulatory")
 public class RegulatoryReportingController {

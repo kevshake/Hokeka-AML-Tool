@@ -29,6 +29,7 @@ import java.util.Optional;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/psps")
 public class PspController {

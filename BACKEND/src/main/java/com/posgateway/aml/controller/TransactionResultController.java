@@ -13,12 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Transaction Result Controller
  * Receives feedback (authorization results, chargebacks) from the gateway
  * Updates fraud metrics (Async)
  */
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/transaction/result")
 public class TransactionResultController {

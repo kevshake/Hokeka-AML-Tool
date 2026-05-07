@@ -16,8 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 // @RequiredArgsConstructor removed
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/auth")
 public class RolePermissionController {

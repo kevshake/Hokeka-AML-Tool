@@ -30,8 +30,9 @@ public class EnhancedAuditService extends AuditLogService {
 
     @Autowired
     public EnhancedAuditService(AuditLogRepository auditLogRepository,
-                                com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
-        super(auditLogRepository, objectMapper);
+                                com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+                                org.springframework.core.env.Environment environment) {
+        super(auditLogRepository, objectMapper, environment);
         this.auditLogRepository = auditLogRepository;
     }
 

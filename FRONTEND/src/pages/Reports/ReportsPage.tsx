@@ -65,7 +65,7 @@ export default function ReportsPage() {
                 variant="outlined"
                 startIcon={<DownloadIcon />}
                 onClick={() => handleExport("cases")}
-                sx={{ borderColor: "#a93226", color: "#a93226", "&:hover": { borderColor: "#922b21" } }}
+                sx={{ borderColor: "error.main", color: "error.main", "&:hover": { borderColor: "error.dark" } }}
               >
                 Export
               </Button>
@@ -99,7 +99,7 @@ export default function ReportsPage() {
                 variant="outlined"
                 startIcon={<DownloadIcon />}
                 onClick={() => handleExport("sars")}
-                sx={{ borderColor: "#a93226", color: "#a93226", "&:hover": { borderColor: "#922b21" } }}
+                sx={{ borderColor: "error.main", color: "error.main", "&:hover": { borderColor: "error.dark" } }}
               >
                 Export
               </Button>
@@ -130,7 +130,7 @@ export default function ReportsPage() {
                 variant="outlined"
                 startIcon={<DownloadIcon />}
                 onClick={() => handleExport("audit")}
-                sx={{ borderColor: "#a93226", color: "#a93226", "&:hover": { borderColor: "#922b21" } }}
+                sx={{ borderColor: "error.main", color: "error.main", "&:hover": { borderColor: "error.dark" } }}
               >
                 Export
               </Button>

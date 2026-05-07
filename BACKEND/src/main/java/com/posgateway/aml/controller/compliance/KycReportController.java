@@ -10,9 +10,11 @@ import com.posgateway.aml.service.analytics.CorporateStructureService;
 import com.posgateway.aml.service.analytics.CorporateStructureService.CorporateGraph;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/compliance/kyc")
 public class KycReportController {

@@ -10,11 +10,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Session Management Controller
  * Handles session refresh, validation, and timeout management
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/auth/session")
 public class SessionController {

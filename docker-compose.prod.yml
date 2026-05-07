@@ -14,8 +14,8 @@ services:
     container_name: fraud-detector-postgres-prod
     environment:
       POSTGRES_DB: fraud_detector
-      POSTGRES_USER: ${DATABASE_USERNAME}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_USER: ${DATABASE_USERNAME:?DATABASE_USERNAME must be set}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d:ro
@@ -105,8 +105,8 @@ services:
     container_name: fraud-detector-backend-prod
     environment:
       DATABASE_URL: jdbc:postgresql://postgres-prod:5432/fraud_detector
-      DATABASE_USERNAME: ${DATABASE_USERNAME}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:?DATABASE_USERNAME must be set}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
       # Aerospike is no longer reachable from the API server — it lives in aml-ms-prod.
       AML_MICROSERVICE_URL: http://aml-ms-prod:8091
       AML_MICROSERVICE_ENABLED: "true"

@@ -229,7 +229,7 @@ const handleConfirmDelete = () => {
                                             <IconButton size="small" onClick={() => handleOpenDialog(role)} sx={{ color: "#8B4049" }}>
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
-                                            <IconButton size="small" onClick={() => handleDelete(role.id)} sx={{ color: "#e74c3c" }}>
+                                            <IconButton size="small" onClick={() => handleDelete(role.id)} sx={{ color: "error.main" }}>
                                                 <DeleteIcon fontSize="small" />
                                             </IconButton>
                                         </Box>
@@ -366,7 +366,7 @@ const handleConfirmDelete = () => {
                     <Button
                         onClick={handleConfirmDelete}
                         variant="contained"
-                        sx={{ backgroundColor: "#e74c3c", "&:hover": { backgroundColor: "#c0392b" } }}
+                        sx={{ backgroundColor: "error.main", "&:hover": { backgroundColor: "error.dark" } }}
                     >
                         Delete
                     </Button>

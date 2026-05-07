@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 // @RequiredArgsConstructor removed
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/psps")
 public class PspReportingConfigController {

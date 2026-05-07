@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
  * Report Definition Controller
  * REST endpoints for report definitions and categories
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/reports/definitions")
 public class ReportDefinitionController {

@@ -6,7 +6,7 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5173,
-        allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1'],
+        allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1', 'testaml.hokeka.com', 'aml.hokeka.com', 'testapi.hokeka.com', 'api.hokeka.com'],
         proxy: {
             '/api/v1': {
                 target: process.env.VITE_PROXY_TARGET || 'http://localhost:2637',

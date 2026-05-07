@@ -2,8 +2,9 @@ import { Box, Typography, Alert, Paper } from "@mui/material";
 import { Routes, Route, Navigate } from "react-router-dom";
 import TabNavigation from "../../components/Common/TabNavigation";
 
-// Grafana base URL - should be configured via environment variable
-const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL || "http://localhost:3000";
+// Grafana base URL - must be configured via environment variable (VITE_GRAFANA_URL).
+// When unset, the page renders an informative empty state instead of falling back to localhost.
+const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL;
 
 interface GrafanaDashboardProps {
     dashboardId: string;
@@ -11,6 +12,14 @@ interface GrafanaDashboardProps {
 }
 
 function GrafanaDashboard({ dashboardId, title }: GrafanaDashboardProps) {
+    if (!GRAFANA_BASE_URL) {
+        return (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+                Grafana URL is not configured. Set <strong>VITE_GRAFANA_URL</strong> to enable analytics dashboards.
+            </Alert>
+        );
+    }
+
     const iframeUrl = `${GRAFANA_BASE_URL}/d/${dashboardId}?orgId=1&kiosk&theme=light`;
 
     return (

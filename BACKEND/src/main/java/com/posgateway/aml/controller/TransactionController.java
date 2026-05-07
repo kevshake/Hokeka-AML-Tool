@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
  * detection
  * Optimized for high throughput with async processing
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/transactions")
 public class TransactionController {

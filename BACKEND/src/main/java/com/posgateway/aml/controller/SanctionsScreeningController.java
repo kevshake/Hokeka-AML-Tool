@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * REST controller for direct sanctions screening.
@@ -29,6 +30,7 @@ import java.util.Map;
  * <p>If the microservice is disabled or its circuit breaker is open, we return
  * {@code status=UNAVAILABLE} with HTTP 200 — graceful degradation, not 5xx.
  */
+@PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
 @RequestMapping("/sanctions")
 public class SanctionsScreeningController {

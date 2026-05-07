@@ -145,9 +145,9 @@ services:
     image: postgres:15-alpine
     container_name: aml-postgres
     environment:
-      POSTGRES_USER: fraud_user
-      POSTGRES_PASSWORD: fraud_secure_2024
-      POSTGRES_DB: fraud_detector
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-fraud_detector}
       # Performance tuning
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     # Internal only - no external port mapping
@@ -175,21 +175,24 @@ services:
     networks:
       - aml-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fraud_user -d fraud_detector"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # ============================================================
-  # CLICKHOUSE (Analytics)
+  # CLICKHOUSE (Analytics) — gated until cold-path analytics is wired in BACKEND.
+  # No client/inserts/reads exist today. Start opt-in:
+  #   docker compose --profile clickhouse up clickhouse
   # ============================================================
   clickhouse:
     image: clickhouse/clickhouse-server:24.3
     container_name: aml-clickhouse
+    profiles: [clickhouse]
     environment:
-      CLICKHOUSE_DB: fraud_analytics
-      CLICKHOUSE_USER: analytics
-      CLICKHOUSE_PASSWORD: analytics_secure_2024
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-fraud_analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:?CLICKHOUSE_USER must be set}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD must be set}
       CLICKHOUSE_DEFAULT_ACCESS_MANIT: 1
     ports:
       - "8123:8123"  # HTTP interface (for queries)

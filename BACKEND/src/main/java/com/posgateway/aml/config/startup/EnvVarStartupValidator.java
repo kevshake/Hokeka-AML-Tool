@@ -117,6 +117,12 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                         "HMAC signing secret for session JWTs. MUST be a long random string in production. " +
                                 "Test profile has a hardcoded fallback labelled 'do-not-use-in-production'."),
 
+                // --- Audit log integrity ---
+                EnvVarSpec.requiredIf("AUDIT_HMAC_KEY", isProduction,
+                        "HMAC signing key used by AuditLogService to checksum each audit row. " +
+                                "MUST be a long random string in production — without it audit-log " +
+                                "checksums are forgeable. AuditLogService refuses to boot on prod when blank."),
+
                 // --- CORS / external access ---
                 EnvVarSpec.requiredIf("CORS_ALLOWED_ORIGINS", isProduction,
                         "Comma-separated origin allowlist for production CORS. e.g. https://app.example.com"),

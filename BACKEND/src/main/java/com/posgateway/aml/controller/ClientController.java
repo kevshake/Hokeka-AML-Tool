@@ -11,12 +11,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Client Controller
  * Manages client registration and API key management
  * No authentication required for now
  */
+@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/clients")
 public class ClientController {

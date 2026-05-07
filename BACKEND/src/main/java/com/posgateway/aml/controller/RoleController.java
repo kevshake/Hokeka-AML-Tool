@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 // @RequiredArgsConstructor removed
+@PreAuthorize("hasAnyRole('ADMIN','MANAGE_USERS','MANAGE_ROLES')")
 @RestController
 @RequestMapping("/roles")
 public class RoleController {
