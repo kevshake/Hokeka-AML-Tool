@@ -5,6 +5,9 @@ import com.posgateway.aml.dto.compliance.CbkSubmissionDto;
 import com.posgateway.aml.dto.compliance.CbkSubmitRequest;
 import com.posgateway.aml.dto.compliance.CbkSubmitResponse;
 import com.posgateway.aml.entity.User;
+import com.posgateway.aml.service.cbk.CbkEndpointType;
+import com.posgateway.aml.service.cbk.CbkSubmissionOrchestrator;
+import com.posgateway.aml.service.cbk.CbkSubmissionResult;
 import com.posgateway.aml.service.compliance.CbkReportService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CBK (Central Bank of Kenya) regulatory reporting API.
@@ -38,9 +42,12 @@ public class CbkReportController {
     private static final Logger log = LoggerFactory.getLogger(CbkReportController.class);
 
     private final CbkReportService cbkReportService;
+    private final CbkSubmissionOrchestrator cbkSubmissionOrchestrator;
 
-    public CbkReportController(CbkReportService cbkReportService) {
+    public CbkReportController(CbkReportService cbkReportService,
+                                CbkSubmissionOrchestrator cbkSubmissionOrchestrator) {
         this.cbkReportService = cbkReportService;
+        this.cbkSubmissionOrchestrator = cbkSubmissionOrchestrator;
     }
 
     @GetMapping("/reports")
@@ -78,6 +85,39 @@ public class CbkReportController {
         log.info("CBK submission accepted by user {} for PSP {}: ref={}",
                 user.getUsername(), pspId, resp.referenceNumber());
         return ResponseEntity.ok(resp);
+    }
+
+    /**
+     * Manual retry / ad-hoc trigger for a single CBK GDI endpoint.
+     *
+     * <p>Allows admins and compliance officers to re-fire a specific endpoint for a
+     * given PSP without waiting for the next scheduled run. Useful for recovering
+     * from transient network failures or correcting data after an ad-hoc fix.
+     *
+     * <p>URL: {@code POST /api/v1/compliance/cbk/submissions/{endpointType}/run}
+     *
+     * @param endpointType path-variable matching a {@link CbkEndpointType} constant
+     * @param body         JSON body containing {@code "pspId": <long>}
+     * @return the {@link CbkSubmissionResult} for the triggered submission attempt
+     */
+    @PostMapping("/submissions/{endpointType}/run")
+    @PreAuthorize("hasAnyRole('ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN')")
+    public ResponseEntity<CbkSubmissionResult> runSingleEndpoint(
+            @PathVariable CbkEndpointType endpointType,
+            @RequestBody Map<String, Long> body) {
+
+        Long pspId = body.get("pspId");
+        if (pspId == null) {
+            log.warn("CBK manual run: missing pspId in request body for endpoint {}", endpointType);
+            return ResponseEntity.badRequest().build();
+        }
+
+        log.info("CBK manual run triggered: endpoint={} pspId={}", endpointType, pspId);
+        CbkSubmissionResult result = cbkSubmissionOrchestrator.runSingleEndpoint(pspId, endpointType);
+        log.info("CBK manual run completed: endpoint={} pspId={} outcome={}",
+                endpointType, pspId, result.getOutcome());
+
+        return ResponseEntity.ok(result);
     }
 
     private User getCurrentUser() {
