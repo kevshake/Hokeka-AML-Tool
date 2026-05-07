@@ -10,16 +10,14 @@ import {
     IconButton,
     CircularProgress,
     Tooltip,
-    Link,
     Snackbar,
-    Dialog,          
-    DialogTitle,     
-    DialogContent,   
+    Dialog,
+    DialogTitle,
+    DialogContent,
     DialogActions,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
-import { Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function LoginPage() {
     const { login } = useAuth();

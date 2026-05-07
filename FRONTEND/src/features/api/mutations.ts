@@ -245,3 +245,208 @@ export const useCreateDeadline = () => {
     },
   });
 };
+
+// ─────────────────────────────────────────────
+// PSP CBK config update
+// ─────────────────────────────────────────────
+
+export interface UpdatePspCbkConfigRequest {
+  pspId: number | string;
+  cbkInstitutionCode?: string;
+  cbkReportingEnabled?: boolean;
+  cbkClientId?: string;
+  cbkClientSecret?: string;
+}
+
+export const useUpdatePspCbkConfig = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pspId, ...body }: UpdatePspCbkConfigRequest) =>
+      apiClient.put(`psps/${pspId}`, body),
+    onSuccess: (_data, { pspId }) => {
+      queryClient.invalidateQueries({ queryKey: ["psp", pspId] });
+      queryClient.invalidateQueries({ queryKey: ["psps"] });
+    },
+  });
+};
+
+// ─────────────────────────────────────────────
+// PSP child-entity CRUD mutations
+// Each hook takes pspId (create/delete) or pspId+id (update) at call time.
+// ─────────────────────────────────────────────
+
+// Directors
+export const useCreatePspDirector = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/directors`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "directors"] }); },
+  });
+};
+export const useUpdatePspDirector = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/directors/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "directors"] }); },
+  });
+};
+export const useDeletePspDirector = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/directors/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "directors"] }); },
+  });
+};
+
+// Shareholders
+export const useCreatePspShareholder = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/shareholders`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "shareholders"] }); },
+  });
+};
+export const useUpdatePspShareholder = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/shareholders/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "shareholders"] }); },
+  });
+};
+export const useDeletePspShareholder = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/shareholders/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "shareholders"] }); },
+  });
+};
+
+// Trustees
+export const useCreatePspTrustee = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/trustees`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trustees"] }); },
+  });
+};
+export const useUpdatePspTrustee = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/trustees/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trustees"] }); },
+  });
+};
+export const useDeletePspTrustee = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/trustees/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trustees"] }); },
+  });
+};
+
+// Senior Management
+export const useCreatePspSeniorManagement = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/senior-management`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "senior-management"] }); },
+  });
+};
+export const useUpdatePspSeniorManagement = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/senior-management/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "senior-management"] }); },
+  });
+};
+export const useDeletePspSeniorManagement = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/senior-management/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "senior-management"] }); },
+  });
+};
+
+// Products
+export const useCreatePspProduct = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/products`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "products"] }); },
+  });
+};
+export const useUpdatePspProduct = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/products/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "products"] }); },
+  });
+};
+export const useDeletePspProduct = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/products/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "products"] }); },
+  });
+};
+
+// Trust Accounts
+export const useCreatePspTrustAccount = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/trust-accounts`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trust-accounts"] }); },
+  });
+};
+export const useUpdatePspTrustAccount = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/trust-accounts/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trust-accounts"] }); },
+  });
+};
+export const useDeletePspTrustAccount = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/trust-accounts/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "trust-accounts"] }); },
+  });
+};
+
+// Tariffs
+export const useCreatePspTariff = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post(`psps/${pspId}/cbk/tariffs`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "tariffs"] }); },
+  });
+};
+export const useUpdatePspTariff = (pspId: number | string, id: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.put(`psps/${pspId}/cbk/tariffs/${id}`, body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "tariffs"] }); },
+  });
+};
+export const useDeletePspTariff = (pspId: number | string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number | string) => apiClient.delete(`psps/${pspId}/cbk/tariffs/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psp", pspId, "tariffs"] }); },
+  });
+};
+
+// ─────────────────────────────────────────────
+// CBK Submission replay
+// ─────────────────────────────────────────────
+
+export const useReplayCbkSubmission = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ endpointType, pspId }: { endpointType: string; pspId: number | string }) =>
+      apiClient.post(`compliance/cbk/submissions/${endpointType}/run`, { pspId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cbk-submissions"] });
+    },
+  });
+};

@@ -31,6 +31,9 @@ const AuditLogsPage = lazy(() => import("./pages/AuditLogs/AuditLogsPage"));
 const RulesGenerationPage = lazy(() => import("./pages/RulesGeneration/RulesGenerationPage"));
 const KycDocumentsPage = lazy(() => import("./pages/KycDocuments/KycDocumentsPage"));
 const AnalyticsPage = lazy(() => import("./pages/Analytics/AnalyticsPage"));
+const RegulatoryReportsPage = lazy(() => import("./pages/RegulatoryReports/RegulatoryReportsPage"));
+const PspsListPage = lazy(() => import("./pages/Psps/PspsListPage"));
+const PspConfigPage = lazy(() => import("./pages/Psps/PspConfigPage"));
 
 function PageLoader() {
   return (
@@ -88,6 +91,9 @@ function App() {
                           <Route path="rules-generation" element={<RulesGenerationPage />} />
                           <Route path="kyc-documents" element={<KycDocumentsPage />} />
                           <Route path="analytics" element={<AnalyticsPage />} />
+                          <Route path="regulatory-reports" element={<RegulatoryReportsPage />} />
+                          <Route path="psps" element={<PspsListPage />} />
+                          <Route path="psps/:pspId/configure" element={<PspConfigPage />} />
                         </Routes>
                         </Suspense>
                       </RouteErrorBoundary>

@@ -502,3 +502,116 @@ export const useAllPsps = () => {
     queryFn: () => apiClient.get<Psp[]>("psps").catch(() => []),
   });
 };
+
+// ─────────────────────────────────────────────
+// PSP child-entity queries
+// ─────────────────────────────────────────────
+
+export const usePspDirectors = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "directors"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/directors`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspShareholders = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "shareholders"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/shareholders`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspTrustees = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "trustees"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/trustees`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspSeniorManagement = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "senior-management"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/senior-management`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspProducts = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "products"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/products`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspTrustAccounts = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "trust-accounts"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/trust-accounts`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspTariffs = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "tariffs"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/tariffs`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspCyberIncidents = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "cyber-incidents"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/cyber-incidents`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspSystemInterruptions = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "system-interruptions"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/system-interruptions`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspComplaints = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "complaints"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/complaints`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+export const usePspFraudIncidents = (pspId: number | string) =>
+  useQuery<any[]>({
+    queryKey: ["psp", pspId, "fraud-incidents"],
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/fraud-incidents`).catch(() => []),
+    enabled: !!pspId,
+  });
+
+// ─────────────────────────────────────────────
+// CBK Submissions history
+// ─────────────────────────────────────────────
+
+export interface CbkSubmissionQueryParams {
+  pspId?: number | string;
+  status?: string;
+  endpoint?: string;
+  page?: number;
+  size?: number;
+}
+
+export const useCbkSubmissions = (params: CbkSubmissionQueryParams = {}) => {
+  const { pspId, status, endpoint, page = 0, size = 25 } = params;
+  const qs = [
+    `page=${page}`,
+    `size=${size}`,
+    pspId !== undefined ? `pspId=${pspId}` : "",
+    status ? `status=${status}` : "",
+    endpoint ? `endpoint=${endpoint}` : "",
+  ]
+    .filter(Boolean)
+    .join("&");
+  return useQuery<PageResponse<any>>({
+    queryKey: ["cbk-submissions", params],
+    queryFn: () =>
+      apiClient
+        .get<PageResponse<any>>(`compliance/cbk/submissions?${qs}`)
+        .catch(() => ({ content: [], totalElements: 0, totalPages: 0, size, number: page })),
+  });
+};

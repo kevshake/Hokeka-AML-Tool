@@ -2,8 +2,12 @@ import { useState } from "react";
 import { Box, Paper, Typography, Button, Tabs, Tab, Grid, Card, CardContent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
 import { useRegulatoryReport } from "../../features/api/queries";
 import { Download as DownloadIcon } from "@mui/icons-material";
+import CbkSubmissionsTab from "./tabs/CbkSubmissionsTab";
+
+type MainTab = "reports" | "cbk-submissions";
 
 export default function RegulatoryReportsPage() {
+  const [mainTab, setMainTab] = useState<MainTab>("reports");
   const [reportType, setReportType] = useState<"ctr" | "lctr" | "iftr">("ctr");
   const { data: report, isLoading } = useRegulatoryReport(reportType);
 
@@ -46,6 +50,24 @@ export default function RegulatoryReportsPage() {
         Regulatory Reports
       </Typography>
 
+      {/* Top-level tab: FIU reports vs CBK submissions */}
+      <Tabs
+        value={mainTab}
+        onChange={(_, v) => setMainTab(v)}
+        sx={{
+          mb: 3,
+          borderBottom: "1px solid rgba(0,0,0,0.1)",
+          "& .MuiTab-root": { color: "text.secondary", "&.Mui-selected": { color: "#a93226" } },
+          "& .MuiTabs-indicator": { backgroundColor: "#a93226" },
+        }}
+      >
+        <Tab label="FIU Reports" value="reports" />
+        <Tab label="CBK Submissions" value="cbk-submissions" />
+      </Tabs>
+
+      {mainTab === "cbk-submissions" && <CbkSubmissionsTab />}
+
+      {mainTab === "reports" && <>
       <Tabs
         value={reportType}
         onChange={(_, newValue) => setReportType(newValue)}
@@ -178,6 +200,7 @@ export default function RegulatoryReportsPage() {
           </Typography>
         )}
       </Paper>
+      </>}
     </Box>
   );
 }

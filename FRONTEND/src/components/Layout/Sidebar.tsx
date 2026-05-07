@@ -36,6 +36,8 @@ import {
   Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
   VerifiedUser as KycIcon,
+  AccountBalance as PspIcon,
+  Description as RegulatoryIcon,
 } from "@mui/icons-material";
 import { useAlerts, useCases } from "../../features/api/queries";
 import { useQuery } from "@tanstack/react-query";
@@ -148,6 +150,18 @@ export default function Sidebar() {
           label: "Limits & AML Rules",
           icon: <RulesIcon />,
           path: "/rules-generation",
+        },
+        {
+          id: "psps",
+          label: "PSPs",
+          icon: <PspIcon />,
+          path: "/psps",
+        },
+        {
+          id: "regulatory-reports",
+          label: "Regulatory Reports",
+          icon: <RegulatoryIcon />,
+          path: "/regulatory-reports",
         },
         {
           id: "profile",
