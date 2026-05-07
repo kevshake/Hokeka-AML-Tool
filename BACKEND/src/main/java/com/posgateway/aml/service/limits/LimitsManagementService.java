@@ -410,8 +410,32 @@ public class LimitsManagementService {
                 .count();
         stats.put("riskAlerts", riskAlerts);
 
-        // Average Success Rate (mock for now)
-        stats.put("avgSuccessRate", 94.2);
+        // Average Success Rate over the trailing 7 days, computed in-DB.
+        // Definition: APPROVED transactions / total transactions * 100.
+        // No fallback to a fake number — return 0.0 when there are zero rows.
+        LocalDateTime since = LocalDateTime.now().minusDays(7);
+        Object[] counts = (pspId != null)
+                ? transactionRepository.getApprovedAndTotalCountByPspSince(pspId, since)
+                : transactionRepository.getApprovedAndTotalCountSince(since);
+        long approved = 0L;
+        long total = 0L;
+        if (counts != null && counts.length >= 1) {
+            // JPQL aggregate returns a single Object[] row; some Hibernate
+            // versions wrap it in another Object[] — handle both shapes.
+            Object[] row = (counts.length == 1 && counts[0] instanceof Object[])
+                    ? (Object[]) counts[0]
+                    : counts;
+            if (row != null && row.length >= 2) {
+                approved = row[0] instanceof Number ? ((Number) row[0]).longValue() : 0L;
+                total    = row[1] instanceof Number ? ((Number) row[1]).longValue() : 0L;
+            }
+        }
+        double avgSuccessRate = (total > 0)
+                ? (approved * 100.0) / total
+                : 0.0;
+        // Round to 1 dp to match the previous response shape (94.2 style).
+        avgSuccessRate = Math.round(avgSuccessRate * 10.0) / 10.0;
+        stats.put("avgSuccessRate", avgSuccessRate);
 
         return stats;
     }
