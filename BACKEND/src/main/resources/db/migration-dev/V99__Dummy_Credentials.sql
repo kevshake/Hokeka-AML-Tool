@@ -81,3 +81,31 @@ SELECT 'investigator', '$2a$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqv
        (SELECT id FROM roles WHERE name = 'INVESTIGATOR' AND psp_id = (SELECT psp_id FROM psps WHERE psp_code = 'TECHFLOW_PSP')),
        (SELECT psp_id FROM psps WHERE psp_code = 'TECHFLOW_PSP'), true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM platform_users WHERE username = 'investigator');
+
+-- ============================================================================
+-- # Migration gating notes
+-- ============================================================================
+-- This file lives in db/migration-dev/, NOT db/migration/. It is loaded ONLY
+-- by the `dev` Spring profile via:
+--     spring.flyway.locations=classpath:db/migration,classpath:db/migration-dev
+--
+-- Production profiles (`prod`, `production`) load only classpath:db/migration
+-- and therefore NEVER apply this seed data.
+--
+-- Existing-prod deploy steps (DBs that previously ran V99 from db/migration/):
+--   1. The row for V99 already lives in flyway_schema_history.
+--   2. After this change, V99 no longer exists under classpath:db/migration.
+--   3. Spring Boot would normally fail validation; we set
+--      spring.flyway.ignore-missing-migrations=true on prod to tolerate this.
+--   4. No data change. No DELETE from flyway_schema_history is required.
+--
+-- Clean-prod deploy steps (fresh DB):
+--   1. V99 is simply absent from the active locations.
+--   2. flyway_schema_history will have a gap at version 99 (V100+ apply).
+--      Flyway accepts this when out-of-order/ignore-missing is permissive.
+--
+-- Existing-dev deploy steps (DBs that previously ran V99):
+--   1. V99 is still found, same checksum, same content. Flyway sees it as
+--      already applied and re-validation passes (validate-on-migrate=false on
+--      dev anyway).
+-- ============================================================================
