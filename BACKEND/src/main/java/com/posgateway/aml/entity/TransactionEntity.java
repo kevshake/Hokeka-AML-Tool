@@ -84,6 +84,22 @@ public class TransactionEntity {
     @Column(name = "decision", length = 20)
     private String decision; // APPROVED, MANUAL_REVIEW, DECLINED
 
+    // CBK classification columns (V128 migration)
+    @Column(name = "card_brand", length = 16)
+    private String cardBrand; // e.g. VISA, MASTERCARD — null if unknown
+
+    @Column(name = "card_type", length = 16)
+    private String cardType; // e.g. DEBIT, CREDIT, PREPAID
+
+    @Column(name = "card_class", length = 16)
+    private String cardClass; // e.g. CLASSIC, GOLD, PLATINUM
+
+    @Column(name = "channel_type", length = 32)
+    private String channelType; // e.g. POS, ECOMMERCE, MOBILE, ATM
+
+    @Column(name = "bill_classification_code", length = 16)
+    private String billClassificationCode; // CBK taxonomy code
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -259,5 +275,45 @@ public class TransactionEntity {
 
     public void setDecision(String decision) {
         this.decision = decision;
+    }
+
+    public String getCardBrand() {
+        return cardBrand;
+    }
+
+    public void setCardBrand(String cardBrand) {
+        this.cardBrand = cardBrand;
+    }
+
+    public String getCardType() {
+        return cardType;
+    }
+
+    public void setCardType(String cardType) {
+        this.cardType = cardType;
+    }
+
+    public String getCardClass() {
+        return cardClass;
+    }
+
+    public void setCardClass(String cardClass) {
+        this.cardClass = cardClass;
+    }
+
+    public String getChannelType() {
+        return channelType;
+    }
+
+    public void setChannelType(String channelType) {
+        this.channelType = channelType;
+    }
+
+    public String getBillClassificationCode() {
+        return billClassificationCode;
+    }
+
+    public void setBillClassificationCode(String billClassificationCode) {
+        this.billClassificationCode = billClassificationCode;
     }
 }
