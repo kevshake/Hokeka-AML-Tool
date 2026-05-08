@@ -53,7 +53,7 @@ public class ReportDefinitionController {
      * GET /api/reports/definitions
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<Page<ReportDefinitionDTO>> listReportDefinitions(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String type,
@@ -100,7 +100,7 @@ public class ReportDefinitionController {
      * GET /api/reports/definitions/{id}
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<ReportDefinitionDTO> getReportDefinition(@PathVariable Long id) {
         logger.debug("Get report definition by ID: {}", id);
         
@@ -115,7 +115,7 @@ public class ReportDefinitionController {
      * GET /api/reports/definitions/code/{code}
      */
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<ReportDefinitionDTO> getReportDefinitionByCode(@PathVariable String code) {
         logger.debug("Get report definition by code: {}", code);
         
@@ -130,7 +130,7 @@ public class ReportDefinitionController {
      * GET /api/reports/categories
      */
     @GetMapping("/categories")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<List<ReportCategoryDTO>> listCategories() {
         logger.debug("List report categories");
         
@@ -146,7 +146,7 @@ public class ReportDefinitionController {
      * GET /api/reports/definitions/category/{category}
      */
     @GetMapping("/category/{category}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<ReportCategoryDTO> getReportsByCategory(@PathVariable String category) {
         logger.debug("Get reports by category: {}", category);
         
@@ -174,7 +174,7 @@ public class ReportDefinitionController {
      * GET /api/reports/definitions/types
      */
     @GetMapping("/types")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'ANALYST')")
     public ResponseEntity<List<Map<String, String>>> getReportTypes() {
         logger.debug("Get report types");
         

@@ -1,5 +1,11 @@
 package com.posgateway.aml.service.reporting;
 
+import com.posgateway.aml.client.regulator.FcaSubmissionClient;
+import com.posgateway.aml.client.regulator.FincenSubmissionClient;
+import com.posgateway.aml.client.regulator.OfacSubmissionClient;
+import com.posgateway.aml.client.regulator.RegulatorSubmissionClient;
+import com.posgateway.aml.client.regulator.RegulatorSubmissionDisabledException;
+import com.posgateway.aml.client.regulator.SubmissionResult;
 import com.posgateway.aml.dto.reporting.RegulatorySubmissionDTO;
 import com.posgateway.aml.dto.reporting.RegulatorySubmissionRequest;
 import com.posgateway.aml.entity.User;
@@ -11,6 +17,7 @@ import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.security.PspIsolationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +48,13 @@ public class RegulatorySubmissionService {
     private final UserRepository userRepository;
     private final PspIsolationService pspIsolationService;
 
+    // Optional regulator-side adapters — present only when the matching
+    // `regulators.<name>.enabled` flag is true. We tolerate absence at boot
+    // so deploys without all three credential sets still come up.
+    private final FincenSubmissionClient fincenClient;
+    private final FcaSubmissionClient fcaClient;
+    private final OfacSubmissionClient ofacClient;
+
     // Regulator-specific configurations
     private static final String REGULATOR_FINCEN = "FINCEN";
     private static final String REGULATOR_FCA = "FCA";
@@ -51,12 +65,18 @@ public class RegulatorySubmissionService {
                                        ReportRepository reportRepository,
                                        ReportExecutionRepository reportExecutionRepository,
                                        UserRepository userRepository,
-                                       PspIsolationService pspIsolationService) {
+                                       PspIsolationService pspIsolationService,
+                                       @Autowired(required = false) FincenSubmissionClient fincenClient,
+                                       @Autowired(required = false) FcaSubmissionClient fcaClient,
+                                       @Autowired(required = false) OfacSubmissionClient ofacClient) {
         this.submissionRepository = submissionRepository;
         this.reportRepository = reportRepository;
         this.reportExecutionRepository = reportExecutionRepository;
         this.userRepository = userRepository;
         this.pspIsolationService = pspIsolationService;
+        this.fincenClient = fincenClient;
+        this.fcaClient = fcaClient;
+        this.ofacClient = ofacClient;
     }
 
     /**
@@ -103,90 +123,92 @@ public class RegulatorySubmissionService {
     }
 
     /**
-     * Submit to FinCEN (Financial Crimes Enforcement Network)
+     * Submit to FinCEN (Financial Crimes Enforcement Network).
+     * Uses {@link FincenSubmissionClient} when {@code regulators.fincen.enabled=true};
+     * otherwise the submission is parked in {@link SubmissionStatus#SUBMISSION_PENDING}.
      */
     @Transactional
     public RegulatorySubmissionDTO submitToFinCEN(Long reportId, Long userId, Long pspId) {
         logger.info("Submitting to FinCEN - report: {}, user: {}", reportId, userId);
-        
-        // Prepare submission if not exists
         RegulatorySubmission submission = findOrCreateSubmission(reportId, REGULATOR_FINCEN, userId, pspId);
-        
-        // Validate submission can be filed
-        if (!submission.canFile()) {
-            throw new IllegalStateException("Submission cannot be filed. Current status: " + submission.getStatus());
-        }
-        
-        // Perform FinCEN-specific submission logic
-        // In production, this would integrate with FinCEN's BSA E-Filing System
-        String fincenReference = submitToFinCENApi(submission);
-        
-        // Update submission
-        submission.setStatus(SubmissionStatus.FILED);
-        submission.setFiledBy(userRepository.findById(userId).orElse(null));
-        submission.setFiledAt(LocalDateTime.now());
-        submission.setRegulatorReference(fincenReference);
-        submission.setFilingReceipt(generateFilingReceipt(submission, REGULATOR_FINCEN));
-        
-        RegulatorySubmission saved = submissionRepository.save(submission);
-        logger.info("FinCEN submission completed: {}", saved.getSubmissionReference());
-        
-        return convertToDTO(saved);
+        return dispatchSubmission(submission, fincenClient, REGULATOR_FINCEN, userId);
     }
 
     /**
-     * Submit to FCA (Financial Conduct Authority - UK)
+     * Submit to FCA (Financial Conduct Authority - UK).
      */
     @Transactional
     public RegulatorySubmissionDTO submitToFCA(Long reportId, Long userId, Long pspId) {
         logger.info("Submitting to FCA - report: {}, user: {}", reportId, userId);
-        
         RegulatorySubmission submission = findOrCreateSubmission(reportId, REGULATOR_FCA, userId, pspId);
-        
-        if (!submission.canFile()) {
-            throw new IllegalStateException("Submission cannot be filed. Current status: " + submission.getStatus());
-        }
-        
-        // FCA-specific submission
-        String fcaReference = submitToFCAApi(submission);
-        
-        submission.setStatus(SubmissionStatus.FILED);
-        submission.setFiledBy(userRepository.findById(userId).orElse(null));
-        submission.setFiledAt(LocalDateTime.now());
-        submission.setRegulatorReference(fcaReference);
-        submission.setFilingReceipt(generateFilingReceipt(submission, REGULATOR_FCA));
-        
-        RegulatorySubmission saved = submissionRepository.save(submission);
-        logger.info("FCA submission completed: {}", saved.getSubmissionReference());
-        
-        return convertToDTO(saved);
+        return dispatchSubmission(submission, fcaClient, REGULATOR_FCA, userId);
     }
 
     /**
-     * Submit to OFAC (Office of Foreign Assets Control)
+     * Submit to OFAC. Note: OFAC has no SAR-submit endpoint; the adapter validates
+     * the SDN feed freshness and returns a NO_OP result when the bean is enabled.
      */
     @Transactional
     public RegulatorySubmissionDTO submitToOFAC(Long reportId, Long userId, Long pspId) {
         logger.info("Submitting to OFAC - report: {}, user: {}", reportId, userId);
-        
         RegulatorySubmission submission = findOrCreateSubmission(reportId, REGULATOR_OFAC, userId, pspId);
-        
+        return dispatchSubmission(submission, ofacClient, REGULATOR_OFAC, userId);
+    }
+
+    /**
+     * Common submission dispatch:
+     * <ol>
+     *   <li>Verify the submission is APPROVED ({@link RegulatorySubmission#canFile()}).</li>
+     *   <li>If a regulator-side reference is already present, treat the call as a
+     *       no-op replay (idempotency) and return the existing record.</li>
+     *   <li>Invoke the wired client; on success persist FILED + receipt.</li>
+     *   <li>On {@link RegulatorSubmissionDisabledException}, mark the submission
+     *       {@link SubmissionStatus#SUBMISSION_PENDING} with a rejection reason so
+     *       it can be re-driven once the regulator is enabled.</li>
+     * </ol>
+     */
+    private RegulatorySubmissionDTO dispatchSubmission(RegulatorySubmission submission,
+                                                       RegulatorSubmissionClient client,
+                                                       String regulatorCode,
+                                                       Long userId) {
         if (!submission.canFile()) {
             throw new IllegalStateException("Submission cannot be filed. Current status: " + submission.getStatus());
         }
-        
-        // OFAC-specific submission
-        String ofacReference = submitToOFACApi(submission);
-        
-        submission.setStatus(SubmissionStatus.FILED);
-        submission.setFiledBy(userRepository.findById(userId).orElse(null));
-        submission.setFiledAt(LocalDateTime.now());
-        submission.setRegulatorReference(ofacReference);
-        submission.setFilingReceipt(generateFilingReceipt(submission, REGULATOR_OFAC));
-        
+
+        // Idempotent retry: if a previous attempt already returned a regulator ref, don't re-submit.
+        if (submission.getStatus() == SubmissionStatus.FILED && submission.getRegulatorReference() != null) {
+            logger.info("{} submission {} already filed (ref={}), returning existing record",
+                    regulatorCode, submission.getSubmissionReference(), submission.getRegulatorReference());
+            return convertToDTO(submission);
+        }
+
+        if (client == null) {
+            return parkPending(submission, regulatorCode,
+                    regulatorCode + " client not configured (regulators." + regulatorCode.toLowerCase() + ".enabled=false)");
+        }
+
+        try {
+            SubmissionResult result = client.submit(submission);
+            submission.setStatus(SubmissionStatus.FILED);
+            submission.setFiledBy(userRepository.findById(userId).orElse(null));
+            submission.setFiledAt(LocalDateTime.now());
+            submission.setRegulatorReference(result.submissionId());
+            submission.setFilingReceipt(generateFilingReceipt(submission, regulatorCode));
+            RegulatorySubmission saved = submissionRepository.save(submission);
+            logger.info("{} submission completed: localRef={} regulatorRef={} status={}",
+                    regulatorCode, saved.getSubmissionReference(), result.submissionId(), result.status());
+            return convertToDTO(saved);
+        } catch (RegulatorSubmissionDisabledException e) {
+            return parkPending(submission, regulatorCode, e.getMessage());
+        }
+    }
+
+    private RegulatorySubmissionDTO parkPending(RegulatorySubmission submission, String regulatorCode, String reason) {
+        logger.warn("{} submission {} parked SUBMISSION_PENDING: {}",
+                regulatorCode, submission.getSubmissionReference(), reason);
+        submission.setStatus(SubmissionStatus.SUBMISSION_PENDING);
+        submission.setRejectionReason("Pending regulator enablement: " + reason);
         RegulatorySubmission saved = submissionRepository.save(submission);
-        logger.info("OFAC submission completed: {}", saved.getSubmissionReference());
-        
         return convertToDTO(saved);
     }
 
@@ -452,25 +474,6 @@ public class RegulatorySubmissionService {
         // Create new submission
         RegulatorySubmissionDTO dto = prepareSubmission(reportId, regulator, userId, pspId);
         return submissionRepository.findById(dto.getId()).orElseThrow();
-    }
-
-    private String submitToFinCENApi(RegulatorySubmission submission) {
-        // In production: Integrate with FinCEN BSA E-Filing API
-        // This is a mock implementation
-        logger.info("Mock FinCEN API submission for: {}", submission.getSubmissionReference());
-        return "FINCEN-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
-    }
-
-    private String submitToFCAApi(RegulatorySubmission submission) {
-        // In production: Integrate with FCA RegData API
-        logger.info("Mock FCA API submission for: {}", submission.getSubmissionReference());
-        return "FCA-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
-    }
-
-    private String submitToOFACApi(RegulatorySubmission submission) {
-        // In production: Integrate with OFAC reporting system
-        logger.info("Mock OFAC API submission for: {}", submission.getSubmissionReference());
-        return "OFAC-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
     }
 
     private String generateSubmissionReference(String regulatoryBody) {

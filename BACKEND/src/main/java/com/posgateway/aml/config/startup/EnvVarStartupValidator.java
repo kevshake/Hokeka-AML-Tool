@@ -102,6 +102,13 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 Boolean.parseBoolean(e.getProperty("scoring.service.enabled", "true"));
         Predicate<Environment> aiRuleGeneratorEnabled = e ->
                 Boolean.parseBoolean(e.getProperty("ai.rule-generator.enabled", "false"));
+        // Regulator clients: required only when (a) we're on prod and (b) the
+        // matching `regulators.<name>.enabled` flag is true. Disabled regulators
+        // never block boot.
+        Predicate<Environment> fincenRequired = e -> isProduction.test(e)
+                && Boolean.parseBoolean(e.getProperty("regulators.fincen.enabled", "false"));
+        Predicate<Environment> fcaRequired = e -> isProduction.test(e)
+                && Boolean.parseBoolean(e.getProperty("regulators.fca.enabled", "false"));
 
         return List.of(
                 // --- Core: always required ---
@@ -122,6 +129,12 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                         "HMAC signing key used by AuditLogService to checksum each audit row. " +
                                 "MUST be a long random string in production — without it audit-log " +
                                 "checksums are forgeable. AuditLogService refuses to boot on prod when blank."),
+
+                // --- Password reset token pepper ---
+                EnvVarSpec.requiredIf("AUTH_PASSWORD_RESET_PEPPER", isProduction,
+                        "Pepper mixed into password-reset token hashes by PasswordResetService. " +
+                                "MUST be a long random string in production — without it reset-token " +
+                                "hashes are predictable. PasswordResetService refuses to boot on prod when blank."),
 
                 // --- CORS / external access ---
                 EnvVarSpec.requiredIf("CORS_ALLOWED_ORIGINS", isProduction,
@@ -183,7 +196,28 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.requiredWhen("ANTHROPIC_API_KEY", aiRuleGeneratorEnabled,
                         "Anthropic API key for the AI rule generator. " +
                                 "Required when ai.rule-generator.enabled=true. " +
-                                "Without it, POST /api/v1/rules/generate returns 503.")
+                                "Without it, POST /api/v1/rules/generate returns 503."),
+
+                // --- Regulator submission clients (FinCEN / FCA) ---
+                // Required only when the regulator is enabled AND we're on prod, so dev/test
+                // deploys are not forced to provide credentials they don't have yet.
+                EnvVarSpec.requiredIf("REGULATORS_FINCEN_ENDPOINT", fincenRequired,
+                        "FinCEN BSA E-Filing endpoint URL. Required when regulators.fincen.enabled=true on prod. " +
+                                "Default is intentionally blank — no placeholder host."),
+                EnvVarSpec.requiredIf("REGULATORS_FINCEN_KEYSTORE_PATH", fincenRequired,
+                        "Path to the .p12 client keystore used for mutual TLS to FinCEN. " +
+                                "Required when regulators.fincen.enabled=true on prod."),
+                EnvVarSpec.requiredIf("REGULATORS_FINCEN_KEYSTORE_PASSWORD", fincenRequired,
+                        "Password for the FinCEN client keystore. " +
+                                "Required when regulators.fincen.enabled=true on prod."),
+                EnvVarSpec.requiredIf("REGULATORS_FCA_ENDPOINT", fcaRequired,
+                        "FCA / NCA SAR Online endpoint URL. Required when regulators.fca.enabled=true on prod."),
+                EnvVarSpec.requiredIf("REGULATORS_FCA_API_KEY", fcaRequired,
+                        "API key for the FCA submission endpoint. " +
+                                "Required when regulators.fca.enabled=true on prod."),
+                EnvVarSpec.requiredIf("REGULATORS_FCA_HMAC_SECRET", fcaRequired,
+                        "HMAC-SHA256 secret used to sign FCA request bodies (X-Signature header). " +
+                                "Required when regulators.fca.enabled=true on prod.")
         );
     }
 

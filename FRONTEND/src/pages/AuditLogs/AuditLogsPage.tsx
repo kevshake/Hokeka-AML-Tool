@@ -17,6 +17,7 @@ import {
   Tooltip,
   TablePagination,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { Search as SearchIcon, FilterList as FilterIcon } from "@mui/icons-material";
 import { useAuditLogs, useAllPsps } from "../../features/api/queries";
 import { useAuth } from "../../contexts/AuthContext";
@@ -237,17 +238,17 @@ export default function AuditLogsPage() {
                     <Chip
                       label={log.actionType}
                       size="small"
-                      sx={{
+                      sx={(theme) => ({
                         backgroundColor:
-                          log.actionType === 'DELETE' ? '#ffebee' :
-                            log.actionType === 'CREATE' ? '#e8f5e9' :
-                              log.actionType === 'UPDATE' ? '#e3f2fd' : '#f5f5f5',
+                          log.actionType === 'DELETE' ? alpha(theme.palette.error.main, 0.1) :
+                            log.actionType === 'CREATE' ? alpha(theme.palette.success.main, 0.1) :
+                              log.actionType === 'UPDATE' ? alpha(theme.palette.info.main, 0.1) : alpha(theme.palette.text.secondary, 0.1),
                         color:
-                          log.actionType === 'DELETE' ? '#c62828' :
-                            log.actionType === 'CREATE' ? '#2e7d32' :
-                              log.actionType === 'UPDATE' ? '#1565c0' : '#616161',
+                          log.actionType === 'DELETE' ? theme.palette.error.dark :
+                            log.actionType === 'CREATE' ? theme.palette.success.dark :
+                              log.actionType === 'UPDATE' ? theme.palette.info.dark : theme.palette.text.secondary,
                         fontWeight: 500
-                      }}
+                      })}
                     />
                   </TableCell>
                   <TableCell sx={{ color: "text.primary" }}>{log.entityType}</TableCell>

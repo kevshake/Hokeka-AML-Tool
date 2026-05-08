@@ -1,9 +1,12 @@
 package com.posgateway.aml.service.kyc;
 
+import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.merchant.MerchantDocument;
+import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantDocumentRepository;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.service.notification.EmailNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,8 @@ public class KycExpirationTrackingService {
 
     private final MerchantDocumentRepository documentRepository;
     private final MerchantRepository merchantRepository;
+    private final AlertRepository alertRepository;
+    private final EmailNotificationService emailService;
 
     @Value("${kyc.expiration.alert-days:30}")
     private int alertDaysBeforeExpiration;
@@ -38,9 +43,13 @@ public class KycExpirationTrackingService {
     @Autowired
     public KycExpirationTrackingService(
             MerchantDocumentRepository documentRepository,
-            MerchantRepository merchantRepository) {
+            MerchantRepository merchantRepository,
+            AlertRepository alertRepository,
+            EmailNotificationService emailService) {
         this.documentRepository = documentRepository;
         this.merchantRepository = merchantRepository;
+        this.alertRepository = alertRepository;
+        this.emailService = emailService;
     }
 
     /**
@@ -134,12 +143,55 @@ public class KycExpirationTrackingService {
     }
 
     /**
-     * Create alert for expiring document
+     * Create alert for expiring document.
+     *
+     * <p>Persists a real {@link Alert} row scoped to the merchant's PSP and
+     * sends an email to that PSP's compliance contact via
+     * {@link EmailNotificationService}.
      */
     private void createExpirationAlert(ExpiringDocument doc) {
-        // TODO: Integrate with Alert service
         logger.warn("KYC Document expiring: Merchant {}, Document Type {}, Expires in {} days",
                 doc.getMerchantId(), doc.getDocumentType(), doc.getDaysUntilExpiration());
+
+        Merchant merchant = null;
+        try {
+            merchant = merchantRepository.findById(doc.getMerchantId()).orElse(null);
+        } catch (Exception ex) {
+            logger.warn("Merchant lookup failed: {}", ex.getMessage());
+        }
+
+        try {
+            Alert alert = new Alert();
+            alert.setMerchantId(doc.getMerchantId());
+            alert.setStatus("open");
+            alert.setSeverity("CRITICAL".equals(doc.getStatus()) ? "CRITICAL" : "WARN");
+            alert.setAction("KYC_EXPIRY");
+            alert.setReason("KYC document " + doc.getDocumentType()
+                    + " expiring in " + doc.getDaysUntilExpiration() + " days");
+            alert.setNotes("Document ID " + doc.getDocumentId()
+                    + " expiry " + doc.getExpiryDate());
+            alertRepository.save(alert);
+        } catch (Exception ex) {
+            logger.error("Failed to persist KYC expiry alert: {}", ex.getMessage());
+        }
+
+        if (merchant != null && merchant.getPsp() != null) {
+            String email = merchant.getPsp().getContactEmail();
+            String subject = "[Hokeka AML] KYC document expiring for merchant "
+                    + doc.getMerchantId();
+            String detail = String.format(
+                    "Merchant: %s%nDocument type: %s%nExpires in %d days (on %s)",
+                    merchant.getLegalName(),
+                    doc.getDocumentType(),
+                    doc.getDaysUntilExpiration(),
+                    doc.getExpiryDate());
+            try {
+                emailService.sendOperationalAlert(email, subject,
+                        "KYC document expiring", detail);
+            } catch (Exception ex) {
+                logger.warn("Failed to email KYC expiry alert: {}", ex.getMessage());
+            }
+        }
     }
 
     /**

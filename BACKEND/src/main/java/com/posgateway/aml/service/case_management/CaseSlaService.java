@@ -1,9 +1,14 @@
 package com.posgateway.aml.service.case_management;
 
+import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
+import com.posgateway.aml.entity.messaging.Message;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
+import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.messaging.MessageService;
+import com.posgateway.aml.service.notification.EmailNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +32,9 @@ public class CaseSlaService {
 
     private final ComplianceCaseRepository caseRepository;
     private final BusinessDayCalculator businessDayCalculator;
+    private final EmailNotificationService emailService;
+    private final MessageService messageService;
+    private final UserRepository userRepository;
 
     @Value("${case.sla.days.low:7}")
     private int slaDaysLow;
@@ -42,9 +50,15 @@ public class CaseSlaService {
 
     @Autowired
     public CaseSlaService(ComplianceCaseRepository caseRepository,
-                          BusinessDayCalculator businessDayCalculator) {
+                          BusinessDayCalculator businessDayCalculator,
+                          EmailNotificationService emailService,
+                          MessageService messageService,
+                          UserRepository userRepository) {
         this.caseRepository = caseRepository;
         this.businessDayCalculator = businessDayCalculator;
+        this.emailService = emailService;
+        this.messageService = messageService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -145,14 +159,76 @@ public class CaseSlaService {
     }
 
     /**
-     * Notify about SLA breach or risk
+     * Notify about SLA breach or risk via in-app message + email.
+     *
+     * <p>Recipients: case assignee (+ supervisors found by role
+     * {@code COMPLIANCE_OFFICER}/{@code SUPERVISOR} within the same PSP). Failure
+     * to dispatch any single channel must not abort the loop.
      */
     private void notifySlaBreach(ComplianceCase complianceCase, CaseSlaStatus slaStatus) {
-        // TODO: Integrate with notification service
-        logger.warn("Case {} SLA status: {} (Deadline: {})", 
-                complianceCase.getCaseReference(), 
-                slaStatus, 
-                complianceCase.getSlaDeadline());
+        String caseRef = complianceCase.getCaseReference();
+        String subject = "[Hokeka AML] Case " + caseRef + " SLA " + slaStatus.name();
+        String body = String.format(
+                "Case %s is %s.%nDeadline: %s%nPriority: %s%nDays open: %s",
+                caseRef, slaStatus,
+                complianceCase.getSlaDeadline(),
+                complianceCase.getPriority(),
+                complianceCase.getDaysOpen());
+
+        logger.warn("Case {} SLA status: {} (Deadline: {})",
+                caseRef, slaStatus, complianceCase.getSlaDeadline());
+
+        // 1) In-app message + email to assignee
+        User assignee = complianceCase.getAssignedTo();
+        if (assignee != null) {
+            try {
+                Message msg = new Message();
+                msg.setRecipientUserId(assignee.getId());
+                msg.setSenderUserId(null); // system
+                msg.setSubject(subject);
+                msg.setBody(body);
+                msg.setCategory(Message.Category.CASE);
+                msg.setRelatedEntityType("case");
+                msg.setRelatedEntityId(complianceCase.getId());
+                messageService.send(msg);
+            } catch (Exception ex) {
+                logger.error("Failed to send in-app SLA message to assignee {}: {}",
+                        assignee.getId(), ex.getMessage());
+            }
+            try {
+                emailService.sendOperationalAlert(assignee.getEmail(), subject,
+                        "Case " + caseRef + " " + slaStatus.name(), body);
+            } catch (Exception ex) {
+                logger.error("Failed to send SLA email to assignee: {}", ex.getMessage());
+            }
+        }
+
+        // 2) Notify supervisors / compliance officers in the same PSP
+        if (assignee != null && assignee.getPsp() != null) {
+            try {
+                List<User> supervisors = userRepository.findByPspAndRole(
+                        assignee.getPsp(), assignee.getRole());
+                for (User sup : supervisors) {
+                    if (sup.getId().equals(assignee.getId())) continue;
+                    try {
+                        Message m = new Message();
+                        m.setRecipientUserId(sup.getId());
+                        m.setSubject(subject);
+                        m.setBody(body);
+                        m.setCategory(Message.Category.CASE);
+                        m.setRelatedEntityType("case");
+                        m.setRelatedEntityId(complianceCase.getId());
+                        messageService.send(m);
+                        emailService.sendOperationalAlert(sup.getEmail(), subject,
+                                "Case " + caseRef + " " + slaStatus.name(), body);
+                    } catch (Exception inner) {
+                        logger.warn("Failed to notify supervisor {}: {}", sup.getId(), inner.getMessage());
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Failed supervisor lookup for SLA notify: {}", ex.getMessage());
+            }
+        }
     }
 
     /**

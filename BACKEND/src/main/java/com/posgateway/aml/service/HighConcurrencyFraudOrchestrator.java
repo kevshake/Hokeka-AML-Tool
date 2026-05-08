@@ -1,6 +1,8 @@
 package com.posgateway.aml.service;
 
 import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.psp.Psp;
+import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.service.DecisionEngine.DecisionResult;
 import com.posgateway.aml.service.ScoringService.ScoringResult;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -8,9 +10,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +33,11 @@ public class HighConcurrencyFraudOrchestrator {
     private final ScoringService scoringService;
     private final DecisionEngine decisionEngine;
     private final PrometheusMetricsService metricsService;
+    private final PspRepository pspRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    private static final String PSP_CODE_KEY_PREFIX = "psp:code:";
+    private static final Duration PSP_CODE_TTL = Duration.ofHours(1);
 
     @Value("${ultra.throughput.enabled:true}")
     private boolean ultraThroughputEnabled;
@@ -38,11 +47,15 @@ public class HighConcurrencyFraudOrchestrator {
             OptimizedFeatureExtractionService featureExtractionService,
             ScoringService scoringService,
             DecisionEngine decisionEngine,
-            PrometheusMetricsService metricsService) {
+            PrometheusMetricsService metricsService,
+            PspRepository pspRepository,
+            RedisTemplate<String, Object> redisTemplate) {
         this.featureExtractionService = featureExtractionService;
         this.scoringService = scoringService;
         this.decisionEngine = decisionEngine;
         this.metricsService = metricsService;
+        this.pspRepository = pspRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -162,16 +175,42 @@ public class HighConcurrencyFraudOrchestrator {
     }
 
     /**
-     * Helper method to get PSP code from PSP ID
-     * In production, this would query the PSP repository
+     * Resolve a PSP code (e.g. {@code MPESA_KE}) by ID, with a 1-hour Redis
+     * cache. PSP codes are immutable in practice, so caching cuts the
+     * per-transaction lookup to a single Redis GET on the hot path.
+     *
+     * <p>Returns {@code "unknown"} when the input is null or the lookup fails
+     * — never blocks transaction processing on a missing PSP row.
      */
     private String getPspCode(Long pspId) {
         if (pspId == null) {
             return "unknown";
         }
-        // TODO: Implement proper PSP code lookup from repository
-        // For now, return a placeholder based on PSP ID
-        return "PSP_" + pspId;
+        String cacheKey = PSP_CODE_KEY_PREFIX + pspId;
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof String s && !s.isBlank()) {
+                return s;
+            }
+        } catch (Exception ex) {
+            logger.debug("Redis read failed for psp code key {}: {}", cacheKey, ex.getMessage());
+        }
+        try {
+            Psp psp = pspRepository.findById(pspId).orElse(null);
+            if (psp == null || psp.getPspCode() == null || psp.getPspCode().isBlank()) {
+                return "unknown";
+            }
+            String code = psp.getPspCode();
+            try {
+                redisTemplate.opsForValue().set(cacheKey, code, PSP_CODE_TTL);
+            } catch (Exception ex) {
+                logger.debug("Redis write failed for psp code key {}: {}", cacheKey, ex.getMessage());
+            }
+            return code;
+        } catch (Exception ex) {
+            logger.warn("PSP code lookup failed for id {}: {}", pspId, ex.getMessage());
+            return "unknown";
+        }
     }
 
     /**

@@ -285,7 +285,7 @@ export default function ScheduleReportDialog({
                 disabled={!newRecipient}
                 sx={{
                   backgroundColor: "#800020",
-                  "&:hover": { backgroundColor: "#600018" },
+                  "&:hover": { backgroundColor: "primary.dark" },
                   borderRadius: "12px",
                   minWidth: "100px",
                 }}
@@ -305,7 +305,7 @@ export default function ScheduleReportDialog({
                     color: "#800020",
                     "& .MuiChip-deleteIcon": {
                       color: "#800020",
-                      "&: hover": { color: "#600018" },
+                      "&: hover": { color: "primary.dark" },
                     },
                   }}
                 />
@@ -337,7 +337,7 @@ export default function ScheduleReportDialog({
           disabled={!isValid}
           sx={{
             backgroundColor: "#800020",
-            "&:hover": { backgroundColor: "#600018" },
+            "&:hover": { backgroundColor: "primary.dark" },
             borderRadius: "12px",
             px: 4,
           }}
