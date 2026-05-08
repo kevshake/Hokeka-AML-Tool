@@ -3,6 +3,8 @@ package com.posgateway.aml.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.service.enrichment.BinLookupService;
+import com.posgateway.aml.service.enrichment.IpGeoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Transaction Ingestion Service
@@ -29,6 +32,8 @@ public class TransactionIngestionService {
 
     private final TransactionStatisticsService statisticsService;
     private final com.posgateway.aml.service.risk.RiskScoringService riskScoringService;
+    private final IpGeoService ipGeoService;
+    private final BinLookupService binLookupService;
 
     @Autowired
     public TransactionIngestionService(TransactionRepository transactionRepository,
@@ -36,12 +41,16 @@ public class TransactionIngestionService {
             ObjectMapper objectMapper,
 
             TransactionStatisticsService statisticsService,
-            com.posgateway.aml.service.risk.RiskScoringService riskScoringService) {
+            com.posgateway.aml.service.risk.RiskScoringService riskScoringService,
+            IpGeoService ipGeoService,
+            BinLookupService binLookupService) {
         this.transactionRepository = transactionRepository;
         this.merchantRepository = merchantRepository;
         this.objectMapper = objectMapper;
         this.statisticsService = statisticsService;
         this.riskScoringService = riskScoringService;
+        this.ipGeoService = ipGeoService;
+        this.binLookupService = binLookupService;
     }
 
     /**
@@ -96,9 +105,8 @@ public class TransactionIngestionService {
                     transaction.setKrs(krs);
 
                     // 2. Calculate TRS (Transaction Risk)
-                    // Origin: defaulting to 'UNKNOWN' or deriving from IP/Card if available. 
-                    // Dest: Merchant Country
-                    String originCountry = "UNKNOWN"; // TODO: Derive from IP/Bin
+                    // Origin: real GeoIP / BIN lookup; if both fail we leave it null.
+                    String originCountry = deriveOriginCountry(transactionRequest);
                     String destCountry = merchant.getCountry();
                     java.math.BigDecimal amount = java.math.BigDecimal.valueOf(transactionRequest.getAmountCents()); // Cents to Unit? Adjust inside service or here. Service takes BigDecimal.
                     // Service expects standard units? Let's assume passed value is valid relative to thresholds (1000, 5000 etc). 
@@ -203,6 +211,25 @@ public class TransactionIngestionService {
     }
 
     /**
+     * Derive transaction origin country from IP first, then BIN.
+     *
+     * <p>Returns {@code "UNKNOWN"} only if every available signal fails — but
+     * unlike the previous placeholder, the actual cache and DB are consulted.
+     */
+    private String deriveOriginCountry(TransactionRequest req) {
+        if (req == null) return "UNKNOWN";
+        Optional<String> byIp = ipGeoService.lookupCountry(req.getIpAddress());
+        if (byIp.isPresent()) return byIp.get();
+        // Fall back to BIN of card.
+        String pan = req.getPan();
+        if (pan != null && pan.length() >= 6) {
+            Optional<String> byBin = binLookupService.lookupCountry(pan.substring(0, Math.min(8, pan.length())));
+            if (byBin.isPresent()) return byBin.get();
+        }
+        return "UNKNOWN";
+    }
+
+    /**
      * Hash PAN for privacy (SHA-256)
      */
     private String hashPan(String pan) {
@@ -238,6 +265,10 @@ public class TransactionIngestionService {
         private Map<String, Object> emvTags;
         private String acquirerResponse;
         private String direction;
+        private String ipAddress;
+
+        public String getIpAddress() { return ipAddress; }
+        public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
 
         // Getters and Setters
         public String getIsoMsg() {

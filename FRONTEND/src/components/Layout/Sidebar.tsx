@@ -369,7 +369,7 @@ export default function Sidebar() {
                             minHeight: 40,
                             "&.Mui-selected": {
                               backgroundColor: "rgba(169, 50, 38, 0.1)",
-                              color: "#a93226",
+                              color: "primary.main",
                               fontWeight: 600,
                               "&:hover": { backgroundColor: "rgba(169, 50, 38, 0.15)" },
                             },
@@ -378,7 +378,7 @@ export default function Sidebar() {
                             },
                           }}
                         >
-                          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32, color: active ? "#a93226" : "text.secondary" }}>
+                          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32, color: active ? "primary.main" : "text.secondary" }}>
                             {item.badge !== undefined && item.badge > 0 ? (
                               <Badge badgeContent={item.badge > 99 ? "99+" : item.badge} color="error" max={999}>
                                 {item.icon}

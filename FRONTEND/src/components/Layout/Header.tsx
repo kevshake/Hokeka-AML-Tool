@@ -219,7 +219,7 @@ export default function Header() {
                 fontSize: "0.7rem",
                 height: 24,
                 backgroundColor: "rgba(46, 204, 113, 0.15)",
-                color: "#27ae60",
+                color: "success.dark",
                 border: "1px solid rgba(46, 204, 113, 0.3)",
               }}
             />

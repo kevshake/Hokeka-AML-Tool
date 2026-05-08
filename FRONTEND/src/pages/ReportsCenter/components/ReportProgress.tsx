@@ -3,7 +3,8 @@
  * Shows progress bar for long-running reports
  */
 
-import { Box, LinearProgress, Typography, Paper, Chip } from "@mui/material";
+import { Box, LinearProgress, Typography, Paper, Chip, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
   HourglassEmpty as PendingIcon,
   CheckCircle as SuccessIcon,
@@ -27,11 +28,14 @@ const STATUS_ICONS: Record<StatusType, SvgIconComponent> = {
   failed: ErrorIcon,
 };
 
-const STATUS_COLORS: Record<StatusType, { bg: string; text: string; bar: string }> = {
-  pending: { bg: "rgba(255, 152, 0, 0.1)", text: "#F57C00", bar: "#F57C00" },
-  processing: { bg: "rgba(25, 118, 210, 0.1)", text: "#1976D2", bar: "#1976D2" },
-  completed: { bg: "rgba(46, 125, 50, 0.1)", text: "#2E7D32", bar: "#2E7D32" },
-  failed: { bg: "rgba(211, 47, 47, 0.1)", text: "#C62828", bar: "#C62828" },
+const useStatusColors = (): Record<StatusType, { bg: string; text: string; bar: string }> => {
+  const theme = useTheme();
+  return {
+    pending: { bg: alpha(theme.palette.warning.main, 0.1), text: theme.palette.warning.dark, bar: theme.palette.warning.dark },
+    processing: { bg: alpha(theme.palette.info.main, 0.1), text: theme.palette.info.main, bar: theme.palette.info.main },
+    completed: { bg: alpha(theme.palette.success.main, 0.1), text: theme.palette.success.main, bar: theme.palette.success.main },
+    failed: { bg: alpha(theme.palette.error.main, 0.1), text: theme.palette.error.dark, bar: theme.palette.error.dark },
+  };
 };
 
 const STATUS_MESSAGES: Record<StatusType, string> = {
@@ -42,6 +46,7 @@ const STATUS_MESSAGES: Record<StatusType, string> = {
 };
 
 export default function ReportProgress({ progress, showDetails = true }: ReportProgressProps) {
+  const STATUS_COLORS = useStatusColors();
   if (!progress) return null;
 
   const status = progress.status as StatusType;

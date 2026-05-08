@@ -228,29 +228,70 @@ public class RealTimeTransactionScreeningService {
     }
 
     /**
-     * Extract counterparty name from transaction
-     * This is a placeholder - would need to be enhanced based on actual transaction
-     * data structure
+     * Extract cardholder / acceptor name from a transaction.
+     *
+     * <p>Priority:
+     * <ol>
+     *   <li>Custom "CH_NAME=foo|" tag (Hokeka pipe-encoded extension).</li>
+     *   <li>ISO 8583 DE-43 (Card Acceptor Name & Location), TLV-encoded as
+     *       {@code F43=...} or LLVAR-encoded inline. We extract the leading
+     *       40 chars (acceptor name segment) per ISO 8583:1987/93.</li>
+     *   <li>EMV tag 5F20 (Cardholder Name) parsed from {@code emvTags} JSON.</li>
+     * </ol>
+     * Returns {@code null} when nothing usable is present — callers MUST NOT
+     * substitute a fabricated value.
      */
     private String extractCounterpartyName(TransactionEntity transaction) {
-        // TODO: Extract from transaction data (e.g., cardholder name from ISO message)
-        // For demo, we look for a "CH_NAME=" pattern in the ISO message if present
         String isoMsg = transaction.getIsoMsg();
+
+        // 1. Hokeka pipe-encoded extension
         if (isoMsg != null && isoMsg.contains("CH_NAME=")) {
             try {
                 int start = isoMsg.indexOf("CH_NAME=") + 8;
                 int end = isoMsg.indexOf("|", start);
-                if (end == -1)
-                    end = isoMsg.length();
-                return isoMsg.substring(start, end).trim();
+                if (end == -1) end = isoMsg.length();
+                String v = isoMsg.substring(start, end).trim();
+                if (!v.isEmpty()) return v;
             } catch (Exception e) {
-                logger.warn("Failed to extract CH_NAME from ISO message: {}", e.getMessage());
+                logger.warn("Failed to extract CH_NAME: {}", e.getMessage());
             }
         }
 
-        // Fallback: If no name, we might return placeholder for "CARDHOLDER" (masked)
-        // or
-        // null
+        // 2. ISO 8583 DE-43 — accept "F43=" prefix or full 40-char acceptor segment.
+        if (isoMsg != null && isoMsg.contains("F43=")) {
+            try {
+                int start = isoMsg.indexOf("F43=") + 4;
+                int end = isoMsg.indexOf("|", start);
+                if (end == -1) end = Math.min(isoMsg.length(), start + 40);
+                String acceptor = isoMsg.substring(start, end).trim();
+                // DE-43 layout: <acceptor name 22 / 25><city 13><state 3 / country 3>.
+                // Leading 22-25 chars contain the acceptor / cardholder name.
+                if (acceptor.length() > 25) acceptor = acceptor.substring(0, 25);
+                acceptor = acceptor.trim();
+                if (!acceptor.isEmpty()) return acceptor;
+            } catch (Exception e) {
+                logger.warn("Failed to extract DE-43: {}", e.getMessage());
+            }
+        }
+
+        // 3. EMV tag 5F20 (Cardholder Name) from the parsed EMV-tag JSON map.
+        try {
+            String emvJson = transaction.getEmvTags();
+            if (emvJson != null && emvJson.contains("5F20")) {
+                com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> tags = m.readValue(emvJson, java.util.Map.class);
+                Object v = tags.get("5F20");
+                if (v == null) v = tags.get("5f20");
+                if (v != null) {
+                    String s = v.toString().trim();
+                    if (!s.isEmpty()) return s;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("EMV 5F20 extraction failed: {}", e.getMessage());
+        }
+
         return null;
     }
 

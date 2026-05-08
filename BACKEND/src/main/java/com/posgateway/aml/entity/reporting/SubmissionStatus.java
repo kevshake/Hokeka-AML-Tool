@@ -9,7 +9,9 @@ public enum SubmissionStatus {
     APPROVED("Approved", "Approved for filing"),
     FILED("Filed", "Submitted to regulator"),
     REJECTED("Rejected", "Rejected by regulator"),
-    AMENDED("Amended", "Amended submission");
+    AMENDED("Amended", "Amended submission"),
+    SUBMISSION_PENDING("Submission Pending",
+            "Approved for filing but the regulator client is not yet enabled — will be re-driven");
 
     private final String displayName;
     private final String description;

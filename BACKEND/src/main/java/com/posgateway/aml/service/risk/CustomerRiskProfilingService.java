@@ -4,8 +4,10 @@ import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.repository.risk.CountryRiskRepository;
 import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
 import com.posgateway.aml.service.cache.KycDataCacheService;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -28,6 +31,10 @@ public class CustomerRiskProfilingService {
     private final TransactionRepository transactionRepository;
     private final KycDataCacheService kycCacheService; // Aerospike cache for fast lookups
     private final HighRiskCountryRepository highRiskCountryRepository;
+    private final CountryRiskRepository countryRiskRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private static final String COUNTRY_RISK_KEY = "country:risk:";
+    private static final Duration COUNTRY_RISK_TTL = Duration.ofHours(6);
 
     @Value("${risk.edd.threshold:0.7}")
     private double eddThreshold;
@@ -39,11 +46,15 @@ public class CustomerRiskProfilingService {
     public CustomerRiskProfilingService(ComplianceCaseRepository caseRepository,
             TransactionRepository transactionRepository,
             KycDataCacheService kycCacheService,
-            HighRiskCountryRepository highRiskCountryRepository) {
+            HighRiskCountryRepository highRiskCountryRepository,
+            CountryRiskRepository countryRiskRepository,
+            RedisTemplate<String, Object> redisTemplate) {
         this.caseRepository = caseRepository;
         this.transactionRepository = transactionRepository;
         this.kycCacheService = kycCacheService;
         this.highRiskCountryRepository = highRiskCountryRepository;
+        this.countryRiskRepository = countryRiskRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -163,11 +174,42 @@ public class CustomerRiskProfilingService {
     }
 
     /**
-     * Calculate geographic risk score
+     * Calculate geographic risk score, backed by the {@code country_risk_scores}
+     * table with a Redis cache (6h TTL). Falls back to the binary
+     * {@code high_risk_countries} list if a numeric score is not available.
      */
     public double calculateGeographicRiskScore(String country) {
-        // TODO: Implement based on country risk database
-        return isHighRiskCountry(country) ? 0.5 : 0.1;
+        if (country == null || country.isBlank()) {
+            return 0.1;
+        }
+        String cc = country.toUpperCase();
+        String key = COUNTRY_RISK_KEY + cc;
+        try {
+            Object cached = redisTemplate.opsForValue().get(key);
+            if (cached instanceof Number n) {
+                return n.doubleValue();
+            }
+        } catch (Exception ex) {
+            logger.debug("Redis read fail for {}: {}", key, ex.getMessage());
+        }
+        Double score = null;
+        try {
+            score = countryRiskRepository.findByCountryCode(cc)
+                    .map(c -> c.getRiskScore())
+                    .orElse(null);
+        } catch (Exception ex) {
+            logger.warn("country_risk_scores lookup failed for {}: {}. " +
+                    "FIXME(go-live, country_risk_scores-migration-pending)", cc, ex.getMessage());
+        }
+        if (score == null) {
+            score = isHighRiskCountry(cc) ? 0.5 : 0.1;
+        }
+        try {
+            redisTemplate.opsForValue().set(key, score, COUNTRY_RISK_TTL);
+        } catch (Exception ex) {
+            logger.debug("Redis write fail for {}: {}", key, ex.getMessage());
+        }
+        return score;
     }
 
     /**

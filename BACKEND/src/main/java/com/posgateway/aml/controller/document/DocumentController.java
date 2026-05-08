@@ -90,7 +90,7 @@ public class DocumentController {
      * GET /documents/{id}/file
      */
     @GetMapping("/documents/{documentId}/file")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
     public ResponseEntity<InputStreamResource> streamDocument(@PathVariable Long documentId) throws IOException {
         return serveDocument(documentId, false);
     }
@@ -100,7 +100,7 @@ public class DocumentController {
      * GET /documents/{id}/download
      */
     @GetMapping("/documents/{documentId}/download")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'PSP_USER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
     public ResponseEntity<InputStreamResource> downloadDocument(@PathVariable Long documentId) throws IOException {
         return serveDocument(documentId, true);
     }

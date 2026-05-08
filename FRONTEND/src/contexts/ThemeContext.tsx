@@ -86,6 +86,24 @@ function createPspTheme(pspTheme: PspTheme | null): Theme {
                 light: lightenColor(accentColor, 0.2),
                 dark: darkenColor(accentColor, 0.2),
             },
+            warning: {
+                main: "#C9A961",
+                dark: "#9F8746",
+                light: "#E0C68B",
+                contrastText: "#1A1A1A",
+            },
+            success: {
+                main: "#2E7D32",
+                dark: "#1B5E20",
+                light: "#66BB6A",
+                contrastText: "#FFFFFF",
+            },
+            info: {
+                main: "#3D2C2E",
+                dark: "#2A1E1F",
+                light: "#6E5A5C",
+                contrastText: "#FFFFFF",
+            },
             background: {
                 default: "#FAF8F5",
                 paper: "#FFFFFF",

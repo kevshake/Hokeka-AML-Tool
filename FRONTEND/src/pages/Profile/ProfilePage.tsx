@@ -24,6 +24,7 @@ import {
   TableRow,
   Tooltip,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
   Person as PersonIcon,
   Lock as LockIcon,
@@ -172,20 +173,20 @@ export default function ProfilePage() {
                 <Chip
                   label={user?.psp?.name || "System User"}
                   size="small"
-                  sx={{
-                    backgroundColor: user?.psp ? "#f39c1220" : "#95a5a620",
-                    color: user?.psp ? "#f39c12" : "#95a5a6",
-                    border: `1px solid ${user?.psp ? "#f39c12" : "#95a5a6"}`,
-                  }}
+                  sx={(theme) => ({
+                    backgroundColor: user?.psp ? alpha(theme.palette.warning.main, 0.15) : alpha(theme.palette.text.disabled, 0.15),
+                    color: user?.psp ? theme.palette.warning.dark : theme.palette.text.secondary,
+                    border: `1px solid ${user?.psp ? theme.palette.warning.main : theme.palette.text.disabled}`,
+                  })}
                 />
                 <Chip
                   label={user?.enabled ? "Active" : "Disabled"}
                   size="small"
-                  sx={{
-                    backgroundColor: user?.enabled ? "#2ecc7120" : "#e74c3c20",
-                    color: user?.enabled ? "#2ecc71" : "#e74c3c",
-                    border: `1px solid ${user?.enabled ? "#2ecc71" : "#e74c3c"}`,
-                  }}
+                  sx={(theme) => ({
+                    backgroundColor: user?.enabled ? alpha(theme.palette.success.main, 0.15) : alpha(theme.palette.error.main, 0.15),
+                    color: user?.enabled ? theme.palette.success.main : theme.palette.error.main,
+                    border: `1px solid ${user?.enabled ? theme.palette.success.main : theme.palette.error.main}`,
+                  })}
                 />
               </Box>
             </Box>
@@ -456,11 +457,11 @@ export default function ProfilePage() {
                           <Chip
                             label="Granted"
                             size="small"
-                            sx={{
-                              backgroundColor: "#2ecc7120",
-                              color: "#2ecc71",
-                              border: "1px solid #2ecc71",
-                            }}
+                            sx={(theme) => ({
+                              backgroundColor: alpha(theme.palette.success.main, 0.15),
+                              color: theme.palette.success.main,
+                              border: `1px solid ${theme.palette.success.main}`,
+                            })}
                           />
                         </TableCell>
                       </TableRow>

@@ -1,9 +1,15 @@
 package com.posgateway.aml.service.kyc;
 
+import com.posgateway.aml.entity.Alert;
+import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.messaging.Message;
+import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.messaging.MessageService;
 import com.posgateway.aml.service.risk.CustomerRiskProfilingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +36,9 @@ public class TriggerBasedKycService {
     private final TransactionRepository transactionRepository;
     private final CustomerRiskProfilingService riskProfilingService;
     private final PeriodicKycRefreshService periodicRefreshService;
+    private final AlertRepository alertRepository;
+    private final MessageService messageService;
+    private final UserRepository userRepository;
 
     @Value("${kyc.trigger.large-transaction.threshold:50000}")
     private BigDecimal largeTransactionThreshold;
@@ -45,11 +54,17 @@ public class TriggerBasedKycService {
             MerchantRepository merchantRepository,
             TransactionRepository transactionRepository,
             CustomerRiskProfilingService riskProfilingService,
-            PeriodicKycRefreshService periodicRefreshService) {
+            PeriodicKycRefreshService periodicRefreshService,
+            AlertRepository alertRepository,
+            MessageService messageService,
+            UserRepository userRepository) {
         this.merchantRepository = merchantRepository;
         this.transactionRepository = transactionRepository;
         this.riskProfilingService = riskProfilingService;
         this.periodicRefreshService = periodicRefreshService;
+        this.alertRepository = alertRepository;
+        this.messageService = messageService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -152,15 +167,57 @@ public class TriggerBasedKycService {
     }
 
     /**
-     * Trigger KYC update for merchant
+     * Trigger KYC update for merchant.
+     *
+     * <p>Creates a real {@link Alert} row for the operations queue plus an
+     * in-app {@link Message} for the merchant's PSP compliance officers so the
+     * trigger is visible in the case-management UI immediately.
      */
     private void triggerKycUpdate(Merchant merchant, String reason) {
         logger.info("Triggering KYC update for merchant {}: {}", merchant.getMerchantId(), reason);
-        
+
         // Trigger periodic refresh service
         periodicRefreshService.refreshMerchantKycManually(merchant.getMerchantId());
-        
-        // TODO: Create alert or notification
+
+        // Persist a real Alert row for ops/queue visibility.
+        try {
+            Alert alert = new Alert();
+            alert.setMerchantId(merchant.getMerchantId());
+            alert.setStatus("open");
+            alert.setSeverity("WARN");
+            alert.setAction("KYC_REFRESH");
+            alert.setReason("KYC trigger: " + reason);
+            alert.setNotes("Auto-triggered KYC refresh for merchant " + merchant.getMerchantId());
+            alertRepository.save(alert);
+        } catch (Exception ex) {
+            logger.error("Failed to persist KYC trigger Alert for merchant {}: {}",
+                    merchant.getMerchantId(), ex.getMessage());
+        }
+
+        // Notify PSP compliance officers via in-app message.
+        try {
+            if (merchant.getPsp() != null) {
+                List<User> officers = userRepository.findByPsp(merchant.getPsp());
+                String subject = "[Hokeka AML] KYC refresh triggered: merchant "
+                        + merchant.getMerchantId();
+                for (User u : officers) {
+                    try {
+                        Message m = new Message();
+                        m.setRecipientUserId(u.getId());
+                        m.setSubject(subject);
+                        m.setBody("Reason: " + reason);
+                        m.setCategory(Message.Category.COMPLIANCE);
+                        m.setRelatedEntityType("merchant");
+                        m.setRelatedEntityId(merchant.getMerchantId());
+                        messageService.send(m);
+                    } catch (Exception inner) {
+                        logger.warn("Failed message dispatch user {}: {}", u.getId(), inner.getMessage());
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            logger.warn("KYC trigger notification failed: {}", ex.getMessage());
+        }
     }
 
     /**

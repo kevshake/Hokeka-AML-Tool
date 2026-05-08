@@ -6,7 +6,9 @@ import com.posgateway.aml.repository.PasswordResetTokenRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.AuditLogService;
 import com.posgateway.aml.service.notification.NotificationService;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -26,16 +29,19 @@ public class PasswordResetService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PasswordResetService.class);
 
+    private static final List<String> PROD_PROFILES = Arrays.asList("prod", "production");
+
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final Environment environment;
 
     @Value("${auth.password-reset.token-ttl-minutes:15}")
     private int tokenTtlMinutes;
 
-    @Value("${auth.password-reset.pepper:change-me-in-production}")
+    @Value("${auth.password-reset.pepper:}")
     private String tokenPepper;
 
     @Value("${auth.emergency-reset.enabled:false}")
@@ -56,12 +62,51 @@ public class PasswordResetService {
             PasswordResetTokenRepository tokenRepository,
             PasswordEncoder passwordEncoder,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            Environment environment) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.environment = environment;
+    }
+
+    /**
+     * Validate the password-reset token pepper at startup.
+     *
+     * <p>In {@code prod}/{@code production}, a missing or blank
+     * {@code AUTH_PASSWORD_RESET_PEPPER} is a fatal misconfiguration: token hashes
+     * become predictable / reproducible by anyone with source access. Fail-fast
+     * with {@link IllegalStateException} so the boot aborts and the operator sees
+     * a loud error.
+     *
+     * <p>In any other profile (including {@code dev} and {@code testenv}), a
+     * blank pepper is replaced by a randomly-generated per-boot 32-byte secret
+     * with a WARN log so local development is not blocked. The pepper is NOT
+     * persisted — restarts get a fresh one, which means in dev a password-reset
+     * link issued before a restart will not validate after the restart. That is
+     * the intended dev behavior.
+     */
+    @PostConstruct
+    void validatePepper() {
+        boolean isProd = Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(PROD_PROFILES::contains);
+        if (tokenPepper != null && !tokenPepper.isBlank()) {
+            return;
+        }
+        if (isProd) {
+            throw new IllegalStateException(
+                    "auth.password-reset.pepper (env AUTH_PASSWORD_RESET_PEPPER) is required in prod/production "
+                            + "but was blank. Set a long random secret and restart. Refusing to boot with a "
+                            + "predictable password-reset token pepper.");
+        }
+        byte[] random = new byte[32];
+        new SecureRandom().nextBytes(random);
+        this.tokenPepper = Base64.getEncoder().encodeToString(random);
+        log.warn("AUTH_PASSWORD_RESET_PEPPER is blank in non-prod profile {} — generated an ephemeral per-boot " +
+                        "pepper. Password-reset tokens issued before a restart will NOT validate after restart.",
+                Arrays.toString(environment.getActiveProfiles()));
     }
 
     /**

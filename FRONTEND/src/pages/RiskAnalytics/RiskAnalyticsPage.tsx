@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Box, Paper, Typography, Select, MenuItem, FormControl, InputLabel, Grid } from "@mui/material";
+import { Box, Paper, Typography, Select, MenuItem, FormControl, InputLabel, Grid, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useRiskHeatmap, useRiskTrends } from "../../features/api/queries";
 import {
   Chart as ChartJS,
@@ -16,6 +17,7 @@ import { Line } from "react-chartjs-2";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function RiskAnalyticsPage() {
+  const theme = useTheme();
   const [period, setPeriod] = useState<number>(30);
   const [heatmapType, setHeatmapType] = useState<"customer" | "merchant">("customer");
 
@@ -29,8 +31,8 @@ export default function RiskAnalyticsPage() {
           {
             label: "Risk Trend",
             data: trends.data || Object.values(trends),
-            borderColor: "#a93226",
-            backgroundColor: "rgba(169, 50, 38, 0.1)",
+            borderColor: theme.palette.primary.main,
+            backgroundColor: alpha(theme.palette.primary.main, 0.1),
             tension: 0.4,
           },
         ],
@@ -89,16 +91,16 @@ export default function RiskAnalyticsPage() {
                           p: 2,
                           backgroundColor:
                             typeof value === "number" && value > 50
-                              ? "#e74c3c20"
+                              ? alpha(theme.palette.error.main, 0.15)
                               : typeof value === "number" && value > 25
-                              ? "#f39c1220"
-                              : "#2ecc7120",
+                              ? alpha(theme.palette.warning.main, 0.15)
+                              : alpha(theme.palette.success.main, 0.15),
                           border: `1px solid ${
                             typeof value === "number" && value > 50
-                              ? "#e74c3c"
+                              ? theme.palette.error.main
                               : typeof value === "number" && value > 25
-                              ? "#f39c12"
-                              : "#2ecc71"
+                              ? theme.palette.warning.main
+                              : theme.palette.success.main
                           }`,
                           borderRadius: 1,
                           textAlign: "center",
