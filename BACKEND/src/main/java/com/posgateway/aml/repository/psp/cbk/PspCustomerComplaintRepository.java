@@ -2,6 +2,8 @@ package com.posgateway.aml.repository.psp.cbk;
 
 import com.posgateway.aml.entity.psp.cbk.PspCustomerComplaint;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -15,9 +17,16 @@ public interface PspCustomerComplaintRepository extends JpaRepository<PspCustome
     List<PspCustomerComplaint> findByPspIdAndRemedialStatus(Long pspId, String remedialStatus);
 
     /**
-     * Monthly window: complaints whose date_of_occurrence falls within [start, end).
-     * Used by the CBK orchestrator to report only the previous calendar month.
+     * Complaints whose date of occurrence (or date reported, when occurrence is null)
+     * falls inside [windowStart, windowEnd]. Used for the monthly CBK return.
      */
-    List<PspCustomerComplaint> findByPspIdAndDateOfOccurrenceBetween(
-            Long pspId, LocalDate start, LocalDate end);
+    @Query("SELECT c FROM PspCustomerComplaint c WHERE c.pspId = :pspId " +
+           "AND ( " +
+           "   (c.dateOfOccurrence IS NOT NULL AND c.dateOfOccurrence BETWEEN :windowStart AND :windowEnd) " +
+           "OR (c.dateOfOccurrence IS NULL AND c.dateReportedToTheInstitution IS NOT NULL " +
+           "    AND c.dateReportedToTheInstitution BETWEEN :windowStart AND :windowEnd) " +
+           ")")
+    List<PspCustomerComplaint> findActiveInWindow(@Param("pspId") Long pspId,
+                                                  @Param("windowStart") LocalDate windowStart,
+                                                  @Param("windowEnd") LocalDate windowEnd);
 }

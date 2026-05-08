@@ -3,6 +3,7 @@ package com.posgateway.aml.service.analytics;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.model.SarStatus;
+import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import org.slf4j.Logger;
@@ -26,12 +27,15 @@ public class OperationalMetricsService {
 
     private final ComplianceCaseRepository caseRepository;
     private final SuspiciousActivityReportRepository sarRepository;
+    private final AlertRepository alertRepository;
 
     @Autowired
     public OperationalMetricsService(ComplianceCaseRepository caseRepository,
-                                    SuspiciousActivityReportRepository sarRepository) {
+                                    SuspiciousActivityReportRepository sarRepository,
+                                    AlertRepository alertRepository) {
         this.caseRepository = caseRepository;
         this.sarRepository = sarRepository;
+        this.alertRepository = alertRepository;
     }
 
     /**
@@ -81,12 +85,23 @@ public class OperationalMetricsService {
     }
 
     /**
-     * Calculate alert-to-SAR conversion rate
+     * Calculate alert-to-SAR conversion rate.
+     *
+     * <p>Conversion = (SARs filed in [startDate,endDate]) / (alerts created in
+     * [startDate,endDate]) × 100. Returns 0.0 when no alerts were raised in
+     * the window. Note: this is a window-level proxy — true alert→case→SAR
+     * lineage requires tracing case_alerts; the proxy is what every existing
+     * dashboard expects.
      */
     public double calculateAlertToSarConversionRate(LocalDateTime startDate, LocalDateTime endDate) {
-        // TODO: Implement based on your alert system
-        // This would require linking alerts to cases to SARs
-        return 0.0;
+        long alerts = alertRepository.findByCreatedAtBetween(startDate, endDate).size();
+        if (alerts == 0) {
+            return 0.0;
+        }
+        long sarsFiled = sarRepository.findByCreatedAtBetween(startDate, endDate).stream()
+                .filter(s -> s.getStatus() == SarStatus.FILED)
+                .count();
+        return ((double) sarsFiled / (double) alerts) * 100.0;
     }
 
     /**

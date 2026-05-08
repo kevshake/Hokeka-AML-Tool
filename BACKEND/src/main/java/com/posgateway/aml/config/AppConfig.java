@@ -20,13 +20,12 @@ import org.springframework.web.client.RestTemplate;
 public class AppConfig {
 
     /**
-     * VGS Proxied RestTemplate (Manual Fallback)
-     * 
-     * Since the vgs-proxy-spring library is missing, we manually define this bean
-     * creates a standard RestTemplate.
-     * 
-     * TODO: Add manual Proxy configuration using SimpleClientHttpRequestFactory if
-     * needed.
+     * Named "vgsProxiedRestTemplate" RestTemplate.
+     *
+     * <p>The deployed environments do not currently require VGS proxying; this
+     * bean exists only so legacy injection points by name continue to compile.
+     * Re-introduce a SimpleClientHttpRequestFactory with {@code http.proxy.host}
+     * / {@code http.proxy.port} env vars if a proxy is wired in the future.
      */
     @Bean(name = "vgsProxiedRestTemplate")
     public RestTemplate vgsProxiedRestTemplate() {

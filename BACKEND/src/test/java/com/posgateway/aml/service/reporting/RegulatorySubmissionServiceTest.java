@@ -1,10 +1,13 @@
 package com.posgateway.aml.service.reporting;
 
+import com.posgateway.aml.client.regulator.FincenSubmissionClient;
+import com.posgateway.aml.client.regulator.SubmissionResult;
 import com.posgateway.aml.dto.reporting.RegulatorySubmissionDTO;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.reporting.*;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.repository.reporting.RegulatorySubmissionRepository;
+import com.posgateway.aml.repository.reporting.ReportExecutionRepository;
 import com.posgateway.aml.repository.reporting.ReportRepository;
 import com.posgateway.aml.service.security.PspIsolationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,10 +40,16 @@ class RegulatorySubmissionServiceTest {
     private ReportRepository reportRepository;
 
     @Mock
+    private ReportExecutionRepository reportExecutionRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
     private PspIsolationService pspIsolationService;
+
+    @Mock
+    private FincenSubmissionClient fincenClient;
 
     @InjectMocks
     private RegulatorySubmissionService submissionService;
@@ -109,7 +119,7 @@ class RegulatorySubmissionServiceTest {
     }
 
     @Test
-    void submitToFinCEN_shouldFileApprovedSubmission() {
+    void submitToFinCEN_shouldFileApprovedSubmission() throws Exception {
         // Given
         testSubmission.setStatus(SubmissionStatus.APPROVED);
         when(reportRepository.findById(1L)).thenReturn(Optional.of(testReport));
@@ -118,6 +128,11 @@ class RegulatorySubmissionServiceTest {
         when(submissionRepository.save(any(RegulatorySubmission.class))).thenReturn(testSubmission);
         when(submissionRepository.findByFilters(any(), eq(SubmissionStatus.DRAFT), eq("FINCEN"), any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
+        // findOrCreateSubmission falls through to prepareSubmission then re-loads via findById
+        when(submissionRepository.findById(1L)).thenReturn(Optional.of(testSubmission));
+        // dispatchSubmission delegates to the wired FincenSubmissionClient on the success path
+        when(fincenClient.submit(any(RegulatorySubmission.class)))
+            .thenReturn(new SubmissionResult("BSA-12345", "ACCEPTED", Instant.now(), "FINCEN"));
 
         // When
         RegulatorySubmissionDTO result = submissionService.submitToFinCEN(1L, 1L, 1L);
@@ -131,13 +146,14 @@ class RegulatorySubmissionServiceTest {
 
     @Test
     void submitToFinCEN_shouldThrowExceptionForDraftStatus() {
-        // Given
+        // Given - submission stays DRAFT (canFile() must return false to trigger IllegalStateException)
         when(reportRepository.findById(1L)).thenReturn(Optional.of(testReport));
         when(pspIsolationService.sanitizePspId(1L)).thenReturn(1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(submissionRepository.save(any(RegulatorySubmission.class))).thenReturn(testSubmission);
         when(submissionRepository.findByFilters(any(), eq(SubmissionStatus.DRAFT), eq("FINCEN"), any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
+        when(submissionRepository.findById(1L)).thenReturn(Optional.of(testSubmission));
 
         // When/Then
         assertThrows(IllegalStateException.class, () -> {

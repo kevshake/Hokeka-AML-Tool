@@ -10,8 +10,8 @@ import java.time.Instant;
  *
  * <p>Persisted whenever a PSP submits a CBK regulatory report (CTR, STR,
  * quarterly summary, etc.) via the compliance reporting UI. This row is the
- * audit trail; the actual remote CBK API call is wired in
- * {@code CbkReportService} (currently a TODO stub).
+ * audit trail; the actual remote CBK API call is owned by
+ * {@code CbkReportService} / {@code CbkSubmissionOrchestrator}.
  *
  * <p>PSP isolation is enforced by the {@code pspId} column — every query
  * MUST filter by {@code pspId}.

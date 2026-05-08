@@ -1,5 +1,8 @@
 package com.posgateway.aml.service.monitoring;
 
+import com.posgateway.aml.client.aml.SanctionsScreenClient;
+import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScreenRequest;
+import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScreenResponse;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.entity.Alert;
@@ -9,6 +12,7 @@ import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,6 +36,7 @@ public class TransactionMonitoringService {
     private final AlertRepository alertRepository;
     private final UserRepository userRepository;
     private final MerchantRepository merchantRepository;
+    private final SanctionsScreenClient sanctionsScreenClient;
 
     /**
      * High-amount threshold (cents). $500 default — same as legacy getTopRiskIndicators check.
@@ -62,12 +67,14 @@ public class TransactionMonitoringService {
             SuspiciousActivityReportRepository sarRepository,
             AlertRepository alertRepository,
             UserRepository userRepository,
-            MerchantRepository merchantRepository) {
+            MerchantRepository merchantRepository,
+            @Autowired(required = false) SanctionsScreenClient sanctionsScreenClient) {
         this.transactionRepository = transactionRepository;
         this.sarRepository = sarRepository;
         this.alertRepository = alertRepository;
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
+        this.sanctionsScreenClient = sanctionsScreenClient;
     }
 
     private java.util.Set<String> highRiskMccs() {
@@ -466,17 +473,26 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * Sanctions status surfaced on the live monitoring page.
-     *
-     * <p>The Aerospike-backed sanctions service is being removed in parallel
-     * (post-removal stub returns CLEAR for everything, which is misleading on
-     * the dashboard). Until the AML microservice exposes a screening endpoint
-     * we surface "UNKNOWN" rather than a fake "CLEAR" so operators know the
-     * data is missing.
+     * Sanctions status surfaced on the live monitoring page. Delegates to the
+     * AML microservice via {@link SanctionsScreenClient}; returns the upstream
+     * status string (CLEAR / REVIEW / FLAGGED). When the client is absent or
+     * the upstream is unavailable we return "UNKNOWN" so operators know the
+     * data is missing rather than a misleading false-CLEAR.
      */
-    // TODO(sanctions-microservice): wire to aml-microservice when sanctions move there
     private String getSanctionsStatus(TransactionEntity txn) {
-        return "UNKNOWN";
+        if (sanctionsScreenClient == null || txn == null || txn.getMerchantId() == null) {
+            return "UNKNOWN";
+        }
+        try {
+            BackendSanctionsScreenResponse resp = sanctionsScreenClient.screen(
+                    new BackendSanctionsScreenRequest(txn.getMerchantId(), null, null));
+            if (resp == null || resp.status() == null || resp.status().isBlank()) {
+                return "UNKNOWN";
+            }
+            return resp.status();
+        } catch (Exception ex) {
+            return "UNKNOWN";
+        }
     }
 
     /**

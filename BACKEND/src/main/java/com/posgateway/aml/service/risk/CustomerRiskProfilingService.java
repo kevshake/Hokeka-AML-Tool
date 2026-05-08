@@ -34,7 +34,7 @@ public class CustomerRiskProfilingService {
     private final CountryRiskRepository countryRiskRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private static final String COUNTRY_RISK_KEY = "country:risk:";
-    private static final Duration COUNTRY_RISK_TTL = Duration.ofHours(6);
+    private static final Duration COUNTRY_RISK_TTL = Duration.ofHours(1);
 
     @Value("${risk.edd.threshold:0.7}")
     private double eddThreshold;
@@ -194,12 +194,13 @@ public class CustomerRiskProfilingService {
         }
         Double score = null;
         try {
+            // country_risk_scores.risk_score is an integer 0-100; legacy callers
+            // expect a 0.0-1.0 scale, so we normalise here.
             score = countryRiskRepository.findByCountryCode(cc)
-                    .map(c -> c.getRiskScore())
+                    .map(c -> c.getRiskScore() == null ? null : c.getRiskScore() / 100.0)
                     .orElse(null);
         } catch (Exception ex) {
-            logger.warn("country_risk_scores lookup failed for {}: {}. " +
-                    "FIXME(go-live, country_risk_scores-migration-pending)", cc, ex.getMessage());
+            logger.warn("country_risk_scores lookup failed for {}: {}", cc, ex.getMessage());
         }
         if (score == null) {
             score = isHighRiskCountry(cc) ? 0.5 : 0.1;

@@ -1,13 +1,12 @@
 package com.posgateway.aml.service.sanctions;
 
+import com.posgateway.aml.client.aml.SanctionsCountClient;
 import com.posgateway.aml.entity.sanctions.WatchlistUpdate;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.sanctions.WatchlistUpdateRepository;
-import com.posgateway.aml.service.AerospikeConnectionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,7 +17,9 @@ import java.util.Map;
 
 /**
  * Screening Coverage Reports Service
- * Generates screening coverage statistics
+ * Generates screening coverage statistics by combining merchant-screening
+ * timestamps from Postgres with the live sanctions record count served by
+ * the {@code aml-microservice} {@code /internal/v1/sanctions/count} endpoint.
  */
 @Service
 public class ScreeningCoverageService {
@@ -27,20 +28,16 @@ public class ScreeningCoverageService {
 
     private final MerchantRepository merchantRepository;
     private final WatchlistUpdateRepository watchlistUpdateRepository;
-    private final AerospikeConnectionService aerospikeConnectionService;
-
-    @SuppressWarnings("unused") // TODO(aerospike-removal): drop when sanctions-stats endpoint is wired in.
-    @Value("${aerospike.namespace:sanctions}")
-    private String aerospikeNamespace;
+    private final SanctionsCountClient sanctionsCountClient;
 
     @Autowired
     public ScreeningCoverageService(
             MerchantRepository merchantRepository,
             WatchlistUpdateRepository watchlistUpdateRepository,
-            AerospikeConnectionService aerospikeConnectionService) {
+            SanctionsCountClient sanctionsCountClient) {
         this.merchantRepository = merchantRepository;
         this.watchlistUpdateRepository = watchlistUpdateRepository;
-        this.aerospikeConnectionService = aerospikeConnectionService;
+        this.sanctionsCountClient = sanctionsCountClient;
     }
 
     /**
@@ -61,12 +58,12 @@ public class ScreeningCoverageService {
         report.setScreenedMerchants(screenedMerchants);
 
         // Coverage percentage
-        double coveragePercent = totalMerchants > 0 ? 
+        double coveragePercent = totalMerchants > 0 ?
                 (screenedMerchants / (double) totalMerchants) * 100 : 0.0;
         report.setCoveragePercentage(coveragePercent);
 
-        // Coverage by list type - query Aerospike for actual sanctions list statistics
-        Map<String, Long> coverageByList = getAerospikeSanctionsStatistics();
+        // Coverage by list type — sum WatchlistUpdate.recordCount per list name.
+        Map<String, Long> coverageByList = getSanctionsListBreakdown();
         report.setCoverageByListType(coverageByList);
 
         // Last screening dates
@@ -88,19 +85,13 @@ public class ScreeningCoverageService {
     }
 
     /**
-     * TODO(aerospike-removal): originally counted live entity rows from Aerospike.
-     * Aerospike now lives in aml-microservice; until that service exposes a
-     * sanctions-stats endpoint we fall back to the {@link WatchlistUpdate}
-     * metadata stored in PostgreSQL.
+     * Per-list breakdown of how many records each ingested watchlist contributed.
+     * Sourced from {@link WatchlistUpdate#getRecordCount()} (Postgres) — the
+     * aml-microservice owns the live Aerospike set but doesn't expose a
+     * per-list breakdown today.
      */
-    private Map<String, Long> getAerospikeSanctionsStatistics() {
+    private Map<String, Long> getSanctionsListBreakdown() {
         Map<String, Long> stats = new HashMap<>();
-        if (aerospikeConnectionService != null) {
-            // Reference retained so the autowired field isn't flagged unused;
-            // the stub always reports !isConnected() so we go straight to fallback.
-            logger.debug("aerospike connected={} — using WatchlistUpdate fallback for stats",
-                    aerospikeConnectionService.isConnected());
-        }
         List<WatchlistUpdate> updates = watchlistUpdateRepository.findAll();
         for (WatchlistUpdate update : updates) {
             Long recordCount = update.getRecordCount();
@@ -110,11 +101,16 @@ public class ScreeningCoverageService {
     }
 
     /**
-     * TODO(aerospike-removal): always returns 0 now — the live sanctions count
-     * lives behind the aml-microservice. Wire to a new endpoint when one exists.
+     * Live count of sanctions records in the AML microservice's Aerospike set.
+     * Returns -1 when the upstream is unavailable (the dashboard MUST surface
+     * "unavailable" rather than a misleading "0").
      */
-    public long getTotalSanctionsEntitiesInAerospike() {
-        return 0L;
+    public long getTotalSanctionsEntities() {
+        long count = sanctionsCountClient.getCount();
+        if (count < 0) {
+            logger.debug("Sanctions count unavailable from aml-microservice");
+        }
+        return count;
     }
 
     /**
@@ -146,4 +142,3 @@ public class ScreeningCoverageService {
         public void setNewestScreeningDate(LocalDate newestScreeningDate) { this.newestScreeningDate = newestScreeningDate; }
     }
 }
-

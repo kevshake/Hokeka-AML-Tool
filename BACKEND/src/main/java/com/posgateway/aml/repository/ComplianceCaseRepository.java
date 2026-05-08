@@ -160,4 +160,44 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
     @Query(value = "SELECT priority, COUNT(*) FROM compliance_cases GROUP BY priority",
            nativeQuery = true)
     List<Object[]> countAllGroupByPriority();
+
+    /**
+     * Compliance team workload — open-case counts grouped by assignee for
+     * a given PSP (the "team" is everyone with the same {@code psp_id}).
+     * Returns rows of {@code [user_id (BIGINT), full_name (TEXT), count (BIGINT)]};
+     * the {@code full_name} column is built as {@code first || ' ' || last}
+     * and only includes users who currently have at least one open case.
+     */
+    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.id) " +
+            "FROM compliance_cases c " +
+            "JOIN users u ON u.id = c.assigned_to_user_id" +
+            "WHERE c.psp_id = :pspId " +
+            "  AND c.status IN ('NEW','ASSIGNED','IN_PROGRESS','PENDING_REVIEW','ESCALATED','PENDING_INFO') " +
+            "GROUP BY u.id, full_name " +
+            "ORDER BY COUNT(c.id) DESC",
+           nativeQuery = true)
+    List<Object[]> countOpenCasesByAssigneeForPsp(@Param("pspId") Long pspId);
+
+    /**
+     * Open-case count for a specific assignee within a PSP.
+     */
+    @Query(value = "SELECT COUNT(*) FROM compliance_cases " +
+            "WHERE assigned_to_user_id = :userId AND psp_id = :pspId " +
+            "  AND status IN ('NEW','ASSIGNED','IN_PROGRESS','PENDING_REVIEW','ESCALATED','PENDING_INFO')",
+           nativeQuery = true)
+    long countOpenByAssigneeAndPsp(@Param("userId") Long userId, @Param("pspId") Long pspId);
+
+    /**
+     * Compliance team workload — open-case counts grouped by assignee
+     * across all PSPs (admin view). Same shape as
+     * {@link #countOpenCasesByAssigneeForPsp(Long)}.
+     */
+    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.id) " +
+            "FROM compliance_cases c " +
+            "JOIN users u ON u.id = c.assigned_to_user_id " +
+            "WHERE c.status IN ('NEW','ASSIGNED','IN_PROGRESS','PENDING_REVIEW','ESCALATED','PENDING_INFO') " +
+            "GROUP BY u.id, full_name " +
+            "ORDER BY COUNT(c.id) DESC",
+           nativeQuery = true)
+    List<Object[]> countOpenCasesByAssignee();
 }

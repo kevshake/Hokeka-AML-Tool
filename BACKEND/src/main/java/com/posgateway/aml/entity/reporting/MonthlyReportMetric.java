@@ -34,7 +34,7 @@ public class MonthlyReportMetric {
     @Column(name = "year_month", nullable = false, length = 7)
     private String yearMonth;
 
-    @Column(name = "psp_id")
+    @Column(name = "psp_id", nullable = false)
     private Long pspId;
 
     @Column(name = "metric_name", nullable = false, length = 64)

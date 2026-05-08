@@ -86,12 +86,17 @@ public class ReportingConsumer {
     }
 
     private void increment(String ym, Long pspId, String metric, double delta) {
+        if (pspId == null) {
+            // The monthly_report_metrics table requires a non-null psp_id (FK to psps).
+            // Events without a resolvable tenant are skipped — no synthetic 0 row.
+            logger.debug("skipping metric increment with null pspId: ym={} metric={}", ym, metric);
+            return;
+        }
         try {
             metricRepository.upsertIncrement(ym, pspId, metric, delta);
         } catch (DataAccessException ex) {
-            logger.warn("Metric upsert failed (table missing?). " +
-                    "FIXME(go-live, monthly_report_metrics-migration-pending). err={}",
-                    ex.getMessage());
+            logger.warn("Metric upsert failed: ym={} pspId={} metric={} err={}",
+                    ym, pspId, metric, ex.getMessage());
             return;
         }
         try {

@@ -114,11 +114,20 @@ public class ComplianceDashboardService {
     }
 
     /**
-     * Get team workload distribution
+     * Get team workload distribution — open-case counts per assignee.
+     * The "team" is the PSP cohort (every user with the same {@code pspId});
+     * because this dashboard endpoint is also used by SUPER_ADMIN we
+     * aggregate across all PSPs and rely on the FE to scope by PSP.
      */
     private Map<String, Integer> getTeamWorkload() {
-        // TODO: Implement based on your user/team structure
-        return new HashMap<>();
+        Map<String, Integer> workload = new HashMap<>();
+        for (Object[] row : caseRepository.countOpenCasesByAssignee()) {
+            // [user_id, full_name, count]
+            String fullName = row[1] != null ? row[1].toString() : "user-" + row[0];
+            int count = ((Number) row[2]).intValue();
+            workload.merge(fullName, count, Integer::sum);
+        }
+        return workload;
     }
 
     /**

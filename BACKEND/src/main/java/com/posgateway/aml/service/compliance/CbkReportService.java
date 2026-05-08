@@ -24,9 +24,12 @@ import java.util.UUID;
 /**
  * CBK regulatory submission service (HOK-CBK).
  *
- * <p>Currently the {@link #submitReport submit} call only persists the request
- * locally; the real CBK SOAP/REST integration is a TODO. The persistence is
- * audited via Hibernate Envers ({@code cbk_submissions_aud}).
+ * <p>This service handles the FE-driven on-demand submission path: it persists
+ * the request locally for audit and returns a reference to the operator. The
+ * actual GDI transmission is performed asynchronously by
+ * {@link com.posgateway.aml.service.cbk.CbkSubmissionOrchestrator} using the
+ * OAuth2 multipart {@code CbkGdiClient}. Persistence is audited via
+ * Hibernate Envers ({@code cbk_submissions_aud}).
  */
 @Service
 public class CbkReportService {
@@ -76,8 +79,8 @@ public class CbkReportService {
      * Persist a CBK submission. The reference number is generated as
      * {@code CBK-<year>-<8-char-uuid>} and returned to the caller for display.
      *
-     * <p>The actual remote CBK submission is not yet implemented — this method
-     * marks the record SUBMITTED locally and returns success. See the TODO inside.
+     * <p>This is the FE on-demand path; the actual GDI transmission is owned by
+     * {@link com.posgateway.aml.service.cbk.CbkSubmissionOrchestrator}.
      */
     @Transactional
     public CbkSubmitResponse submitReport(Long pspId, Long userId, CbkSubmitRequest req) {
@@ -107,10 +110,10 @@ public class CbkReportService {
         entity.setPayloadJson(serializePayload(req));
         entity.setStatus(CbkSubmission.Status.SUBMITTED);
 
-        // TODO(HOK-CBK-API): wire real CBK SOAP/REST submission here.
-        // On success: keep status SUBMITTED, store regulatorResponse.
-        // On rejection: status REJECTED, errorMessage = remote error.
-
+        // Real CBK GDI submission is performed by CbkSubmissionOrchestrator on a
+        // schedule via integration/cbk/CbkGdiClient (OAuth2 + multipart). This
+        // ad-hoc, FE-driven persistence path only records the request locally;
+        // operators retrigger transmission through the orchestrator if needed.
         CbkSubmission saved = repository.save(entity);
         log.info("CBK submission persisted: pspId={} ref={} reportType={} period={}",
                 pspId, saved.getReferenceNumber(), saved.getReportType(), saved.getPeriod());

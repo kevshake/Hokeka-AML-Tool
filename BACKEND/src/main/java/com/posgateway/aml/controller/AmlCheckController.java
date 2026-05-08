@@ -11,10 +11,12 @@ import com.posgateway.aml.service.ScoringService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +45,9 @@ public class AmlCheckController {
     private final FeatureExtractionService featureExtractionService;
     private final AmlMicroserviceClient amlMicroserviceClient;
     private final AmlMicroserviceProperties amlMicroserviceProperties;
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    private static final Duration LOCAL_SCORE_TTL = Duration.ofHours(1);
 
     @Autowired
     public AmlCheckController(
@@ -50,12 +55,14 @@ public class AmlCheckController {
             @Autowired(required = false) ScoringService scoringService,
             @Autowired(required = false) FeatureExtractionService featureExtractionService,
             AmlMicroserviceClient amlMicroserviceClient,
-            AmlMicroserviceProperties amlMicroserviceProperties) {
+            AmlMicroserviceProperties amlMicroserviceProperties,
+            RedisTemplate<String, Object> redisTemplate) {
         this.orchestrator = orchestrator;
         this.scoringService = scoringService;
         this.featureExtractionService = featureExtractionService;
         this.amlMicroserviceClient = amlMicroserviceClient;
         this.amlMicroserviceProperties = amlMicroserviceProperties;
+        this.redisTemplate = redisTemplate;
     }
 
     @PostMapping("/check")
@@ -163,9 +170,14 @@ public class AmlCheckController {
             response.put("latencyMs", System.currentTimeMillis() - t0);
         }
 
-        // TODO(aerospike-removal): writeback caching of the local-pipeline result is
-        // intentionally omitted — the aml-microservice owns the cache. If we want
-        // round-trip caching we should POST the computed score back to /internal/v1/aml/score.
+        // Writeback the local-pipeline score to Redis so the next call within
+        // the TTL window short-circuits at the layer-0 cache. Best-effort —
+        // a Redis outage MUST NOT break scoring.
+        try {
+            redisTemplate.opsForValue().set("aml:score:" + txnId, response, LOCAL_SCORE_TTL);
+        } catch (Exception ex) {
+            logger.debug("Redis writeback failed for txnId {}: {}", txnId, ex.getMessage());
+        }
 
         return ResponseEntity.ok(response);
     }

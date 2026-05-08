@@ -1,12 +1,6 @@
 package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.TransactionEntity;
-import com.posgateway.aml.service.cbk.projection.BillingClassificationAggRow;
-import com.posgateway.aml.service.cbk.projection.CardBrandAggRow;
-import com.posgateway.aml.service.cbk.projection.FailedTransactionAggRow;
-import com.posgateway.aml.service.cbk.projection.HourlyActivityAggRow;
-import com.posgateway.aml.service.cbk.projection.MerchantSettlementAggRow;
-import com.posgateway.aml.service.cbk.projection.TransactionDetailAggRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -280,98 +274,106 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     Object[] getApprovedAndTotalCountSince(@Param("since") LocalDateTime since);
 
     // -----------------------------------------------------------------------
-    // CBK transaction-aggregate queries (date-windowed, PSP-scoped)
+    // CBK GDI aggregations — used by CbkSubmissionOrchestrator
+    //
+    // The TransactionEntity does NOT carry CBK fields card_brand,
+    // bill_classification_code, channel, card_class_type or transaction_type.
+    // Sensible substitutes are chosen per query and documented at each call site.
     // -----------------------------------------------------------------------
 
     /**
-     * CARD_BRANDS — aggregate count and value by card_brand for a PSP in window.
-     * Monthly window (previous calendar month).
+     * Endpoint #12 (CARD_BRANDS) — group by direction (placeholder for card brand).
+     * Returns rows of [groupKey (String), count (Long), sumAmountCents (Long)].
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.CardBrandAggRow(" +
-           "  t.cardBrand, COUNT(t), COALESCE(SUM(t.amountCents), 0L)" +
-           ") FROM TransactionEntity t " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "GROUP BY t.cardBrand")
-    List<CardBrandAggRow> aggregateCardBrandsByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT COALESCE(t.direction, 'UNKNOWN') AS group_key, " +
+                   "COUNT(*) AS cnt, COALESCE(SUM(t.amount_cents), 0) AS amt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY COALESCE(t.direction, 'UNKNOWN') " +
+                   "ORDER BY group_key", nativeQuery = true)
+    List<Object[]> findCardBrandSummaryForPsp(@Param("pspId") Long pspId,
+                                              @Param("start") LocalDateTime start,
+                                              @Param("end") LocalDateTime end);
 
     /**
-     * TRANSACTION_DETAILS — aggregate by (card_brand, card_type, card_class, channel_type).
-     * Monthly window (previous calendar month).
+     * Endpoint #14 (TRANSACTION_DETAILS) — group by direction × decision × merchant_country.
+     * Returns rows of [direction, decision, country, count, sumAmountCents].
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.TransactionDetailAggRow(" +
-           "  t.cardBrand, t.cardType, t.cardClass, t.channelType," +
-           "  COUNT(t), COALESCE(SUM(t.amountCents), 0L)" +
-           ") FROM TransactionEntity t " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "GROUP BY t.cardBrand, t.cardType, t.cardClass, t.channelType")
-    List<TransactionDetailAggRow> aggregateTransactionDetailsByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT COALESCE(t.direction, 'UNKNOWN') AS brand, " +
+                   "COALESCE(t.decision, 'UNKNOWN') AS txn_type, " +
+                   "COALESCE(t.merchant_country, 'XX') AS country, " +
+                   "COUNT(*) AS cnt, COALESCE(SUM(t.amount_cents), 0) AS amt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY COALESCE(t.direction, 'UNKNOWN'), COALESCE(t.decision, 'UNKNOWN'), " +
+                   "         COALESCE(t.merchant_country, 'XX') " +
+                   "ORDER BY brand, txn_type, country", nativeQuery = true)
+    List<Object[]> findTransactionMixForPsp(@Param("pspId") Long pspId,
+                                            @Param("start") LocalDateTime start,
+                                            @Param("end") LocalDateTime end);
 
     /**
-     * BILLING_TEMPLATE — aggregate count and value by bill_classification_code.
-     * Daily window (yesterday).
+     * Endpoint #9 (SYSTEM_ACTIVITY) — TPS+TPH per hour for [start, end].
+     * Returns rows of [hour 0-23 (Integer), count (Long)].
+     * Caller derives TPS as ceil(count / 3600.0).
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.BillingClassificationAggRow(" +
-           "  t.billClassificationCode, COUNT(t), COALESCE(SUM(t.amountCents), 0L)" +
-           ") FROM TransactionEntity t " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "GROUP BY t.billClassificationCode")
-    List<BillingClassificationAggRow> aggregateBillingClassificationByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT EXTRACT(HOUR FROM t.txn_ts)::int AS hour, COUNT(*) AS cnt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY EXTRACT(HOUR FROM t.txn_ts) " +
+                   "ORDER BY hour", nativeQuery = true)
+    List<Object[]> findHourlyTpsTphForPsp(@Param("pspId") Long pspId,
+                                          @Param("start") LocalDateTime start,
+                                          @Param("end") LocalDateTime end);
 
     /**
-     * SYSTEM_ACTIVITY — transaction count per hour-of-day.
-     * Daily window (yesterday). Returns up to 24 rows; mapper pads missing hours.
+     * Endpoint #13 (BILLING_TEMPLATE) — group by merchant_country (placeholder for
+     * bill_classification_code which is not yet on TransactionEntity).
+     * Returns rows of [classificationCode, count, sumAmountCents].
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.HourlyActivityAggRow(" +
-           "  FUNCTION('hour', t.txnTs), COUNT(t)" +
-           ") FROM TransactionEntity t " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "GROUP BY FUNCTION('hour', t.txnTs) " +
-           "ORDER BY FUNCTION('hour', t.txnTs)")
-    List<HourlyActivityAggRow> aggregateHourlyActivityByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT COALESCE(t.merchant_country, 'UNCLASSIFIED') AS bill_class, " +
+                   "COUNT(*) AS cnt, COALESCE(SUM(t.amount_cents), 0) AS amt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY COALESCE(t.merchant_country, 'UNCLASSIFIED') " +
+                   "ORDER BY bill_class", nativeQuery = true)
+    List<Object[]> findBillClassificationSummaryForPsp(@Param("pspId") Long pspId,
+                                                       @Param("start") LocalDateTime start,
+                                                       @Param("end") LocalDateTime end);
 
     /**
-     * MERCHANT_TRANSACTIONS — aggregate approved transactions per merchant,
-     * joined to Merchant for country, email, mcc.
-     * Daily window (yesterday), only APPROVED decisions.
+     * Endpoint #16 (MERCHANT_TRANSACTIONS) — successful transactions for the
+     * window grouped by merchant. Successful = decision='APPROVED'.
+     * Returns rows of [merchantId, merchantCountry, count, sumAmountCents].
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.MerchantSettlementAggRow(" +
-           "  t.merchantId, m.country, m.contactEmail, m.mcc," +
-           "  COUNT(t), COALESCE(SUM(t.amountCents), 0L)" +
-           ") FROM TransactionEntity t " +
-           "JOIN com.posgateway.aml.entity.merchant.Merchant m ON m.merchantId = CAST(t.merchantId AS long) " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "AND t.decision = 'APPROVED' " +
-           "GROUP BY t.merchantId, m.country, m.contactEmail, m.mcc")
-    List<MerchantSettlementAggRow> aggregateMerchantSettlementByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT t.merchant_id AS merchant_id, " +
+                   "COALESCE(t.merchant_country, 'XX') AS country, " +
+                   "COUNT(*) AS cnt, COALESCE(SUM(t.amount_cents), 0) AS amt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId AND t.decision = 'APPROVED' " +
+                   "  AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY t.merchant_id, COALESCE(t.merchant_country, 'XX') " +
+                   "ORDER BY merchant_id", nativeQuery = true)
+    List<Object[]> findSuccessfulYesterdayByPspId(@Param("pspId") Long pspId,
+                                                  @Param("start") LocalDateTime start,
+                                                  @Param("end") LocalDateTime end);
 
     /**
-     * FAILED_TRANSACTIONS — aggregate declined/rejected transactions per
-     * (merchant_id, acquirer_response).
-     * Daily window (yesterday), decisions DECLINED or MANUAL_REVIEW.
+     * Endpoint #17 (FAILED_TRANSACTIONS) — failed/rejected transactions for the
+     * window grouped by merchant + decision. TransactionStatus has no FAILED
+     * literal — DECLINED/MANUAL_REVIEW are treated as failed/rejected.
+     * Returns rows of [merchantId, decision, count, sumAmountCents].
      */
-    @Query("SELECT new com.posgateway.aml.service.cbk.projection.FailedTransactionAggRow(" +
-           "  t.merchantId, t.acquirerResponse, COUNT(t), COALESCE(SUM(t.amountCents), 0L)" +
-           ") FROM TransactionEntity t " +
-           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
-           "AND t.decision IN ('DECLINED', 'MANUAL_REVIEW') " +
-           "GROUP BY t.merchantId, t.acquirerResponse")
-    List<FailedTransactionAggRow> aggregateFailedTransactionsByPspAndWindow(
-            @Param("pspId") Long pspId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+    @Query(value = "SELECT t.merchant_id AS merchant_id, " +
+                   "COALESCE(t.decision, 'UNKNOWN') AS decision, " +
+                   "COUNT(*) AS cnt, COALESCE(SUM(t.amount_cents), 0) AS amt " +
+                   "FROM transactions t " +
+                   "WHERE t.psp_id = :pspId " +
+                   "  AND t.decision IN ('DECLINED','MANUAL_REVIEW') " +
+                   "  AND t.txn_ts >= :start AND t.txn_ts <= :end " +
+                   "GROUP BY t.merchant_id, COALESCE(t.decision, 'UNKNOWN') " +
+                   "ORDER BY merchant_id, decision", nativeQuery = true)
+    List<Object[]> findFailedRejectedForPspByDay(@Param("pspId") Long pspId,
+                                                 @Param("start") LocalDateTime start,
+                                                 @Param("end") LocalDateTime end);
 }

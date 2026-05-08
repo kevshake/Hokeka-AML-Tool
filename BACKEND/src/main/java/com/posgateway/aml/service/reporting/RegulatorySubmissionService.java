@@ -10,6 +10,7 @@ import com.posgateway.aml.dto.reporting.RegulatorySubmissionDTO;
 import com.posgateway.aml.dto.reporting.RegulatorySubmissionRequest;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.reporting.*;
+import com.posgateway.aml.repository.reporting.RegulatorySubmissionAttemptRepository;
 import com.posgateway.aml.repository.reporting.RegulatorySubmissionRepository;
 import com.posgateway.aml.repository.reporting.ReportExecutionRepository;
 import com.posgateway.aml.repository.reporting.ReportRepository;
@@ -43,10 +44,15 @@ public class RegulatorySubmissionService {
     private static final Logger logger = LoggerFactory.getLogger(RegulatorySubmissionService.class);
 
     private final RegulatorySubmissionRepository submissionRepository;
+    private final RegulatorySubmissionAttemptRepository submissionAttemptRepository;
     private final ReportRepository reportRepository;
     private final ReportExecutionRepository reportExecutionRepository;
     private final UserRepository userRepository;
     private final PspIsolationService pspIsolationService;
+
+    /** Hard cap on the request body bytes we log; longer payloads are truncated. */
+    private static final int REQUEST_BODY_MAX_BYTES = 64 * 1024;
+    private static final String TRUNCATED_MARKER = "\n__TRUNCATED__";
 
     // Optional regulator-side adapters — present only when the matching
     // `regulators.<name>.enabled` flag is true. We tolerate absence at boot
@@ -62,6 +68,7 @@ public class RegulatorySubmissionService {
     private static final String REGULATOR_FIU = "FIU";
 
     public RegulatorySubmissionService(RegulatorySubmissionRepository submissionRepository,
+                                       RegulatorySubmissionAttemptRepository submissionAttemptRepository,
                                        ReportRepository reportRepository,
                                        ReportExecutionRepository reportExecutionRepository,
                                        UserRepository userRepository,
@@ -70,6 +77,7 @@ public class RegulatorySubmissionService {
                                        @Autowired(required = false) FcaSubmissionClient fcaClient,
                                        @Autowired(required = false) OfacSubmissionClient ofacClient) {
         this.submissionRepository = submissionRepository;
+        this.submissionAttemptRepository = submissionAttemptRepository;
         this.reportRepository = reportRepository;
         this.reportExecutionRepository = reportExecutionRepository;
         this.userRepository = userRepository;
@@ -183,6 +191,9 @@ public class RegulatorySubmissionService {
         }
 
         if (client == null) {
+            recordAttempt(submission, regulatorCode,
+                    String.valueOf(submission.getSubmittedData()), null, null,
+                    regulatorCode + " client not configured");
             return parkPending(submission, regulatorCode,
                     regulatorCode + " client not configured (regulators." + regulatorCode.toLowerCase() + ".enabled=false)");
         }
@@ -195,12 +206,65 @@ public class RegulatorySubmissionService {
             submission.setRegulatorReference(result.submissionId());
             submission.setFilingReceipt(generateFilingReceipt(submission, regulatorCode));
             RegulatorySubmission saved = submissionRepository.save(submission);
+            recordAttempt(saved, regulatorCode,
+                    String.valueOf(saved.getSubmittedData()),
+                    "regulatorRef=" + result.submissionId() + " status=" + result.status(),
+                    200,
+                    null);
             logger.info("{} submission completed: localRef={} regulatorRef={} status={}",
                     regulatorCode, saved.getSubmissionReference(), result.submissionId(), result.status());
             return convertToDTO(saved);
         } catch (RegulatorSubmissionDisabledException e) {
+            recordAttempt(submission, regulatorCode,
+                    String.valueOf(submission.getSubmittedData()), e.getMessage(), null, e.getMessage());
             return parkPending(submission, regulatorCode, e.getMessage());
+        } catch (RuntimeException e) {
+            recordAttempt(submission, regulatorCode,
+                    String.valueOf(submission.getSubmittedData()), e.getMessage(), 500, e.getMessage());
+            throw e;
         }
+    }
+
+    /**
+     * Append a row to {@code regulatory_submission_attempts}. Best-effort; a
+     * failure to log MUST NOT break the dispatch path so we swallow the
+     * persistence exception with a warning.
+     */
+    private void recordAttempt(RegulatorySubmission submission,
+                               String regulatorCode,
+                               String requestBody,
+                               String responseBody,
+                               Integer httpStatus,
+                               String errorOrNull) {
+        try {
+            int nextAttempt = submissionAttemptRepository
+                    .findTopBySubmissionIdAndRegulatorOrderByAttemptNoDesc(submission.getId(), regulatorCode)
+                    .map(a -> a.getAttemptNo() == null ? 1 : a.getAttemptNo() + 1)
+                    .orElse(1);
+
+            RegulatorySubmissionAttempt attempt = new RegulatorySubmissionAttempt();
+            attempt.setSubmissionId(submission.getId());
+            attempt.setRegulator(regulatorCode);
+            attempt.setIdempotencyKey(submission.getSubmissionReference() + "#" + nextAttempt);
+            attempt.setRequestBody(truncate(requestBody));
+            attempt.setResponseBody(truncate(responseBody));
+            attempt.setHttpStatus(httpStatus);
+            attempt.setAttemptNo(nextAttempt);
+            submissionAttemptRepository.save(attempt);
+            if (errorOrNull != null) {
+                logger.debug("Logged regulatory submission attempt {} for {} (error: {})",
+                        nextAttempt, regulatorCode, errorOrNull);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to log regulatory_submission_attempts row for submission={} regulator={}: {}",
+                    submission != null ? submission.getId() : null, regulatorCode, ex.getMessage());
+        }
+    }
+
+    private static String truncate(String body) {
+        if (body == null) return null;
+        if (body.length() <= REQUEST_BODY_MAX_BYTES) return body;
+        return body.substring(0, REQUEST_BODY_MAX_BYTES) + TRUNCATED_MARKER;
     }
 
     private RegulatorySubmissionDTO parkPending(RegulatorySubmission submission, String regulatorCode, String reason) {

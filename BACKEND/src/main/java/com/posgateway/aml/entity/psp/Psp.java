@@ -32,10 +32,12 @@ public class Psp {
     @Column(name = "country", nullable = false, length = 3)
     private String country;
 
-    @Column(name = "registration_number", length = 100)
+    @Column(name = "registration_number", length = 512)
+    @jakarta.persistence.Convert(converter = com.posgateway.aml.entity.converter.AesGcmStringConverter.class)
     private String registrationNumber;
 
-    @Column(name = "tax_id", length = 100)
+    @Column(name = "tax_id", length = 512)
+    @jakarta.persistence.Convert(converter = com.posgateway.aml.entity.converter.AesGcmStringConverter.class)
     private String taxId;
 
     // Contact Information
@@ -112,12 +114,14 @@ public class Psp {
     private Boolean cbkReportingEnabled = false;
 
     // Optional per-PSP OAuth2 credentials (CBK issues per-PSP client_id/secret in some
-    // deployments). Encrypted at rest by JPA-level converter (TODO: hook attribute
-    // converter in V124 follow-up). Falls back to global cbk.client-id/secret when null.
-    @Column(name = "cbk_client_id", length = 128)
+    // deployments). Encrypted at rest by AesGcmStringConverter (V130 widens columns).
+    // Falls back to global cbk.client-id/secret when null.
+    @Column(name = "cbk_client_id", length = 512)
+    @jakarta.persistence.Convert(converter = com.posgateway.aml.entity.converter.AesGcmStringConverter.class)
     private String cbkClientId;
 
-    @Column(name = "cbk_client_secret", length = 256)
+    @Column(name = "cbk_client_secret", length = 1024)
+    @jakarta.persistence.Convert(converter = com.posgateway.aml.entity.converter.AesGcmStringConverter.class)
     private String cbkClientSecret;
 
     // Per-PSP CBK environment. Platform admins (SUPER_ADMIN / ADMIN) set this; PSP_ADMIN
