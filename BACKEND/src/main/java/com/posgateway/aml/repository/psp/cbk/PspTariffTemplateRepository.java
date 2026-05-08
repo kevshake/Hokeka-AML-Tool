@@ -18,4 +18,11 @@ public interface PspTariffTemplateRepository extends JpaRepository<PspTariffTemp
            "AND (t.effectiveFrom IS NULL OR t.effectiveFrom <= :today) " +
            "AND (t.effectiveTo IS NULL OR t.effectiveTo >= :today)")
     List<PspTariffTemplate> findActiveByPspId(@Param("pspId") Long pspId, @Param("today") LocalDate today);
+
+    /**
+     * Monthly window: tariffs whose effectiveFrom falls within [start, end).
+     * Used by the CBK orchestrator to report tariffs effective in the previous month.
+     */
+    List<PspTariffTemplate> findByPspIdAndEffectiveFromBetween(
+            Long pspId, LocalDate start, LocalDate end);
 }

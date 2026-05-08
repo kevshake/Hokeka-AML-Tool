@@ -7,6 +7,7 @@ import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.integration.cbk.CbkGdiClient;
 import com.posgateway.aml.integration.cbk.PspCbkContext;
 import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.repository.compliance.CbkSubmissionRepository;
 import com.posgateway.aml.repository.psp.cbk.PspCyberIncidentRepository;
 import com.posgateway.aml.repository.psp.cbk.PspCustomerComplaintRepository;
@@ -30,6 +31,12 @@ import com.posgateway.aml.service.cbk.mapper.PspSystemInterruptionMapper;
 import com.posgateway.aml.service.cbk.mapper.PspTariffTemplateMapper;
 import com.posgateway.aml.service.cbk.mapper.PspTrustAccountMapper;
 import com.posgateway.aml.service.cbk.mapper.PspTrusteeMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnBillingTemplateMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnCardBrandMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnFailedTransactionMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnMerchantTransactionMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnSystemActivityMapper;
+import com.posgateway.aml.service.cbk.mapper.TxnTransactionDetailMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,9 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,8 +61,9 @@ import java.util.UUID;
  *   <li>Collects all PSPs where {@code cbkReportingEnabled=true} and
  *       {@code cbk_institution_code} is non-null.</li>
  *   <li>For each PSP resolves credentials via {@link PspCbkConfigResolver}.</li>
- *   <li>Pulls source data from the appropriate repository (or passes an empty
- *       list at wiring points not yet connected).</li>
+ *   <li>Pulls source data from the appropriate repository using a date-windowed
+ *       query (daily = yesterday, monthly = previous calendar month, annual =
+ *       current roster snapshot).</li>
  *   <li>Calls the matching {@link CbkGdiClient} method.</li>
  *   <li>Persists a {@link CbkSubmission} row regardless of success or failure.</li>
  * </ol>
@@ -73,7 +82,10 @@ public class CbkSubmissionOrchestrator {
     private final CbkGdiClient cbkGdiClient;
     private final ObjectMapper objectMapper;
 
-    // Entity-backed repositories (wired — 11 endpoints now source real data)
+    // Transaction-aggregate repository (wired — 6 CBK endpoints)
+    private final TransactionRepository transactionRepository;
+
+    // Entity-backed repositories (wired — 11 endpoints source real data)
     private final PspSeniorManagementRepository seniorManagementRepository;
     private final PspDirectorRepository directorRepository;
     private final PspTrusteeRepository trusteeRepository;
@@ -92,6 +104,7 @@ public class CbkSubmissionOrchestrator {
             PspCbkConfigResolver configResolver,
             CbkGdiClient cbkGdiClient,
             ObjectMapper objectMapper,
+            TransactionRepository transactionRepository,
             PspSeniorManagementRepository seniorManagementRepository,
             PspDirectorRepository directorRepository,
             PspTrusteeRepository trusteeRepository,
@@ -108,6 +121,7 @@ public class CbkSubmissionOrchestrator {
         this.configResolver = configResolver;
         this.cbkGdiClient = cbkGdiClient;
         this.objectMapper = objectMapper;
+        this.transactionRepository = transactionRepository;
         this.seniorManagementRepository = seniorManagementRepository;
         this.directorRepository = directorRepository;
         this.trusteeRepository = trusteeRepository;
@@ -265,7 +279,7 @@ public class CbkSubmissionOrchestrator {
     // =========================================================================
 
     /**
-     * Dispatches to the correct {@link CbkGdiClient} method for {@code type},
+     * Dispatches to the correct {@link CbkGdiClient} submit method for {@code type},
      * then persists an audit {@link CbkSubmission} row regardless of outcome.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -314,113 +328,217 @@ public class CbkSubmissionOrchestrator {
     /**
      * Routes to the correct {@link CbkGdiClient} submit method.
      *
-     * <p>11 entity-backed endpoints now fetch real data via their repositories and
-     * mappers. 6 transaction-aggregate endpoints remain stubbed pending aggregation
-     * query implementation.
+     * <p>All 17 endpoints now source real data:
+     * <ul>
+     *   <li>Annual (4): entity-backed current roster — no time window.</li>
+     *   <li>Monthly entity (3): windowed to the previous calendar month by createdAt /
+     *       dateOfOccurrence / effectiveFrom.</li>
+     *   <li>Daily entity (4): windowed to yesterday by incidentDate / reportingDate /
+     *       asOfDate.</li>
+     *   <li>Transaction-aggregate (6): windowed to yesterday (daily) or the previous
+     *       calendar month (monthly) from {@link TransactionRepository}.</li>
+     * </ul>
      */
     private Object dispatch(PspCbkContext ctx, CbkEndpointType type) {
         Long pspId = ctx.getPspId();
         String institutionCode = ctx.getInstitutionCode();
+
         return switch (type) {
 
-            // --- Annual (entity-backed) ---
-            case SENIOR_MANAGEMENT -> {
-                // TODO add date-windowed query to PspSeniorManagementRepository
-                yield cbkGdiClient.submitSeniorManagement(ctx,
-                        PspSeniorManagementMapper.toRecords(
-                                seniorManagementRepository.findByPspId(pspId), institutionCode));
-            }
-            case DIRECTORS -> {
-                // TODO add date-windowed query to PspDirectorRepository
-                yield cbkGdiClient.submitDirectors(ctx,
-                        PspDirectorMapper.toRecords(
-                                directorRepository.findByPspId(pspId), institutionCode));
-            }
-            case TRUSTEES -> {
-                // TODO add date-windowed query to PspTrusteeRepository
-                yield cbkGdiClient.submitTrustees(ctx,
-                        PspTrusteeMapper.toRecords(
-                                trusteeRepository.findByPspId(pspId), institutionCode));
-            }
-            case SHAREHOLDERS -> {
-                // TODO add date-windowed query to PspShareholderRepository
-                yield cbkGdiClient.submitShareholders(ctx,
-                        PspShareholderMapper.toRecords(
-                                shareholderRepository.findByPspId(pspId), institutionCode));
-            }
+            // -----------------------------------------------------------------
+            // Annual — current roster snapshot (no date window; always send all)
+            // -----------------------------------------------------------------
+            case SENIOR_MANAGEMENT -> cbkGdiClient.submitSeniorManagement(ctx,
+                    PspSeniorManagementMapper.toRecords(
+                            seniorManagementRepository.findByPspId(pspId), institutionCode));
 
-            // --- Monthly (entity-backed) ---
+            case DIRECTORS -> cbkGdiClient.submitDirectors(ctx,
+                    PspDirectorMapper.toRecords(
+                            directorRepository.findByPspId(pspId), institutionCode));
+
+            case TRUSTEES -> cbkGdiClient.submitTrustees(ctx,
+                    PspTrusteeMapper.toRecords(
+                            trusteeRepository.findByPspId(pspId), institutionCode));
+
+            case SHAREHOLDERS -> cbkGdiClient.submitShareholders(ctx,
+                    PspShareholderMapper.toRecords(
+                            shareholderRepository.findByPspId(pspId), institutionCode));
+
+            // -----------------------------------------------------------------
+            // Monthly — entity-backed, previous calendar month window
+            // -----------------------------------------------------------------
             case CUSTOMER_COMPLAINTS -> {
-                // TODO add date-windowed query to PspCustomerComplaintRepository
+                LocalDate prevMonthStart = startOfPreviousMonth();
+                LocalDate prevMonthEnd   = endOfPreviousMonth();
                 yield cbkGdiClient.submitCustomerComplaints(ctx,
                         PspCustomerComplaintMapper.toRecords(
-                                customerComplaintRepository.findByPspId(pspId), institutionCode));
+                                customerComplaintRepository.findByPspIdAndDateOfOccurrenceBetween(
+                                        pspId, prevMonthStart, prevMonthEnd),
+                                institutionCode));
             }
+
             case PRODUCTS_INFO -> {
-                // TODO add date-windowed query to PspProductRepository
+                LocalDateTime prevMonthStartDt = startOfPreviousMonthDateTime();
+                LocalDateTime prevMonthEndDt   = endOfPreviousMonthDateTime();
                 yield cbkGdiClient.submitProducts(ctx,
                         PspProductMapper.toRecords(
-                                productRepository.findByPspId(pspId), institutionCode));
+                                productRepository.findByPspIdAndCreatedAtBetween(
+                                        pspId, prevMonthStartDt, prevMonthEndDt),
+                                institutionCode));
             }
+
             case TRANSACTION_TARIFFS -> {
-                // TODO add date-windowed query to PspTariffTemplateRepository
+                LocalDate prevMonthStart = startOfPreviousMonth();
+                LocalDate prevMonthEnd   = endOfPreviousMonth();
                 yield cbkGdiClient.submitTransactionTariffs(ctx,
                         PspTariffTemplateMapper.toRecords(
-                                tariffTemplateRepository.findByPspId(pspId), institutionCode));
+                                tariffTemplateRepository.findByPspIdAndEffectiveFromBetween(
+                                        pspId, prevMonthStart, prevMonthEnd),
+                                institutionCode));
             }
 
-            // --- Daily (entity-backed) ---
+            // -----------------------------------------------------------------
+            // Daily — entity-backed, yesterday window
+            // -----------------------------------------------------------------
             case CYBER_INCIDENT -> {
-                // TODO add date-windowed query to PspCyberIncidentRepository
+                LocalDateTime yesterdayStart = startOfYesterdayDateTime();
+                LocalDateTime yesterdayEnd   = startOfTodayDateTime();
                 yield cbkGdiClient.submitCyberIncidents(ctx,
                         PspCyberIncidentMapper.toRecords(
-                                cyberIncidentRepository.findByPspId(pspId), institutionCode));
-            }
-            case FRAUD_INCIDENTS -> {
-                // TODO add date-windowed query to PspFraudIncidentRepository
-                yield cbkGdiClient.submitFraudIncidents(ctx,
-                        PspFraudIncidentMapper.toRecords(
-                                fraudIncidentRepository.findByPspId(pspId), institutionCode));
-            }
-            case SYSTEM_STABILITY -> {
-                // TODO add date-windowed query to PspSystemInterruptionRepository
-                yield cbkGdiClient.submitSystemStability(ctx,
-                        PspSystemInterruptionMapper.toRecords(
-                                systemInterruptionRepository.findByPspId(pspId), institutionCode));
-            }
-            case TRUST_ACCOUNT -> {
-                // TODO add date-windowed query to PspTrustAccountRepository
-                yield cbkGdiClient.submitTrustAccounts(ctx,
-                        PspTrustAccountMapper.toRecords(
-                                trustAccountRepository.findByPspId(pspId), institutionCode));
+                                cyberIncidentRepository.findByPspIdAndIncidentDateBetween(
+                                        pspId, yesterdayStart, yesterdayEnd),
+                                institutionCode));
             }
 
-            // --- Transaction-aggregate stubs (needs aggregation queries — handled separately) ---
+            case FRAUD_INCIDENTS -> {
+                LocalDate yesterday = startOfYesterday();
+                LocalDate today     = LocalDate.now(ZoneOffset.UTC);
+                yield cbkGdiClient.submitFraudIncidents(ctx,
+                        PspFraudIncidentMapper.toRecords(
+                                fraudIncidentRepository.findByPspIdAndReportingDateBetween(
+                                        pspId, yesterday, today),
+                                institutionCode));
+            }
+
+            case SYSTEM_STABILITY -> {
+                LocalDate yesterday = startOfYesterday();
+                LocalDate today     = LocalDate.now(ZoneOffset.UTC);
+                yield cbkGdiClient.submitSystemStability(ctx,
+                        PspSystemInterruptionMapper.toRecords(
+                                systemInterruptionRepository.findByPspIdAndReportingDateBetween(
+                                        pspId, yesterday, today),
+                                institutionCode));
+            }
+
+            case TRUST_ACCOUNT -> {
+                LocalDate yesterday = startOfYesterday();
+                LocalDate today     = LocalDate.now(ZoneOffset.UTC);
+                yield cbkGdiClient.submitTrustAccounts(ctx,
+                        PspTrustAccountMapper.toRecords(
+                                trustAccountRepository.findByPspIdAndAsOfDateBetween(
+                                        pspId, yesterday, today),
+                                institutionCode));
+            }
+
+            // -----------------------------------------------------------------
+            // Monthly — transaction-aggregate, previous calendar month window
+            // -----------------------------------------------------------------
             case CARD_BRANDS -> {
-                // TODO source from TransactionRepository — aggregate by card_brand_type for previous month
-                yield cbkGdiClient.submitCardBrands(ctx, Collections.emptyList());
+                LocalDateTime start = startOfPreviousMonthDateTime();
+                LocalDateTime end   = endOfPreviousMonthDateTime();
+                yield cbkGdiClient.submitCardBrands(ctx,
+                        TxnCardBrandMapper.toRecords(
+                                transactionRepository.aggregateCardBrandsByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
+
             case TRANSACTION_DETAILS -> {
-                // TODO source from TransactionRepository — aggregate by brand/type/class/channel for previous month
-                yield cbkGdiClient.submitTransactionDetails(ctx, Collections.emptyList());
+                LocalDateTime start = startOfPreviousMonthDateTime();
+                LocalDateTime end   = endOfPreviousMonthDateTime();
+                yield cbkGdiClient.submitTransactionDetails(ctx,
+                        TxnTransactionDetailMapper.toRecords(
+                                transactionRepository.aggregateTransactionDetailsByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
+
+            // -----------------------------------------------------------------
+            // Daily — transaction-aggregate, yesterday window
+            // -----------------------------------------------------------------
             case SYSTEM_ACTIVITY -> {
-                // TODO source from TransactionRepository — aggregate TPS+TPH per hour for yesterday, PSP-scoped
-                yield cbkGdiClient.submitSystemActivity(ctx, Collections.emptyList());
+                LocalDateTime start = startOfYesterdayDateTime();
+                LocalDateTime end   = startOfTodayDateTime();
+                yield cbkGdiClient.submitSystemActivity(ctx,
+                        TxnSystemActivityMapper.toRecords(
+                                transactionRepository.aggregateHourlyActivityByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
+
             case BILLING_TEMPLATE -> {
-                // TODO source from TransactionRepository — aggregate by bill_classification_code for yesterday
-                yield cbkGdiClient.submitBillingTemplate(ctx, Collections.emptyList());
+                LocalDateTime start = startOfYesterdayDateTime();
+                LocalDateTime end   = startOfTodayDateTime();
+                yield cbkGdiClient.submitBillingTemplate(ctx,
+                        TxnBillingTemplateMapper.toRecords(
+                                transactionRepository.aggregateBillingClassificationByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
+
             case MERCHANT_TRANSACTIONS -> {
-                // TODO source from TransactionRepository.findSuccessfulYesterdayByPspId(pspId)
-                yield cbkGdiClient.submitMerchantTransactions(ctx, Collections.emptyList());
+                LocalDateTime start = startOfYesterdayDateTime();
+                LocalDateTime end   = startOfTodayDateTime();
+                yield cbkGdiClient.submitMerchantTransactions(ctx,
+                        TxnMerchantTransactionMapper.toRecords(
+                                transactionRepository.aggregateMerchantSettlementByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
+
             case FAILED_TRANSACTIONS -> {
-                // TODO source from TransactionRepository — filter status=FAILED|REJECTED for yesterday
-                yield cbkGdiClient.submitFailedTransactions(ctx, Collections.emptyList());
+                LocalDateTime start = startOfYesterdayDateTime();
+                LocalDateTime end   = startOfTodayDateTime();
+                yield cbkGdiClient.submitFailedTransactions(ctx,
+                        TxnFailedTransactionMapper.toRecords(
+                                transactionRepository.aggregateFailedTransactionsByPspAndWindow(pspId, start, end),
+                                institutionCode));
             }
         };
+    }
+
+    // =========================================================================
+    // Date-window helpers (UTC)
+    // =========================================================================
+
+    /** Midnight UTC at the start of yesterday (inclusive lower bound for daily windows). */
+    private static LocalDate startOfYesterday() {
+        return LocalDate.now(ZoneOffset.UTC).minusDays(1);
+    }
+
+    /** Midnight UTC at the start of yesterday as LocalDateTime. */
+    private static LocalDateTime startOfYesterdayDateTime() {
+        return LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay();
+    }
+
+    /** Midnight UTC at the start of today (exclusive upper bound for daily windows). */
+    private static LocalDateTime startOfTodayDateTime() {
+        return LocalDate.now(ZoneOffset.UTC).atStartOfDay();
+    }
+
+    /** First day of the previous calendar month (inclusive lower bound). */
+    private static LocalDate startOfPreviousMonth() {
+        return LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).minusMonths(1);
+    }
+
+    /** First day of the previous calendar month as LocalDateTime. */
+    private static LocalDateTime startOfPreviousMonthDateTime() {
+        return startOfPreviousMonth().atStartOfDay();
+    }
+
+    /** First day of the current calendar month (exclusive upper bound for monthly windows). */
+    private static LocalDate endOfPreviousMonth() {
+        return LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1);
+    }
+
+    /** First day of the current calendar month as LocalDateTime (exclusive upper bound). */
+    private static LocalDateTime endOfPreviousMonthDateTime() {
+        return endOfPreviousMonth().atStartOfDay();
     }
 
     // =========================================================================

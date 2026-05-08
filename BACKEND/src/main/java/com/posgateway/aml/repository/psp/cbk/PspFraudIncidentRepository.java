@@ -13,4 +13,11 @@ public interface PspFraudIncidentRepository extends JpaRepository<PspFraudIncide
     List<PspFraudIncident> findByPspIdAndReportingDate(Long pspId, LocalDate reportingDate);
     List<PspFraudIncident> findByAlertIdLink(Long alertId);
     List<PspFraudIncident> findByCaseIdLink(Long caseId);
+
+    /**
+     * Daily window: incidents whose reportingDate falls within [start, end).
+     * Used by the CBK orchestrator to report only yesterday's fraud incidents.
+     */
+    List<PspFraudIncident> findByPspIdAndReportingDateBetween(
+            Long pspId, LocalDate start, LocalDate end);
 }
