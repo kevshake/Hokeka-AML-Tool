@@ -22,6 +22,7 @@ import SeniorManagementTab from "./tabs/SeniorManagementTab";
 import ProductsTab from "./tabs/ProductsTab";
 import TrustAccountsTab from "./tabs/TrustAccountsTab";
 import TariffsTab from "./tabs/TariffsTab";
+import BillingTab from "./tabs/BillingTab";
 
 const ACCENT = "#8B4049";
 
@@ -35,6 +36,7 @@ const TAB_LABELS = [
   "Products",
   "Trust Accounts",
   "Tariffs",
+  "Billing",
 ];
 
 export default function PspConfigPage() {
@@ -125,6 +127,7 @@ export default function PspConfigPage() {
             {tab === 6 && <ProductsTab pspId={pspId} />}
             {tab === 7 && <TrustAccountsTab pspId={pspId} />}
             {tab === 8 && <TariffsTab pspId={pspId} />}
+            {tab === 9 && <BillingTab pspId={pspId} />}
           </Box>
         </>
       )}

@@ -41,4 +41,22 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.status = :status")
     long countByStatus(@Param("status") String status);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE i.status = 'PAID' " +
+            "AND i.billingPeriodStart >= :periodStart AND i.billingPeriodEnd <= :periodEnd")
+    BigDecimal sumPaidAmountForPeriod(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE i.status NOT IN ('CANCELLED', 'VOID') " +
+            "AND i.billingPeriodStart >= :periodStart AND i.billingPeriodEnd <= :periodEnd")
+    BigDecimal sumExpectedAmountForPeriod(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE (i.status = 'SENT' OR i.status = 'OVERDUE') " +
+            "AND i.dueDate < :today")
+    BigDecimal sumOverdueAmount(@Param("today") LocalDate today);
+
+    List<Invoice> findByPsp_PspIdAndStatus(Long pspId, String status);
 }

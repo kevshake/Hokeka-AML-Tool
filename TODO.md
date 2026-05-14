@@ -46,6 +46,15 @@ _Last updated: 2026-05-14_
 
 ---
 
+## Wave 6 — SaaS Billing (full end-to-end) ✅
+
+- [x] **#47** Expanded `BillingController` (+7 endpoints: invoice detail, status update, overdue list, PDF download, usage by month, current usage, revenue summary) + new `SubscriptionController` (7 CRUD endpoints). DTOs: `InvoiceStatusUpdateRequest`, `UsageSummaryResponse`, `RevenueSummaryResponse`, `SubscriptionRequest`, `SubscriptionResponse`. New repo queries: `sumPaidAmountForPeriod`, `sumExpectedAmountForPeriod`, `sumOverdueAmount`, `countAllByPspAndPeriod`. Full PSP-scoped isolation (PSP_ADMIN sees only own data).
+- [x] **#48** `InvoicePdfService` (OpenPDF A4 branded PDF — header, bill-to, line items, totals, payment info, footer). `BillingEmailService` (async, fail-soft: invoice email with PDF attachment, dunning reminder, escalation). `DunningScheduler` (daily 09:00 overdue sweep + Monday escalation). OpenPDF `Spacer`/`LineSeparator` compat fixed. Properties wired under `billing.*`.
+- [x] **#49** `BillingPage.tsx` (admin, 4 tabs): Revenue Dashboard (KPI cards + bar chart + overdue alert table), Subscriptions (CRUD dialog — PSP/tier/cycle/currency/dates/discount), Invoices (filter by PSP+status, mark-paid dialog, PDF download), Usage (PSP selector + month picker + breakdown table). `types/billing.ts` with 8 interfaces. 10 query hooks + 4 mutation hooks added to `queries.ts`/`mutations.ts`. `/billing` route in `App.tsx`. Sidebar nav item (ADMIN/SUPER_ADMIN only).
+- [x] **#50** `BillingTab.tsx` added to `PspConfigPage` (tab #9): Current Plan card (tier badge, fees, contract dates, trial warning), Current Month Usage (KPI cards + breakdown, auto-refresh 60s), Invoice History (table with PDF download via `fetch`+`createObjectURL`).
+
+---
+
 ## Done (from previous sessions)
 
 - [x] CBK GDI API inventory — all 17 endpoints documented (`docs/integrations/CBK_API_INVENTORY.md`)

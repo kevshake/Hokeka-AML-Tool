@@ -8,6 +8,7 @@ import com.posgateway.aml.repository.ApiUsageLogRepository;
 import com.posgateway.aml.repository.BillingRateRepository;
 import com.posgateway.aml.repository.InvoiceRepository;
 import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.service.billing.BillingEmailService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +29,16 @@ public class BillingService {
     private final InvoiceRepository invoiceRepository;
     private final PspRepository pspRepository;
     private final ApiUsageLogRepository apiUsageLogRepository;
+    private final BillingEmailService billingEmailService;
 
     public BillingService(BillingRateRepository billingRateRepository, InvoiceRepository invoiceRepository,
-            PspRepository pspRepository, ApiUsageLogRepository apiUsageLogRepository) {
+            PspRepository pspRepository, ApiUsageLogRepository apiUsageLogRepository,
+            BillingEmailService billingEmailService) {
         this.billingRateRepository = billingRateRepository;
         this.invoiceRepository = invoiceRepository;
         this.pspRepository = pspRepository;
         this.apiUsageLogRepository = apiUsageLogRepository;
+        this.billingEmailService = billingEmailService;
     }
 
     @Transactional(readOnly = true)
@@ -139,7 +143,12 @@ public class BillingService {
         // Add tax logic here if needed
         invoice.setTotalAmount(subtotal);
 
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+
+        // Send invoice email asynchronously — fail-soft, never throws
+        billingEmailService.sendInvoiceEmail(saved);
+
+        return saved;
     }
 
     @Transactional(readOnly = true)

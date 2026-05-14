@@ -38,10 +38,12 @@ import {
   VerifiedUser as KycIcon,
   AccountBalance as PspIcon,
   Description as RegulatoryIcon,
+  Receipt as BillingIcon,
 } from "@mui/icons-material";
 import { useAlerts, useCases } from "../../features/api/queries";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
+import { useAuth } from "../../contexts/AuthContext";
 
 const drawerWidth = 240;
 const miniDrawerWidth = 64;
@@ -63,10 +65,14 @@ interface NavItem {
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     dashboard: true,
   });
+
+  const roleName = user?.role?.name ?? "";
+  const isBillingAdmin = roleName === "SUPER_ADMIN" || roleName === "ADMIN";
 
   // Fetch live badge counts — data cached with staleTime=30s so no extra load
   const { data: alertsData } = useAlerts({ page: 0, size: 1, status: "OPEN" });
@@ -219,6 +225,16 @@ export default function Sidebar() {
           icon: <AuditIcon />,
           path: "/audit",
         },
+        ...(isBillingAdmin
+          ? [
+              {
+                id: "billing",
+                label: "Billing",
+                icon: <BillingIcon />,
+                path: "/billing",
+              } satisfies NavItem,
+            ]
+          : []),
       ],
     },
   ];

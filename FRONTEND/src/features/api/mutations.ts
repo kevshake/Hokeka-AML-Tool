@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type { AmlRule, VelocityRule, RiskThreshold } from "../../types/rules";
 import type { Priority } from "../../types";
+import type { SubscriptionRequest } from "../../types/billing";
 
 // Case Mutations
 export interface CreateCaseRequest {
@@ -451,6 +452,58 @@ export const useReplayCbkSubmission = () => {
       apiClient.post(`compliance/cbk/submissions/${endpointType}/run`, { pspId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cbk-submissions"] });
+    },
+  });
+};
+
+// ─── Billing mutations ────────────────────────────────────────────────────────
+
+export interface UpdateInvoiceStatusRequest {
+  invoiceId: number;
+  status: string;
+  paymentReference?: string;
+  paymentMethod?: string;
+  paymentAmount?: number;
+}
+
+export const useUpdateInvoiceStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invoiceId, ...body }: UpdateInvoiceStatusRequest) =>
+      apiClient.put(`billing/invoices/${invoiceId}/status`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
+    },
+  });
+};
+
+export const useCreateSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SubscriptionRequest) => apiClient.post('subscriptions', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
+    },
+  });
+};
+
+export const useUpdateSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & SubscriptionRequest) =>
+      apiClient.put(`subscriptions/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
+    },
+  });
+};
+
+export const useCancelSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`subscriptions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
     },
   });
 };

@@ -35,6 +35,7 @@ const RegulatoryReportsPage = lazy(() => import("./pages/RegulatoryReports/Regul
 const PspsListPage = lazy(() => import("./pages/Psps/PspsListPage"));
 const PspConfigPage = lazy(() => import("./pages/Psps/PspConfigPage"));
 const LimitsAmlPage = lazy(() => import("./pages/LimitsAml/LimitsAmlPage"));
+const BillingPage = lazy(() => import("./pages/Billing/BillingPage"));
 
 function PageLoader() {
   return (
@@ -96,6 +97,7 @@ function App() {
                           <Route path="psps" element={<PspsListPage />} />
                           <Route path="psps/:pspId/configure" element={<PspConfigPage />} />
                           <Route path="limits-aml" element={<LimitsAmlPage />} />
+                          <Route path="billing" element={<BillingPage />} />
                         </Routes>
                         </Suspense>
                       </RouteErrorBoundary>

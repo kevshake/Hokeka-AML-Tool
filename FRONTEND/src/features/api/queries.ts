@@ -13,6 +13,7 @@ import type {
   PageResponse,
 } from "../../types";
 import type { User as UserManagementUser, Role as UserManagementRole } from "../../types/userManagement";
+import type { RevenueSummary, Invoice, Subscription, UsageSummary, PricingTier } from "../../types/billing";
 
 // Dashboard
 export const useDashboardStats = () => {
@@ -639,3 +640,93 @@ export const useCbkSubmissions = (params: CbkSubmissionQueryParams = {}) => {
         .catch(() => ({ content: [], totalElements: 0, totalPages: 0, size, number: page })),
   });
 };
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+
+export function useRevenueSummary() {
+  return useQuery<RevenueSummary>({
+    queryKey: ['billing', 'revenue-summary'],
+    queryFn: () => apiClient.get<RevenueSummary>('billing/revenue/summary'),
+  });
+}
+
+export interface InvoiceQueryParams {
+  pspId?: number;
+  page?: number;
+  size?: number;
+}
+
+export function useInvoices(params?: InvoiceQueryParams) {
+  const qs = params
+    ? Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+        .join('&')
+    : '';
+  return useQuery<PageResponse<Invoice>>({
+    queryKey: ['billing', 'invoices', params],
+    queryFn: () => apiClient.get<PageResponse<Invoice>>(`billing/invoices${qs ? `?${qs}` : ''}`),
+  });
+}
+
+export function useInvoice(id: number | null) {
+  return useQuery<Invoice>({
+    queryKey: ['billing', 'invoices', id],
+    queryFn: () => apiClient.get<Invoice>(`billing/invoices/${id}`),
+    enabled: id != null,
+  });
+}
+
+export function useOverdueInvoices() {
+  return useQuery<Invoice[]>({
+    queryKey: ['billing', 'invoices', 'overdue'],
+    queryFn: () => apiClient.get<Invoice[]>('billing/invoices/overdue').catch(() => []),
+  });
+}
+
+export function useSubscriptions() {
+  return useQuery<Subscription[]>({
+    queryKey: ['billing', 'subscriptions'],
+    queryFn: () => apiClient.get<Subscription[]>('subscriptions').catch(() => []),
+  });
+}
+
+export function useSubscription(id: number | null) {
+  return useQuery<Subscription>({
+    queryKey: ['billing', 'subscriptions', id],
+    queryFn: () => apiClient.get<Subscription>(`subscriptions/${id}`),
+    enabled: id != null,
+  });
+}
+
+export function usePspSubscription(pspId: number | null) {
+  return useQuery<Subscription>({
+    queryKey: ['billing', 'subscriptions', 'psp', pspId],
+    queryFn: () => apiClient.get<Subscription>(`subscriptions/psp/${pspId}`),
+    enabled: pspId != null,
+  });
+}
+
+export function usePricingTiers() {
+  return useQuery<PricingTier[]>({
+    queryKey: ['billing', 'pricing-tiers'],
+    queryFn: () => apiClient.get<PricingTier[]>('pricing/tiers').catch(() => []),
+  });
+}
+
+export function useUsageSummary(pspId: number | null, month?: string) {
+  const qs = month ? `?month=${encodeURIComponent(month)}` : '';
+  return useQuery<UsageSummary>({
+    queryKey: ['billing', 'usage', pspId, month],
+    queryFn: () => apiClient.get<UsageSummary>(`billing/usage/${pspId}${qs}`),
+    enabled: pspId != null,
+  });
+}
+
+export function useCurrentUsage(pspId: number | null) {
+  return useQuery<UsageSummary>({
+    queryKey: ['billing', 'usage', pspId, 'current'],
+    queryFn: () => apiClient.get<UsageSummary>(`billing/usage/${pspId}/current`),
+    enabled: pspId != null,
+  });
+}

@@ -60,6 +60,16 @@ public interface ApiUsageLogRepository extends JpaRepository<ApiUsageLog, Long> 
                         @Param("end") LocalDateTime end);
 
         /**
+         * Count all requests (billable and non-billable) for a PSP in a period.
+         */
+        @Query("SELECT COUNT(a) FROM ApiUsageLog a WHERE a.psp.pspId = :pspId " +
+                        "AND a.requestTimestamp BETWEEN :start AND :end")
+        long countAllByPspAndPeriod(
+                        @Param("pspId") Long pspId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
+        /**
          * Count billable checks for billing engine
          */
         default int countBillableByPspAndPeriod(Long pspId, LocalDateTime start, LocalDateTime end) {
