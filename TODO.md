@@ -46,6 +46,13 @@ _Last updated: 2026-05-14_
 
 ---
 
+## Wave 7 — PSP Self-Serve Billing + Payments ✅
+
+- [x] **#51** `SettingsPage.tsx` — PSP users (`pspId > 0`) now see ONLY a "Billing" tab (page title shows their PSP name). Platform admins still see Theme + System Settings. `BillingTab` rendered with `user.pspId` — no navigation to `/psps/:id/configure` required.
+- [x] **#52** Payment capability end-to-end: `V134__payment_attempts.sql`, `PaymentAttempt` entity/repo, `MpesaProperties` + `MpesaService` (Daraja OAuth2 token cache, STK Push, callback processing, invoice auto-marked PAID on ResultCode=0), `PaymentController` (`POST /billing/payments/initiate`, `POST /billing/payments/mpesa/callback` [public], `GET /billing/payments/{invoiceId}`, `GET /billing/bank-details`). Security config: M-Pesa callback URL permit-all. `BillingTab.tsx`: "Pay" button on SENT/OVERDUE invoices → payment dialog (M-Pesa phone input + STK push OR Bank Transfer details display + reference submission). `mpesa.*` + `billing.bank.*` env-overridable properties.
+
+---
+
 ## Wave 6 — SaaS Billing (full end-to-end) ✅
 
 - [x] **#47** Expanded `BillingController` (+7 endpoints: invoice detail, status update, overdue list, PDF download, usage by month, current usage, revenue summary) + new `SubscriptionController` (7 CRUD endpoints). DTOs: `InvoiceStatusUpdateRequest`, `UsageSummaryResponse`, `RevenueSummaryResponse`, `SubscriptionRequest`, `SubscriptionResponse`. New repo queries: `sumPaidAmountForPeriod`, `sumExpectedAmountForPeriod`, `sumOverdueAmount`, `countAllByPspAndPeriod`. Full PSP-scoped isolation (PSP_ADMIN sees only own data).

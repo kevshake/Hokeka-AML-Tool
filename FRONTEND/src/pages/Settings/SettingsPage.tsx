@@ -22,6 +22,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { BRAND_THEMES } from "../../config/themes";
 import { useAuth } from "../../contexts/AuthContext";
+import BillingTab from "../Psps/tabs/BillingTab";
 
 
 interface Psp {
@@ -155,6 +156,12 @@ export default function SettingsPage() {
 
   const { user } = useAuth();
   const isSuperAdmin = user?.pspId === 0;
+  const isPspUser = !!user && user.pspId > 0; // PSP_ADMIN or PSP_USER
+
+  // Tab index computation:
+  // PSP users:     0 = Billing  (only tab shown)
+  // Platform admins: 0 = PSP Theme Management, 1 = System Settings (super-admin only)
+  const billingTabIndex = 0; // always 0 for PSP users; tab is hidden for admins so index is irrelevant
 
   // System Settings Interface
   interface SystemSettings {
@@ -220,15 +227,16 @@ export default function SettingsPage() {
   return (
     <Box>
       <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
-        Settings
+        {isPspUser && user?.psp?.name ? `Settings — ${user.psp.name}` : "Settings"}
       </Typography>
 
       <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
-        <Tab label="PSP Theme Management" />
-        {isSuperAdmin && <Tab label="System Settings" />}
+        {!isPspUser && <Tab label="PSP Theme Management" />}
+        {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
+        {isPspUser && <Tab label="Billing" />}
       </Tabs>
 
-      <TabPanel value={tabValue} index={0}>
+      {!isPspUser && <TabPanel value={tabValue} index={0}>
         <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
           <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
             PSP Theme Customization
@@ -435,9 +443,9 @@ export default function SettingsPage() {
             <Alert severity="info">Please select a PSP to manage its theme.</Alert>
           )}
         </Paper>
-      </TabPanel>
+      </TabPanel>}
 
-      {isSuperAdmin && (
+      {!isPspUser && isSuperAdmin && (
         <TabPanel value={tabValue} index={1}>
           <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
@@ -546,6 +554,12 @@ export default function SettingsPage() {
               )}
             </Grid>
           </Paper>
+        </TabPanel>
+      )}
+
+      {isPspUser && (
+        <TabPanel value={tabValue} index={billingTabIndex}>
+          <BillingTab pspId={String(user!.pspId)} />
         </TabPanel>
       )}
     </Box>

@@ -58,6 +58,9 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/v1/merchants/onboard").permitAll()
                                                 .requestMatchers("/api/v1/merchants/health").permitAll()
                                                 .requestMatchers("/api/v1/pricing/**").permitAll()
+                                                // Safaricom Daraja M-Pesa callback — must be publicly accessible
+                                                .requestMatchers("/api/v1/billing/payments/mpesa/callback",
+                                                                "/billing/payments/mpesa/callback").permitAll()
                                                 .requestMatchers("/actuator/**").permitAll()
                                                 // Swagger / OpenAPI documentation (springdoc-openapi).
                                                 // Both forms — with and without the /api/v1 context path —

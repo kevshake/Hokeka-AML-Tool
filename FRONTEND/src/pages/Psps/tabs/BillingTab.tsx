@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Card,
@@ -18,12 +18,22 @@ import {
   Grid,
   Divider,
   Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   DownloadOutlined as DownloadIcon,
   CreditCard as CreditCardIcon,
   BarChart as BarChartIcon,
   Receipt as ReceiptIcon,
+  Payment as PaymentIcon,
+  AccountBalance as BankIcon,
+  PhoneAndroid as PhoneIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { apiClient } from "../../../lib/apiClient";
@@ -68,16 +78,41 @@ interface CurrentUsage {
   breakdown: UsageLineItem[];
 }
 
+type InvoiceStatus =
+  | "PAID"
+  | "OVERDUE"
+  | "SENT"
+  | "DRAFT"
+  | "CANCELLED"
+  | "PENDING_PAYMENT_VERIFICATION";
+
 interface Invoice {
-  id: number;
+  invoiceId: number;
   invoiceNumber: string;
-  periodStart: string;
-  periodEnd: string;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
   totalAmount: number;
   currency: string;
-  status: "PAID" | "OVERDUE" | "SENT" | "DRAFT";
+  status: InvoiceStatus;
   dueDate: string;
 }
+
+interface BankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string;
+  swiftCode: string;
+}
+
+interface PaymentInitiateResponse {
+  attemptId: number | null;
+  checkoutRequestId: string | null;
+  status: string;
+  message: string;
+}
+
+type PaymentMethod = "MPESA" | "BANK_TRANSFER";
 
 // ─── Local hooks (billing) ─────────────────────────────────────────────────
 
@@ -110,6 +145,14 @@ const useInvoices = (pspId: string) =>
     enabled: !!pspId,
   });
 
+const useBankDetails = () =>
+  useQuery<BankDetails | null>({
+    queryKey: ["billing", "bank-details"],
+    queryFn: () =>
+      apiClient.get<BankDetails>("billing/bank-details").catch(() => null),
+    staleTime: 10 * 60_000, // cache for 10 minutes — static data
+  });
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null | undefined): string {
@@ -133,11 +176,9 @@ function fmtNumber(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
-type InvoiceStatus = "PAID" | "OVERDUE" | "SENT" | "DRAFT";
-
 function invoiceStatusColor(
   status: InvoiceStatus
-): "success" | "error" | "primary" | "default" {
+): "success" | "error" | "primary" | "warning" | "default" {
   switch (status) {
     case "PAID":
       return "success";
@@ -145,9 +186,15 @@ function invoiceStatusColor(
       return "error";
     case "SENT":
       return "primary";
+    case "PENDING_PAYMENT_VERIFICATION":
+      return "warning";
     default:
       return "default";
   }
+}
+
+function isPayable(status: InvoiceStatus): boolean {
+  return status === "SENT" || status === "OVERDUE";
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────
@@ -162,7 +209,11 @@ function KpiCard({ label, value, sub }: KpiCardProps) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, height: "100%" }}>
       <CardContent sx={{ pb: "16px !important" }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}
+        >
           {label}
         </Typography>
         <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: ACCENT }}>
@@ -178,6 +229,293 @@ function KpiCard({ label, value, sub }: KpiCardProps) {
   );
 }
 
+// ─── Payment Dialog ─────────────────────────────────────────────────────────
+
+interface PaymentDialogProps {
+  invoice: Invoice | null;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  bankDetails: BankDetails | null;
+}
+
+function PaymentDialog({
+  invoice,
+  open,
+  onClose,
+  onSuccess,
+  bankDetails,
+}: PaymentDialogProps) {
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("MPESA");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [bankRef, setBankRef] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [result, setResult] = useState<{
+    severity: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
+  const handleClose = () => {
+    if (paying) return;
+    setResult(null);
+    setPhoneNumber("");
+    setBankRef("");
+    setPayMethod("MPESA");
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!invoice) return;
+    setPaying(true);
+    setResult(null);
+
+    try {
+      const body: {
+        invoiceId: number;
+        paymentMethod: PaymentMethod;
+        phoneNumber?: string;
+        bankReference?: string;
+      } = {
+        invoiceId: invoice.invoiceId,
+        paymentMethod: payMethod,
+      };
+
+      if (payMethod === "MPESA") {
+        body.phoneNumber = phoneNumber;
+      } else {
+        body.bankReference = bankRef;
+      }
+
+      const response = await fetch(getApiUrl("billing/payments/initiate"), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-PSP-ID": sessionStorage.getItem("_psp") ?? "0",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data: PaymentInitiateResponse = await response.json();
+
+      if (!response.ok || data.status === "FAILED" || data.status === "REJECTED") {
+        setResult({ severity: "error", message: data.message || "Payment initiation failed." });
+      } else {
+        setResult({ severity: "success", message: data.message });
+        onSuccess();
+      }
+    } catch {
+      setResult({ severity: "error", message: "Network error. Please try again." });
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  if (!invoice) return null;
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700 }}>
+        Pay Invoice {invoice.invoiceNumber}
+      </DialogTitle>
+
+      <DialogContent dividers>
+        {/* Invoice summary */}
+        <Box
+          sx={{
+            p: 1.5,
+            mb: 2,
+            borderRadius: 1,
+            backgroundColor: "rgba(139,64,73,0.05)",
+            border: "1px solid rgba(139,64,73,0.15)",
+          }}
+        >
+          <Grid container spacing={1}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">
+                Invoice
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+                {invoice.invoiceNumber}
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">
+                Amount Due
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: ACCENT }}>
+                {fmtMoney(invoice.totalAmount, invoice.currency)}
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">
+                Status
+              </Typography>
+              <Chip
+                label={invoice.status}
+                size="small"
+                color={invoiceStatusColor(invoice.status)}
+                sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">
+                Due Date
+              </Typography>
+              <Typography variant="body2">{fmtDate(invoice.dueDate)}</Typography>
+            </Grid>
+          </Grid>
+        </Box>
+
+        {/* Payment method toggle */}
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+          Payment Method
+        </Typography>
+        <ToggleButtonGroup
+          value={payMethod}
+          exclusive
+          onChange={(_e, val: PaymentMethod | null) => {
+            if (val) {
+              setPayMethod(val);
+              setResult(null);
+            }
+          }}
+          size="small"
+          sx={{ mb: 2 }}
+          disabled={paying}
+        >
+          <ToggleButton value="MPESA" sx={{ textTransform: "none", gap: 0.5 }}>
+            <PhoneIcon fontSize="small" />
+            M-Pesa
+          </ToggleButton>
+          <ToggleButton value="BANK_TRANSFER" sx={{ textTransform: "none", gap: 0.5 }}>
+            <BankIcon fontSize="small" />
+            Bank Transfer
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        {/* M-Pesa section */}
+        {payMethod === "MPESA" && (
+          <Box>
+            <TextField
+              label="M-Pesa Phone Number"
+              placeholder="07XXXXXXXX or 254XXXXXXXXX"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              fullWidth
+              size="small"
+              disabled={paying}
+              helperText="Enter the Kenya phone number registered with M-Pesa (e.g. 0712345678)"
+              InputProps={{ startAdornment: <PhoneIcon fontSize="small" sx={{ mr: 0.5, color: "text.secondary" }} /> }}
+            />
+          </Box>
+        )}
+
+        {/* Bank Transfer section */}
+        {payMethod === "BANK_TRANSFER" && (
+          <Box>
+            {bankDetails ? (
+              <Box
+                sx={{
+                  p: 1.5,
+                  mb: 2,
+                  borderRadius: 1,
+                  backgroundColor: "rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Transfer To
+                </Typography>
+                <Grid container spacing={0.5} sx={{ mt: 0.5 }}>
+                  {[
+                    ["Bank", bankDetails.bankName],
+                    ["Account Name", bankDetails.accountName],
+                    ["Account Number", bankDetails.accountNumber || "Contact billing@hokeka.com"],
+                    ["Branch", bankDetails.branch],
+                    ["SWIFT / BIC", bankDetails.swiftCode],
+                  ].map(([label, value]) => (
+                    <Grid item xs={12} key={label}>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 110 }}>
+                          {label}:
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, fontFamily: label === "Account Number" ? "monospace" : "inherit" }}>
+                          {value}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                  Use invoice number <strong>{invoice.invoiceNumber}</strong> as the payment reference.
+                </Typography>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Contact billing@hokeka.com for bank transfer details.
+              </Alert>
+            )}
+
+            <TextField
+              label="Your Bank Transfer Reference"
+              placeholder="e.g. TXN12345 or bank receipt number"
+              value={bankRef}
+              onChange={(e) => setBankRef(e.target.value)}
+              fullWidth
+              size="small"
+              disabled={paying}
+              helperText="Enter the reference or receipt number from your bank after completing the transfer."
+            />
+          </Box>
+        )}
+
+        {/* Result message */}
+        {result && (
+          <Alert severity={result.severity} sx={{ mt: 2 }}>
+            {result.message}
+          </Alert>
+        )}
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} disabled={paying} sx={{ textTransform: "none" }}>
+          {result?.severity === "success" ? "Close" : "Cancel"}
+        </Button>
+        {!result || result.severity !== "success" ? (
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={
+              paying ||
+              (payMethod === "MPESA" && !phoneNumber.trim()) ||
+              (payMethod === "BANK_TRANSFER" && !bankRef.trim())
+            }
+            startIcon={
+              paying ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <PaymentIcon fontSize="small" />
+              )
+            }
+            sx={{
+              textTransform: "none",
+              backgroundColor: ACCENT,
+              "&:hover": { backgroundColor: "#6e3139" },
+            }}
+          >
+            {paying
+              ? "Processing..."
+              : payMethod === "MPESA"
+              ? "Send STK Push"
+              : "Submit Reference"}
+          </Button>
+        ) : null}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ─── BillingTab ────────────────────────────────────────────────────────────
 
 interface BillingTabProps {
@@ -185,9 +523,17 @@ interface BillingTabProps {
 }
 
 export default function BillingTab({ pspId }: BillingTabProps) {
-  const { data: subscription, isLoading: subLoading, isError: subError } = usePspSubscription(pspId);
-  const { data: usage, isLoading: usageLoading, isError: usageError } = useCurrentUsage(pspId);
-  const { data: invoices, isLoading: invoicesLoading, isError: invoicesError } = useInvoices(pspId);
+  const queryClient = useQueryClient();
+  const { data: subscription, isLoading: subLoading, isError: subError } =
+    usePspSubscription(pspId);
+  const { data: usage, isLoading: usageLoading, isError: usageError } =
+    useCurrentUsage(pspId);
+  const {
+    data: invoices,
+    isLoading: invoicesLoading,
+    isError: invoicesError,
+  } = useInvoices(pspId);
+  const { data: bankDetails } = useBankDetails();
 
   const [toast, setToast] = useState<{
     open: boolean;
@@ -195,14 +541,21 @@ export default function BillingTab({ pspId }: BillingTabProps) {
     message: string;
   }>({ open: false, severity: "success", message: "" });
 
-  const handleDownloadPdf = async (invoiceId: number, invoiceNumber: string) => {
+  const [payDialog, setPayDialog] = useState<{
+    open: boolean;
+    invoice: Invoice | null;
+  }>({ open: false, invoice: null });
+
+  const handleDownloadPdf = async (
+    invoiceId: number,
+    invoiceNumber: string
+  ) => {
     try {
       const url = getApiUrl(`billing/invoices/${invoiceId}/pdf`);
       const response = await fetch(url, {
         method: "GET",
         credentials: "include",
         headers: {
-          // apiClient uses cookie-based auth + X-PSP-ID header
           "X-PSP-ID": sessionStorage.getItem("_psp") ?? "0",
         },
       });
@@ -221,10 +574,23 @@ export default function BillingTab({ pspId }: BillingTabProps) {
       window.URL.revokeObjectURL(objectUrl);
       document.body.removeChild(anchor);
 
-      setToast({ open: true, severity: "success", message: `Invoice ${invoiceNumber} downloaded.` });
+      setToast({
+        open: true,
+        severity: "success",
+        message: `Invoice ${invoiceNumber} downloaded.`,
+      });
     } catch {
-      setToast({ open: true, severity: "error", message: "Could not download invoice. Please try again." });
+      setToast({
+        open: true,
+        severity: "error",
+        message: "Could not download invoice. Please try again.",
+      });
     }
+  };
+
+  const handlePaySuccess = () => {
+    // Refresh the invoice list so the updated status is reflected
+    queryClient.invalidateQueries({ queryKey: ["psp", pspId, "invoices"] });
   };
 
   return (
@@ -309,15 +675,34 @@ export default function BillingTab({ pspId }: BillingTabProps) {
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   Monthly Fee
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                  {fmtMoney(subscription.tier.monthlyFee, subscription.tier.currency)}
+                  {fmtMoney(
+                    subscription.tier.monthlyFee,
+                    subscription.tier.currency
+                  )}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   Billing Cycle
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -325,7 +710,15 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   Included Checks
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -333,7 +726,15 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   Currency
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -346,24 +747,45 @@ export default function BillingTab({ pspId }: BillingTabProps) {
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   Contract Start
                 </Typography>
-                <Typography variant="body2">{fmtDate(subscription.startDate)}</Typography>
+                <Typography variant="body2">
+                  {fmtDate(subscription.startDate)}
+                </Typography>
               </Grid>
               {subscription.endDate && (
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
                     Contract End
                   </Typography>
-                  <Typography variant="body2">{fmtDate(subscription.endDate)}</Typography>
+                  <Typography variant="body2">
+                    {fmtDate(subscription.endDate)}
+                  </Typography>
                 </Grid>
               )}
             </Grid>
 
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                To upgrade your plan or change your billing cycle, please contact your account manager.
+                To upgrade your plan or change your billing cycle, please
+                contact your account manager.
               </Typography>
             </Box>
           </CardContent>
@@ -376,7 +798,11 @@ export default function BillingTab({ pspId }: BillingTabProps) {
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           Current Month Usage
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ ml: "auto" }}
+        >
           Auto-refreshes every 60 s
         </Typography>
       </Box>
@@ -406,7 +832,9 @@ export default function BillingTab({ pspId }: BillingTabProps) {
               <KpiCard
                 label="Total API Requests"
                 value={fmtNumber(usage.totalRequests)}
-                sub={`Period: ${fmtDate(usage.periodStart)} – ${fmtDate(usage.periodEnd)}`}
+                sub={`Period: ${fmtDate(usage.periodStart)} – ${fmtDate(
+                  usage.periodEnd
+                )}`}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -437,10 +865,16 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                     <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
                       Service Type
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+                    >
                       Request Count
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+                    >
                       Cost (USD)
                     </TableCell>
                   </TableRow>
@@ -486,11 +920,13 @@ export default function BillingTab({ pspId }: BillingTabProps) {
         </Alert>
       )}
 
-      {!invoicesLoading && !invoicesError && (!invoices || invoices.length === 0) && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          No invoices found for this PSP.
-        </Alert>
-      )}
+      {!invoicesLoading &&
+        !invoicesError &&
+        (!invoices || invoices.length === 0) && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            No invoices found for this PSP.
+          </Alert>
+        )}
 
       {!invoicesLoading && !invoicesError && invoices && invoices.length > 0 && (
         <TableContainer
@@ -501,28 +937,56 @@ export default function BillingTab({ pspId }: BillingTabProps) {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ backgroundColor: "rgba(139,64,73,0.05)" }}>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Invoice #</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Period</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Total Amount</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Currency</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Due Date</TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Invoice #
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Period
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ fontWeight: 700, fontSize: "0.8rem" }}
+                >
+                  Total Amount
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Currency
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Status
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Due Date
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                  Actions
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {invoices.map((inv) => (
-                <TableRow key={inv.id} hover>
-                  <TableCell sx={{ fontSize: "0.85rem", fontFamily: "monospace" }}>
+                <TableRow key={inv.invoiceId} hover>
+                  <TableCell
+                    sx={{
+                      fontSize: "0.85rem",
+                      fontFamily: "monospace",
+                    }}
+                  >
                     {inv.invoiceNumber}
                   </TableCell>
                   <TableCell sx={{ fontSize: "0.85rem" }}>
-                    {fmtDate(inv.periodStart)} – {fmtDate(inv.periodEnd)}
+                    {fmtDate(inv.billingPeriodStart)} –{" "}
+                    {fmtDate(inv.billingPeriodEnd)}
                   </TableCell>
-                  <TableCell align="right" sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ fontSize: "0.85rem", fontWeight: 600 }}
+                  >
                     {fmtMoney(inv.totalAmount, inv.currency)}
                   </TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>{inv.currency}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>
+                    {inv.currency}
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={inv.status}
@@ -535,19 +999,49 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                     {fmtDate(inv.dueDate)}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      size="small"
-                      startIcon={<DownloadIcon fontSize="small" />}
-                      onClick={() => handleDownloadPdf(inv.id, inv.invoiceNumber)}
-                      sx={{
-                        color: ACCENT,
-                        textTransform: "none",
-                        fontSize: "0.78rem",
-                        "&:hover": { backgroundColor: "rgba(139,64,73,0.06)" },
-                      }}
-                    >
-                      PDF
-                    </Button>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        startIcon={<DownloadIcon fontSize="small" />}
+                        onClick={() =>
+                          handleDownloadPdf(inv.invoiceId, inv.invoiceNumber)
+                        }
+                        sx={{
+                          color: ACCENT,
+                          textTransform: "none",
+                          fontSize: "0.78rem",
+                          minWidth: 0,
+                          "&:hover": {
+                            backgroundColor: "rgba(139,64,73,0.06)",
+                          },
+                        }}
+                      >
+                        PDF
+                      </Button>
+
+                      {isPayable(inv.status) && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<PaymentIcon fontSize="small" />}
+                          onClick={() =>
+                            setPayDialog({ open: true, invoice: inv })
+                          }
+                          sx={{
+                            textTransform: "none",
+                            fontSize: "0.78rem",
+                            borderColor: ACCENT,
+                            color: ACCENT,
+                            "&:hover": {
+                              borderColor: "#6e3139",
+                              backgroundColor: "rgba(139,64,73,0.06)",
+                            },
+                          }}
+                        >
+                          Pay
+                        </Button>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -555,6 +1049,15 @@ export default function BillingTab({ pspId }: BillingTabProps) {
           </Table>
         </TableContainer>
       )}
+
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={payDialog.open}
+        invoice={payDialog.invoice}
+        onClose={() => setPayDialog({ open: false, invoice: null })}
+        onSuccess={handlePaySuccess}
+        bankDetails={bankDetails ?? null}
+      />
 
       {/* Toast */}
       <Snackbar
