@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
@@ -46,8 +49,14 @@ public class LimitsManagementController {
 
     // Merchant Limits
     @GetMapping("/merchant")
-    public ResponseEntity<List<MerchantTransactionLimit>> getAllMerchantLimits() {
-        return ResponseEntity.ok(limitsService.getAllMerchantLimits());
+    public ResponseEntity<Page<MerchantTransactionLimit>> getAllMerchantLimits(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageRequest pageable = PageRequest.of(
+                Math.max(0, page),
+                Math.max(1, Math.min(size, 100)),
+                Sort.by(Sort.Direction.ASC, "id"));
+        return ResponseEntity.ok(limitsService.getAllMerchantLimits(pageable));
     }
 
     @GetMapping("/merchant/{merchantId}")

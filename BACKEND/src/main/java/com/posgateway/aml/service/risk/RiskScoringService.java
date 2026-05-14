@@ -2,8 +2,11 @@
 package com.posgateway.aml.service.risk;
 
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.repository.risk.CountryRiskRepository;
 import com.posgateway.aml.service.rules.RulesExecutionService;
 import com.posgateway.aml.rules.RuleEvaluationResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,13 +28,19 @@ import io.micrometer.core.instrument.Tags;
 @Service
 public class RiskScoringService {
 
+    private static final Logger logger = LoggerFactory.getLogger(RiskScoringService.class);
+
     private final MeterRegistry meterRegistry;
     private final RulesExecutionService rulesExecutionService;
+    private final CountryRiskRepository countryRiskRepository;
 
     @Autowired
-    public RiskScoringService(MeterRegistry meterRegistry, RulesExecutionService rulesExecutionService) {
+    public RiskScoringService(MeterRegistry meterRegistry,
+                              RulesExecutionService rulesExecutionService,
+                              CountryRiskRepository countryRiskRepository) {
         this.meterRegistry = meterRegistry;
         this.rulesExecutionService = rulesExecutionService;
+        this.countryRiskRepository = countryRiskRepository;
     }
 
     // --- Weights Configuration (Can be moved to DB later) ---
@@ -185,8 +194,28 @@ public class RiskScoringService {
         return result;
     }
 
+    /**
+     * Return a country risk score in the range [0, 100].
+     * Primary source is the {@code country_risk_scores} table (CountryRiskRepository).
+     * Falls back to the in-process static map when the DB is unavailable or the
+     * country code is not yet seeded, so a cold DB never causes a NullPointerException.
+     *
+     * @param code ISO 3166-1 alpha-2 country code (null-safe)
+     * @return risk score 0-100 (higher = riskier)
+     */
     private double getCountryRisk(String code) {
-        return COUNTRY_RISK.getOrDefault(code, 50.0);
+        if (code == null || code.isBlank()) {
+            return COUNTRY_RISK.getOrDefault("UNKNOWN", 50.0);
+        }
+        String normalised = code.toUpperCase();
+        try {
+            return countryRiskRepository.findByCountryCode(normalised)
+                    .map(c -> c.getRiskScore() != null ? c.getRiskScore().doubleValue() : 50.0)
+                    .orElseGet(() -> COUNTRY_RISK.getOrDefault(normalised, 50.0));
+        } catch (Exception ex) {
+            logger.warn("country_risk_scores lookup failed for {}: {}; using static fallback", normalised, ex.getMessage());
+            return COUNTRY_RISK.getOrDefault(normalised, 50.0);
+        }
     }
 
     private double calculateAmountRisk(BigDecimal amount) {
@@ -209,11 +238,9 @@ public class RiskScoringService {
         double amount = Double.parseDouble(features.getOrDefault("amount", "0").toString());
         if (amount > 10000) score += 30;
         
-        // High risk country - NOTE: countryRepository is not defined in this file. This line will cause a compilation error.
-        // Assuming a placeholder or that countryRepository would be injected if this method were fully implemented.
-        // if (countryRepository.existsByCountryCode(country)) score += 40;
+        // High-risk country contribution: DB-backed via getCountryRisk() with static fallback.
         String country = (String) features.getOrDefault("country_code", "US");
-        if (COUNTRY_RISK.getOrDefault(country, 0.0) > 50.0) score += 40; // Using existing COUNTRY_RISK map as a proxy
+        if (getCountryRisk(country) > 50.0) score += 40;
 
         return Math.min(100.0, score);
     }

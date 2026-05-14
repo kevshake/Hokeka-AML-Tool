@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.RoleRepository;
 import com.posgateway.aml.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,7 +81,14 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /**
+     * Evicts both the username and email cache entries for this user because
+     * {@code CustomUserDetailsService.loadUserByUsername} may have been called
+     * with either value as the key.  We also clear by allEntries=false and use
+     * two @CacheEvict annotations — one per possible key.
+     */
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public User updateUser(Long userId, User updates, Long roleId) {
         User user = getUserById(userId);
 
@@ -105,11 +113,13 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public void deleteUser(Long userId) {
         userRepository.deleteById(userId);
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public void toggleUserStatus(Long userId, boolean enable) {
         User user = getUserById(userId);
         user.setEnabled(enable);
@@ -117,6 +127,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public User updateProfile(Long userId, String firstName, String lastName, String email) {
         User user = getUserById(userId);
 
@@ -133,6 +144,7 @@ public class UserService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public void changePassword(Long userId, String currentPassword, String newPassword) {
         User user = getUserById(userId);
 

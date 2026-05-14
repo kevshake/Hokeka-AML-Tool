@@ -59,7 +59,7 @@ public class ComplianceDashboardService {
         // Today's high-risk alerts
         dto.setTodayHighRiskCases(getTodayHighRiskCases());
 
-        // Team workload distribution (placeholder - implement based on your user structure)
+        // Team workload distribution
         dto.setTeamWorkload(getTeamWorkload());
 
         return dto;

@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
  * detection
  * Optimized for high throughput with async processing
  */
-@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/transactions")
 public class TransactionController {
@@ -102,6 +101,7 @@ public class TransactionController {
      * @return Fraud detection result
      */
     @PostMapping("/ingest")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER')")
     public CompletableFuture<ResponseEntity<FraudDetectionResponseDTO>> ingestTransaction(
             @Valid @RequestBody TransactionRequestDTO requestDTO) {
 
@@ -212,6 +212,7 @@ public class TransactionController {
      * @return List of fraud detection results
      */
     @PostMapping("/ingest/batch")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER')")
     public CompletableFuture<ResponseEntity<List<FraudDetectionResponseDTO>>> batchIngestTransactions(
             @Valid @RequestBody List<TransactionRequestDTO> requestDTOs) {
 
@@ -301,6 +302,7 @@ public class TransactionController {
      * GET /transactions/{id}
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
     public ResponseEntity<TransactionEntity> getTransactionById(@PathVariable Long id) {
         logger.info("Get transaction by ID: {}", id);
         return transactionRepository.findById(id)
@@ -363,6 +365,7 @@ public class TransactionController {
      * GET /api/v1/transactions/health
      */
     @GetMapping("/health")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Transaction Service is running");
     }

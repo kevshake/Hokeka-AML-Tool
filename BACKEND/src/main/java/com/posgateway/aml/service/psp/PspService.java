@@ -6,6 +6,8 @@ import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.repository.RoleRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,19 @@ public class PspService {
     }
     // User can uncomment or
     // inject if available
+
+    /**
+     * Cacheable PSP lookup by primary key.  All hot-path code that only needs to
+     * read PSP configuration should call this method rather than hitting the
+     * repository directly, so the result is served from the "psps" Caffeine cache
+     * (15-min TTL, 500-entry max) on subsequent calls.
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "psps", key = "#pspId")
+    public Psp getPsp(Long pspId) {
+        return pspRepository.findById(pspId)
+                .orElseThrow(() -> new IllegalArgumentException("PSP not found: " + pspId));
+    }
 
     @Transactional
     public Psp registerPsp(PspRegistrationRequest request) {
@@ -63,6 +78,7 @@ public class PspService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "psps", key = "#pspId")
     public Psp updatePspProfile(Long pspId, com.posgateway.aml.dto.psp.PspUpdateRequest request) {
         Psp psp = pspRepository.findById(pspId)
                 .orElseThrow(() -> new IllegalArgumentException("PSP not found"));
@@ -80,6 +96,7 @@ public class PspService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "psps", key = "#pspId")
     public Psp updatePspTheme(Long pspId, com.posgateway.aml.dto.psp.PspThemeUpdateRequest request) {
         Psp psp = pspRepository.findById(pspId)
                 .orElseThrow(() -> new IllegalArgumentException("PSP not found"));
@@ -101,6 +118,7 @@ public class PspService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "psps", key = "#pspId")
     public void updatePspStatus(Long pspId, String status) {
         Psp psp = pspRepository.findById(pspId)
                 .orElseThrow(() -> new IllegalArgumentException("PSP not found"));

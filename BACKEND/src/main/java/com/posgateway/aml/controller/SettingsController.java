@@ -3,8 +3,10 @@ package com.posgateway.aml.controller;
 import com.posgateway.aml.dto.SystemSettingsRequest;
 import com.posgateway.aml.dto.psp.PspThemeUpdateRequest;
 import com.posgateway.aml.entity.User;
+import com.posgateway.aml.entity.UserSettings;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.repository.UserSettingsRepository;
 import com.posgateway.aml.service.ConfigService;
 import com.posgateway.aml.service.psp.PspService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -24,46 +27,101 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/settings")
-@PreAuthorize("hasAnyRole('ADMIN')")
+@PreAuthorize("isAuthenticated()")
 public class SettingsController {
 
     private final PspRepository pspRepository;
     private final PspService pspService;
     private final ConfigService configService;
+    private final UserSettingsRepository userSettingsRepository;
 
     @Autowired
-    public SettingsController(PspRepository pspRepository, PspService pspService, ConfigService configService) {
+    public SettingsController(PspRepository pspRepository, PspService pspService, ConfigService configService,
+            UserSettingsRepository userSettingsRepository) {
         this.pspRepository = pspRepository;
         this.pspService = pspService;
         this.configService = configService;
+        this.userSettingsRepository = userSettingsRepository;
     }
 
     /**
-     * Get user settings (legacy endpoint for backward compatibility)
+     * Get per-user settings.
      * GET /settings
+     * Returns persisted settings for the authenticated user, or defaults if none have been saved yet.
      */
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("theme", "light");
-        settings.put("notifications", true);
-        settings.put("autoRefresh", true);
-        settings.put("refreshInterval", 30); // seconds
-        settings.put("timezone", "UTC");
-        settings.put("dateFormat", "YYYY-MM-DD");
-        settings.put("itemsPerPage", 50);
-        return ResponseEntity.ok(settings);
+    public ResponseEntity<Map<String, Object>> getSettings(@AuthenticationPrincipal User currentUser) {
+        if (currentUser == null) {
+            return ResponseEntity.status(401).build();
+        }
+        UserSettings settings = userSettingsRepository.findByUserId(currentUser.getId())
+                .orElseGet(() -> {
+                    // Return in-memory defaults; the row is written only on first PUT.
+                    UserSettings defaults = new UserSettings();
+                    defaults.setUserId(currentUser.getId());
+                    return defaults;
+                });
+        return ResponseEntity.ok(toMap(settings));
     }
 
     /**
-     * Update system settings
+     * Update per-user settings.
      * PUT /settings
+     * Persists the supplied fields for the authenticated user; unknown keys are ignored.
      */
     @PutMapping
-    public ResponseEntity<Map<String, Object>> updateSettings(@RequestBody Map<String, Object> settings) {
-        // In a real implementation, this would save to database
-        // For now, just return the settings
-        return ResponseEntity.ok(settings);
+    public ResponseEntity<Map<String, Object>> updateSettings(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser == null) {
+            return ResponseEntity.status(401).build();
+        }
+        UserSettings settings = userSettingsRepository.findByUserId(currentUser.getId())
+                .orElseGet(() -> {
+                    UserSettings s = new UserSettings();
+                    s.setUserId(currentUser.getId());
+                    return s;
+                });
+
+        if (body.containsKey("theme")) {
+            settings.setTheme((String) body.get("theme"));
+        }
+        if (body.containsKey("notifications")) {
+            settings.setNotifications((Boolean) body.get("notifications"));
+        }
+        if (body.containsKey("autoRefresh")) {
+            settings.setAutoRefresh((Boolean) body.get("autoRefresh"));
+        }
+        if (body.containsKey("refreshInterval")) {
+            settings.setRefreshInterval(((Number) body.get("refreshInterval")).intValue());
+        }
+        if (body.containsKey("timezone")) {
+            settings.setTimezone((String) body.get("timezone"));
+        }
+        if (body.containsKey("dateFormat")) {
+            settings.setDateFormat((String) body.get("dateFormat"));
+        }
+        if (body.containsKey("itemsPerPage")) {
+            settings.setItemsPerPage(((Number) body.get("itemsPerPage")).intValue());
+        }
+
+        userSettingsRepository.save(settings);
+        return ResponseEntity.ok(toMap(settings));
+    }
+
+    /**
+     * Convert a UserSettings entity to the API response map.
+     */
+    private Map<String, Object> toMap(UserSettings s) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("theme", s.getTheme());
+        m.put("notifications", s.getNotifications());
+        m.put("autoRefresh", s.getAutoRefresh());
+        m.put("refreshInterval", s.getRefreshInterval());
+        m.put("timezone", s.getTimezone());
+        m.put("dateFormat", s.getDateFormat());
+        m.put("itemsPerPage", s.getItemsPerPage());
+        return m;
     }
 
     /**
@@ -71,6 +129,7 @@ public class SettingsController {
      * GET /settings/system
      * Returns maintenance mode, debug logging, risk thresholds, audit retention, etc.
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @GetMapping("/system")
     public ResponseEntity<Map<String, Object>> getSystemSettings() {
         Map<String, Object> settings = new HashMap<>();
@@ -91,6 +150,7 @@ public class SettingsController {
      * PUT /settings/system
      * Updates maintenance mode, debug logging, risk thresholds, audit retention, etc.
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @PutMapping("/system")
     public ResponseEntity<Map<String, Object>> updateSystemSettings(
             @RequestBody SystemSettingsRequest request,
@@ -143,6 +203,7 @@ public class SettingsController {
      * Get application configuration
      * GET /settings/config
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @GetMapping("/config")
     public ResponseEntity<Map<String, Object>> getConfig() {
         Map<String, Object> config = new HashMap<>();
@@ -159,6 +220,7 @@ public class SettingsController {
      * GET /api/v1/settings/psps
      * Super Admin only - can manage themes for all PSPs
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @GetMapping("/psps")
     public ResponseEntity<List<Map<String, Object>>> getAllPsps() {
         List<Psp> psps = pspRepository.findAll();
@@ -179,6 +241,7 @@ public class SettingsController {
      * Get PSP theme configuration
      * GET /settings/psps/{pspId}/theme
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @GetMapping("/psps/{pspId}/theme")
     public ResponseEntity<Map<String, Object>> getPspTheme(@PathVariable Long pspId) {
         Psp psp = pspRepository.findById(pspId)
@@ -205,6 +268,7 @@ public class SettingsController {
      * Update PSP theme configuration
      * PUT /settings/psps/{pspId}/theme
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @PutMapping("/psps/{pspId}/theme")
     public ResponseEntity<Map<String, Object>> updatePspTheme(
             @PathVariable Long pspId,
@@ -233,6 +297,7 @@ public class SettingsController {
      * Get available theme presets
      * GET /settings/themes/presets
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     @GetMapping("/themes/presets")
     public ResponseEntity<Map<String, Map<String, String>>> getThemePresets() {
         Map<String, Map<String, String>> presets = new HashMap<>();

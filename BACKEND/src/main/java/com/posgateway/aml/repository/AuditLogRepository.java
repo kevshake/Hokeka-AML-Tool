@@ -1,6 +1,8 @@
 package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.AuditLog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -20,9 +22,15 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
 
     List<AuditLog> findByEntityTypeAndEntityIdOrderByTimestampDesc(String entityType, String entityId);
 
+    Page<AuditLog> findByEntityTypeAndEntityId(String entityType, String entityId, Pageable pageable);
+
     List<AuditLog> findByUsernameOrderByTimestampDesc(String username);
 
+    Page<AuditLog> findByUsername(String username, Pageable pageable);
+
     List<AuditLog> findByTimestampBetween(LocalDateTime start, LocalDateTime end);
+
+    Page<AuditLog> findByTimestampBetween(LocalDateTime start, LocalDateTime end, Pageable pageable);
 
     long countByTimestampAfter(LocalDateTime timestamp);
 

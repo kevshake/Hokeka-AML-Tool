@@ -254,14 +254,73 @@ public class CaseEscalationService {
     }
 
     /**
-     * Get case risk score (placeholder - implement based on your risk scoring
-     * system)
+     * Compute a composite case risk score in the range [0, 100].
+     *
+     * <ul>
+     *   <li><b>Alert base (0–50):</b> average of all linked {@link com.posgateway.aml.entity.compliance.CaseAlert#getScore()}
+     *       values (which are in [0,1]) multiplied by 50.</li>
+     *   <li><b>Transaction amount factor (0–30):</b> log10(totalAmountCents + 1) scaled so
+     *       that 10 000 USD (1 000 000 cents) maps to ≈30. Formula:
+     *       {@code min(30, log10(totalCents + 1) / log10(1_000_001) * 30)}.</li>
+     *   <li><b>Entity risk tier (0–20):</b> derived from the merchant's risk level stored in
+     *       {@link com.posgateway.aml.service.risk.CustomerRiskProfilingService}:
+     *       CRITICAL→20, HIGH→15, MEDIUM→8, LOW→3, unknown→0.</li>
+     * </ul>
      */
     private Double getCaseRiskScore(ComplianceCase complianceCase) {
-        // Implement risk score calculation
-        if (complianceCase.getMerchantId() == null)
-            return 0.0;
-        return riskProfilingService.calculateRiskRating(complianceCase.getMerchantId().toString()).getRiskScore();
+        // --- 1. Alert base score ---
+        double alertBase = 0.0;
+        java.util.List<com.posgateway.aml.entity.compliance.CaseAlert> alerts = complianceCase.getAlerts();
+        if (alerts != null && !alerts.isEmpty()) {
+            double sum = alerts.stream()
+                    .map(com.posgateway.aml.entity.compliance.CaseAlert::getScore)
+                    .filter(s -> s != null)
+                    .mapToDouble(Double::doubleValue)
+                    .sum();
+            long withScore = alerts.stream()
+                    .filter(a -> a.getScore() != null)
+                    .count();
+            if (withScore > 0) {
+                alertBase = (sum / withScore) * 50.0; // average normalised to [0,1], scaled to [0,50]
+            }
+        }
+
+        // --- 2. Transaction amount factor ---
+        double amountFactor = 0.0;
+        if (complianceCase.getMerchantId() != null) {
+            Long totalCents = transactionRepository.sumAmountByMerchantInTimeWindow(
+                    complianceCase.getMerchantId().toString(),
+                    java.time.LocalDateTime.now().minusDays(30),
+                    java.time.LocalDateTime.now());
+            if (totalCents != null && totalCents > 0) {
+                // log10(1_000_001) ≈ 6 → 10 000 USD maps to 30
+                amountFactor = Math.min(30.0, Math.log10(totalCents + 1.0) / Math.log10(1_000_001.0) * 30.0);
+            }
+        }
+
+        // --- 3. Entity risk tier ---
+        double entityRisk = 0.0;
+        if (complianceCase.getMerchantId() != null) {
+            try {
+                String riskLevel = riskProfilingService
+                        .calculateRiskRating(complianceCase.getMerchantId().toString())
+                        .getRiskLevel();
+                if (riskLevel != null) {
+                    entityRisk = switch (riskLevel.toUpperCase()) {
+                        case "CRITICAL" -> 20.0;
+                        case "HIGH"     -> 15.0;
+                        case "MEDIUM"   -> 8.0;
+                        case "LOW"      -> 3.0;
+                        default         -> 0.0;
+                    };
+                }
+            } catch (Exception ignored) {
+                // leave entityRisk at 0 if risk profiling is unavailable
+            }
+        }
+
+        double raw = alertBase + amountFactor + entityRisk;
+        return Math.max(0.0, Math.min(100.0, raw));
     }
 
     private java.math.BigDecimal getCaseTotalAmount(ComplianceCase complianceCase) {

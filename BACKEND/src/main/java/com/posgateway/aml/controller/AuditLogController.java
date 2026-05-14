@@ -4,6 +4,7 @@ import com.posgateway.aml.entity.AuditLog;
 import com.posgateway.aml.repository.AuditLogRepository;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,24 +32,42 @@ public class AuditLogController {
 
     @GetMapping("/entity")
     @PreAuthorize("hasAuthority('VIEW_AUDIT_LOGS')")
-    public ResponseEntity<List<AuditLog>> byEntity(@RequestParam String entityType,
-            @RequestParam String entityId) {
-        return ResponseEntity
-                .ok(auditLogRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(entityType, entityId));
+    public ResponseEntity<Page<AuditLog>> byEntity(@RequestParam String entityType,
+            @RequestParam String entityId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageRequest pageable = PageRequest.of(
+                Math.max(0, page),
+                Math.max(1, Math.min(size, 100)),
+                Sort.by(Sort.Direction.DESC, "timestamp"));
+        return ResponseEntity.ok(
+                auditLogRepository.findByEntityTypeAndEntityId(entityType, entityId, pageable));
     }
 
     @GetMapping("/user/{username}")
     @PreAuthorize("hasAuthority('VIEW_AUDIT_LOGS')")
-    public ResponseEntity<List<AuditLog>> byUser(@PathVariable String username) {
-        return ResponseEntity.ok(auditLogRepository.findByUsernameOrderByTimestampDesc(username));
+    public ResponseEntity<Page<AuditLog>> byUser(@PathVariable String username,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageRequest pageable = PageRequest.of(
+                Math.max(0, page),
+                Math.max(1, Math.min(size, 100)),
+                Sort.by(Sort.Direction.DESC, "timestamp"));
+        return ResponseEntity.ok(auditLogRepository.findByUsername(username, pageable));
     }
 
     @GetMapping("/range")
     @PreAuthorize("hasAuthority('VIEW_AUDIT_LOGS')")
-    public ResponseEntity<List<AuditLog>> byRange(
+    public ResponseEntity<Page<AuditLog>> byRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return ResponseEntity.ok(auditLogRepository.findByTimestampBetween(start, end));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageRequest pageable = PageRequest.of(
+                Math.max(0, page),
+                Math.max(1, Math.min(size, 100)),
+                Sort.by(Sort.Direction.DESC, "timestamp"));
+        return ResponseEntity.ok(auditLogRepository.findByTimestampBetween(start, end, pageable));
     }
 
     /**

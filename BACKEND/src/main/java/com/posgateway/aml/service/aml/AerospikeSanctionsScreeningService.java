@@ -11,6 +11,7 @@ import com.posgateway.aml.model.ScreeningResult.ScreeningStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -39,6 +40,20 @@ public class AerospikeSanctionsScreeningService {
     @Autowired
     private SanctionsScreenClient sanctionsScreenClient;
 
+    /**
+     * Screens a name against the sanctions list via the AML microservice.
+     *
+     * <p>Results are cached in the "sanctions" Caffeine cache (10-min TTL,
+     * 50 000-entry max) keyed by {@code name + ':' + entityType}.  Sanctions
+     * lists are refreshed daily by the microservice; a 10-min window is safe
+     * and eliminates repeated microservice round-trips for recurring names.
+     *
+     * <p>Note: the cache key normalises {@code null} name to the empty string
+     * and a {@code null} entityType to "PERSON" before caching so that the key
+     * space is deterministic.
+     */
+    @Cacheable(cacheNames = "sanctions",
+               key = "(#name != null ? #name : '') + ':' + (#entityType != null ? #entityType.name() : 'PERSON')")
     public ScreeningResult screenName(String name, EntityType entityType) {
         EntityType resolvedType = entityType != null ? entityType : EntityType.PERSON;
         String typeStr = mapTypeToWire(resolvedType);

@@ -5,9 +5,11 @@ import com.posgateway.aml.entity.compliance.CaseEntity;
 import com.posgateway.aml.entity.compliance.CaseNote;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
+import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.repository.CaseEntityRepository;
 import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
+import com.posgateway.aml.repository.MerchantRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,7 @@ public class CaseEnrichmentService {
     private final CaseTransactionRepository caseTransactionRepository;
     private final CaseEntityRepository caseEntityRepository;
     private final ComplianceCaseRepository caseRepository;
+    private final MerchantRepository merchantRepository;
     private final com.posgateway.aml.service.aml.SumsubAmlService sumsubAmlService;
     private final com.posgateway.aml.service.graph.Neo4jGdsService neo4jGdsService;
 
@@ -39,11 +42,13 @@ public class CaseEnrichmentService {
     public CaseEnrichmentService(CaseTransactionRepository caseTransactionRepository,
             CaseEntityRepository caseEntityRepository,
             ComplianceCaseRepository caseRepository,
+            MerchantRepository merchantRepository,
             com.posgateway.aml.service.aml.SumsubAmlService sumsubAmlService,
             @Autowired(required = false) com.posgateway.aml.service.graph.Neo4jGdsService neo4jGdsService) {
         this.caseTransactionRepository = caseTransactionRepository;
         this.caseEntityRepository = caseEntityRepository;
         this.caseRepository = caseRepository;
+        this.merchantRepository = merchantRepository;
         this.sumsubAmlService = sumsubAmlService;
         this.neo4jGdsService = neo4jGdsService;
     }
@@ -92,36 +97,29 @@ public class CaseEnrichmentService {
                     null);
             caseEntityRepository.save(customEntity);
 
-            // 2. Perform Real-time KYC/AML Screening (Integration: KYC Services)
+            // 2. Fetch merchant and perform real-time KYC/AML screening
             try {
-                // Using dummy merchant object constructed from ID as we don't have full
-                // merchant details here.
-                // Ideally this method should accept a Merchant object or fetch it.
-                // For now, assuming ref is usable, but in real scenario we'd fetch from
-                // MerchantRepository.
-                // Since MerchantRepository is not injected here, we skip fetching for this
-                // concise update
-                // OR we can fetch if we inject it. Let's assume for now we just log
-                // availability.
+                Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+                if (merchant != null) {
+                    String merchantName = merchant.getLegalName() != null
+                            ? merchant.getLegalName()
+                            : merchant.getTradingName();
+                    String riskTier = merchant.getRiskLevel() != null ? merchant.getRiskLevel() : "UNKNOWN";
+                    String kycStatus = merchant.getKycStatus() != null ? merchant.getKycStatus() : "PENDING";
 
-                // NOTE: To do this properly, we need MerchantRepository.
-                // Let's rely on the fact that the caller likely has the merchant or we can
-                // fetch it if we inject repo.
-                // But wait, we didn't inject MerchantRepository in previous step.
-                // Let's just add the placeholder for now or fix injection in next step if
-                // critical.
+                    addSystemNote(cCase,
+                            "Merchant enrichment: name=" + merchantName
+                                    + ", riskTier=" + riskTier
+                                    + ", kycStatus=" + kycStatus);
 
-                // ACTUALLY, checking previous code... I realized I don't have
-                // MerchantRepository injected.
-                // I will add a system note about integration triggering.
-
-                addSystemNote(cCase, "Triggered Background KYC Check for Merchant " + ref);
-
-                // If we had the merchant object:
-                // var result = sumsubAmlService.screenMerchantWithSumsub(merchant);
-
+                    sumsubAmlService.screenMerchantWithSumsub(merchant);
+                    addSystemNote(cCase, "KYC screening triggered for merchant " + merchantName + " (id=" + merchantId + ")");
+                } else {
+                    addSystemNote(cCase, "Triggered background KYC check for merchant id=" + merchantId
+                            + " (merchant record not found in local DB)");
+                }
             } catch (Exception e) {
-                logger.error("KYC trigger failed", e);
+                logger.error("KYC trigger failed for merchant {}", merchantId, e);
             }
 
             // 3. Update Graph Context (Integration: Neo4j)

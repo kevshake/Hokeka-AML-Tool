@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Service for managing Limits & AML Management
@@ -106,6 +108,10 @@ public class LimitsManagementService {
 
     public List<MerchantTransactionLimit> getAllMerchantLimits() {
         return merchantLimitRepository.findAll();
+    }
+
+    public Page<MerchantTransactionLimit> getAllMerchantLimits(Pageable pageable) {
+        return merchantLimitRepository.findAll(pageable);
     }
 
     public MerchantTransactionLimit getMerchantLimit(Long merchantId) {

@@ -80,35 +80,54 @@ public class MonitoringMetricsService {
     }
 
     /**
-     * Compute AUC (Area Under ROC Curve)
-     * Simplified implementation - would need proper ROC curve calculation
+     * Compute AUC (Area Under ROC Curve) via trapezoidal rule over the ROC curve.
+     * Requires labeled transactions (label=1 fraud, label=0 legitimate) with model scores.
+     * Falls back to the most recently stored ModelMetrics.auc when insufficient labeled
+     * data is present in the provided batch.
      */
     private Double computeAUC(List<TransactionFeatures> features) {
-        // Filter labeled transactions
+        // Filter to labeled records that carry a model score
         List<TransactionFeatures> labeled = features.stream()
             .filter(tf -> tf.getLabel() != null && tf.getScore() != null)
             .collect(Collectors.toList());
 
-        if (labeled.size() < 10) {
-            return null; // Not enough data
+        long fraudCount = labeled.stream().filter(tf -> tf.getLabel() == 1).count();
+        long goodCount  = labeled.size() - fraudCount;
+
+        if (labeled.size() < 10 || fraudCount == 0 || goodCount == 0) {
+            // Not enough labeled data for this batch — use the latest persisted AUC
+            return metricsRepository.findFirstByOrderByDateDesc()
+                .map(ModelMetrics::getAuc)
+                .orElse(0.0);
         }
 
-        // Sort by score descending
+        // Sort by predicted score descending (highest-risk first)
         labeled.sort((a, b) -> Double.compare(
             b.getScore() != null ? b.getScore() : 0.0,
             a.getScore() != null ? a.getScore() : 0.0));
 
-        // Count true positives and false positives at each threshold
-        long fraudCount = labeled.stream().filter(tf -> tf.getLabel() == 1).count();
-        long goodCount = labeled.size() - fraudCount;
+        // Trapezoidal AUC: walk the ROC curve accumulating area
+        double auc = 0.0;
+        long tp = 0;
+        long fp = 0;
+        double prevTpr = 0.0;
+        double prevFpr = 0.0;
 
-        if (fraudCount == 0 || goodCount == 0) {
-            return null; // Need both classes
+        for (TransactionFeatures tf : labeled) {
+            if (tf.getLabel() == 1) {
+                tp++;
+            } else {
+                fp++;
+            }
+            double tpr = (double) tp / fraudCount;
+            double fpr = (double) fp / goodCount;
+            // Trapezoid: width = delta FPR, height = average TPR
+            auc += (fpr - prevFpr) * (tpr + prevTpr) / 2.0;
+            prevTpr = tpr;
+            prevFpr = fpr;
         }
 
-        // Simplified AUC calculation (would use proper ROC curve)
-        double auc = 0.5; // Placeholder - implement proper ROC curve calculation
-        return auc;
+        return Math.min(1.0, Math.max(0.0, auc));
     }
 
     /**
@@ -132,12 +151,33 @@ public class MonitoringMetricsService {
     }
 
     /**
-     * Compute average latency
+     * Compute average scoring latency in milliseconds.
+     * Latency per record is (scoredAt - transaction.createdAt).
+     * Only records where both timestamps are present and non-negative are included.
+     * Returns 0.0 when no usable data is found.
      */
     private Double computeAverageLatency(List<TransactionFeatures> features) {
-        // Latency would be stored separately or computed from timestamps
-        // For now, return null as placeholder
-        return null;
+        double[] latencies = features.stream()
+            .filter(tf -> tf.getScoredAt() != null
+                && tf.getTransaction() != null
+                && tf.getTransaction().getCreatedAt() != null)
+            .mapToDouble(tf -> {
+                long millis = java.time.Duration.between(
+                    tf.getTransaction().getCreatedAt(), tf.getScoredAt()).toMillis();
+                return millis;
+            })
+            .filter(ms -> ms >= 0)
+            .toArray();
+
+        if (latencies.length == 0) {
+            return 0.0;
+        }
+
+        double sum = 0.0;
+        for (double ms : latencies) {
+            sum += ms;
+        }
+        return sum / latencies.length;
     }
 
     /**

@@ -4,6 +4,7 @@ import com.posgateway.aml.config.AmlProperties;
 import com.posgateway.aml.model.RiskAssessment;
 import com.posgateway.aml.model.RiskLevel;
 import com.posgateway.aml.model.Transaction;
+import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * AML (Anti-Money Laundering) Service
@@ -28,13 +30,26 @@ public class AmlService {
     private static final BigDecimal LARGE_AMOUNT_THRESHOLD = new BigDecimal("10000");
     private static final BigDecimal VERY_LARGE_AMOUNT_THRESHOLD = new BigDecimal("50000");
 
+    /**
+     * FATF high-risk / blacklisted country codes (ISO 3166-1 alpha-2).
+     * Used as a compile-time fallback when the high_risk_countries table is
+     * unavailable (e.g. cold start before Flyway migration, test context).
+     */
+    private static final Set<String> FATF_HIGH_RISK_COUNTRIES = Set.of(
+            "KP", "IR", "MM", "SY", "YE", "SD", "LY", "SO", "CF", "SS", "VE", "AF", "IQ", "ML", "BF"
+    );
+
     private final AmlProperties amlProperties;
     private final TransactionStatisticsService statisticsService;
+    private final HighRiskCountryRepository highRiskCountryRepository;
 
     @Autowired
-    public AmlService(AmlProperties amlProperties, TransactionStatisticsService statisticsService) {
+    public AmlService(AmlProperties amlProperties,
+                      TransactionStatisticsService statisticsService,
+                      HighRiskCountryRepository highRiskCountryRepository) {
         this.amlProperties = amlProperties;
         this.statisticsService = statisticsService;
+        this.highRiskCountryRepository = highRiskCountryRepository;
     }
 
     /**
@@ -177,19 +192,31 @@ public class AmlService {
 
     private int assessGeographicRisk(Transaction transaction, List<String> riskFactors) {
         int score = 0;
-        
-        // High-risk country check (should be configurable)
-        if (transaction.getCountryCode() != null) {
-            // This would check against a configurable list of high-risk countries
-            // For now, placeholder
+
+        String countryCode = transaction.getCountryCode();
+
+        // High-risk country check: DB-first with static FATF fallback
+        if (countryCode != null) {
+            String normalised = countryCode.toUpperCase();
+            boolean highRisk = false;
+            try {
+                highRisk = highRiskCountryRepository.existsByCountryCode(normalised);
+            } catch (Exception ex) {
+                logger.warn("high_risk_countries lookup failed for {}: {}; using static FATF list",
+                        normalised, ex.getMessage());
+                highRisk = FATF_HIGH_RISK_COUNTRIES.contains(normalised);
+            }
+            if (highRisk) {
+                score += 20;
+                riskFactors.add("Transaction involves FATF high-risk country: " + normalised);
+            }
         }
 
         // Cross-border transaction check - optimize string comparison
-        String countryCode = transaction.getCountryCode();
         String currencyCode = transaction.getCurrencyCode();
         if (countryCode != null && currencyCode != null && currencyCode.length() >= 2) {
             String currencyCountry = currencyCode.substring(0, 2);
-            if (!countryCode.equals(currencyCountry)) {
+            if (!countryCode.equalsIgnoreCase(currencyCountry)) {
                 score += 15;
                 riskFactors.add("Cross-border transaction detected");
             }

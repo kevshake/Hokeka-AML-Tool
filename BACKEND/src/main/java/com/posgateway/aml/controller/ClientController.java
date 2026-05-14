@@ -16,9 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 /**
  * Client Controller
  * Manages client registration and API key management
- * No authentication required for now
  */
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
 @RestController
 @RequestMapping("/clients")
 public class ClientController {
