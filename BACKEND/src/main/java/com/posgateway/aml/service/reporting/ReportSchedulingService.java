@@ -320,18 +320,24 @@ public class ReportSchedulingService {
                 return nextMonthly;
                 
             case QUARTERLY:
-                LocalDateTime nextQuarterly = now.with(timeOfDay);
-                int currentMonth = nextQuarterly.getMonthValue();
-                int nextQuarterMonth = ((currentMonth - 1) / 3 + 1) * 3 + 1;
-                if (nextQuarterMonth > 12) {
-                    nextQuarterly = nextQuarterly.plusYears(1).withMonth(1);
+                LocalDateTime nextQ = now.with(timeOfDay);
+                int month = nextQ.getMonthValue();
+                int nextQStart;
+                if (month < 4) {
+                    nextQStart = 4;
+                } else if (month < 7) {
+                    nextQStart = 7;
+                } else if (month < 10) {
+                    nextQStart = 10;
                 } else {
-                    nextQuarterly = nextQuarterly.withMonth(nextQuarterMonth);
+                    nextQStart = 1;
+                    nextQ = nextQ.plusYears(1);
                 }
-                if (!nextQuarterly.isAfter(now)) {
-                    nextQuarterly = nextQuarterly.plusMonths(3);
+                nextQ = nextQ.withMonth(nextQStart).withDayOfMonth(1);
+                if (!nextQ.isAfter(now)) {
+                    nextQ = nextQ.plusMonths(3).withDayOfMonth(1);
                 }
-                return nextQuarterly;
+                return nextQ;
                 
             case YEARLY:
                 LocalDateTime nextYearly = now.withMonth(1).withDayOfMonth(1).with(timeOfDay);

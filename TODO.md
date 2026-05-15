@@ -46,6 +46,16 @@ _Last updated: 2026-05-14_
 
 ---
 
+## Wave 9 — Reports, Analytics, Data Output + DB Indexes ✅
+
+- [x] **#59** `DashboardController` sanctions status + fraud metrics — replaced all hardcoded literals with real DB queries: `MerchantScreeningResultRepository` (lastRun, merchantsProcessed, hitsFound today), `ModelMetricsRepository` (AUC, precisionAt100, drift, latency), `AlertRepository` (precision/recall/F1/FPR computed from true/false positive alert dispositions).
+- [x] **#60** `ReportExportService` — complete rewrite: real OpenPDF PDF (branded A4, alternating rows, page-N-of-M footer) returning `byte[]`; real RFC-compliant UTF-8-BOM CSV `byte[]`; no file-system writes. `ReportController` download endpoint serves `application/pdf` or `text/csv` with `Content-Disposition`. New `GET /reports/chart/export` endpoint flattens chart data to CSV/PDF bytes. BOM and wildcard-import compile errors fixed.
+- [x] **#61** `RegulatoryReportingService` — deleted `SimpleTransactionFetcher()` (was calling `findAll()` and filtering in memory); replaced with indexed `findByPspIdAndTxnTsBetween()` + pageable overload added to `TransactionRepository`. New `GET /reports/transactions/stats` endpoint returns 10 aggregated metrics (counts by decision/risk, total+avg amount, fraud alerts) — PSP-scoped. `TransactionMonitoringReports.tsx` replaced hardcoded `size=1000` with `useTransactionStats()` hook against the new endpoint.
+- [x] **#62** `AnalyticsPage.tsx` — native Recharts analytics (4 tabs: Transaction Overview, Risk Analytics, Alert Trends, Model Performance) shown by default; Grafana tab only appears when `VITE_GRAFANA_URL` is set. 4 new query hooks in `queries.ts` (`useFraudMetrics`, `useModelMetricsLatest`, `useModelMetricsRange`, `useAlertTrends`). `ReportSchedulingService` quarterly calculation bug fixed (explicit Q-boundary if/else, `withDayOfMonth(1)` applied correctly).
+- [x] **#63** `V135__production_performance_indexes.sql` — 26 new composite/partial indexes across 13 tables: transactions (psp+decision+time, psp+risk+time, device+time, ip+time, direction+decision+time, country+time), api_usage_logs (psp+service+time, psp+billable+time, endpoint+time), alerts (merchant+status+time), invoices (psp+status+due, paid+date), payment_attempts (psp+status+created, invoice+status), SARs (psp+status+created), CBK submissions (psp+status+submitted), audit_logs (action+entity+time, failed-only partial), merchants (next_screening, psp+status+risk, country+mcc), compliance_cases (psp+assignee+status), billing_calculations (psp+period), subscriptions (psp+status), merchant_screening (status+score partial). All `IF NOT EXISTS`, verified against existing migrations.
+
+---
+
 ## Wave 8 — Zero Stubs: Fraud Scoring, Risk, Kafka Pipeline, Compliance Reporting ✅
 
 - [x] **#53** `FraudDetectionService` — replaced 3 hardcoded-0 stubs: `assessDeviceRisk` (device fingerprint velocity + fraud-alert cross-join), `assessIpRisk` (IP velocity + HighRiskCountry DB + FATF fallback), `assessBehavioralRisk` (amount vs 30-day avg, unusual hours). `TransactionMonitoringService` `getDeviceRisk`/`isVpnDetected` now delegate to real scoring; VPN detection uses RFC-1918 exclusion + cloud-prefix heuristic. `TransactionRepository` +4 JPQL queries.

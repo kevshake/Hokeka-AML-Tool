@@ -1,6 +1,7 @@
 package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.Alert;
+import com.posgateway.aml.model.AlertDisposition;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -99,5 +100,31 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
      */
     @Query("SELECT a FROM Alert a WHERE a.status = 'open' ORDER BY a.createdAt DESC")
     List<Alert> findRecentOpenAlerts();
+
+    /**
+     * Count alerts that have been disposed with any of the specified dispositions
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.disposition IN :dispositions")
+    long countByDispositionIn(@Param("dispositions") List<AlertDisposition> dispositions);
+
+    /**
+     * Count all alerts that have a non-null disposition (i.e. have been reviewed)
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.disposition IS NOT NULL")
+    long countReviewedAlerts();
+
+    /**
+     * Count CRITICAL alerts created in a date window, optionally scoped to a PSP via txn join.
+     * Used by the /transactions/stats endpoint for fraudAlertCount.
+     */
+    @Query(value = "SELECT COUNT(DISTINCT a.alert_id) FROM alerts a " +
+                   "INNER JOIN transactions t ON a.txn_id = t.txn_id " +
+                   "WHERE (:pspId IS NULL OR t.psp_id = :pspId) " +
+                   "AND a.severity = 'CRITICAL' " +
+                   "AND a.created_at >= :start AND a.created_at < :end",
+           nativeQuery = true)
+    long countFraudAlertsByPspAndPeriod(@Param("pspId") Long pspId,
+                                        @Param("start") java.time.LocalDateTime start,
+                                        @Param("end") java.time.LocalDateTime end);
 }
 

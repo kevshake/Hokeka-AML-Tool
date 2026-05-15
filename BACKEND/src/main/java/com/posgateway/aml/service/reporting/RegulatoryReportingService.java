@@ -115,21 +115,8 @@ public class RegulatoryReportingService {
      * IFTRs are required for cross-border transactions and international wire transfers
      */
     public InternationalFundsTransferReport generateIftr(LocalDateTime startDate, LocalDateTime endDate) {
-        // Find all transactions in date range, respecting PSP isolation
         Long pspId = pspIsolationService.getCurrentUserPspId();
-        List<TransactionEntity> allTxns; 
-        
-        // Note: Ideally use a custom repository method findByTxnTsBetweenAndPspId
-        // but for now reusing findAll and filtering or using internal helper logic
-        if (pspId != null) {
-            // Need a repository method for this efficiency, but effectively:
-            // For now, let's fetch all and filter in memory if repo method missing, 
-            // OR use the helper method pattern as below.
-            // Using a helper fetching method for consistency:
-            allTxns = fetchTransactions(startDate, endDate, pspId);
-        } else {
-            allTxns = SimpleTransactionFetcher(startDate, endDate);
-        }
+        List<TransactionEntity> allTxns = fetchTransactions(startDate, endDate, pspId);
 
         List<TransactionEntity> iftrTxns = new ArrayList<>();
 
@@ -201,27 +188,11 @@ public class RegulatoryReportingService {
     }
     
     private List<TransactionEntity> fetchTransactions(LocalDateTime startDate, LocalDateTime endDate, Long pspId) {
-        if (pspId != null) {
-            // Use specific repository method if available, or findAll and filter
-            // Ideally: transactionRepository.findByPspIdAndTxnTsBetween(pspId, startDate, endDate);
-            // Assuming simplified retrieval for now to match interface:
-            return transactionRepository.findAll().stream()
-                    .filter(tx -> tx.getPspId() != null && tx.getPspId().equals(pspId))
-                    .filter(tx -> tx.getTxnTs() != null && 
-                            !tx.getTxnTs().isBefore(startDate) && 
-                            !tx.getTxnTs().isAfter(endDate))
-                    .collect(Collectors.toList());
+        if (pspId != null && pspId != 0L) {
+            return transactionRepository.findByPspIdAndTxnTsBetween(pspId, startDate, endDate);
         } else {
-            return SimpleTransactionFetcher(startDate, endDate);
+            return transactionRepository.findByTxnTsBetween(startDate, endDate);
         }
-    }
-    
-    private List<TransactionEntity> SimpleTransactionFetcher(LocalDateTime startDate, LocalDateTime endDate) {
-         return transactionRepository.findAll().stream()
-                .filter(tx -> tx.getTxnTs() != null &&
-                        !tx.getTxnTs().isBefore(startDate) &&
-                        !tx.getTxnTs().isAfter(endDate))
-                .collect(Collectors.toList());
     }
 
     /**

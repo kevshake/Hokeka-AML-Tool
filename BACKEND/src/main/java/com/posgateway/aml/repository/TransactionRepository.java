@@ -229,6 +229,71 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
 
     List<TransactionEntity> findByPspIdAndTxnTsBetween(Long pspId, LocalDateTime start, LocalDateTime end);
 
+    /**
+     * Find all transactions in a date window regardless of PSP (platform admin view).
+     * Replaces findAll() + in-memory filter in regulatory reporting.
+     */
+    List<TransactionEntity> findByTxnTsBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Pageable variant for large date-range fetches in regulatory reporting.
+     */
+    @Query("SELECT t FROM TransactionEntity t WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs <= :end ORDER BY t.txnTs DESC")
+    org.springframework.data.domain.Page<TransactionEntity> findByPspIdAndTxnTsBetween(
+            @Param("pspId") Long pspId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            org.springframework.data.domain.Pageable pageable);
+
+    // -----------------------------------------------------------------------
+    // Transaction stats aggregations — used by GET /reports/transactions/stats
+    // -----------------------------------------------------------------------
+
+    /**
+     * Count all transactions in a date window, optionally scoped to a PSP.
+     * When pspId is null (platform admin) the PSP filter is skipped.
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE (:pspId IS NULL OR t.pspId = :pspId) " +
+           "AND t.txnTs >= :start AND t.txnTs < :end")
+    long countByPspAndPeriod(@Param("pspId") Long pspId,
+                             @Param("start") LocalDateTime start,
+                             @Param("end") LocalDateTime end);
+
+    /**
+     * Count transactions filtered by decision in a date window, optionally scoped to a PSP.
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE (:pspId IS NULL OR t.pspId = :pspId) " +
+           "AND t.decision = :decision " +
+           "AND t.txnTs >= :start AND t.txnTs < :end")
+    long countByPspAndDecisionAndPeriod(@Param("pspId") Long pspId,
+                                        @Param("decision") String decision,
+                                        @Param("start") LocalDateTime start,
+                                        @Param("end") LocalDateTime end);
+
+    /**
+     * Count transactions filtered by risk level in a date window, optionally scoped to a PSP.
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE (:pspId IS NULL OR t.pspId = :pspId) " +
+           "AND t.riskLevel = :riskLevel " +
+           "AND t.txnTs >= :start AND t.txnTs < :end")
+    long countByPspAndRiskLevelAndPeriod(@Param("pspId") Long pspId,
+                                         @Param("riskLevel") String riskLevel,
+                                         @Param("start") LocalDateTime start,
+                                         @Param("end") LocalDateTime end);
+
+    /**
+     * Sum amount_cents for all transactions in a date window, optionally scoped to a PSP.
+     */
+    @Query("SELECT COALESCE(SUM(t.amountCents), 0) FROM TransactionEntity t " +
+           "WHERE (:pspId IS NULL OR t.pspId = :pspId) " +
+           "AND t.txnTs >= :start AND t.txnTs < :end")
+    java.math.BigDecimal sumAmountByPspAndPeriod(@Param("pspId") Long pspId,
+                                                 @Param("start") LocalDateTime start,
+                                                 @Param("end") LocalDateTime end);
+
     // -----------------------------------------------------------------------
     // Live monitoring page — indexed top-N queries (replace findAll() + filter)
     // -----------------------------------------------------------------------

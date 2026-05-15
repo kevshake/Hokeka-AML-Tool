@@ -1,40 +1,22 @@
-import { Box, Typography, Grid, Card, CardContent, Paper, Button } from "@mui/material";
-import { useTransactions } from "../../features/api/queries";
+import { Box, Typography, Grid, Card, CardContent, Paper } from "@mui/material";
+import { useTransactionStats } from "../../features/api/queries";
 
 export default function TransactionMonitoringReports() {
-  // Load first page with large size for statistics (up to 1000 records)
-  // Note: Stats are calculated from paginated data, may not reflect all transactions
-  const { data: transactions, isLoading } = useTransactions({ page: 0, size: 1000 });
+  const { data: stats, isLoading } = useTransactionStats();
 
-  const totalTransactions = transactions?.totalElements || transactions?.content?.length || 0;
-  const transactionList = transactions?.content || [];
-  const blockedTransactions = transactionList.filter((t) => t.decision === "BLOCK").length;
-  const heldTransactions = transactionList.filter((t) => t.decision === "HOLD").length;
-  const totalAmount = transactionList.reduce((sum, t) => sum + (t.amountCents || 0), 0);
-  const blockedAmount = transactionList
-    .filter((t) => t.decision === "BLOCK")
-    .reduce((sum, t) => sum + (t.amountCents || 0), 0);
+  const totalCount      = stats?.totalCount      ?? 0;
+  const approvedCount   = stats?.approvedCount   ?? 0;
+  const declinedCount   = stats?.declinedCount   ?? 0;
+  const manualCount     = stats?.manualReviewCount ?? 0;
+  const highRiskCount   = stats?.highRiskCount   ?? 0;
+  const mediumRiskCount = stats?.mediumRiskCount ?? 0;
+  const lowRiskCount    = stats?.lowRiskCount    ?? 0;
+  const totalAmountCents   = stats?.totalAmountCents   ?? 0;
+  const averageAmountCents = stats?.averageAmountCents ?? 0;
+  const fraudAlertCount    = stats?.fraudAlertCount    ?? 0;
 
-  const handleExport = () => {
-    if (!transactionList.length) return;
-    const headers = ["ID", "Merchant ID", "Decision", "Amount (USD)", "Currency", "Timestamp"];
-    const rows = transactionList.map(t => [
-      t.id,
-      t.merchantId || "",
-      t.decision || "",
-      t.amountCents != null ? (t.amountCents / 100).toFixed(2) : "",
-      t.currency || "",
-      t.txnTs ? new Date(t.txnTs).toISOString() : "",
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `transaction-report-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const declineRate = totalCount > 0 ? ((declinedCount / totalCount) * 100).toFixed(2) : "0.00";
+  const manualRate  = totalCount > 0 ? ((manualCount  / totalCount) * 100).toFixed(2) : "0.00";
 
   return (
     <Box>
@@ -42,13 +24,6 @@ export default function TransactionMonitoringReports() {
         <Typography variant="h6" sx={{ color: "text.primary" }}>
           Transaction Monitoring Reports
         </Typography>
-        <Button
-          variant="contained"
-          onClick={handleExport}
-          sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
-        >
-          Export Report
-        </Button>
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -59,7 +34,7 @@ export default function TransactionMonitoringReports() {
                 Total Transactions
               </Typography>
               <Typography variant="h6" sx={{ color: "text.primary" }}>
-                {totalTransactions.toLocaleString()}
+                {totalCount.toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
@@ -68,10 +43,22 @@ export default function TransactionMonitoringReports() {
           <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <CardContent>
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-                Blocked Transactions
+                Approved
+              </Typography>
+              <Typography variant="h6" sx={{ color: "#27ae60" }}>
+                {approvedCount.toLocaleString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <CardContent>
+              <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+                Declined
               </Typography>
               <Typography variant="h6" sx={{ color: "#e74c3c" }}>
-                {blockedTransactions.toLocaleString()}
+                {declinedCount.toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
@@ -80,10 +67,25 @@ export default function TransactionMonitoringReports() {
           <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <CardContent>
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-                Total Amount
+                Manual Review
+              </Typography>
+              <Typography variant="h6" sx={{ color: "#f39c12" }}>
+                {manualCount.toLocaleString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <CardContent>
+              <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+                Total Volume
               </Typography>
               <Typography variant="h6" sx={{ color: "text.primary" }}>
-                ${(totalAmount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${(totalAmountCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
             </CardContent>
           </Card>
@@ -92,10 +94,34 @@ export default function TransactionMonitoringReports() {
           <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <CardContent>
               <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-                Blocked Amount
+                Avg Transaction
+              </Typography>
+              <Typography variant="h6" sx={{ color: "text.primary" }}>
+                ${(averageAmountCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <CardContent>
+              <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+                High-Risk Transactions
               </Typography>
               <Typography variant="h6" sx={{ color: "#e74c3c" }}>
-                ${(blockedAmount / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {highRiskCount.toLocaleString()}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+            <CardContent>
+              <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+                Fraud Alerts (Critical)
+              </Typography>
+              <Typography variant="h6" sx={{ color: "#c0392b" }}>
+                {fraudAlertCount.toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
@@ -107,20 +133,28 @@ export default function TransactionMonitoringReports() {
           Summary Statistics
         </Typography>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-              Block Rate
+              Decline Rate
             </Typography>
             <Typography variant="h6" sx={{ color: "text.primary" }}>
-              {totalTransactions > 0 ? ((blockedTransactions / totalTransactions) * 100).toFixed(2) : 0}%
+              {declineRate}%
             </Typography>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-              Hold Rate
+              Manual Review Rate
             </Typography>
             <Typography variant="h6" sx={{ color: "text.primary" }}>
-              {totalTransactions > 0 ? ((heldTransactions / totalTransactions) * 100).toFixed(2) : 0}%
+              {manualRate}%
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
+              Risk Breakdown (H / M / L)
+            </Typography>
+            <Typography variant="h6" sx={{ color: "text.primary" }}>
+              {highRiskCount.toLocaleString()} / {mediumRiskCount.toLocaleString()} / {lowRiskCount.toLocaleString()}
             </Typography>
           </Grid>
         </Grid>

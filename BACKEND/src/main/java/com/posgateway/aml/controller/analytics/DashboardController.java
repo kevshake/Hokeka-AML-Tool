@@ -1,9 +1,14 @@
 package com.posgateway.aml.controller.analytics;
 
 import com.posgateway.aml.entity.Alert;
+import com.posgateway.aml.entity.ModelMetrics;
+import com.posgateway.aml.entity.merchant.MerchantScreeningResult;
+import com.posgateway.aml.model.AlertDisposition;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.MerchantScreeningResultRepository;
+import com.posgateway.aml.repository.ModelMetricsRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,9 +21,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 // @RequiredArgsConstructor removed
@@ -32,16 +39,22 @@ public class DashboardController {
     private final com.posgateway.aml.repository.UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final AlertRepository alertRepository;
+    private final MerchantScreeningResultRepository screeningResultRepository;
+    private final ModelMetricsRepository modelMetricsRepository;
 
     public DashboardController(MerchantRepository merchantRepository, ComplianceCaseRepository caseRepository,
             com.posgateway.aml.repository.UserRepository userRepository,
             TransactionRepository transactionRepository,
-            AlertRepository alertRepository) {
+            AlertRepository alertRepository,
+            MerchantScreeningResultRepository screeningResultRepository,
+            ModelMetricsRepository modelMetricsRepository) {
         this.merchantRepository = merchantRepository;
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
         this.alertRepository = alertRepository;
+        this.screeningResultRepository = screeningResultRepository;
+        this.modelMetricsRepository = modelMetricsRepository;
     }
 
     private com.posgateway.aml.entity.User getCurrentUser() {
@@ -139,21 +152,111 @@ public class DashboardController {
     @GetMapping("/sanctions/status")
     public ResponseEntity<Map<String, Object>> getSanctionsStatus() {
         Map<String, Object> status = new HashMap<>();
-        status.put("lastRun", "Today, 02:00 AM");
-        status.put("status", "SUCCESS");
-        status.put("merchantsProcessed", 1240);
-        status.put("hitsFound", 3);
+
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+
+        Optional<MerchantScreeningResult> latestResult = screeningResultRepository.findLatestScreeningResult();
+        if (latestResult.isPresent()) {
+            LocalDateTime screenedAt = latestResult.get().getScreenedAt();
+            status.put("lastRun", screenedAt.toString());
+            boolean stale = screenedAt.isBefore(LocalDateTime.now().minusHours(24));
+            status.put("status", stale ? "STALE" : "SUCCESS");
+        } else {
+            status.put("lastRun", "N/A");
+            status.put("status", "NO_DATA");
+        }
+
+        long merchantsProcessed = screeningResultRepository.countScreenedSince(startOfDay);
+        long hitsFound = screeningResultRepository.countByScreeningStatusAndScreenedAtAfter("MATCH", startOfDay)
+                + screeningResultRepository.countByScreeningStatusAndScreenedAtAfter("POTENTIAL_MATCH", startOfDay);
+
+        status.put("merchantsProcessed", merchantsProcessed);
+        status.put("hitsFound", hitsFound);
+
         return ResponseEntity.ok(status);
     }
 
     @GetMapping("/fraud-metrics")
     public ResponseEntity<Map<String, Object>> getFraudMetrics() {
         Map<String, Object> metrics = new HashMap<>();
-        metrics.put("precision", "98.5%");
-        metrics.put("recall", "92.1%");
-        metrics.put("f1", "95.2%");
-        metrics.put("falsePositives", "0.4%");
+
+        // AUC from the latest stored model metrics row
+        Optional<ModelMetrics> latestMetrics = modelMetricsRepository.findFirstByOrderByDateDesc();
+        if (latestMetrics.isPresent()) {
+            ModelMetrics m = latestMetrics.get();
+            if (m.getAuc() != null) {
+                metrics.put("auc", formatPct(m.getAuc() * 100.0));
+            }
+            if (m.getPrecisionAt100() != null) {
+                metrics.put("precisionAt100", formatPct(m.getPrecisionAt100() * 100.0));
+            }
+            if (m.getDriftScore() != null) {
+                metrics.put("driftScore", String.format("%.4f", m.getDriftScore()));
+            }
+            if (m.getAvgLatencyMs() != null) {
+                metrics.put("avgLatencyMs", String.format("%.1f ms", m.getAvgLatencyMs()));
+            }
+            metrics.put("modelDate", m.getDate().toString());
+        }
+
+        // Precision, recall, F1, and false-positive rate computed from alert disposition outcomes
+        List<AlertDisposition> truePositiveDispositions = Arrays.asList(
+                AlertDisposition.TRUE_POSITIVE_SAR_FILED,
+                AlertDisposition.TRUE_POSITIVE_BLOCKED,
+                AlertDisposition.TRUE_POSITIVE_REPORTED);
+        List<AlertDisposition> falsePositiveDispositions = Arrays.asList(
+                AlertDisposition.FALSE_POSITIVE,
+                AlertDisposition.DUPLICATE,
+                AlertDisposition.TECHNICAL_ERROR);
+
+        long truePositives = alertRepository.countByDispositionIn(truePositiveDispositions);
+        long falsePositives = alertRepository.countByDispositionIn(falsePositiveDispositions);
+        long reviewedAlerts = alertRepository.countReviewedAlerts();
+        long totalAlerts = alertRepository.count();
+
+        if (truePositives + falsePositives > 0) {
+            double precision = (double) truePositives / (truePositives + falsePositives) * 100.0;
+            metrics.put("precision", formatPct(precision));
+        } else {
+            metrics.put("precision", "N/A");
+        }
+
+        if (reviewedAlerts > 0) {
+            double recall = (double) truePositives / reviewedAlerts * 100.0;
+            metrics.put("recall", formatPct(recall));
+
+            double precisionRaw = (truePositives + falsePositives > 0)
+                    ? (double) truePositives / (truePositives + falsePositives)
+                    : 0.0;
+            double recallRaw = (double) truePositives / reviewedAlerts;
+            if (precisionRaw + recallRaw > 0) {
+                double f1 = 2.0 * precisionRaw * recallRaw / (precisionRaw + recallRaw) * 100.0;
+                metrics.put("f1", formatPct(f1));
+            } else {
+                metrics.put("f1", "N/A");
+            }
+        } else {
+            metrics.put("recall", "N/A");
+            metrics.put("f1", "N/A");
+        }
+
+        if (totalAlerts > 0) {
+            double fpRate = (double) falsePositives / totalAlerts * 100.0;
+            metrics.put("falsePositiveRate", formatPct(fpRate));
+        } else {
+            metrics.put("falsePositiveRate", "N/A");
+        }
+
+        metrics.put("truePositiveCount", truePositives);
+        metrics.put("falsePositiveCount", falsePositives);
+        metrics.put("reviewedAlertCount", reviewedAlerts);
+        metrics.put("totalAlertCount", totalAlerts);
+
         return ResponseEntity.ok(metrics);
+    }
+
+    private String formatPct(double value) {
+        return String.format("%.1f%%", value);
     }
 
     /**

@@ -442,26 +442,35 @@ public class ReportGenerationService {
     }
 
     /**
-     * Export report to file
+     * Export report to file — obtains bytes from ReportExportService then writes them
+     * to a temp path, preserving the file-path reference stored on ReportExecution.
      */
     private String exportReport(List<Map<String, Object>> data, Report report, String format, String executionId) {
-        String fileName = report.getReportCode() + "_" + executionId + "." + format.toLowerCase();
-        String filePath = "/tmp/reports/" + fileName;
-        
+        // CSV replaces the old TSV-based "Excel" export
+        String ext = format.equalsIgnoreCase("EXCEL") || format.equalsIgnoreCase("XLSX") ? "csv" : format.toLowerCase();
+        String fileName = report.getReportCode() + "_" + executionId + "." + ext;
+        String filePath = System.getProperty("java.io.tmpdir") + java.io.File.separator + "reports"
+                + java.io.File.separator + fileName;
+
         try {
-            switch (format.toUpperCase()) {
-                case "PDF":
-                    return reportExportService.exportToPDF(data, report.getReportName(), filePath);
-                case "CSV":
-                    return reportExportService.exportToCSV(data, filePath);
-                case "EXCEL":
-                case "XLSX":
-                    return reportExportService.exportToExcel(data, report.getReportName(), filePath);
-                case "XML":
-                    return reportExportService.exportToXML(data, report.getReportName(), filePath);
-                default:
-                    return reportExportService.exportToPDF(data, report.getReportName(), filePath);
+            java.io.File dir = new java.io.File(filePath).getParentFile();
+            if (dir != null && !dir.exists()) {
+                dir.mkdirs();
             }
+
+            byte[] bytes = switch (format.toUpperCase()) {
+                case "CSV", "EXCEL", "XLSX" -> reportExportService.exportToCSV(data);
+                case "XML"                  -> reportExportService.exportToXML(data, report.getReportName());
+                default                     -> reportExportService.exportToPDF(data, report.getReportName());
+            };
+
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(filePath)) {
+                fos.write(bytes);
+            }
+
+            logger.info("Report exported to {}: {} bytes", filePath, bytes.length);
+            return filePath;
+
         } catch (Exception e) {
             logger.error("Export failed for format: {}", format, e);
             throw new RuntimeException("Export failed: " + e.getMessage(), e);
