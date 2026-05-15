@@ -45,4 +45,9 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
 
     // HOK-61: PSP-scoped count for count/not-exported endpoint
     long countByPspId(Long pspId);
+
+    // Used by SarContentGenerationService to enrich the rendered narrative with
+    // a "related SARs in the same case" count.
+    List<SuspiciousActivityReport> findByComplianceCase_Id(Long complianceCaseId);
+    long countByComplianceCase_Id(Long complianceCaseId);
 }

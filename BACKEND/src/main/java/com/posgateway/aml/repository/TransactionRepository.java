@@ -484,4 +484,32 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     List<Object[]> findFailedRejectedForPspByDay(@Param("pspId") Long pspId,
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
+
+    // -----------------------------------------------------------------------
+    // Structuring detection — count "just-below-threshold" transactions for
+    // a given customer account in a sliding window. The transactions table
+    // is shared between TransactionEntity (pan_hash schema) and the
+    // model.Transaction entity (account_number / amount / transaction_timestamp
+    // schema) — both legitimately exist as physical columns on the same table.
+    // Native SQL targets the model.Transaction columns directly because they
+    // are not mapped on TransactionEntity.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Count transactions for a given account within an amount range and time
+     * window — used by structuring (smurfing) detection. The amount range is
+     * half-open: [minAmount, maxAmount).
+     */
+    @Query(value = "SELECT COUNT(*) FROM transactions t " +
+                   "WHERE t.account_number = :accountNumber " +
+                   "  AND t.amount >= :minAmount " +
+                   "  AND t.amount < :maxAmount " +
+                   "  AND t.transaction_timestamp >= :start " +
+                   "  AND t.transaction_timestamp <= :end",
+           nativeQuery = true)
+    long countByAccountAndAmountRangeAndPeriod(@Param("accountNumber") String accountNumber,
+                                               @Param("minAmount") java.math.BigDecimal minAmount,
+                                               @Param("maxAmount") java.math.BigDecimal maxAmount,
+                                               @Param("start") LocalDateTime start,
+                                               @Param("end") LocalDateTime end);
 }

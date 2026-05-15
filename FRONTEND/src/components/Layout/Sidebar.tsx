@@ -39,6 +39,7 @@ import {
   AccountBalance as PspIcon,
   Description as RegulatoryIcon,
   Receipt as BillingIcon,
+  Tune as LimitsIcon,
 } from "@mui/icons-material";
 import { useAlerts, useCases } from "../../features/api/queries";
 import { useQuery } from "@tanstack/react-query";
@@ -156,6 +157,12 @@ export default function Sidebar() {
           label: "Limits & AML Rules",
           icon: <RulesIcon />,
           path: "/rules-generation",
+        },
+        {
+          id: "limits-aml",
+          label: "Transaction Limits",
+          icon: <LimitsIcon />,
+          path: "/limits-aml",
         },
         {
           id: "psps",

@@ -1,12 +1,16 @@
 package com.posgateway.aml.controller.psp.cbk;
 
 import com.posgateway.aml.dto.psp.cbk.PspCustomerComplaintDto;
+import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.psp.cbk.PspCustomerComplaint;
+import com.posgateway.aml.model.UserRole;
 import com.posgateway.aml.repository.psp.cbk.PspCustomerComplaintRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,28 +33,37 @@ public class PspCustomerComplaintController {
         this.repository = repository;
     }
 
-    private com.posgateway.aml.entity.User getCurrentUser() {
-        org.springframework.security.core.Authentication auth =
-                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof com.posgateway.aml.entity.User) {
-            return (com.posgateway.aml.entity.User) auth.getPrincipal();
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
         }
-        return null;
+        Object principal = auth.getPrincipal();
+        return (principal instanceof User user) ? user : null;
     }
 
-    private boolean canAccess(com.posgateway.aml.entity.User user, Long pspId) {
-        if (user == null) return false;
-        com.posgateway.aml.model.UserRole role =
-                com.posgateway.aml.model.UserRole.valueOf(user.getRole().getName());
-        if (role == com.posgateway.aml.model.UserRole.PSP_ADMIN) {
-            return user.getPsp() != null && user.getPsp().getPspId().equals(pspId);
+    private Long getCurrentPspId() {
+        User u = getCurrentUser();
+        return (u != null && u.getPsp() != null) ? u.getPsp().getPspId() : null;
+    }
+
+    private boolean canAccess(User user, Long pspId) {
+        if (user == null || user.getRole() == null || user.getRole().getName() == null) return false;
+        UserRole role;
+        try {
+            role = UserRole.valueOf(user.getRole().getName());
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        if (role == UserRole.PSP_ADMIN) {
+            return user.getPsp() != null && pspId != null && pspId.equals(user.getPsp().getPspId());
         }
         return true;
     }
 
     @GetMapping
     public ResponseEntity<List<PspCustomerComplaint>> list(@PathVariable Long pspId) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
+        User user = getCurrentUser();
         if (user == null) return ResponseEntity.status(401).build();
         if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
         return ResponseEntity.ok(repository.findByPspId(pspId));
@@ -58,7 +71,7 @@ public class PspCustomerComplaintController {
 
     @GetMapping("/{id}")
     public ResponseEntity<PspCustomerComplaint> getById(@PathVariable Long pspId, @PathVariable Long id) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
+        User user = getCurrentUser();
         if (user == null) return ResponseEntity.status(401).build();
         if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
         Optional<PspCustomerComplaint> opt = repository.findById(id);
@@ -69,7 +82,7 @@ public class PspCustomerComplaintController {
     @PostMapping
     public ResponseEntity<PspCustomerComplaint> create(@PathVariable Long pspId,
                                                        @RequestBody PspCustomerComplaintDto dto) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
+        User user = getCurrentUser();
         if (user == null) return ResponseEntity.status(401).build();
         if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
 
@@ -100,7 +113,7 @@ public class PspCustomerComplaintController {
     public ResponseEntity<PspCustomerComplaint> update(@PathVariable Long pspId,
                                                        @PathVariable Long id,
                                                        @RequestBody PspCustomerComplaintDto dto) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
+        User user = getCurrentUser();
         if (user == null) return ResponseEntity.status(401).build();
         if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
 
@@ -130,7 +143,7 @@ public class PspCustomerComplaintController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long pspId, @PathVariable Long id) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
+        User user = getCurrentUser();
         if (user == null) return ResponseEntity.status(401).build();
         if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
         Optional<PspCustomerComplaint> opt = repository.findById(id);

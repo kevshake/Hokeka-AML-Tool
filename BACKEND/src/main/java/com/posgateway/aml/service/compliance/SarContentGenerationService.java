@@ -4,9 +4,11 @@ import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
 import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.reporting.SarTemplate;
 import com.posgateway.aml.exception.SarTemplateNotConfiguredException;
 import com.posgateway.aml.repository.CaseTransactionRepository;
+import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.reporting.SarTemplateRepository;
 import org.slf4j.Logger;
@@ -19,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,18 +38,25 @@ public class SarContentGenerationService {
     /** Mustache-style {{key}} matcher used to render template bodies. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_]+)\\s*}}");
 
+    /** Default jurisdiction / currency fallback when neither merchant nor any
+     * transaction yields a value. Kenya context for this platform. */
+    private static final String DEFAULT_COUNTRY = "KE";
+    private static final String DEFAULT_CURRENCY = "KES";
+
     private final CaseTransactionRepository caseTransactionRepository;
-    @SuppressWarnings("unused")
     private final SuspiciousActivityReportRepository sarRepository;
     private final SarTemplateRepository sarTemplateRepository;
+    private final MerchantRepository merchantRepository;
 
     @Autowired
     public SarContentGenerationService(CaseTransactionRepository caseTransactionRepository,
                                       SuspiciousActivityReportRepository sarRepository,
-                                      SarTemplateRepository sarTemplateRepository) {
+                                      SarTemplateRepository sarTemplateRepository,
+                                      MerchantRepository merchantRepository) {
         this.caseTransactionRepository = caseTransactionRepository;
         this.sarRepository = sarRepository;
         this.sarTemplateRepository = sarTemplateRepository;
+        this.merchantRepository = merchantRepository;
     }
 
     /**
@@ -255,7 +265,7 @@ public class SarContentGenerationService {
             customerName = (fn + " " + ln).trim();
         }
         v.put("customer_name",        customerName);
-        v.put("customer_country",     "");
+        v.put("customer_country",     resolveCustomerCountry(sar, c));
         v.put("filing_institution",   c != null && c.getPspId() != null ? "PSP-" + c.getPspId() : "");
         String filedByName = "";
         if (sar != null && sar.getFiledBy() != null) {
@@ -269,7 +279,7 @@ public class SarContentGenerationService {
                 sar != null && sar.getSuspiciousActivityType() != null ? sar.getSuspiciousActivityType() : "");
         v.put("total_suspicious_amount",
                 sar != null && sar.getTotalSuspiciousAmount() != null ? sar.getTotalSuspiciousAmount().toPlainString() : "0");
-        v.put("currency", "USD");
+        v.put("currency", resolveCurrency(sar));
 
         List<TransactionEntity> txns = sar != null ? sar.getSuspiciousTransactions() : null;
         v.put("transaction_count", txns == null ? "0" : String.valueOf(txns.size()));
@@ -309,7 +319,81 @@ public class SarContentGenerationService {
         v.put("filing_reference",     sar != null && sar.getFilingReferenceNumber() != null ? sar.getFilingReferenceNumber() : "");
         v.put("psp_id",               sar != null && sar.getPspId() != null ? sar.getPspId().toString() : "");
 
+        // Related-SAR enrichment: how many other SARs already exist for the same
+        // case. Useful for narrative context ("this is the 3rd SAR filed against
+        // the case"), and for FATF-style amendment tracking.
+        long relatedSarCount = 0L;
+        if (c != null && c.getId() != null) {
+            try {
+                long total = sarRepository.countByComplianceCase_Id(c.getId());
+                // Subtract self if the SAR is already persisted, so the value
+                // represents *other* SARs on the case.
+                relatedSarCount = (sar != null && sar.getId() != null && total > 0) ? total - 1 : total;
+                if (relatedSarCount < 0) relatedSarCount = 0;
+            } catch (Exception ex) {
+                logger.debug("Failed to load related SAR count for case {}: {}", c.getId(), ex.getMessage());
+            }
+        }
+        v.put("related_sar_count",    String.valueOf(relatedSarCount));
+
         return v;
+    }
+
+    /**
+     * Resolve the customer / merchant country for the SAR.
+     *
+     * <p>Preference order:
+     * <ol>
+     *   <li>Merchant's persisted {@code country} when the case has a merchantId</li>
+     *   <li>{@code merchantCountry} of the first linked transaction</li>
+     *   <li>{@link #DEFAULT_COUNTRY} (Kenya context)</li>
+     * </ol>
+     */
+    private String resolveCustomerCountry(SuspiciousActivityReport sar, ComplianceCase c) {
+        if (c != null && c.getMerchantId() != null) {
+            Optional<String> merchantCountry = merchantRepository.findById(c.getMerchantId())
+                    .map(Merchant::getCountry)
+                    .filter(s -> s != null && !s.isBlank());
+            if (merchantCountry.isPresent()) {
+                return merchantCountry.get();
+            }
+        }
+        if (sar != null && sar.getSuspiciousTransactions() != null) {
+            for (TransactionEntity t : sar.getSuspiciousTransactions()) {
+                if (t.getMerchantCountry() != null && !t.getMerchantCountry().isBlank()) {
+                    return t.getMerchantCountry();
+                }
+            }
+        }
+        return DEFAULT_COUNTRY;
+    }
+
+    /**
+     * Resolve the SAR's reporting currency.
+     *
+     * <p>Preference order:
+     * <ol>
+     *   <li>Most common non-blank {@code currency} across the SAR's linked
+     *       transactions</li>
+     *   <li>{@link #DEFAULT_CURRENCY} (Kenya context: KES)</li>
+     * </ol>
+     *
+     * <p>The {@link SuspiciousActivityReport} entity does not carry a dedicated
+     * currency field, so we derive it from the suspicious transactions when
+     * available.
+     */
+    private String resolveCurrency(SuspiciousActivityReport sar) {
+        if (sar != null && sar.getSuspiciousTransactions() != null && !sar.getSuspiciousTransactions().isEmpty()) {
+            Map<String, Long> tally = sar.getSuspiciousTransactions().stream()
+                    .map(TransactionEntity::getCurrency)
+                    .filter(cur -> cur != null && !cur.isBlank())
+                    .collect(Collectors.groupingBy(cur -> cur, Collectors.counting()));
+            return tally.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(DEFAULT_CURRENCY);
+        }
+        return DEFAULT_CURRENCY;
     }
 
     private static String substitute(String template, Map<String, String> values) {

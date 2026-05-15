@@ -1,5 +1,6 @@
 package com.posgateway.aml.service.psp;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.entity.psp.BillingRate;
 import com.posgateway.aml.entity.psp.Invoice;
 import com.posgateway.aml.entity.psp.InvoiceLineItem;
@@ -13,14 +14,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-// @RequiredArgsConstructor removed
 @Service
 public class BillingService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BillingService.class);
@@ -30,15 +32,17 @@ public class BillingService {
     private final PspRepository pspRepository;
     private final ApiUsageLogRepository apiUsageLogRepository;
     private final BillingEmailService billingEmailService;
+    private final ObjectMapper objectMapper;
 
     public BillingService(BillingRateRepository billingRateRepository, InvoiceRepository invoiceRepository,
             PspRepository pspRepository, ApiUsageLogRepository apiUsageLogRepository,
-            BillingEmailService billingEmailService) {
+            BillingEmailService billingEmailService, ObjectMapper objectMapper) {
         this.billingRateRepository = billingRateRepository;
         this.invoiceRepository = invoiceRepository;
         this.pspRepository = pspRepository;
         this.apiUsageLogRepository = apiUsageLogRepository;
         this.billingEmailService = billingEmailService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +60,7 @@ public class BillingService {
     @Transactional(readOnly = true)
     public BigDecimal calculateUsageCost(Long pspId, String serviceType, int count) {
         Optional<BillingRate> rateOpt = getEffectiveRate(pspId, serviceType);
-        if (rateOpt.isEmpty()) {
+        if (rateOpt.isEmpty() || count <= 0) {
             return BigDecimal.ZERO;
         }
 
@@ -64,25 +68,116 @@ public class BillingService {
         if ("PER_REQUEST".equals(rate.getPricingModel()) && rate.getBaseRate() != null) {
             return rate.getBaseRate().multiply(BigDecimal.valueOf(count));
         } else if ("TIERED".equals(rate.getPricingModel())) {
-            // Simple tiered logic: First 10k cheaper, next expensive, etc. (Mock
-            // implementation)
-            // Real implementation would parse rate.getTiers() JSON or similar structure.
-            // Assuming baseRate is Tier 1, and we discount for volume > 10000
-            BigDecimal total = BigDecimal.ZERO;
-            if (count <= 10000) {
-                total = rate.getBaseRate().multiply(BigDecimal.valueOf(count));
-            } else {
-                // First 10000 at base rate
-                total = rate.getBaseRate().multiply(BigDecimal.valueOf(10000));
-                // Remaining at 80% of base rate
-                BigDecimal tier2Rate = rate.getBaseRate().multiply(new BigDecimal("0.8"));
-                int remaining = count - 10000;
-                total = total.add(tier2Rate.multiply(BigDecimal.valueOf(remaining)));
-            }
-            return total;
+            return calculateTieredPrice(rate, count);
         }
 
         return BigDecimal.ZERO;
+    }
+
+    /**
+     * Calculate cost using tiered pricing based on the rate's tier_config JSON.
+     *
+     * Expected JSON shape (stored as a Map under tier_config jsonb column):
+     *   { "tiers": [
+     *       { "upTo": 1000,  "rate": 0.50 },
+     *       { "upTo": 10000, "rate": 0.40 },
+     *       { "upTo": null,  "rate": 0.30 }   // null upTo = unlimited (catch-all)
+     *     ]
+     *   }
+     *
+     * The "upTo" value is a cumulative threshold — units between the previous
+     * threshold and this one are billed at this tier's "rate". A null or absent
+     * "upTo" on the final tier consumes all remaining units.
+     *
+     * Falls back to flat baseRate * count if the JSON is missing, malformed, or
+     * the resulting tier list is empty.
+     */
+    BigDecimal calculateTieredPrice(BillingRate rate, long count) {
+        if (count <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal baseRate = rate.getBaseRate();
+        BigDecimal flatFallback = (baseRate != null)
+                ? baseRate.multiply(BigDecimal.valueOf(count))
+                : BigDecimal.ZERO;
+
+        Map<String, Object> tierConfig = rate.getTierConfig();
+        if (tierConfig == null || tierConfig.isEmpty()) {
+            return flatFallback;
+        }
+
+        try {
+            // tier_config may either be the tier array directly under "tiers",
+            // or already be a List serialized as a Map (defensive — re-marshal).
+            Object tiersObj = tierConfig.get("tiers");
+            List<Map<String, Object>> tiers;
+            if (tiersObj instanceof List<?>) {
+                String reserialized = objectMapper.writeValueAsString(tiersObj);
+                tiers = objectMapper.readValue(reserialized,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            } else {
+                log.warn("tier_config for rate {} has no 'tiers' array — falling back to flat rate",
+                        rate.getRateId());
+                return flatFallback;
+            }
+
+            if (tiers == null || tiers.isEmpty()) {
+                return flatFallback;
+            }
+
+            BigDecimal total = BigDecimal.ZERO;
+            long remaining = count;
+            long processed = 0;
+
+            for (Map<String, Object> tier : tiers) {
+                if (remaining <= 0) break;
+
+                Object upToObj = tier.get("upTo");
+                Object rateObj = tier.get("rate");
+                if (rateObj == null) {
+                    continue;
+                }
+                BigDecimal tierRate = new BigDecimal(rateObj.toString());
+
+                Long upTo = (upToObj == null) ? null : ((Number) upToObj).longValue();
+
+                long applicable;
+                if (upTo == null) {
+                    applicable = remaining;
+                } else {
+                    long capacity = upTo - processed;
+                    if (capacity <= 0) {
+                        continue;
+                    }
+                    applicable = Math.min(remaining, capacity);
+                }
+                if (applicable <= 0) continue;
+
+                total = total.add(tierRate.multiply(BigDecimal.valueOf(applicable)));
+                remaining -= applicable;
+                processed += applicable;
+            }
+
+            // If remaining units were not absorbed (no catch-all tier), bill them
+            // at the last tier's rate to avoid silently under-billing.
+            if (remaining > 0) {
+                Map<String, Object> lastTier = tiers.get(tiers.size() - 1);
+                Object lastRateObj = lastTier.get("rate");
+                if (lastRateObj != null) {
+                    BigDecimal lastRate = new BigDecimal(lastRateObj.toString());
+                    total = total.add(lastRate.multiply(BigDecimal.valueOf(remaining)));
+                } else if (baseRate != null) {
+                    total = total.add(baseRate.multiply(BigDecimal.valueOf(remaining)));
+                }
+            }
+
+            return total;
+        } catch (Exception e) {
+            log.warn("Failed to parse tier_config for rate {} — falling back to flat rate: {}",
+                    rate.getRateId(), e.getMessage());
+            return flatFallback;
+        }
     }
 
     @Transactional
@@ -118,10 +213,18 @@ public class BillingService {
         for (Object[] row : usageSummary) {
             String serviceType = (String) row[0];
             Long count = (Long) row[1];
-            BigDecimal cost = (BigDecimal) row[2];
+            if (count == null) count = 0L;
 
-            if (cost == null)
-                cost = BigDecimal.ZERO;
+            // Recompute the line total against the current effective rate so the
+            // invoice reflects active tiered pricing (not whatever per-request
+            // cost was stamped on each log row at call time).
+            BigDecimal lineTotal = calculateUsageCost(pspId, serviceType, count.intValue());
+
+            // Effective unit price = lineTotal / quantity. Avoids re-walking tiers
+            // and naturally reflects blended tiered pricing on the invoice.
+            BigDecimal unitPrice = (count > 0)
+                    ? lineTotal.divide(BigDecimal.valueOf(count), 6, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
 
             InvoiceLineItem item = InvoiceLineItem.builder()
                     .invoice(invoice)
@@ -129,14 +232,14 @@ public class BillingService {
                     .serviceType(serviceType)
                     .description("Usage charges for " + serviceType)
                     .quantity(count.intValue())
-                    .unitPrice(BigDecimal.ZERO) // Average/Effective rate calculation is complex, showing 0 for now
-                    .lineTotal(cost)
+                    .unitPrice(unitPrice)
+                    .lineTotal(lineTotal)
                     .periodStart(periodStart)
                     .periodEnd(periodEnd)
                     .build();
 
             invoice.addLineItem(item);
-            subtotal = subtotal.add(cost);
+            subtotal = subtotal.add(lineTotal);
         }
 
         invoice.setSubtotal(subtotal);

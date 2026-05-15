@@ -70,6 +70,7 @@ public class PeriodicSanctionsScreeningService {
     @Transactional
     public void processMerchant(Merchant merchant) {
         boolean alertTriggered = false;
+        Long pspId = (merchant.getPsp() != null) ? merchant.getPsp().getPspId() : null;
 
         // 1. Screen Merchant Entity (Legal & Trading Name)
         ScreeningResult merchantResult = screeningService.screenMerchant(merchant.getLegalName(),
@@ -79,24 +80,13 @@ public class PeriodicSanctionsScreeningService {
             logger.warn("SANCTIONS HIT: Merchant {} matched {}", merchant.getLegalName(),
                     merchantResult.getHighestMatchScore());
 
-            // Trigger Case
-            // Note: We need a placeholder TransactionEntity or modify trigger to accept
-            // Merchant directly
-            // For now, we'll create a dummy TX wrapper or assume trigger accepts partial
-            // Adapting CaseCreationService to support Entity-based triggers would be best,
-            // but assuming we pass the merchant ID securely is key.
-            // Using a dedicated method in CaseCreationService would be cleaner.
-            // For this implementation, invoking a new method we'll add to
-            // CaseCreationService: triggerCaseForEntity()
-
-            Long pspId = (merchant.getPsp() != null) ? merchant.getPsp().getPspId() : null;
-
-            caseCreationService.triggerCaseFromSanctions(
+            String matchDetails = "Periodic Screening Hit: " + merchant.getLegalName()
+                    + " Score: " + merchantResult.getHighestMatchScore();
+            caseCreationService.triggerCaseFromSanctionsForMerchant(
                     merchant.getMerchantId(),
                     pspId,
-                    "SANCTIONS_WATCHLIST",
-                    "Periodic Screening Hit: " + merchant.getLegalName() + " Score: "
-                            + merchantResult.getHighestMatchScore());
+                    matchDetails,
+                    "SANCTIONS_WATCHLIST");
             alertTriggered = true;
         }
 
@@ -107,13 +97,14 @@ public class PeriodicSanctionsScreeningService {
             if (uboResult.hasMatches()) {
                 logger.warn("SANCTIONS HIT: UBO {} matched {}", ubo.getFullName(), uboResult.getHighestMatchScore());
 
-                Long pspId = (merchant.getPsp() != null) ? merchant.getPsp().getPspId() : null;
-
-                caseCreationService.triggerCaseFromSanctions(
+                String uboDetails = "UBO Hit: " + ubo.getFullName()
+                        + " linked to " + merchant.getLegalName()
+                        + " Score: " + uboResult.getHighestMatchScore();
+                caseCreationService.triggerCaseFromSanctionsForMerchant(
                         merchant.getMerchantId(),
                         pspId,
-                        "PEP_SANCTIONS_UBO",
-                        "UBO Hit: " + ubo.getFullName() + " linked to " + merchant.getLegalName());
+                        uboDetails,
+                        "PEP_SANCTIONS_UBO");
                 ubo.setIsSanctioned(true);
                 alertTriggered = true;
             }
@@ -121,9 +112,6 @@ public class PeriodicSanctionsScreeningService {
 
         // 3. Update Merchant Screening Status
         merchant.setLastScreenedAt(java.time.LocalDateTime.now());
-        // Set next due date (default 7 days, or 1 day if we want frequent)
-        // User asked for "twice as much", assuming frequent. Let's make it configurable
-        // or stick to entity logic.
         merchant.updateNextScreeningDue();
 
         if (alertTriggered) {

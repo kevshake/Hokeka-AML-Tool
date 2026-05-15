@@ -122,9 +122,15 @@ public class CbkReportController {
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof User) {
-            return (User) auth.getPrincipal();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
         }
-        return null;
+        Object principal = auth.getPrincipal();
+        return (principal instanceof User user) ? user : null;
+    }
+
+    private Long getCurrentPspId() {
+        User u = getCurrentUser();
+        return (u != null && u.getPsp() != null) ? u.getPsp().getPspId() : null;
     }
 }

@@ -55,8 +55,17 @@ public class PasswordResetService {
     @Value("${auth.emergency-reset.local-only:true}")
     private boolean emergencyLocalOnly;
 
-    @Value("${auth.default-password:password123}")
+    @Value("${auth.default-password:}")
     private String defaultPassword;
+
+    /** Character set used to build random fallback passwords (mix of upper/lower/digits/symbols). */
+    private static final String RESET_PASSWORD_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String RESET_PASSWORD_LOWER = "abcdefghijklmnopqrstuvwxyz";
+    private static final String RESET_PASSWORD_DIGITS = "0123456789";
+    private static final String RESET_PASSWORD_SYMBOLS = "!@#$%^&*()-_=+[]{};:,.?";
+    private static final String RESET_PASSWORD_ALPHABET =
+            RESET_PASSWORD_UPPER + RESET_PASSWORD_LOWER + RESET_PASSWORD_DIGITS + RESET_PASSWORD_SYMBOLS;
+    private static final int RESET_PASSWORD_DEFAULT_LENGTH = 24;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -196,9 +205,12 @@ public class PasswordResetService {
             throw new IllegalArgumentException("Invalid or expired reset token");
         }
 
-        // Reset to default password
-        String defaultPwd = defaultPassword != null && !defaultPassword.isBlank() ? defaultPassword : "password123";
-        user.setPasswordHash(passwordEncoder.encode(defaultPwd));
+        // Reset password: prefer configured default; otherwise generate a secure random one.
+        // The plaintext value is communicated to the user via email and is never logged.
+        String newPassword = (defaultPassword != null && !defaultPassword.isBlank())
+                ? defaultPassword
+                : generateSecurePassword(RESET_PASSWORD_DEFAULT_LENGTH);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
         token.setUsedAt(LocalDateTime.now());
@@ -207,15 +219,15 @@ public class PasswordResetService {
         notificationService.sendEmail(
                 user.getEmail(),
                 "Password Reset Successful",
-                "Your password has been reset to the default password.\n\n" +
-                        "Default password: " + defaultPwd + "\n\n" +
+                "Your password has been reset.\n\n" +
+                        "Temporary password: " + newPassword + "\n\n" +
                         "Please log in and change your password immediately for security.\n" +
                         "If you did not request this reset, contact support immediately."
         );
 
         auditLogService.logAction(null, "PASSWORD_RESET_CONFIRM", "USER",
                 user.getId() != null ? user.getId().toString() : "UNKNOWN",
-                null, null, ipAddress, "Password reset confirmed (reset to default password)");
+                null, null, ipAddress, "Password reset confirmed (temporary password issued)");
     }
 
     /**
@@ -262,24 +274,27 @@ public class PasswordResetService {
             tokenRepository.saveAll(activeTokens);
         }
 
-        // Reset to default password (same as regular reset)
-        String defaultPwd = defaultPassword != null && !defaultPassword.isBlank() ? defaultPassword : "password123";
-        user.setPasswordHash(passwordEncoder.encode(defaultPwd));
+        // Reset password: prefer configured default; otherwise generate a secure random one.
+        // The plaintext value is communicated to the user via email and is never logged.
+        String newPassword = (defaultPassword != null && !defaultPassword.isBlank())
+                ? defaultPassword
+                : generateSecurePassword(RESET_PASSWORD_DEFAULT_LENGTH);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
         notificationService.sendEmail(
                 user.getEmail(),
                 "Emergency Password Reset",
                 "An emergency password reset was performed for your account.\n\n" +
-                        "Your password has been reset to the default password.\n" +
-                        "Default password: " + defaultPwd + "\n\n" +
+                        "Your password has been reset.\n" +
+                        "Temporary password: " + newPassword + "\n\n" +
                         "Please log in and change your password immediately for security.\n" +
                         "If you did not request this, contact support immediately."
         );
 
         auditLogService.logAction(null, "EMERGENCY_PASSWORD_RESET", "USER",
                 user.getId() != null ? user.getId().toString() : "UNKNOWN",
-                null, null, ipAddress, "Emergency reset executed (reset to default password)");
+                null, null, ipAddress, "Emergency reset executed (temporary password issued)");
 
         log.warn("Emergency password reset executed for user={}, ip={}, ua={}",
                 user.getUsername(), ipAddress, userAgent != null ? userAgent.substring(0, Math.min(userAgent.length(), 120)) : null);
@@ -336,6 +351,41 @@ public class PasswordResetService {
             result |= aBytes[i] ^ bBytes[i];
         }
         return result == 0;
+    }
+
+    /**
+     * Generate a cryptographically-random password of the requested length using
+     * {@link SecureRandom}. The character set mixes upper-case, lower-case, digits and
+     * symbols, and the result is guaranteed to contain at least one character from
+     * each class (with the remaining positions filled from the combined alphabet and
+     * shuffled with {@code SecureRandom}).
+     *
+     * <p>The plaintext is returned to the caller so it can be communicated to the user
+     * (e.g. in a reset email). Callers MUST NOT log the returned value.
+     *
+     * @param length total length of the generated password; must be at least 4 to
+     *               accommodate one character from each character class.
+     * @return the generated plaintext password.
+     */
+    private String generateSecurePassword(int length) {
+        int effectiveLength = Math.max(length, 4);
+        char[] buf = new char[effectiveLength];
+        // Guarantee at least one character from each class.
+        buf[0] = RESET_PASSWORD_UPPER.charAt(secureRandom.nextInt(RESET_PASSWORD_UPPER.length()));
+        buf[1] = RESET_PASSWORD_LOWER.charAt(secureRandom.nextInt(RESET_PASSWORD_LOWER.length()));
+        buf[2] = RESET_PASSWORD_DIGITS.charAt(secureRandom.nextInt(RESET_PASSWORD_DIGITS.length()));
+        buf[3] = RESET_PASSWORD_SYMBOLS.charAt(secureRandom.nextInt(RESET_PASSWORD_SYMBOLS.length()));
+        for (int i = 4; i < effectiveLength; i++) {
+            buf[i] = RESET_PASSWORD_ALPHABET.charAt(secureRandom.nextInt(RESET_PASSWORD_ALPHABET.length()));
+        }
+        // Fisher-Yates shuffle so the guaranteed characters are not always in positions 0-3.
+        for (int i = effectiveLength - 1; i > 0; i--) {
+            int j = secureRandom.nextInt(i + 1);
+            char tmp = buf[i];
+            buf[i] = buf[j];
+            buf[j] = tmp;
+        }
+        return new String(buf);
     }
 
 }

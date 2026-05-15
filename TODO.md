@@ -1,5 +1,20 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-05-14_
+_Last updated: 2026-05-15_
+
+---
+
+## Wave 11 — Frontend cleanup (Task #68) ✅
+
+- [x] **#68** Deleted orphaned `RolesPage.tsx` + `pages/Roles/` dir; added `/limits-aml` sidebar nav link ("Transaction Limits", `Tune` icon, placed right after rules-generation); removed 7 empty page dirs (Crypto, Entities, Network, PepManagement, Rules, SarReports, Transactions); `npm run typecheck` passes clean.
+
+---
+
+## Wave 10 — Stub fixes (Task #67) ✅
+
+- [x] **#67A** CBK controllers hardened: all 11 PSP CBK controllers + `CbkReportController` rewritten — `getCurrentUser()` now rejects null/unauthenticated/anonymous principals and returns null cleanly; new `getCurrentPspId()` helper added; `canAccess()` and `isPspAdminForThisPsp()` are NPE-safe with try/catch on `UserRole.valueOf`. FQN `com.posgateway.aml.entity.User` references replaced with proper imports + `User` shorthand.
+- [x] **#67B** `PeriodicSanctionsScreeningService` — placeholder TransactionEntity wrapper removed; new `CaseCreationService.triggerCaseFromSanctionsForMerchant(merchantId, pspId, matchDetails, hitListName)` overload returns persisted `ComplianceCase`, forces HIGH priority, NEW status if fresh, "Sanctions hit on merchant: …" description; UBO and merchant hits both route through the new method.
+- [x] **#67C** `SarContentGenerationService` — `MerchantRepository` injected; `customer_country` resolved via Merchant.country → first txn's `merchantCountry` → `KE` fallback; `currency` derived from most-common txn currency → `KES` fallback (no hardcoded USD); `@SuppressWarnings("unused")` removed and `sarRepository` now actively queries `countByComplianceCase_Id` to expose `{{related_sar_count}}` placeholder; new repo methods `findByComplianceCase_Id` + `countByComplianceCase_Id` added.
+- [x] **#67D** `mvn clean compile` BUILD SUCCESS — 648 sources compile, no new warnings introduced.
 
 > **Goal:** Zero stubs, zero mock data, zero coming-soon pages, full Aerospike integration for caching/speed.
 > **Skills source:** https://www.skills.sh/ — install relevant skills via `npx skillsadd <owner/repo>` as needed per domain.

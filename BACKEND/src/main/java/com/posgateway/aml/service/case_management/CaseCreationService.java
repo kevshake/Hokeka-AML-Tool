@@ -117,6 +117,61 @@ public class CaseCreationService {
     }
 
     /**
+     * Trigger a case from a sanctions hit on a Merchant entity (no triggering
+     * transaction). Used by the periodic batch screener which scans all merchants
+     * and their UBOs against the sanctions watchlist.
+     *
+     * <p>The created case is HIGH priority, NEW status, no transaction link, and
+     * carries a generated case reference plus a clear "Sanctions hit on merchant"
+     * title in the description.
+     *
+     * @param merchantId   the merchant the hit was found on
+     * @param pspId        the PSP the merchant belongs to (nullable)
+     * @param matchDetails human-readable description of the matched entity / score
+     * @param hitListName  the watchlist that produced the hit (e.g. SANCTIONS_WATCHLIST)
+     * @return the persisted compliance case (newly created, or the existing open case
+     *         if one already exists for the merchant)
+     */
+    @Transactional
+    public ComplianceCase triggerCaseFromSanctionsForMerchant(Long merchantId, Long pspId,
+                                                              String matchDetails, String hitListName) {
+        if (merchantId == null) {
+            throw new IllegalArgumentException("merchantId is required for sanctions case creation");
+        }
+        // Reuse upstream merge logic so repeated hits append alerts to an open case
+        // rather than spawning duplicates.
+        String description = "Sanctions hit on merchant: "
+                + (matchDetails != null ? matchDetails : "")
+                + " from " + (hitListName != null ? hitListName : "UNKNOWN_LIST");
+        createOrUpdateCase(merchantId, pspId, "SANCTIONS_HIT", hitListName, null,
+                null, "Global-Sanctions-List", 1.0, description, null);
+
+        // Look up the case we just created/appended to and force the title-style
+        // description + HIGH priority + NEW status if it was freshly created.
+        return complianceCaseRepository.findByMerchantId(merchantId).stream()
+                .filter(c -> c.getStatus() != CaseStatus.CLOSED_CLEARED &&
+                        c.getStatus() != CaseStatus.CLOSED_SAR_FILED &&
+                        c.getStatus() != CaseStatus.CLOSED_BLOCKED &&
+                        c.getStatus() != CaseStatus.CLOSED_REJECTED)
+                .findFirst()
+                .map(c -> {
+                    if (c.getDescription() == null || !c.getDescription().startsWith("Sanctions hit on merchant")) {
+                        c.setDescription(description);
+                    }
+                    c.setPriority(CasePriority.HIGH);
+                    if (c.getStatus() == null) {
+                        c.setStatus(CaseStatus.NEW);
+                    }
+                    c.setUpdatedAt(LocalDateTime.now());
+                    return complianceCaseRepository.save(c);
+                })
+                .orElseGet(() -> {
+                    logger.warn("Sanctions case for merchant {} was not found after createOrUpdateCase", merchantId);
+                    return null;
+                });
+    }
+
+    /**
      * Trigger a case from Graph Anomaly (Cycle/Mule).
      */
     @Transactional
