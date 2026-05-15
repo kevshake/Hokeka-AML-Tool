@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.compliance.CaseAlert;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
+import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
+import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,16 +35,19 @@ public class CaseCreationService {
     private final ObjectMapper objectMapper;
     private final com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer;
     private final CaseEnrichmentService enrichmentService;
+    private final RuleDefinitionRepository ruleDefinitionRepository;
 
     @Autowired
     public CaseCreationService(ComplianceCaseRepository complianceCaseRepository,
                                ObjectMapper objectMapper,
                                @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer,
-                               CaseEnrichmentService enrichmentService) {
+                               CaseEnrichmentService enrichmentService,
+                               RuleDefinitionRepository ruleDefinitionRepository) {
         this.complianceCaseRepository = complianceCaseRepository;
         this.objectMapper = objectMapper;
         this.caseEventProducer = caseEventProducer;
         this.enrichmentService = enrichmentService;
+        this.ruleDefinitionRepository = ruleDefinitionRepository;
     }
 
     /**
@@ -54,8 +59,13 @@ public class CaseCreationService {
     @Transactional
     public void triggerCaseFromRule(TransactionEntity tx, String ruleName, String ruleDescription) {
         Long merchantIdLong = parseMerchantId(tx.getMerchantId());
-        // Simple rule versioning placeholder
-        String ruleVersion = "v1.0";
+        // Derive a version string from the rule's last-updated timestamp.
+        // Pattern: "v<year>.<month>" (e.g. "v2026.5").
+        // Falls back to "v0.0" when the rule is not found in the DB.
+        String ruleVersion = ruleDefinitionRepository.findByName(ruleName)
+                .map(RuleDefinition::getUpdatedAt)
+                .map(ts -> "v" + ts.getYear() + "." + ts.getMonthValue())
+                .orElse("v0.0");
         createOrUpdateCase(merchantIdLong, tx.getPspId(), "RULE_VIOLATION", ruleName, null,
                 null, ruleVersion, 1.0, ruleDescription, tx);
     }

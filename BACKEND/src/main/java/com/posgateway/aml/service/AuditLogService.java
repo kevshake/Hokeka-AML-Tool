@@ -1,6 +1,7 @@
 package com.posgateway.aml.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.posgateway.aml.config.KafkaConfig;
 import com.posgateway.aml.entity.AuditLog;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.repository.AuditLogRepository;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +22,9 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Audit Log Service
@@ -36,16 +40,20 @@ public class AuditLogService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final Environment environment;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Value("${audit.hmac.key:}")
     private String hmacKey;
 
     @Autowired
-    public AuditLogService(AuditLogRepository auditLogRepository, ObjectMapper objectMapper,
-                           Environment environment) {
+    public AuditLogService(AuditLogRepository auditLogRepository,
+                           ObjectMapper objectMapper,
+                           Environment environment,
+                           KafkaTemplate<String, String> kafkaTemplate) {
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
         this.environment = environment;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -119,9 +127,41 @@ public class AuditLogService {
 
             auditLogRepository.save(log);
 
+            // Mirror significant data-modification events to the audit Kafka topic.
+            // Fire-and-forget: Kafka failure must not disrupt the audit DB write already completed.
+            publishAuditEvent(log);
+
         } catch (Exception e) {
             logger.error("Failed to create audit log", e);
             // Don't rethrow to avoid breaking the main business flow
+        }
+    }
+
+    private void publishAuditEvent(AuditLog log) {
+        // Only stream write operations to avoid flooding the audit topic with read noise.
+        String actionType = log.getActionType();
+        if (actionType == null) return;
+        if ("VIEW".equalsIgnoreCase(actionType)) return;
+
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("userId",      log.getUserId());
+            event.put("username",    log.getUsername());
+            event.put("actionType",  log.getActionType());
+            event.put("entityType",  log.getEntityType());
+            event.put("entityId",    log.getEntityId());
+            event.put("pspId",       log.getPspId());
+            event.put("timestamp",   log.getTimestamp() != null ? log.getTimestamp().toString() : null);
+            event.put("ipAddress",   log.getIpAddress());
+            event.put("checksum",    log.getChecksum());
+
+            String payload = objectMapper.writeValueAsString(event);
+            String partitionKey = log.getPspId() != null ? String.valueOf(log.getPspId()) : "0";
+            kafkaTemplate.send(KafkaConfig.TOPIC_TRANSACTIONS_AUDIT, partitionKey, payload);
+            logger.debug("Published audit event: entityType={} entityId={}", log.getEntityType(), log.getEntityId());
+        } catch (Exception e) {
+            logger.warn("Failed to publish audit event to Kafka: entityType={} entityId={} error={}",
+                    log.getEntityType(), log.getEntityId(), e.getMessage());
         }
     }
     

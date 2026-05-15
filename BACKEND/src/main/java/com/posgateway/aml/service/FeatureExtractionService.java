@@ -262,19 +262,41 @@ public class FeatureExtractionService {
     }
 
     private int parseCvmMethod(Object cvmrValue) {
-        // Simplified CVM parsing - CVMR is typically 3 bytes
-        // This is a placeholder - actual implementation would parse CVMR properly
         if (cvmrValue == null) {
             return 0;
         }
         try {
-            String cvmrStr = cvmrValue.toString();
-            if (cvmrStr.length() >= 2) {
-                return Integer.parseInt(cvmrStr.substring(0, 2), 16);
+            // CVMR is a 6-character hex string (3 bytes).
+            // Byte 1 (first two hex chars): CVM performed.
+            //   Bits 7-6 are "apply if fail" flags; bits 5-0 encode the CVM code.
+            // Known CVM codes (bits 5-0):
+            //   0x1E = PIN verified by ICC (online or offline)
+            //   0x02 = Offline PIN plaintext
+            //   0x04 = Offline PIN encrypted
+            //   0x1A = Online PIN
+            //   0x3E = Signature (paper)
+            //   0x00 = No CVM required
+            //   0x3F = No CVM performed
+            String clean = cvmrValue.toString().replaceAll("[^0-9A-Fa-f]", "");
+            if (clean.length() < 2) {
+                return 0;
             }
-        } catch (Exception e) {
-            logger.debug("Failed to parse CVM method", e);
+            int firstByte = Integer.parseInt(clean.substring(0, 2), 16);
+            // Strip the two "apply-if-fail" flag bits (7-6) to get the raw CVM code.
+            int cvmCode = firstByte & 0x3F;
+            if (cvmCode == 0x1E || cvmCode == 0x02 || cvmCode == 0x04 || cvmCode == 0x1A) {
+                return 1; // PIN (ICC offline, plaintext offline, encrypted offline, online)
+            }
+            if (cvmCode == 0x3E) {
+                return 2; // Signature (paper)
+            }
+            if (cvmCode == 0x00 || cvmCode == 0x3F) {
+                return 3; // No CVM required / no CVM performed
+            }
+            return 0; // Unknown or unrecognised CVM code
+        } catch (NumberFormatException e) {
+            logger.debug("Failed to parse CVM method from value: {}", cvmrValue, e);
+            return 0;
         }
-        return 0;
     }
 }

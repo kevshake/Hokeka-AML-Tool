@@ -162,6 +162,6 @@ public class UserService {
     }
 
     public java.util.Optional<User> getSuperAdmin() {
-        return userRepository.findByUsername("super.admin@aml.com"); // Matches dummy data
+        return userRepository.findFirstByRole_NameOrderByIdAsc("SUPER_ADMIN");
     }
 }

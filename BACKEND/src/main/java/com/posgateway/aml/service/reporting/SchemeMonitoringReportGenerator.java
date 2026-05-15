@@ -12,15 +12,9 @@ import java.util.Map;
 
 /**
  * Scheme Monitoring Report Generator
- * Generates VFMP and HECM risk reports
- * Note: In a real system, we'd iterate over all merchants for a PSP.
- * Since Aerospike K-V doesn't easily iterate all keys without a scan,
- * we will simulate this by accepting a list of merchant IDs or just returning
- * headers for now
- * if no merchant list service is injected.
- * 
- * Ideally, we should inject MerchantRepository to get list of merchants for the
- * PSP.
+ * Generates VFMP and HECM risk reports for all active merchants belonging to a PSP.
+ * Each merchant is assessed via the scheme simulators; only high-risk merchants
+ * appear in the report output.
  */
 @Component
 public class SchemeMonitoringReportGenerator implements ReportGenerator {
@@ -28,10 +22,6 @@ public class SchemeMonitoringReportGenerator implements ReportGenerator {
     @SuppressWarnings("unused")
     private final AerospikeMetricsRepository metricsRepository;
     private final SchemeSimulatorService schemeSimulatorService;
-    // Assuming we have a way to find merchants for a PSP.
-    // For this implementation, we will mock/placeholder the merchant iteration
-    // or rely on an injected MerchantRepository (using full path to avoid
-    // collision/import error if not open).
     private final com.posgateway.aml.repository.MerchantRepository merchantRepository;
 
     public SchemeMonitoringReportGenerator(AerospikeMetricsRepository metricsRepository,

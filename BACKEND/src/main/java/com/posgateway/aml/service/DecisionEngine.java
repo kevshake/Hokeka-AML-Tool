@@ -1,5 +1,6 @@
 package com.posgateway.aml.service;
 
+import com.posgateway.aml.config.KafkaConfig;
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.TransactionFeatures;
@@ -9,10 +10,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,16 +33,19 @@ public class DecisionEngine {
     private final AlertRepository alertRepository;
     private final TransactionFeaturesRepository featuresRepository;
     private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Autowired
-    public DecisionEngine(ConfigService configService, 
+    public DecisionEngine(ConfigService configService,
                          AlertRepository alertRepository,
                          TransactionFeaturesRepository featuresRepository,
-                         ObjectMapper objectMapper) {
+                         ObjectMapper objectMapper,
+                         KafkaTemplate<String, String> kafkaTemplate) {
         this.configService = configService;
         this.alertRepository = alertRepository;
         this.featuresRepository = featuresRepository;
         this.objectMapper = objectMapper;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
@@ -236,10 +242,37 @@ public class DecisionEngine {
         alert.setAction(action);
         alert.setReason(reason);
         alert.setStatus("open");
-        
-        alertRepository.save(alert);
-        logger.info("Created alert for transaction {}: {} - {}", 
+
+        Alert saved = alertRepository.save(alert);
+        logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
+
+        // Publish alert event to Kafka — fire-and-forget, never blocks ingestion.
+        publishAlertGeneratedEvent(saved, transaction);
+    }
+
+    private void publishAlertGeneratedEvent(Alert alert, TransactionEntity transaction) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("alertId",    alert.getAlertId());
+            event.put("txnId",      alert.getTxnId());
+            event.put("action",     alert.getAction());
+            event.put("score",      alert.getScore());
+            event.put("status",     alert.getStatus());
+            event.put("severity",   alert.getSeverity());
+            event.put("pspId",      transaction.getPspId());
+            event.put("merchantId", transaction.getMerchantId());
+            event.put("timestamp",  java.time.LocalDateTime.now().toString());
+
+            String payload = objectMapper.writeValueAsString(event);
+            String partitionKey = transaction.getPspId() != null
+                    ? String.valueOf(transaction.getPspId()) : "0";
+            kafkaTemplate.send(KafkaConfig.TOPIC_ALERTS_GENERATED, partitionKey, payload);
+            logger.debug("Published alert-generated event: alertId={}", alert.getAlertId());
+        } catch (Exception e) {
+            logger.warn("Failed to publish alert-generated event: alertId={} error={}",
+                    alert.getAlertId(), e.getMessage());
+        }
     }
 
     private void saveFeaturesAndDecision(TransactionEntity transaction, Double score, 

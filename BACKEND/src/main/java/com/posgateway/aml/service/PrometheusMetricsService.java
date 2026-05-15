@@ -6,6 +6,7 @@ import com.posgateway.aml.model.SarStatus;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.entity.ModelMetrics;
+import com.zaxxer.hikari.HikariDataSource;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.DistributionSummary;
 import jakarta.annotation.PostConstruct;
@@ -16,6 +17,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import javax.sql.DataSource;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,6 +35,7 @@ public class PrometheusMetricsService {
         private final ComplianceCaseRepository caseRepository;
         private final SuspiciousActivityReportRepository sarRepository;
         private final MonitoringMetricsService monitoringMetricsService;
+        private final DataSource dataSource;
 
         // Transaction Metrics
         private final Counter transactionTotalCounter;
@@ -127,11 +130,13 @@ public class PrometheusMetricsService {
                         MeterRegistry meterRegistry,
                         ComplianceCaseRepository caseRepository,
                         SuspiciousActivityReportRepository sarRepository,
-                        @Lazy MonitoringMetricsService monitoringMetricsService) {
+                        @Lazy MonitoringMetricsService monitoringMetricsService,
+                        DataSource dataSource) {
                 this.meterRegistry = meterRegistry;
                 this.caseRepository = caseRepository;
                 this.sarRepository = sarRepository;
                 this.monitoringMetricsService = monitoringMetricsService;
+                this.dataSource = dataSource;
 
                 // Initialize Transaction Metrics
                 this.transactionTotalCounter = Counter.builder("aml.transactions.total")
@@ -376,22 +381,46 @@ public class PrometheusMetricsService {
                                 .tag("application", "aml-fraud-detector")
                                 .register(meterRegistry);
 
-                Gauge
-                                .builder("system.active.connections", () -> 0.0) // Placeholder, as
-                                                                                 // activeConnectionsValue is removed
-                                .description("Number of active connections")
-                                .tag("application", "aml-fraud-detector")
-                                .register(meterRegistry);
+                if (dataSource instanceof HikariDataSource hikari) {
+                        Gauge.builder("system.active.connections", hikari,
+                                        ds -> ds.getHikariPoolMXBean() != null
+                                                ? (double) ds.getHikariPoolMXBean().getActiveConnections()
+                                                : 0.0)
+                                        .description("Active JDBC connections from HikariCP pool")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
 
-                Gauge.builder("database.connection.pool.size", () -> 0.0)
-                                .description("Database connection pool size")
-                                .tag("application", "aml-fraud-detector")
-                                .register(meterRegistry);
+                        Gauge.builder("database.connection.pool.size", hikari,
+                                        ds -> ds.getHikariPoolMXBean() != null
+                                                ? (double) ds.getHikariPoolMXBean().getTotalConnections()
+                                                : 0.0)
+                                        .description("Total JDBC connections in HikariCP pool")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
 
-                Gauge.builder("database.connection.pool.active", () -> 0.0)
-                                .description("Active database connections")
-                                .tag("application", "aml-fraud-detector")
-                                .register(meterRegistry);
+                        Gauge.builder("database.connection.pool.active", hikari,
+                                        ds -> ds.getHikariPoolMXBean() != null
+                                                ? (double) ds.getHikariPoolMXBean().getActiveConnections()
+                                                : 0.0)
+                                        .description("Active database connections from HikariCP pool")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
+                } else {
+                        Gauge.builder("system.active.connections", () -> 0.0)
+                                        .description("Active connections (pool type unknown)")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
+
+                        Gauge.builder("database.connection.pool.size", () -> 0.0)
+                                        .description("Database connection pool size (pool type unknown)")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
+
+                        Gauge.builder("database.connection.pool.active", () -> 0.0)
+                                        .description("Active database connections (pool type unknown)")
+                                        .tag("application", "aml-fraud-detector")
+                                        .register(meterRegistry);
+                }
 
                 // Initialize System Health Metrics
                 Gauge

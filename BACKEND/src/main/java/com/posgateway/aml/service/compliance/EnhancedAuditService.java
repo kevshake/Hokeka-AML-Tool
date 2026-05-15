@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,8 +32,9 @@ public class EnhancedAuditService extends AuditLogService {
     @Autowired
     public EnhancedAuditService(AuditLogRepository auditLogRepository,
                                 com.fasterxml.jackson.databind.ObjectMapper objectMapper,
-                                org.springframework.core.env.Environment environment) {
-        super(auditLogRepository, objectMapper, environment);
+                                org.springframework.core.env.Environment environment,
+                                KafkaTemplate<String, String> kafkaTemplate) {
+        super(auditLogRepository, objectMapper, environment, kafkaTemplate);
         this.auditLogRepository = auditLogRepository;
     }
 

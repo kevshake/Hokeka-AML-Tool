@@ -245,11 +245,89 @@ public class RiskScoringService {
         return Math.min(100.0, score);
     }
 
-    // Placeholder for a more advanced CRA calculation based on features
+    /**
+     * Comprehensive Risk Assessment (CRA): weighted composite of five risk dimensions.
+     *
+     * Dimension weights (sum = 100):
+     *   1. Transaction amount risk  — up to 20 pts
+     *   2. Customer (KRS) risk      — up to 25 pts  (customer score scaled 0-100 → 0-25)
+     *   3. Transaction (TRS) risk   — up to 25 pts  (trs score scaled 0-100 → 0-25)
+     *   4. Geographic risk          — up to 15 pts  (origin + destination country average)
+     *   5. Velocity risk            — up to 15 pts  (txn count in last hour for pan/merchant)
+     *
+     * Feature keys consumed (all optional — absent keys default to neutral values):
+     *   "amount"              → transaction amount in KES (Number)
+     *   "krs_score"           → customer KYC risk score 0-100 (Number)
+     *   "origin_country"      → ISO 3166-1 alpha-2 origin country code (String)
+     *   "destination_country" → ISO 3166-1 alpha-2 destination country code (String)
+     *   "pan_txn_count_1h"    → number of card transactions in last hour (Number)
+     *   "merchant_txn_count_1h" → number of merchant transactions in last hour (Number)
+     *
+     * @param features feature map populated by FeatureExtractionService / calculateOverallRisk
+     * @return CRA score in [0, 100]
+     */
     private double calculateCra(Map<String, Object> features) {
-        // This would involve fetching historical data, applying moving averages, etc.
-        // For now, return a default or a value derived from features.
-        return ((Number) features.getOrDefault("current_cra", 50.0)).doubleValue();
+        double score = 0.0;
+
+        // --- 1. Transaction amount risk (0–20 pts) ---
+        double amount = 0.0;
+        Object rawAmount = features.get("amount");
+        if (rawAmount != null) {
+            try {
+                amount = Double.parseDouble(rawAmount.toString());
+            } catch (NumberFormatException ignored) {
+                amount = 0.0;
+            }
+        }
+        if (amount > 100_000) {
+            score += 20.0;
+        } else if (amount > 10_000) {
+            score += 10.0;
+        } else if (amount > 1_000) {
+            score += 5.0;
+        }
+
+        // --- 2. Customer (KRS) risk (0–25 pts) ---
+        double krsScore = ((Number) features.getOrDefault("krs_score", 50.0)).doubleValue();
+        // Scale: customer score 0-100 → 0-25 CRA points
+        score += (krsScore / 100.0) * 25.0;
+
+        // --- 3. Transaction (TRS) risk contribution (0–25 pts) ---
+        // trs is re-derived from origin/dest/amount using the existing pure method
+        String originCountry = (String) features.getOrDefault("origin_country", "UNKNOWN");
+        String destCountry   = (String) features.getOrDefault("destination_country", "UNKNOWN");
+        double trs = calculateTrs(originCountry, destCountry,
+                new BigDecimal(Double.toString(amount)));
+        // Scale: TRS 0-100 → 0-25 CRA points
+        score += (trs / 100.0) * 25.0;
+
+        // --- 4. Geographic risk (0–15 pts) ---
+        // Average of origin and destination country risk scores (each 0-100), scaled to 0-15
+        double geoRisk = (getCountryRisk(originCountry) + getCountryRisk(destCountry)) / 2.0;
+        score += (geoRisk / 100.0) * 15.0;
+
+        // --- 5. Velocity risk (0–15 pts) ---
+        // Use the higher of pan velocity and merchant velocity
+        long panCount = 0L;
+        Object rawPanCount = features.get("pan_txn_count_1h");
+        if (rawPanCount instanceof Number) {
+            panCount = ((Number) rawPanCount).longValue();
+        }
+        long merchantCount = 0L;
+        Object rawMerchantCount = features.get("merchant_txn_count_1h");
+        if (rawMerchantCount instanceof Number) {
+            merchantCount = ((Number) rawMerchantCount).longValue();
+        }
+        long velocityCount = Math.max(panCount, merchantCount);
+        if (velocityCount > 50) {
+            score += 15.0;
+        } else if (velocityCount > 10) {
+            score += 10.0;
+        } else if (velocityCount > 5) {
+            score += 5.0;
+        }
+
+        return Math.min(100.0, score);
     }
 }
 

@@ -43,24 +43,21 @@ public class WorkflowAutomationService {
             merchant.setUpdatedAt(LocalDateTime.now());
             merchantRepository.save(merchant);
 
-            // Close related onboarding case if exists
-            // Finding logic needs update based on new entity structure, simplified for now
-            // to fix compile error
-            // List<ComplianceCase> cases =
-            // complianceCaseRepository.findByMerchant_MerchantId(merchant.getMerchantId());
-            // for (ComplianceCase c : cases) {
-            // if ("ONBOARDING".equals(c.getCaseType()) && "OPEN".equals(c.getCaseStatus()))
-            // {
-            // c.setStatus(com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED);
-            // c.setResolution("Auto-approved Low Risk");
-            // c.setResolvedAt(LocalDateTime.now());
-            // complianceCaseRepository.save(c);
-            // }
-            // }
-
-            // Placeholder: Log action as we can't easily find cases by merchant anymore
-            // with new schema
-            log.info("Auto-approved merchant {}", merchant.getMerchantId());
+            // Close any open cases linked to this merchant
+            List<ComplianceCase> merchantCases = complianceCaseRepository.findByMerchantId(merchant.getMerchantId());
+            LocalDateTime now = LocalDateTime.now();
+            for (ComplianceCase c : merchantCases) {
+                if (c.getStatus() == com.posgateway.aml.model.CaseStatus.NEW
+                        || c.getStatus() == com.posgateway.aml.model.CaseStatus.IN_PROGRESS
+                        || c.getStatus() == com.posgateway.aml.model.CaseStatus.ASSIGNED) {
+                    c.setStatus(com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED);
+                    c.setResolution("Auto-approved: Low Risk merchant");
+                    c.setResolvedAt(now);
+                    c.setUpdatedAt(now);
+                    complianceCaseRepository.save(c);
+                    log.info("Closed case {} for auto-approved merchant {}", c.getId(), merchant.getMerchantId());
+                }
+            }
 
             notificationService.sendEmail(merchant.getContactEmail(), "Welcome to POS Gateway",
                     "Your account has been auto-approved.");

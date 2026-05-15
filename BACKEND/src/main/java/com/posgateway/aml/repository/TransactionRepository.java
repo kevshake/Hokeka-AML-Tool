@@ -1,5 +1,6 @@
 package com.posgateway.aml.repository;
 
+import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.TransactionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -91,6 +92,48 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
      */
     @Query("SELECT DISTINCT t.merchantId FROM TransactionEntity t WHERE t.ipAddress = :ipAddress")
     List<String> findMerchantIdsByIpAddress(@Param("ipAddress") String ipAddress);
+
+    /**
+     * Count distinct merchant IDs seen from a given device fingerprint within a time window.
+     * Used for device-velocity fraud scoring (many merchants = card-testing signal).
+     */
+    @Query("SELECT COUNT(DISTINCT t.merchantId) FROM TransactionEntity t " +
+           "WHERE t.deviceFingerprint = :deviceFingerprint " +
+           "AND t.txnTs >= :since AND t.txnTs <= :until")
+    Long countDistinctMerchantsByDeviceSince(@Param("deviceFingerprint") String deviceFingerprint,
+                                             @Param("since") LocalDateTime since,
+                                             @Param("until") LocalDateTime until);
+
+    /**
+     * Count transactions from a given IP address within a time window.
+     * Used for IP-velocity fraud scoring (high rate = credential-stuffing / bot signal).
+     */
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE t.ipAddress = :ipAddress " +
+           "AND t.txnTs >= :since AND t.txnTs <= :until")
+    Long countByIpAddressSince(@Param("ipAddress") String ipAddress,
+                               @Param("since") LocalDateTime since,
+                               @Param("until") LocalDateTime until);
+
+    /**
+     * Check whether any FRAUD-severity alert exists for a transaction that used
+     * the given device fingerprint.  Returns &gt; 0 when at least one such alert
+     * is present, 0 otherwise.
+     */
+    @Query("SELECT COUNT(DISTINCT a.alertId) FROM Alert a " +
+           "JOIN TransactionEntity t ON a.txnId = t.txnId " +
+           "WHERE t.deviceFingerprint = :deviceFingerprint " +
+           "AND a.severity = 'CRITICAL'")
+    Long countFraudAlertsByDeviceFingerprint(@Param("deviceFingerprint") String deviceFingerprint);
+
+    /**
+     * Retrieve up to 30 most-recent transactions for a PAN hash, for behavioral
+     * baseline calculation (average amount, typical txn type).
+     */
+    @Query("SELECT t FROM TransactionEntity t WHERE t.panHash = :panHash " +
+           "ORDER BY t.txnTs DESC")
+    List<TransactionEntity> findRecentByPanHash(@Param("panHash") String panHash,
+                                                org.springframework.data.domain.Pageable pageable);
 
     /**
      * Find transactions by merchant ID and timestamp range

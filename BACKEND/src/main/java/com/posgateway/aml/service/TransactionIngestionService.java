@@ -1,6 +1,7 @@
 package com.posgateway.aml.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.posgateway.aml.config.KafkaConfig;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.enrichment.BinLookupService;
@@ -8,11 +9,13 @@ import com.posgateway.aml.service.enrichment.IpGeoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,6 +32,7 @@ public class TransactionIngestionService {
     private final TransactionRepository transactionRepository;
     private final com.posgateway.aml.repository.MerchantRepository merchantRepository;
     private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     private final TransactionStatisticsService statisticsService;
     private final com.posgateway.aml.service.risk.RiskScoringService riskScoringService;
@@ -39,7 +43,7 @@ public class TransactionIngestionService {
     public TransactionIngestionService(TransactionRepository transactionRepository,
             com.posgateway.aml.repository.MerchantRepository merchantRepository,
             ObjectMapper objectMapper,
-
+            KafkaTemplate<String, String> kafkaTemplate,
             TransactionStatisticsService statisticsService,
             com.posgateway.aml.service.risk.RiskScoringService riskScoringService,
             IpGeoService ipGeoService,
@@ -47,6 +51,7 @@ public class TransactionIngestionService {
         this.transactionRepository = transactionRepository;
         this.merchantRepository = merchantRepository;
         this.objectMapper = objectMapper;
+        this.kafkaTemplate = kafkaTemplate;
         this.statisticsService = statisticsService;
         this.riskScoringService = riskScoringService;
         this.ipGeoService = ipGeoService;
@@ -163,6 +168,10 @@ public class TransactionIngestionService {
 
         TransactionEntity saved = transactionRepository.save(transaction);
 
+        // Publish raw transaction event to Kafka for feature pre-computation pipeline.
+        // Fire-and-forget: Kafka failure must never fail the ingestion path.
+        publishRawTransactionEvent(saved);
+
         // Automatically record transaction statistics for AML velocity checks
         statisticsService.recordTransaction(
                 saved.getMerchantId(),
@@ -174,6 +183,35 @@ public class TransactionIngestionService {
                 saved.getTxnId(), saved.getMerchantId(), riskLevel, decision);
 
         return saved;
+    }
+
+    /**
+     * Publish a minimal raw-transaction event to {@code transactions.raw}.
+     * Keyed by pspId so consumers can partition-route by tenant.
+     * Never throws — Kafka failure is logged at WARN and swallowed.
+     */
+    private void publishRawTransactionEvent(TransactionEntity saved) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("transactionId", saved.getTxnId());
+            event.put("pspId", saved.getPspId());
+            event.put("merchantId", saved.getMerchantId());
+            event.put("amountCents", saved.getAmountCents());
+            event.put("currencyCode", saved.getCurrency());
+            event.put("transactionTimestamp", saved.getTxnTs() != null ? saved.getTxnTs().toString() : null);
+            event.put("channelType", saved.getChannelType());
+            event.put("panHash", saved.getPanHash());
+            event.put("riskLevel", saved.getRiskLevel());
+            event.put("decision", saved.getDecision());
+
+            String payload = objectMapper.writeValueAsString(event);
+            String partitionKey = saved.getPspId() != null ? String.valueOf(saved.getPspId()) : "0";
+            kafkaTemplate.send(KafkaConfig.TOPIC_TRANSACTIONS_RAW, partitionKey, payload);
+            logger.debug("Published raw transaction event: txnId={}", saved.getTxnId());
+        } catch (Exception e) {
+            logger.warn("Failed to publish raw transaction event to Kafka: txnId={} error={}",
+                    saved.getTxnId(), e.getMessage());
+        }
     }
 
     /**

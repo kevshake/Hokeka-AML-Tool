@@ -147,6 +147,29 @@ public class EmailNotificationService {
     }
 
     /**
+     * Send a password-reset email containing a secure reset link.
+     *
+     * @param toEmail    Recipient email address
+     * @param firstName  Recipient's first name (used in salutation; "there" if null/blank)
+     * @param resetLink  Fully-qualified password-reset URL including the raw token
+     */
+    public void sendPasswordResetEmail(String toEmail, String firstName, String resetLink) {
+        String subject = "Password Reset Request — Hokeka AML Platform";
+        String salutation = (firstName != null && !firstName.isBlank()) ? firstName : "there";
+        String htmlBody = "<html><body style=\"font-family:Arial,Helvetica,sans-serif;\">"
+                + "<h2 style=\"color:#0a3d62;\">Password Reset Request</h2>"
+                + "<p>Hi " + escape(salutation) + ",</p>"
+                + "<p>We received a request to reset your password on the Hokeka AML Platform.</p>"
+                + "<p>Click the link below to set a new password:</p>"
+                + "<p><a href=\"" + escape(resetLink) + "\">Reset My Password</a></p>"
+                + "<p>This link expires soon. If you did not request a password reset, "
+                + "you can safely ignore this email.</p>"
+                + "<hr/><small>Hokeka AML Platform — automated security notification</small>"
+                + "</body></html>";
+        sendHtml(toEmail, subject, htmlBody);
+    }
+
+    /**
      * Send an SLA / ops alert email — subject and HTML composed from primitives.
      */
     public void sendOperationalAlert(String to, String subject, String headline, String detail) {

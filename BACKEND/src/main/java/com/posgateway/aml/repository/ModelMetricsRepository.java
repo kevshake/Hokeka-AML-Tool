@@ -2,6 +2,8 @@ package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.ModelMetrics;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -22,5 +24,12 @@ public interface ModelMetricsRepository extends JpaRepository<ModelMetrics, Long
      * Find latest metrics
      */
     Optional<ModelMetrics> findFirstByOrderByDateDesc();
+
+    /**
+     * Average AUC over the N most-recent days with a non-null AUC.
+     * Used as a historical baseline for drift score computation.
+     */
+    @Query("SELECT AVG(m.auc) FROM ModelMetrics m WHERE m.date >= :since AND m.auc IS NOT NULL")
+    Optional<Double> findAverageAucSince(@Param("since") LocalDate since);
 }
 

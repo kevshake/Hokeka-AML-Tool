@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.auth.PasswordResetToken;
 import com.posgateway.aml.repository.PasswordResetTokenRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.AuditLogService;
+import com.posgateway.aml.service.notification.EmailNotificationService;
 import com.posgateway.aml.service.notification.NotificationService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +36,7 @@ public class PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
+    private final EmailNotificationService emailNotificationService;
     private final AuditLogService auditLogService;
     private final Environment environment;
 
@@ -62,12 +64,14 @@ public class PasswordResetService {
             PasswordResetTokenRepository tokenRepository,
             PasswordEncoder passwordEncoder,
             NotificationService notificationService,
+            EmailNotificationService emailNotificationService,
             AuditLogService auditLogService,
             Environment environment) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.notificationService = notificationService;
+        this.emailNotificationService = emailNotificationService;
         this.auditLogService = auditLogService;
         this.environment = environment;
     }
@@ -159,15 +163,7 @@ public class PasswordResetService {
                 .build()
                 .toUriString();
 
-        // Send reset link to the user's email (mock email logs for now)
-        notificationService.sendEmail(
-                user.getEmail(),
-                "Password Reset Request",
-                "A password reset was requested for your account.\n\n" +
-                        "Reset link (valid for ~" + tokenTtlMinutes + " minutes):\n" +
-                        resetLink + "\n\n" +
-                        "If you did not request this, you can ignore this email."
-        );
+        emailNotificationService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetLink);
 
         auditLogService.logAction(null, "PASSWORD_RESET_REQUEST", "USER",
                 user.getId() != null ? user.getId().toString() : "UNKNOWN",

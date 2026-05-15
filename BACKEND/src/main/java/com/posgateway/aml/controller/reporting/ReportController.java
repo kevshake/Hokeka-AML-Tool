@@ -2,6 +2,8 @@ package com.posgateway.aml.controller.reporting;
 
 import com.posgateway.aml.dto.reporting.*;
 import com.posgateway.aml.entity.User;
+import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.reporting.ReportGenerationService;
 import com.posgateway.aml.service.reporting.ReportHistoryService;
 import com.posgateway.aml.service.reporting.ReportSchedulingService;
@@ -16,6 +18,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -35,15 +40,21 @@ public class ReportController {
     private final ReportHistoryService reportHistoryService;
     private final ReportSchedulingService reportSchedulingService;
     private final PspIsolationService pspIsolationService;
+    private final TransactionRepository transactionRepository;
+    private final AlertRepository alertRepository;
 
     public ReportController(ReportGenerationService reportGenerationService,
                            ReportHistoryService reportHistoryService,
                            ReportSchedulingService reportSchedulingService,
-                           PspIsolationService pspIsolationService) {
+                           PspIsolationService pspIsolationService,
+                           TransactionRepository transactionRepository,
+                           AlertRepository alertRepository) {
         this.reportGenerationService = reportGenerationService;
         this.reportHistoryService = reportHistoryService;
         this.reportSchedulingService = reportSchedulingService;
         this.pspIsolationService = pspIsolationService;
+        this.transactionRepository = transactionRepository;
+        this.alertRepository = alertRepository;
     }
 
     /**
@@ -312,15 +323,129 @@ public class ReportController {
     /**
      * Get chart data
      * POST /api/reports/chart
+     *
+     * Dispatches on {@code chartType} (case-insensitive):
+     *   PIE / riskDistribution  — alert counts grouped by severity (INFO / WARN / CRITICAL)
+     *   BAR / alertStatus       — alert counts grouped by status (open / closed / false_positive)
+     *   LINE | BAR (default)    — daily transaction counts in the requested date window,
+     *                             with a secondary dataset for daily amount totals (amount_cents / 100)
+     *
+     * Request fields used:
+     *   reportType  — echoed back in the response
+     *   chartType   — determines aggregation strategy (see above)
+     *   options     — may carry { startDate, endDate, pspId } as a Map&lt;String,Object&gt;;
+     *                 defaults to the last 30 days when absent
      */
     @PostMapping("/chart")
     @PreAuthorize("hasAnyRole('ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'PSP_ADMIN', 'ANALYST')")
     public ResponseEntity<ChartDataDTO> getChartData(@RequestBody ChartDataDTO request) {
         logger.info("Get chart data for report: {}", request.getReportType());
-        
-        // This would typically query the report data and format it for charts
-        // For now, returning the request as a placeholder
-        return ResponseEntity.ok(request);
+
+        String chartType = request.getChartType() != null ? request.getChartType().toUpperCase() : "LINE";
+
+        // Extract optional window / PSP parameters from the options map
+        LocalDateTime startDate = LocalDateTime.now().minusDays(30);
+        LocalDateTime endDate   = LocalDateTime.now();
+        Long pspId = null;
+
+        Object rawOptions = request.getOptions();
+        if (rawOptions instanceof Map<?, ?> optMap) {
+            Object rawStart = optMap.get("startDate");
+            if (rawStart != null) {
+                try { startDate = LocalDateTime.parse(rawStart.toString()); } catch (Exception ignored) {}
+            }
+            Object rawEnd = optMap.get("endDate");
+            if (rawEnd != null) {
+                try { endDate = LocalDateTime.parse(rawEnd.toString()); } catch (Exception ignored) {}
+            }
+            Object rawPsp = optMap.get("pspId");
+            if (rawPsp instanceof Number) {
+                pspId = ((Number) rawPsp).longValue();
+            }
+        }
+
+        ChartDataDTO response = new ChartDataDTO();
+        response.setReportType(request.getReportType());
+        response.setChartType(request.getChartType());
+
+        if ("PIE".equals(chartType) || "RISKDISTRIBUTION".equals(chartType)) {
+            // --- Alert risk distribution: counts by alert status ---
+            // Alert statuses map to risk categories: open = active risk, closed = resolved,
+            // false_positive = noise. AlertRepository.countByStatus queries the status column.
+            List<String> statuses = List.of("open", "closed", "false_positive");
+            List<String> labels = new ArrayList<>();
+            List<Long> data = new ArrayList<>();
+            for (String st : statuses) {
+                labels.add(st);
+                data.add(alertRepository.countByStatus(st));
+            }
+            response.setLabels(labels);
+            Map<String, Object> dataset = new LinkedHashMap<>();
+            dataset.put("label", "Alert Risk Distribution");
+            dataset.put("data", data);
+            response.setDatasets(List.of(dataset));
+
+        } else if ("ALERTSTATUS".equals(chartType)) {
+            // --- Alert counts by status ---
+            List<String> statuses = List.of("open", "closed", "false_positive");
+            List<String> labels = new ArrayList<>();
+            List<Long> data = new ArrayList<>();
+            for (String st : statuses) {
+                labels.add(st);
+                data.add(alertRepository.countByStatus(st));
+            }
+            response.setLabels(labels);
+            Map<String, Object> dataset = new LinkedHashMap<>();
+            dataset.put("label", "Alerts by Status");
+            dataset.put("data", data);
+            response.setDatasets(List.of(dataset));
+
+        } else {
+            // --- Daily transaction volume (LINE / BAR default) ---
+            List<Object[]> rows = (pspId != null)
+                    ? transactionRepository.getDailyTransactionCountByPspId(pspId, startDate, endDate)
+                    : transactionRepository.getDailyTransactionCountAll(startDate, endDate);
+
+            List<Object[]> amountRows = (pspId != null)
+                    ? transactionRepository.getDailyTransactionVolumeByPspId(pspId, startDate, endDate)
+                    : transactionRepository.getDailyTransactionVolumeAll(startDate, endDate);
+
+            // Build a date-keyed map for amounts so we can align with the count labels
+            Map<String, Long> amountByDate = new LinkedHashMap<>();
+            for (Object[] row : amountRows) {
+                if (row[0] != null && row[1] != null) {
+                    String dateKey = row[0].toString();
+                    amountByDate.put(dateKey, ((Number) row[1]).longValue());
+                }
+            }
+
+            List<String> labels = new ArrayList<>();
+            List<Long> countData = new ArrayList<>();
+            List<Double> amountData = new ArrayList<>();
+
+            for (Object[] row : rows) {
+                if (row[0] == null || row[1] == null) continue;
+                String dateLabel = row[0].toString();
+                labels.add(dateLabel);
+                countData.add(((Number) row[1]).longValue());
+                long amountCents = amountByDate.getOrDefault(dateLabel, 0L);
+                amountData.add(amountCents / 100.0); // convert cents to currency units
+            }
+
+            response.setLabels(labels);
+
+            Map<String, Object> countDataset = new LinkedHashMap<>();
+            countDataset.put("label", "Transaction Count");
+            countDataset.put("data", countData);
+
+            Map<String, Object> amountDataset = new LinkedHashMap<>();
+            amountDataset.put("label", "Transaction Volume");
+            amountDataset.put("data", amountData);
+
+            response.setDatasets(List.of(countDataset, amountDataset));
+        }
+
+        return ResponseEntity.ok(response);
     }
 
     /**

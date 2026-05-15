@@ -46,6 +46,17 @@ _Last updated: 2026-05-14_
 
 ---
 
+## Wave 8 — Zero Stubs: Fraud Scoring, Risk, Kafka Pipeline, Compliance Reporting ✅
+
+- [x] **#53** `FraudDetectionService` — replaced 3 hardcoded-0 stubs: `assessDeviceRisk` (device fingerprint velocity + fraud-alert cross-join), `assessIpRisk` (IP velocity + HighRiskCountry DB + FATF fallback), `assessBehavioralRisk` (amount vs 30-day avg, unusual hours). `TransactionMonitoringService` `getDeviceRisk`/`isVpnDetected` now delegate to real scoring; VPN detection uses RFC-1918 exclusion + cloud-prefix heuristic. `TransactionRepository` +4 JPQL queries.
+- [x] **#54** `RiskScoringService.calculateCra()` — 5-dimension weighted CRA (amount risk 20pts + KRS 25pts + TRS 25pts + geographic 15pts + velocity 15pts). `ReportController /chart` — real data: PIE/ALERTSTATUS from AlertRepository, LINE/BAR from daily TransactionRepository aggregation with PSP scoping and configurable date window.
+- [x] **#55** `FeatureExtractionService.parseCvmMethod()` — proper EMV CVMR 3-byte parsing (PIN/Signature/No-CVM/unknown). `MonitoringMetricsService` baseline — 30-day rolling average AUC from `ModelMetricsRepository.findAverageAucSince()` (new query), never hardcoded. `CaseCreationService` rule version — live lookup from `RuleDefinitionRepository` yielding `"v<year>.<month>"`, fallback `"v0.0"`.
+- [x] **#56** `ComplianceReportingService.generateFincenXml()` — full goAML-pattern SAR XML (entity header, sar_details block, filing_officer, reason narrative, per-transaction blocks, commons-lang3 escaping). `SarContentGenerationService` — fixed `getFullName()` NoSuchMethodError, added 8 missing substitution keys, post-substitution `{{...}}` validation replaces unfilled tokens with `[NOT PROVIDED]`. `SchemeMonitoringReportGenerator` — stale mock comment removed (implementation was already real).
+- [x] **#57** `UserService` — replaced hardcoded `"super.admin@aml.com"` with `findFirstByRole_NameOrderByIdAsc("SUPER_ADMIN")` (new repo method). `WorkflowAutomationService` — real case-closure loop via `complianceCaseRepository.findByMerchantId()`. `PrometheusMetricsService` — HikariCP-backed gauges for `system.active.connections`, pool size, pool active (instanceof check, `0.0` fallback). `PasswordResetService` — real HTML email via new `EmailNotificationService.sendPasswordResetEmail()`.
+- [x] **#58** Kafka expanded 3→8 topics: +`transactions.raw` (12 partitions, 7d), `transactions.enriched` (12p, 3d), `features.updates` (6p, 1d), `transactions.audit` (6p, 30d), `alerts.generated` (6p, 7d). `TransactionIngestionService` publishes to `transactions.raw` after save. `DecisionEngine` publishes to `alerts.generated` after alert save. `AuditLogService` mirrors CREATE/UPDATE/DELETE to `transactions.audit`. `FeatureEngineService` consumer: `transactions.raw` → pre-computes CustomerFeatures via `FeatureCacheService`, publishes enriched event to `transactions.enriched`. `EnhancedAuditService` constructor updated for new KafkaTemplate param.
+
+---
+
 ## Wave 7 — PSP Self-Serve Billing + Payments ✅
 
 - [x] **#51** `SettingsPage.tsx` — PSP users (`pspId > 0`) now see ONLY a "Billing" tab (page title shows their PSP name). Platform admins still see Theme + System Settings. `BillingTab` rendered with `user.pspId` — no navigation to `/psps/:id/configure` required.

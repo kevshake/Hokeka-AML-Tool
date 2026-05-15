@@ -195,8 +195,11 @@ public class MonitoringMetricsService {
             .average()
             .orElse(0.0);
 
-        // Compare to baseline (would use historical baseline)
-        double baseline = 0.5; // Placeholder baseline
+        // Historical AUC average over the last 30 days used as the score baseline.
+        // Falls back to 0.5 (neutral midpoint) when no prior metrics exist.
+        double baseline = metricsRepository
+                .findAverageAucSince(LocalDate.now().minusDays(30))
+                .orElse(0.5);
         double drift = Math.abs(avgScore - baseline);
 
         return drift;

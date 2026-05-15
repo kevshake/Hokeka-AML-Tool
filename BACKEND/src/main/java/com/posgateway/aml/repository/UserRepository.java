@@ -28,4 +28,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     // Find users by role name and enabled status
     java.util.List<User> findByRole_NameAndEnabled(String roleName, boolean enabled);
+
+    // Find the first (oldest by primary key) user with a given role name
+    java.util.Optional<User> findFirstByRole_NameOrderByIdAsc(String roleName);
 }

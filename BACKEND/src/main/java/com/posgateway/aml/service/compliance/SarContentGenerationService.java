@@ -248,10 +248,22 @@ public class SarContentGenerationService {
         v.put("case_reference",       c != null && c.getCaseReference() != null ? c.getCaseReference() : "");
         v.put("case_description",     c != null && c.getDescription() != null ? c.getDescription() : "");
         v.put("merchant_id",          c != null && c.getMerchantId() != null ? c.getMerchantId().toString() : "");
-        v.put("customer_name",        sar != null && sar.getSuspiciousActivityType() != null ? sar.getSuspiciousActivityType() : "");
+        String customerName = "";
+        if (sar != null && sar.getFiledBy() != null) {
+            String fn = sar.getFiledBy().getFirstName() != null ? sar.getFiledBy().getFirstName() : "";
+            String ln = sar.getFiledBy().getLastName() != null ? sar.getFiledBy().getLastName() : "";
+            customerName = (fn + " " + ln).trim();
+        }
+        v.put("customer_name",        customerName);
         v.put("customer_country",     "");
         v.put("filing_institution",   c != null && c.getPspId() != null ? "PSP-" + c.getPspId() : "");
-        v.put("filed_by_name",        sar != null && sar.getFiledBy() != null ? sar.getFiledBy().getFullName() : "");
+        String filedByName = "";
+        if (sar != null && sar.getFiledBy() != null) {
+            String fn = sar.getFiledBy().getFirstName() != null ? sar.getFiledBy().getFirstName() : "";
+            String ln = sar.getFiledBy().getLastName() != null ? sar.getFiledBy().getLastName() : "";
+            filedByName = (fn + " " + ln).trim();
+        }
+        v.put("filed_by_name",        filedByName);
 
         v.put("suspicious_activity_type",
                 sar != null && sar.getSuspiciousActivityType() != null ? sar.getSuspiciousActivityType() : "");
@@ -286,6 +298,17 @@ public class SarContentGenerationService {
         }
         v.put("investigation_findings", findings.toString());
 
+        // SAR-level fields exposed so templates can reference them directly
+        v.put("sar_reference",        sar != null && sar.getSarReference() != null ? sar.getSarReference() : "");
+        v.put("jurisdiction",         sar != null && sar.getJurisdiction() != null ? sar.getJurisdiction() : "");
+        v.put("sar_type",             sar != null && sar.getSarType() != null ? sar.getSarType().name() : "INITIAL");
+        v.put("sar_status",           sar != null && sar.getStatus() != null ? sar.getStatus().name() : "DRAFT");
+        v.put("amendment_reason",     sar != null && sar.getAmendmentReason() != null ? sar.getAmendmentReason() : "");
+        v.put("filing_deadline",      sar != null && sar.getFilingDeadline() != null
+                ? sar.getFilingDeadline().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "");
+        v.put("filing_reference",     sar != null && sar.getFilingReferenceNumber() != null ? sar.getFilingReferenceNumber() : "");
+        v.put("psp_id",               sar != null && sar.getPspId() != null ? sar.getPspId().toString() : "");
+
         return v;
     }
 
@@ -299,9 +322,22 @@ public class SarContentGenerationService {
             m.appendReplacement(out, Matcher.quoteReplacement(replacement));
         }
         m.appendTail(out);
-        if (logger.isTraceEnabled()) {
-            logger.trace("Rendered SAR template ({} chars)", out.length());
+
+        // Post-substitution: warn on any remaining unfilled tokens and replace
+        // them with a safe sentinel so the rendered output contains no raw {{…}}.
+        String result = out.toString();
+        if (result.contains("{{")) {
+            Matcher remaining = PLACEHOLDER.matcher(result);
+            if (remaining.find()) {
+                logger.warn("SAR template has unfilled placeholder(s); first unfilled: {{{{{}}}}}", remaining.group(1));
+            }
+            result = PLACEHOLDER.matcher(result)
+                    .replaceAll(mr -> Matcher.quoteReplacement("[NOT PROVIDED]"));
         }
-        return out.toString();
+
+        if (logger.isTraceEnabled()) {
+            logger.trace("Rendered SAR template ({} chars)", result.length());
+        }
+        return result;
     }
 }

@@ -12,6 +12,7 @@ import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.FraudDetectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -37,6 +38,7 @@ public class TransactionMonitoringService {
     private final UserRepository userRepository;
     private final MerchantRepository merchantRepository;
     private final SanctionsScreenClient sanctionsScreenClient;
+    private final FraudDetectionService fraudDetectionService;
 
     /**
      * High-amount threshold (cents). $500 default — same as legacy getTopRiskIndicators check.
@@ -68,13 +70,15 @@ public class TransactionMonitoringService {
             AlertRepository alertRepository,
             UserRepository userRepository,
             MerchantRepository merchantRepository,
-            @Autowired(required = false) SanctionsScreenClient sanctionsScreenClient) {
+            @Autowired(required = false) SanctionsScreenClient sanctionsScreenClient,
+            FraudDetectionService fraudDetectionService) {
         this.transactionRepository = transactionRepository;
         this.sarRepository = sarRepository;
         this.alertRepository = alertRepository;
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.sanctionsScreenClient = sanctionsScreenClient;
+        this.fraudDetectionService = fraudDetectionService;
     }
 
     private java.util.Set<String> highRiskMccs() {
@@ -385,9 +389,7 @@ public class TransactionMonitoringService {
         dto.put("riskLevel", txn.getRiskLevel() != null ? txn.getRiskLevel() : getRiskLevel(txn));
         dto.put("decision", txn.getDecision() != null ? txn.getDecision() : getDecision(txn));
         
-        // device-intel not implemented — deliberately left null until fingerprinting vendor wired
         dto.put("deviceRisk", getDeviceRisk(txn));
-        // VPN/proxy detection not implemented — deliberately left null until vendor wired
         dto.put("vpnDetected", isVpnDetected(txn));
         dto.put("sanctionsStatus", getSanctionsStatus(txn));
         dto.put("timestamp", txn.getTxnTs());
@@ -457,19 +459,36 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * device-intel not implemented — deliberately left null until fingerprinting vendor wired.
-     * Frontend should treat null as "no data" and not render a fake gauge.
+     * Compute a device-risk score (0–100) by delegating to {@link FraudDetectionService}.
+     *
+     * <p>Scoring factors (evaluated in order):
+     * <ol>
+     *   <li>No device fingerprint on the transaction → 30 (missing identifier is a risk signal).</li>
+     *   <li>Device fingerprint linked to a CRITICAL alert → 90.</li>
+     *   <li>Device seen at &gt;5 distinct merchants in last 24 h → 80 (card-testing pattern).</li>
+     *   <li>Device seen at 3–5 distinct merchants in last 24 h → 50.</li>
+     *   <li>Default (known device, no velocity) → 10.</li>
+     * </ol>
+     *
+     * @return device risk score in [0, 100]; never null.
      */
     private Integer getDeviceRisk(TransactionEntity txn) {
-        return null;
+        return fraudDetectionService.assessDeviceRisk(txn);
     }
 
     /**
-     * VPN/proxy detection not implemented — deliberately left null until detection vendor wired.
-     * Frontend should treat null as "no data" rather than show a false negative.
+     * Detect whether the transaction IP belongs to a VPN, proxy, or cloud-hosted
+     * exit node by delegating to {@link FraudDetectionService#detectVpn(TransactionEntity)}.
+     *
+     * <p>Heuristic: IPs starting with well-known cloud / data-centre prefixes
+     * (AWS, GCP, Azure, Oracle, common hosting ASNs) are flagged as suspected
+     * VPN/proxy.  Private RFC-1918 ranges are explicitly not flagged.
+     *
+     * @return {@code true} when VPN/proxy is suspected, {@code false} for normal
+     *         consumer IPs, {@code null} when no IP is present on the transaction.
      */
     private Boolean isVpnDetected(TransactionEntity txn) {
-        return null;
+        return fraudDetectionService.detectVpn(txn);
     }
 
     /**
