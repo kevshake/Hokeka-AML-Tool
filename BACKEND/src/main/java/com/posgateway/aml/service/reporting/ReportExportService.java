@@ -1,22 +1,7 @@
 package com.posgateway.aml.service.reporting;
 
-import com.lowagie.text.Chunk;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.pdf.ColumnText;
-import com.lowagie.text.Document;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfContentByte;
-import com.lowagie.text.pdf.PdfPageEventHelper;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfTemplate;
-import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.*;
+import com.lowagie.text.pdf.*;
 import com.lowagie.text.pdf.draw.LineSeparator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,11 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -151,7 +132,7 @@ public class ReportExportService {
     }
 
     // -------------------------------------------------------------------------
-    // XML export
+    // XML export (kept for completeness, not changed in contract)
     // -------------------------------------------------------------------------
 
     /**
@@ -260,7 +241,7 @@ public class ReportExportService {
             meta.addCell(valueCell);
         }
 
-        // Pad to even number of label+value pairs if needed (table has 4 cols, need multiples of 2 pairs)
+        // Pad to even number of columns if needed
         int remainder = metadata.size() % 2;
         if (remainder != 0) {
             meta.addCell(emptyCell());
@@ -326,7 +307,7 @@ public class ReportExportService {
         return cell;
     }
 
-    /** Page N of M footer registered as a page event on the PdfWriter. */
+    /** Page N of M footer — registered as a page event on the PdfWriter. */
     private static class PageFooterEvent extends PdfPageEventHelper {
         private PdfTemplate totalPageTemplate;
         private final String platformName;

@@ -115,8 +115,13 @@ public class RegulatoryReportingService {
      * IFTRs are required for cross-border transactions and international wire transfers
      */
     public InternationalFundsTransferReport generateIftr(LocalDateTime startDate, LocalDateTime endDate) {
+        // Find all transactions in date range, respecting PSP isolation
         Long pspId = pspIsolationService.getCurrentUserPspId();
-        List<TransactionEntity> allTxns = fetchTransactions(startDate, endDate, pspId);
+        List<TransactionEntity> allTxns; 
+        
+        // Note: Ideally use a custom repository method findByTxnTsBetweenAndPspId
+        // but for now reusing findAll and filtering or using internal helper logic
+        allTxns = fetchTransactions(startDate, endDate, pspId);
 
         List<TransactionEntity> iftrTxns = new ArrayList<>();
 

@@ -442,11 +442,10 @@ public class ReportGenerationService {
     }
 
     /**
-     * Export report to file — obtains bytes from ReportExportService then writes them
-     * to a temp path, preserving the file-path reference stored on ReportExecution.
+     * Export report to file — produces bytes via ReportExportService and writes them
+     * to a temp path so that the legacy file-path reference on ReportExecution still works.
      */
     private String exportReport(List<Map<String, Object>> data, Report report, String format, String executionId) {
-        // CSV replaces the old TSV-based "Excel" export
         String ext = format.equalsIgnoreCase("EXCEL") || format.equalsIgnoreCase("XLSX") ? "csv" : format.toLowerCase();
         String fileName = report.getReportCode() + "_" + executionId + "." + ext;
         String filePath = System.getProperty("java.io.tmpdir") + java.io.File.separator + "reports"

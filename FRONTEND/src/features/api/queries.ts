@@ -146,42 +146,6 @@ export const useAlerts = (params?: AlertQueryParams) => {
 };
 
 // Transactions
-export interface TransactionStatsParams {
-  pspId?: number;
-  startDate?: string;
-  endDate?: string;
-}
-
-export interface TransactionStats {
-  totalCount: number;
-  approvedCount: number;
-  declinedCount: number;
-  manualReviewCount: number;
-  highRiskCount: number;
-  mediumRiskCount: number;
-  lowRiskCount: number;
-  totalAmountCents: number;
-  averageAmountCents: number;
-  fraudAlertCount: number;
-}
-
-export const useTransactionStats = (params?: TransactionStatsParams) => {
-  const queryString = params
-    ? Object.entries(params)
-        .filter(([, value]) => value !== undefined && value !== null)
-        .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-        .join("&")
-    : "";
-
-  return useQuery<TransactionStats>({
-    queryKey: ["transactions", "stats", params],
-    queryFn: () =>
-      apiClient.get<TransactionStats>(
-        `reports/transactions/stats${queryString ? `?${queryString}` : ""}`
-      ),
-  });
-};
-
 export interface TransactionQueryParams {
   page?: number;
   size?: number;
@@ -778,15 +742,14 @@ export interface FraudMetrics {
 
 export const useFraudMetrics = () => {
   return useQuery<FraudMetrics>({
-    queryKey: ['analytics', 'fraud-metrics'],
-    queryFn: () =>
-      apiClient
-        .get<FraudMetrics>('dashboard/fraud-metrics')
-        .catch(() => ({ precision: '—', recall: '—', f1: '—', falsePositives: '—' })),
+    queryKey: ["analytics", "fraud-metrics"],
+    queryFn: () => apiClient.get<FraudMetrics>("dashboard/fraud-metrics").catch(() => ({
+      precision: "—", recall: "—", f1: "—", falsePositives: "—",
+    })),
   });
 };
 
-export interface ModelMetricsEntry {
+export interface ModelMetrics {
   id: number;
   date: string;
   auc: number | null;
@@ -796,21 +759,18 @@ export interface ModelMetricsEntry {
 }
 
 export const useModelMetricsLatest = () => {
-  return useQuery<ModelMetricsEntry | null>({
-    queryKey: ['analytics', 'model-metrics', 'latest'],
-    queryFn: () =>
-      apiClient.get<ModelMetricsEntry>('monitoring/metrics/latest').catch(() => null),
+  return useQuery<ModelMetrics | null>({
+    queryKey: ["analytics", "model-metrics", "latest"],
+    queryFn: () => apiClient.get<ModelMetrics>("monitoring/metrics/latest").catch(() => null),
   });
 };
 
 export const useModelMetricsRange = (startDate: string, endDate: string) => {
-  return useQuery<ModelMetricsEntry[]>({
-    queryKey: ['analytics', 'model-metrics', 'range', startDate, endDate],
+  return useQuery<ModelMetrics[]>({
+    queryKey: ["analytics", "model-metrics", "range", startDate, endDate],
     queryFn: () =>
       apiClient
-        .get<ModelMetricsEntry[]>(
-          `monitoring/metrics/range?startDate=${startDate}&endDate=${endDate}`,
-        )
+        .get<ModelMetrics[]>(`monitoring/metrics/range?startDate=${startDate}&endDate=${endDate}`)
         .catch(() => []),
     enabled: !!startDate && !!endDate,
   });
@@ -826,8 +786,10 @@ export interface AlertTrendsEntry {
 
 export const useAlertTrends = (days: number = 30) => {
   return useQuery<AlertTrendsEntry[]>({
-    queryKey: ['analytics', 'alert-trends', days],
+    queryKey: ["analytics", "alert-trends", days],
     queryFn: () =>
-      apiClient.get<AlertTrendsEntry[]>(`analytics/alert-trends?days=${days}`).catch(() => []),
+      apiClient
+        .get<AlertTrendsEntry[]>(`analytics/alert-trends?days=${days}`)
+        .catch(() => []),
   });
 };

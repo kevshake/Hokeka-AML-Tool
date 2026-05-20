@@ -338,7 +338,7 @@ public class ReportSchedulingService {
                     nextQ = nextQ.plusMonths(3).withDayOfMonth(1);
                 }
                 return nextQ;
-                
+
             case YEARLY:
                 LocalDateTime nextYearly = now.withMonth(1).withDayOfMonth(1).with(timeOfDay);
                 if (!nextYearly.isAfter(now)) {

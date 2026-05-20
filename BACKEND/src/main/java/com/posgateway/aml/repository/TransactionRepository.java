@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -237,6 +238,7 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
 
     /**
      * Pageable variant for large date-range fetches in regulatory reporting.
+     * Caller: PageRequest.of(0, batchSize, Sort.by("txnTs").descending())
      */
     @Query("SELECT t FROM TransactionEntity t WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs <= :end ORDER BY t.txnTs DESC")
     org.springframework.data.domain.Page<TransactionEntity> findByPspIdAndTxnTsBetween(
@@ -246,7 +248,7 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             org.springframework.data.domain.Pageable pageable);
 
     // -----------------------------------------------------------------------
-    // Transaction stats aggregations — used by GET /reports/transactions/stats
+    // Transaction stats aggregations — used by /transactions/stats endpoint
     // -----------------------------------------------------------------------
 
     /**
@@ -286,13 +288,14 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
 
     /**
      * Sum amount_cents for all transactions in a date window, optionally scoped to a PSP.
+     * Returns BigDecimal to avoid long overflow for large volumes.
      */
     @Query("SELECT COALESCE(SUM(t.amountCents), 0) FROM TransactionEntity t " +
            "WHERE (:pspId IS NULL OR t.pspId = :pspId) " +
            "AND t.txnTs >= :start AND t.txnTs < :end")
-    java.math.BigDecimal sumAmountByPspAndPeriod(@Param("pspId") Long pspId,
-                                                 @Param("start") LocalDateTime start,
-                                                 @Param("end") LocalDateTime end);
+    BigDecimal sumAmountByPspAndPeriod(@Param("pspId") Long pspId,
+                                       @Param("start") LocalDateTime start,
+                                       @Param("end") LocalDateTime end);
 
     // -----------------------------------------------------------------------
     // Live monitoring page — indexed top-N queries (replace findAll() + filter)
@@ -484,32 +487,4 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     List<Object[]> findFailedRejectedForPspByDay(@Param("pspId") Long pspId,
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
-
-    // -----------------------------------------------------------------------
-    // Structuring detection — count "just-below-threshold" transactions for
-    // a given customer account in a sliding window. The transactions table
-    // is shared between TransactionEntity (pan_hash schema) and the
-    // model.Transaction entity (account_number / amount / transaction_timestamp
-    // schema) — both legitimately exist as physical columns on the same table.
-    // Native SQL targets the model.Transaction columns directly because they
-    // are not mapped on TransactionEntity.
-    // -----------------------------------------------------------------------
-
-    /**
-     * Count transactions for a given account within an amount range and time
-     * window — used by structuring (smurfing) detection. The amount range is
-     * half-open: [minAmount, maxAmount).
-     */
-    @Query(value = "SELECT COUNT(*) FROM transactions t " +
-                   "WHERE t.account_number = :accountNumber " +
-                   "  AND t.amount >= :minAmount " +
-                   "  AND t.amount < :maxAmount " +
-                   "  AND t.transaction_timestamp >= :start " +
-                   "  AND t.transaction_timestamp <= :end",
-           nativeQuery = true)
-    long countByAccountAndAmountRangeAndPeriod(@Param("accountNumber") String accountNumber,
-                                               @Param("minAmount") java.math.BigDecimal minAmount,
-                                               @Param("maxAmount") java.math.BigDecimal maxAmount,
-                                               @Param("start") LocalDateTime start,
-                                               @Param("end") LocalDateTime end);
 }
