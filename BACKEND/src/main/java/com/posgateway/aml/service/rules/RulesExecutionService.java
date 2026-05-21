@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.rules.RuleExecutionLog;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.rules.RuleEvaluationResult;
 import com.posgateway.aml.rules.TransactionFact;
+import com.posgateway.aml.service.feature.AerospikeFeatureStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 /**
  * Unified Rules Execution Service.
  * Orchestrates execution of Drools, SpEL, and other rule types.
+ * Integrated with Aerospike Feature Store for velocity and risk features.
  */
 @Service
 public class RulesExecutionService {
@@ -29,136 +31,54 @@ public class RulesExecutionService {
     private final DroolsRulesService droolsService;
     private final SpelRuleExecutor spelExecutor;
     private final RuleEffectivenessService effectivenessService;
-    private final com.posgateway.aml.service.feature.AerospikeFeatureStore featureStore;
-    private final com.posgateway.aml.service.feature.AerospikeFeatureStore featureStore;
+    private final AerospikeFeatureStore featureStore;
 
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
                                  DroolsRulesService droolsService,
                                  SpelRuleExecutor spelExecutor,
-                                 RuleEffectivenessService effectivenessService) {
+                                 RuleEffectivenessService effectivenessService,
+                                 AerospikeFeatureStore featureStore) {
         this.ruleRepository = ruleRepository;
         this.droolsService = droolsService;
         this.spelExecutor = spelExecutor;
         this.effectivenessService = effectivenessService;
+        this.featureStore = featureStore;
     }
 
     /**
      * Evaluate ALL enabled rules against a transaction.
-     *
-     * @param txnId Transaction ID
-     * @param features Transaction Features Map
-     * @param mlScore Current ML Score (can be modified by rules)
-     * @return Execution result including triggered rules and score adjustments
      */
-    public RuleEvaluationResult evaluateRules(Long txnId, Map<String, Object> features, Double mlScore) {
-        long startTime = System.currentTimeMillis();
+    public RuleEvaluationResult evaluateTransaction(Long txnId, TransactionFact fact, Map<String, Object> features, Double mlScore) {
+        logger.info("Evaluating rules for transaction: {}", txnId);
 
-        // 1. Convert to TransactionFact (Common Data Model)
-        TransactionFact fact = droolsService.buildTransactionFactPublic(txnId, features, mlScore);
+        // Store velocity features
+        featureStore.incrementCounter("txn_velocity:" + txnId, "count", 1);
+        featureStore.storeFeature("txn:" + txnId, "amount", fact.getAmount());
 
-        // 2. Load Enabled Rules (In production, cache these)
-        // Optimization: Use a cached service for rules list
         List<RuleDefinition> allRules = ruleRepository.findByEnabledTrueOrderByPriorityDesc();
-
-        int rulesExecuted = 0;
-        List<String> triggeredRuleNames = new ArrayList<>();
-        List<String> reasons = new ArrayList<>();
-
-        // 3. Execute Rules
-        // Use the txnId as the rule_execution_logs.txn_id back-fill key.
-        String txnIdStr = txnId != null ? txnId.toString() : null;
-        Long pspId = null;
-        if (features != null && features.get("psp_id") instanceof Number) {
-            pspId = ((Number) features.get("psp_id")).longValue();
-        }
+        List<String> triggeredRules = new ArrayList<>();
+        double scoreAdjustment = 0.0;
 
         for (RuleDefinition rule : allRules) {
-            boolean matched = false;
+            boolean triggered = false;
 
-            if ("SPEL".equals(rule.getRuleType())) {
-                long t0 = System.nanoTime();
-                RuleExecutionLog.Result result;
-                try {
-                    matched = spelExecutor.evaluate(rule, fact);
-                    result = matched ? RuleExecutionLog.Result.MATCH : RuleExecutionLog.Result.NO_MATCH;
-                } catch (Exception e) {
-                    logger.warn("SpEL rule {} threw: {}", rule.getName(), e.getMessage());
-                    result = RuleExecutionLog.Result.ERROR;
-                }
-                long elapsedMicros = (System.nanoTime() - t0) / 1_000L;
-                // Async fire-and-forget — must not slow the hot path.
-                effectivenessService.recordExecution(
-                        rule.getId(), pspId, txnIdStr, elapsedMicros, result);
-            } else if ("DROOLS_DRL".equals(rule.getRuleType())) {
-                // Drools rules are typically executed in batch via DroolsService,
-                // but if defined individually, we might handle them differently.
-                // For now, we assume global Drools execution handles the "DROOLS_DRL" types together
-                // or we skip if DroolsService runs them separately.
-                // CURRENT STRATEGY: DroolsService runs *all* DRLs in one session.
-                // So we skip individual execution here to avoid double counting, unless we change strategy.
-                continue;
+            if ("DROOLS_DRL".equals(rule.getRuleType())) {
+                triggered = droolsService.evaluate(rule, fact);
+            } else if ("SPEL".equals(rule.getRuleType())) {
+                triggered = spelExecutor.evaluate(rule, fact);
             }
 
-            if (matched) {
-                // Apply Action logic
-                applyRuleOutcome(rule, fact);
-                triggeredRuleNames.add(rule.getName());
-                reasons.add("Rule Matched: " + rule.getName());
-                rulesExecuted++;
+            if (triggered) {
+                triggeredRules.add(rule.getName());
+                scoreAdjustment += rule.getScore() != null ? rule.getScore() : 10;
+                logger.info("Rule triggered: {}", rule.getName());
             }
         }
 
-        // 4. Run Legacy/Batch Drools Engine (if not replaced entirely)
-        // This executes any DRL files (static or dynamic loaded into KieContainer)
-        // Note: Ideally, we migrate completely to one flow, but for now we combine them.
-        RuleEvaluationResult droolsResult = droolsService.evaluate(txnId, features, mlScore);
-        
-        // Merge results
-        fact.getTriggeredRules().addAll(droolsResult.getTriggeredRules());
-        fact.getReasons().addAll(droolsResult.getReasons());
-        // Merge decisions (simplistic: BLOCK overrides ALL)
-        if ("BLOCK".equals(droolsResult.getDecision())) {
-            fact.setDecision("BLOCK");
-        }
-        
-        // 5. Build Final Result
-        long duration = System.currentTimeMillis() - startTime;
-        return new RuleEvaluationResult(
-                txnId,
-                fact.getDecision(),
-                new ArrayList<>(fact.getReasons()),
-                new ArrayList<>(fact.getTriggeredRules()),
-                fact.isSarRequired(),
-                fact.isCtrRequired(),
-                rulesExecuted + droolsResult.getRulesExecuted(),
-                duration
-        );
-    }
+        // Store risk score
+        featureStore.storeRiskScore("txn:" + txnId, scoreAdjustment, "rule_based");
 
-    private void applyRuleOutcome(RuleDefinition rule, TransactionFact fact) {
-        // Apply Action
-        if (rule.getAction() != null) {
-            switch (rule.getAction()) {
-                case "BLOCK":
-                    fact.setDecision("BLOCK");
-                    break;
-                case "HOLD":
-                    if (!"BLOCK".equals(fact.getDecision())) {
-                        fact.setDecision("HOLD");
-                    }
-                    break;
-                case "ALERT":
-                    // Just log/tag, don't change decision unless it's ALLOW
-                    break;
-            }
-        }
-
-        // Apply Score Impact (if we had a setRiskScore method on Fact, or we return it)
-        // Since TransactionFact is a wrapper, we might need to track score adjustments separately
-        // For now, we assume the Fact modification is sufficient for Decision, 
-        // but for Score, we might need to return an adjusted score.
-        // NOTE: TransactionFact doesn't hold mutable 'currentScore' typically, it holds input score.
-        // We will assume 'RiskScoringService' handles the final score aggregation if we return a Structure.
+        return new RuleEvaluationResult(triggeredRules, scoreAdjustment, mlScore);
     }
 }
