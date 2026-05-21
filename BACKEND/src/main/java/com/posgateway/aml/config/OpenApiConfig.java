@@ -34,7 +34,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Hokeka AML Platform API")
-                        .version("2.3.0")
+                        .version("2.4.0")
                         .description("""
                                 Anti-Money Laundering and Fraud Detection System API
                                 
