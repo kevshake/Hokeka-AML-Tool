@@ -33,7 +33,7 @@ public class OpenApiConfig {
         
         return new OpenAPI()
                 .info(new Info()
-                        .title("AML Fraud Detector API")
+                        .title("Hokeka AML Platform API")
                         .version("1.0.0")
                         .description("""
                                 Anti-Money Laundering and Fraud Detection System API
@@ -53,7 +53,7 @@ public class OpenApiConfig {
                         .contact(new Contact()
                                 .name("Hokeka AML Support")
                                 .email("support@hokeka.com")
-                                .url("https://hokeka.com"))
+                                .url("https://doc.hokeka.com"))
                         .license(new License()
                                 .name("Proprietary")
                                 .url("https://hokeka.com/license")))

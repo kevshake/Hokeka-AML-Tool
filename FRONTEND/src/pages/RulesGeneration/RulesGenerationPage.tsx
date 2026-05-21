@@ -1,3 +1,4 @@
+import VisualRuleBuilder from "../../components/VisualRuleBuilder";
 import { useState, useEffect } from "react";
 import {
   Box,
@@ -278,21 +279,73 @@ export default function RulesGenerationPage() {
       </Box>
 
       <Tabs
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         value={tab}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         onChange={(_, newValue) => setTab(newValue)}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         sx={{
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
           mb: 3,
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
           "& .MuiTab-root": {
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
             color: "text.secondary",
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
             "&.Mui-selected": { color: "#a93226" },
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
           },
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
           "& .MuiTabs-indicator": { backgroundColor: "#a93226" },
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         }}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
       >
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         <Tab label="AML Rules" />
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         <Tab label="Velocity Rules" />
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
         <Tab label="Risk Thresholds" />
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
       </Tabs>
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>Visual Rule Builder (Beta)</Typography>
+        <VisualRuleBuilder onChange={(expr, json) => console.log("Generated Rule:", expr, json)} />
+      </Box>
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder (Beta)</Typography>
+      </Box>
 
       {/* AML Rules Tab */}
       {tab === 0 && (

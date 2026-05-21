@@ -29,6 +29,7 @@ public class RulesExecutionService {
     private final DroolsRulesService droolsService;
     private final SpelRuleExecutor spelExecutor;
     private final RuleEffectivenessService effectivenessService;
+    private final com.posgateway.aml.service.feature.AerospikeFeatureStore featureStore;
 
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
