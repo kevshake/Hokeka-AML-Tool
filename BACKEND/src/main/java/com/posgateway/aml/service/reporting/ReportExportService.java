@@ -251,7 +251,7 @@ public class ReportExportService {
         doc.add(meta);
     }
 
-    private void addDataTable(Document doc, List<Map<String, Object>> reportData) throws DocumentException {
+    private void addDataTable(Document doc, java.util.List<Map<String, Object>> reportData) throws DocumentException {
         Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 8, WHITE);
         Font bodyFont   = FontFactory.getFont(FontFactory.HELVETICA, 7, BODY_DARK);
 
