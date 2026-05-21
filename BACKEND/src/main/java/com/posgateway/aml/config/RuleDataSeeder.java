@@ -60,8 +60,6 @@ public class RuleDataSeeder {
         rules.add(create("R-24", "High risk score from ML model", "#ml.riskScore > 0.8", "SPEL", "HOLD", 80));
         rules.add(create("R-25", "Velocity spike on merchant", "#history.merchantVelocity1h > 10", "SPEL", "ALERT", 75));
 
-        // More rules can be added here up to R-170
-
         ruleRepository.saveAll(rules);
     }
 
