@@ -25,11 +25,11 @@ public class RuleDataSeeder {
     @PostConstruct
     @Transactional
     public void seedDefaultRules() {
-        if (ruleRepository.count() > 100) return;
+        if (ruleRepository.count() > 120) return;
 
         List<RuleDefinition> rules = new ArrayList<>();
 
-        // Transaction & Velocity Rules
+        // Transaction & Velocity Rules (R-1 to R-30)
         rules.add(create("R-1", "First transaction of user", "#tx.isFirstTransaction == true", "SPEL", "FLAG", 85));
         rules.add(create("R-2", "Large amount (>=10000)", "#tx.amount >= 10000", "SPEL", "ALERT", 80));
         rules.add(create("R-3", "Round amount pattern", "#tx.amount % 1000 == 0", "SPEL", "HOLD", 65));
@@ -41,7 +41,7 @@ public class RuleDataSeeder {
         rules.add(create("R-9", "IP change in short time", "#tx.ipAddress != #history.lastIp && #history.timeSinceLastTxn < 300", "SPEL", "HOLD", 78));
         rules.add(create("R-10", "Night transaction (2-5am)", "#tx.hour >= 2 && #tx.hour <= 5", "SPEL", "FLAG", 55));
 
-        // Advanced Rules
+        // Advanced Rules (R-11 to R-40)
         rules.add(create("R-11", "High name similarity", "#merchant.nameLevenshtein > 0.85", "SPEL", "ALERT", 80));
         rules.add(create("R-12", "Multiple cards same device", "#history.uniqueCards24h >= 3", "SPEL", "HOLD", 85));
         rules.add(create("R-13", "High merchant diversity", "#history.merchantDiversity7d > 8", "SPEL", "ALERT", 68));
@@ -53,10 +53,12 @@ public class RuleDataSeeder {
         rules.add(create("R-19", "High amount for merchant", "#tx.amount > #history.avgAmount * 3", "SPEL", "ALERT", 78));
         rules.add(create("R-20", "New IP address", "#tx.ipAddress not in #history.knownIps", "SPEL", "FLAG", 60));
 
-        // Screening & Compliance
+        // Screening & Compliance (R-21 to R-50)
         rules.add(create("R-21", "Sanctions hit on counterparty", "#counterparty.sanctionsHit == true", "SPEL", "SUSPEND", 100));
         rules.add(create("R-22", "PEP screening hit", "#counterparty.pepHit == true", "SPEL", "HOLD", 92));
         rules.add(create("R-23", "Adverse media hit", "#merchant.adverseMediaHit == true", "SPEL", "HOLD", 85));
+        rules.add(create("R-24", "High risk score from ML model", "#ml.riskScore > 0.8", "SPEL", "HOLD", 80));
+        rules.add(create("R-25", "Velocity spike on merchant", "#history.merchantVelocity1h > 10", "SPEL", "ALERT", 75));
 
         ruleRepository.saveAll(rules);
     }

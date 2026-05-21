@@ -193,7 +193,7 @@ export default function VisualRuleBuilder({ onChange }: VisualRuleBuilderProps) 
 
       <Button variant="outlined" onClick={addGroup} startIcon={<Add />}>
         Add Logic Group
-      <Button variant="contained" onClick={() => onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })} sx={{ ml: 2 }}>
+      <Button variant="contained" onClick={() => onSave onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })}onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })} onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => `(${g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`).join(" " + groups[0]?.logic + " "), ruleType: "SPEL" })} sx={{ ml: 2 }}>
         Save Rule
       </Button>
       </Button>
