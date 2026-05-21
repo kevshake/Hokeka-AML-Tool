@@ -1,0 +1,42 @@
+[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for com.posgateway:aml-fraud-detector:jar:1.0.0-SNAPSHOT
+[WARNING] 'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique: org.mapstruct:mapstruct:jar -> version ${org.mapstruct.version} vs 1.5.5.Final @ line 243, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] 
+[INFO] -----------------< com.posgateway:aml-fraud-detector >------------------
+[INFO] Building AML Fraud Detector 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ aml-fraud-detector ---
+[INFO] Copying 29 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.11.0:compile (default-compile) @ aml-fraud-detector ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 441 source files with javac [debug release 17] to target\classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /D:/PROJECTS/POS_GATEWAY/APP/AML_FRAUD_DETECTOR/BACKEND/src/main/java/com/posgateway/aml/service/psp/QuotaService.java:[66,1] class, interface, enum, or record expected
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  5.899 s
+[INFO] Finished at: 2026-01-14T21:48:26+03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project aml-fraud-detector: Compilation failure
+[ERROR] /D:/PROJECTS/POS_GATEWAY/APP/AML_FRAUD_DETECTOR/BACKEND/src/main/java/com/posgateway/aml/service/psp/QuotaService.java:[66,1] class, interface, enum, or record expected
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
