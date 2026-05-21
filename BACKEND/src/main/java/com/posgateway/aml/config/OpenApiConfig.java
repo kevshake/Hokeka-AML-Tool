@@ -56,7 +56,7 @@ public class OpenApiConfig {
                                 .url("https://doc.hokeka.com"))
                         .license(new License()
                                 .name("Proprietary")
-                                .url("https://hokeka.com/license")))
+                                .url("https://doc.hokeka.com")))
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:" + serverPort + contextPath)

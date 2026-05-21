@@ -340,6 +340,10 @@ export default function RulesGenerationPage() {
       </Box>
       </Tabs>
       <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder</Typography>
+        <VisualRuleBuilder onChange={(expr, json) => { console.log("Rule:", expr); setEditingRule({ ruleName: "Visual Rule", ruleExpression: expr, ruleType: "SPEL" }); }} />
+      </Box>
+      <Box sx={{ mt: 4 }}>
         <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>Visual Rule Builder (Beta)</Typography>
         <VisualRuleBuilder onChange={(expr, json) => console.log("Generated Rule:", expr, json)} />
       </Box>
