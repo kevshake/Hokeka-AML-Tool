@@ -28,6 +28,7 @@ interface RuleGroup {
 
 interface VisualRuleBuilderProps {
   onChange: (expression: string, json: any) => void;
+  onSave?: (rule: any) => void;
 }
 
 export default function VisualRuleBuilder({ onChange }: VisualRuleBuilderProps) {
@@ -192,6 +193,9 @@ export default function VisualRuleBuilder({ onChange }: VisualRuleBuilderProps) 
 
       <Button variant="outlined" onClick={addGroup} startIcon={<Add />}>
         Add Logic Group
+      <Button variant="contained" onClick={() => onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })} sx={{ ml: 2 }}>
+        Save Rule
+      </Button>
       </Button>
 
       <Divider sx={{ my: 2 }} />

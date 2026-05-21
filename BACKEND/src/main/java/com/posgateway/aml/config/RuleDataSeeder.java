@@ -25,7 +25,7 @@ public class RuleDataSeeder {
     @PostConstruct
     @Transactional
     public void seedDefaultRules() {
-        if (ruleRepository.count() > 80) return;
+        if (ruleRepository.count() > 100) return;
 
         List<RuleDefinition> rules = new ArrayList<>();
 
