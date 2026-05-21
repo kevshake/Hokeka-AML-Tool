@@ -16,6 +16,7 @@ public interface EscalationRuleRepository extends JpaRepository<EscalationRule, 
      * Find all enabled escalation rules
      */
     List<EscalationRule> findByEnabledTrue();
+    // RLS applied via RlsContextFilter + @Filter in entity
 
     /**
      * Find escalation rule by name
