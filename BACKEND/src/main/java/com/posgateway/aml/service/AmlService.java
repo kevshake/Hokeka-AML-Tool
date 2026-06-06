@@ -181,13 +181,16 @@ public class AmlService {
     }
 
     /**
-     * Extract PAN hash from transaction
-     * Uses panHash field if available, otherwise uses accountNumber as fallback
+     * Extract PAN hash from transaction. {@link Transaction} doesn't expose a
+     * dedicated {@code panHash} field — the upstream PSP submits the masked /
+     * tokenized PAN in {@code accountNumber}, so that's what the velocity
+     * counters key on. Returning a null/empty value disables PAN-level
+     * aggregation for that transaction (fail-open by design — fraud rules
+     * elsewhere still apply).
      */
     private String getPanHash(Transaction transaction) {
-        // Try to get panHash field via reflection or use accountNumber
-        // For now, use accountNumber as it's likely the PAN hash
-        return transaction.getAccountNumber();
+        String acct = transaction.getAccountNumber();
+        return (acct == null || acct.isBlank()) ? null : acct;
     }
 
     private int assessGeographicRisk(Transaction transaction, List<String> riskFactors) {
@@ -195,24 +198,32 @@ public class AmlService {
 
         String countryCode = transaction.getCountryCode();
 
-        // High-risk country check: DB-first with static FATF fallback
+        // High-risk country check: DB-first with static FATF fallback.
+        // Also sourced from the high_risk_countries table (FATF blacklist / greylist / regulator-flagged).
         if (countryCode != null) {
             String normalised = countryCode.toUpperCase();
             boolean highRisk = false;
             try {
                 highRisk = highRiskCountryRepository.existsByCountryCode(normalised);
+                if (highRisk) {
+                    highRiskCountryRepository.findByCountryCode(normalised).ifPresent(c ->
+                            riskFactors.add("High-risk jurisdiction: " + c.getCountryCode()));
+                }
             } catch (Exception ex) {
                 logger.warn("high_risk_countries lookup failed for {}: {}; using static FATF list",
                         normalised, ex.getMessage());
                 highRisk = FATF_HIGH_RISK_COUNTRIES.contains(normalised);
             }
             if (highRisk) {
-                score += 20;
-                riskFactors.add("Transaction involves FATF high-risk country: " + normalised);
+                score += 40;
+                if (riskFactors.stream().noneMatch(f -> f.contains(normalised))) {
+                    riskFactors.add("Transaction involves FATF high-risk country: " + normalised);
+                }
             }
         }
 
-        // Cross-border transaction check - optimize string comparison
+        // Cross-border transaction check — currency's leading two chars are
+        // the ISO 4217 country alpha-2 in the common case (e.g. USD→US, KES→KE).
         String currencyCode = transaction.getCurrencyCode();
         if (countryCode != null && currencyCode != null && currencyCode.length() >= 2) {
             String currencyCountry = currencyCode.substring(0, 2);

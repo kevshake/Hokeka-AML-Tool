@@ -13,7 +13,7 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 // @RequiredArgsConstructor removed
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','ROLE_PLATFORM_ADMIN','MANAGE_PSP')")
 @RestController
 @RequestMapping("/admin/psp")
 public class PspAdminController {

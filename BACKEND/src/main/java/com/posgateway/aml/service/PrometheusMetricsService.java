@@ -7,6 +7,7 @@ import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.entity.ModelMetrics;
 import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.DistributionSummary;
 import jakarta.annotation.PostConstruct;
@@ -381,46 +382,33 @@ public class PrometheusMetricsService {
                                 .tag("application", "aml-fraud-detector")
                                 .register(meterRegistry);
 
-                if (dataSource instanceof HikariDataSource hikari) {
-                        Gauge.builder("system.active.connections", hikari,
-                                        ds -> ds.getHikariPoolMXBean() != null
-                                                ? (double) ds.getHikariPoolMXBean().getActiveConnections()
-                                                : 0.0)
-                                        .description("Active JDBC connections from HikariCP pool")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
+                // Active "connections" exposed as the live HikariCP active count —
+                // the closest thing to "currently in-flight DB-bound requests".
+                Gauge.builder("system.active.connections", this, PrometheusMetricsService::activeDbConnections)
+                                .description("Number of in-flight DB connections (HikariCP active)")
+                                .tag("application", "aml-fraud-detector")
+                                .register(meterRegistry);
 
-                        Gauge.builder("database.connection.pool.size", hikari,
-                                        ds -> ds.getHikariPoolMXBean() != null
-                                                ? (double) ds.getHikariPoolMXBean().getTotalConnections()
-                                                : 0.0)
-                                        .description("Total JDBC connections in HikariCP pool")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
+                Gauge.builder("database.connection.pool.size", this, PrometheusMetricsService::poolTotalConnections)
+                                .description("Database connection pool size (Hikari total)")
+                                .tag("application", "aml-fraud-detector")
+                                .register(meterRegistry);
 
-                        Gauge.builder("database.connection.pool.active", hikari,
-                                        ds -> ds.getHikariPoolMXBean() != null
-                                                ? (double) ds.getHikariPoolMXBean().getActiveConnections()
-                                                : 0.0)
-                                        .description("Active database connections from HikariCP pool")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
-                } else {
-                        Gauge.builder("system.active.connections", () -> 0.0)
-                                        .description("Active connections (pool type unknown)")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
+                Gauge.builder("database.connection.pool.active", this, PrometheusMetricsService::activeDbConnections)
+                                .description("Active database connections (Hikari)")
+                                .tag("application", "aml-fraud-detector")
+                                .register(meterRegistry);
 
-                        Gauge.builder("database.connection.pool.size", () -> 0.0)
-                                        .description("Database connection pool size (pool type unknown)")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
+                Gauge.builder("database.connection.pool.idle", this, PrometheusMetricsService::idleDbConnections)
+                                .description("Idle database connections (Hikari)")
+                                .tag("application", "aml-fraud-detector")
+                                .register(meterRegistry);
 
-                        Gauge.builder("database.connection.pool.active", () -> 0.0)
-                                        .description("Active database connections (pool type unknown)")
-                                        .tag("application", "aml-fraud-detector")
-                                        .register(meterRegistry);
-                }
+                Gauge.builder("database.connection.pool.threads_awaiting", this,
+                                PrometheusMetricsService::threadsAwaitingDbConnection)
+                                .description("Threads currently waiting for a DB connection")
+                                .tag("application", "aml-fraud-detector")
+                                .register(meterRegistry);
 
                 // Initialize System Health Metrics
                 Gauge
@@ -1135,4 +1123,35 @@ public class PrometheusMetricsService {
         }
 
         private static final long startTime = System.currentTimeMillis();
+
+        // ────────────────────────────────────────────────────────────
+        // Hikari connection-pool gauges
+        // ────────────────────────────────────────────────────────────
+
+        private HikariPoolMXBean hikariPool() {
+                if (dataSource instanceof HikariDataSource hds) {
+                        return hds.getHikariPoolMXBean();
+                }
+                return null;
+        }
+
+        private double activeDbConnections() {
+                HikariPoolMXBean p = hikariPool();
+                return p == null ? 0.0 : p.getActiveConnections();
+        }
+
+        private double idleDbConnections() {
+                HikariPoolMXBean p = hikariPool();
+                return p == null ? 0.0 : p.getIdleConnections();
+        }
+
+        private double poolTotalConnections() {
+                HikariPoolMXBean p = hikariPool();
+                return p == null ? 0.0 : p.getTotalConnections();
+        }
+
+        private double threadsAwaitingDbConnection() {
+                HikariPoolMXBean p = hikariPool();
+                return p == null ? 0.0 : p.getThreadsAwaitingConnection();
+        }
 }

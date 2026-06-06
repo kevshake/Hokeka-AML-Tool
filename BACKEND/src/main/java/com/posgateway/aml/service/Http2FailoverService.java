@@ -248,9 +248,11 @@ public class Http2FailoverService {
      */
     private boolean performConnectivityTest() {
         try {
-            // Use network stability service's test method
-            // For now, return true if network is stable
-            return networkStabilityService.isNetworkStableForRetry();
+            // Both gates must pass: rolling stability AND the most recent retry-window probe.
+            // The AND prevents flap (a single bad probe re-enabling HTTP/2 while the long
+            // window is still degraded, or vice versa).
+            return networkStabilityService.isNetworkStable()
+                    && networkStabilityService.isNetworkStableForRetry();
         } catch (Exception e) {
             logger.warn("Connectivity test failed: {}", e.getMessage());
             return false;

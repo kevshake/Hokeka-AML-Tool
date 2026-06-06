@@ -40,6 +40,14 @@ public class RegulatoryReportingService {
     @Value("${regulatory.lctr.threshold:100000}")
     private BigDecimal lctrThreshold;
 
+    /** Local currency for IFTR classification. Hokeka deploys default to Kenya (KES). */
+    @Value("${regulatory.local.currency:KES}")
+    private String localCurrency;
+
+    /** Local country (ISO-3166-1 alpha-2) for IFTR classification. */
+    @Value("${regulatory.local.country:KE}")
+    private String localCountry;
+
     @Autowired
     public RegulatoryReportingService(TransactionRepository transactionRepository,
             MerchantRepository merchantRepository,
@@ -115,36 +123,32 @@ public class RegulatoryReportingService {
      * IFTRs are required for cross-border transactions and international wire transfers
      */
     public InternationalFundsTransferReport generateIftr(LocalDateTime startDate, LocalDateTime endDate) {
-        // Find all transactions in date range, respecting PSP isolation
+        // Find all transactions in the date range, respecting PSP isolation.
+        // fetchTransactions uses indexed (psp_id, txn_ts) / (txn_ts) repository methods.
         Long pspId = pspIsolationService.getCurrentUserPspId();
-        List<TransactionEntity> allTxns; 
-        
-        // Note: Ideally use a custom repository method findByTxnTsBetweenAndPspId
-        // but for now reusing findAll and filtering or using internal helper logic
-        allTxns = fetchTransactions(startDate, endDate, pspId);
+        List<TransactionEntity> allTxns = fetchTransactions(startDate, endDate, pspId);
 
         List<TransactionEntity> iftrTxns = new ArrayList<>();
 
         for (TransactionEntity tx : allTxns) {
-            // IFTR rule: Non-local currency OR Non-local country
-            // For now assume "USD" is local and merchants have countries
-            boolean isInternational = !"USD".equalsIgnoreCase(tx.getCurrency());
+            // IFTR rule: non-local currency OR non-local merchant country.
+            boolean isInternational = tx.getCurrency() != null
+                    && !localCurrency.equalsIgnoreCase(tx.getCurrency());
 
             if (!isInternational && tx.getMerchantId() != null) {
                 try {
                     Long merchantId = Long.parseLong(tx.getMerchantId());
                     Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
                     if (merchant != null) {
-                        String merchantCountry = merchant.getAddressCountry() != null 
-                                ? merchant.getAddressCountry() 
+                        String merchantCountry = merchant.getAddressCountry() != null
+                                ? merchant.getAddressCountry()
                                 : merchant.getCountry();
-                        // Flag any non-US merchant or non-USD currency as IFTR candidate
-                        if (merchantCountry != null && !"US".equalsIgnoreCase(merchantCountry)) {
+                        if (merchantCountry != null && !localCountry.equalsIgnoreCase(merchantCountry)) {
                             isInternational = true;
                         }
                     }
                 } catch (NumberFormatException e) {
-                    // ignore
+                    // non-numeric merchantId — skip enrichment, currency check stands
                 }
             }
 
@@ -192,12 +196,15 @@ public class RegulatoryReportingService {
                 .toList();
     }
     
+    /**
+     * Indexed time-window fetch. PSP-scoped when {@code pspId != null}, else
+     * all PSPs (platform-admin view). Both paths use repository methods backed
+     * by Postgres indexes — no in-memory filtering against {@code findAll()}.
+     */
     private List<TransactionEntity> fetchTransactions(LocalDateTime startDate, LocalDateTime endDate, Long pspId) {
-        if (pspId != null && pspId != 0L) {
-            return transactionRepository.findByPspIdAndTxnTsBetween(pspId, startDate, endDate);
-        } else {
-            return transactionRepository.findByTxnTsBetween(startDate, endDate);
-        }
+        return (pspId != null && pspId != 0L)
+                ? transactionRepository.findByPspIdAndTxnTsBetween(pspId, startDate, endDate)
+                : transactionRepository.findByTxnTsBetween(startDate, endDate);
     }
 
     /**

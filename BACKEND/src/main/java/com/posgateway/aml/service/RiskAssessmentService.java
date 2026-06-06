@@ -51,10 +51,10 @@ public class RiskAssessmentService {
     private final FraudDetectionService fraudDetectionService;
     private final com.posgateway.aml.service.risk.RiskRulesEngine riskRulesEngine;
     private final com.posgateway.aml.repository.MerchantRepository merchantRepository;
+    private final com.posgateway.aml.repository.BeneficialOwnerRepository beneficialOwnerRepository;
     private final com.posgateway.aml.service.analytics.LinkAnalysisService linkAnalysisService;
     private final com.posgateway.aml.service.analytics.BehavioralProfilingService behavioralProfilingService;
     private final com.posgateway.aml.repository.TransactionRepository transactionRepository;
-    private final com.posgateway.aml.repository.BeneficialOwnerRepository beneficialOwnerRepository;
 
     /**
      * CTR (Currency Transaction Report) reporting threshold. In Kenya the CBK
@@ -63,24 +63,32 @@ public class RiskAssessmentService {
      */
     private final BigDecimal structuringThreshold;
 
+    /** Levenshtein threshold above which we treat the names as "different person". */
+    private static final int THIRD_PARTY_LEVENSHTEIN_THRESHOLD = 3;
+
+    /** Lower bound for structuring detection (KES). Above small-business clean-money territory. */
+    private static final java.math.BigDecimal STRUCTURING_LOW = new java.math.BigDecimal("800000");
+    /** Upper bound for structuring detection (KES) — sits just below the FRC CTR threshold. */
+    private static final java.math.BigDecimal STRUCTURING_HIGH = new java.math.BigDecimal("1000000");
+
     @Autowired
     public RiskAssessmentService(AmlService amlService,
             FraudDetectionService fraudDetectionService,
             com.posgateway.aml.service.risk.RiskRulesEngine riskRulesEngine,
             com.posgateway.aml.repository.MerchantRepository merchantRepository,
+            com.posgateway.aml.repository.BeneficialOwnerRepository beneficialOwnerRepository,
             com.posgateway.aml.service.analytics.LinkAnalysisService linkAnalysisService,
             com.posgateway.aml.service.analytics.BehavioralProfilingService behavioralProfilingService,
             com.posgateway.aml.repository.TransactionRepository transactionRepository,
-            com.posgateway.aml.repository.BeneficialOwnerRepository beneficialOwnerRepository,
             @Value("${risk.structuring.threshold:1000000}") BigDecimal structuringThreshold) {
         this.amlService = amlService;
         this.fraudDetectionService = fraudDetectionService;
         this.riskRulesEngine = riskRulesEngine;
         this.merchantRepository = merchantRepository;
+        this.beneficialOwnerRepository = beneficialOwnerRepository;
         this.linkAnalysisService = linkAnalysisService;
         this.behavioralProfilingService = behavioralProfilingService;
         this.transactionRepository = transactionRepository;
-        this.beneficialOwnerRepository = beneficialOwnerRepository;
         this.structuringThreshold = structuringThreshold;
     }
 
@@ -121,16 +129,13 @@ public class RiskAssessmentService {
             boolean isLinked = !linkedBlocked.isEmpty();
             boolean isAnomaly = behavioralProfilingService.isAmountAnomaly(transaction);
 
-            // Kenya-specific structuring (smurfing) detection: amount lies in
-            // [threshold * 0.9, threshold) OR the same account has executed
-            // STRUCTURING_REPEAT_COUNT or more "just-below" transactions in
-            // the last STRUCTURING_WINDOW_HOURS hours.
+            // Structuring (a.k.a. smurfing) detection: STRUCTURING_LOW/HIGH constants define
+            // the just-below-CTR band (KES 800,000–1,000,000). Also checks for repeated
+            // just-below transactions via DB query over the sliding structuring window.
             boolean isStructuring = detectStructuring(transaction);
 
-            // Kenya-specific third-party / smurf detection: the transacting
-            // party's name does not fuzzy-match any registered beneficial
-            // owner of the merchant. Returns false (cannot determine) when
-            // either side of the comparison is unavailable.
+            // Third-party / smurf detection: the transacting party's name does not
+            // fuzzy-match any registered beneficial owner of the merchant.
             boolean isThirdParty = detectThirdParty(transaction, merchant);
 
             // Pass facts to engine
@@ -199,6 +204,72 @@ public class RiskAssessmentService {
         }
 
         return combined;
+    }
+
+    /**
+     * True when the transaction's payer name is materially different from the
+     * merchant's legal / trading name AND from every beneficial owner on file.
+     * "Materially different" = Levenshtein distance > THIRD_PARTY_LEVENSHTEIN_THRESHOLD
+     * on lowercased, whitespace-collapsed forms.
+     */
+    private boolean isThirdPartyTransaction(Transaction transaction,
+                                            com.posgateway.aml.entity.merchant.Merchant merchant) {
+        String payerName = transaction.getMerchantName(); // payer/recipient label on the txn
+        if (payerName == null || payerName.isBlank()) {
+            // Missing name = unknown, not third-party (avoid false positives on legitimate POS txns)
+            return false;
+        }
+        String payer = normalizeName(payerName);
+        if (matchesAny(payer, merchant.getLegalName(), merchant.getTradingName())) {
+            return false;
+        }
+        java.util.List<com.posgateway.aml.entity.merchant.BeneficialOwner> owners =
+                beneficialOwnerRepository.findByMerchant_MerchantId(merchant.getMerchantId());
+        for (com.posgateway.aml.entity.merchant.BeneficialOwner o : owners) {
+            if (matchesAny(payer, o.getFullName())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesAny(String normalized, String... candidates) {
+        for (String c : candidates) {
+            if (c == null) continue;
+            String n = normalizeName(c);
+            if (n.isEmpty()) continue;
+            if (levenshtein(normalized, n) <= THIRD_PARTY_LEVENSHTEIN_THRESHOLD) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeName(String s) {
+        return s == null ? "" : s.toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9 ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    /** Iterative DP Levenshtein in O(n*m) time, O(min(n,m)) space. */
+    private static int levenshtein(String a, String b) {
+        if (a.equals(b)) return 0;
+        if (a.isEmpty()) return b.length();
+        if (b.isEmpty()) return a.length();
+        if (a.length() < b.length()) { String t = a; a = b; b = t; }
+        int[] prev = new int[b.length() + 1];
+        int[] curr = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+        for (int i = 1; i <= a.length(); i++) {
+            curr[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] t = prev; prev = curr; curr = t;
+        }
+        return prev[b.length()];
     }
 
     private String determineDecision(RiskAssessment assessment) {

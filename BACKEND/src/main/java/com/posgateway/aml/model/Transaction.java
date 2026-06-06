@@ -117,6 +117,14 @@ public class Transaction {
         this.transactionId = transactionId;
     }
 
+    public Long getPspId() {
+        return pspId;
+    }
+
+    public void setPspId(Long pspId) {
+        this.pspId = pspId;
+    }
+
     public String getAccountNumber() {
         return accountNumber;
     }

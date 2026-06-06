@@ -58,14 +58,25 @@ public class DecisionEngine {
      */
     @Transactional
     public DecisionResult evaluate(TransactionEntity transaction, Double score, Map<String, Object> features) {
+        return evaluate(transaction, score, features, null);
+    }
+
+    /**
+     * Evaluate with the per-transaction scoring latency. Latency is persisted on
+     * transaction_features so MonitoringMetricsService can compute true p50/p95/p99
+     * percentiles from observed data instead of placeholder constants.
+     */
+    @Transactional
+    public DecisionResult evaluate(TransactionEntity transaction, Double score,
+                                   Map<String, Object> features, Long latencyMs) {
         logger.info("Evaluating transaction {} with score {}", transaction.getTxnId(), score);
 
         // Check hard rules first (before scoring)
         DecisionResult hardRuleResult = checkHardRules(transaction);
         if (hardRuleResult != null) {
-            logger.info("Hard rule triggered for transaction {}: {}", 
+            logger.info("Hard rule triggered for transaction {}: {}",
                 transaction.getTxnId(), hardRuleResult.getAction());
-            saveFeaturesAndDecision(transaction, score, features, hardRuleResult);
+            saveFeaturesAndDecision(transaction, score, features, hardRuleResult, latencyMs);
             return hardRuleResult;
         }
 
@@ -73,46 +84,40 @@ public class DecisionEngine {
         Double blockThreshold = configService.getFraudBlockThreshold();
         Double holdThreshold = configService.getFraudHoldThreshold();
 
-        // Optimize decision logic with early returns and cached thresholds
-        // Cache threshold comparisons for better performance
         final boolean isBlock = score >= blockThreshold;
         final boolean isHold = score >= holdThreshold;
-        
-        // Early return for BLOCK (highest priority)
+
         if (isBlock) {
             List<String> reasons = new ArrayList<>();
             reasons.add(String.format("Score %.3f >= block threshold %.3f", score, blockThreshold));
             takeBlockAction(transaction, score, reasons);
             DecisionResult decision = new DecisionResult("BLOCK", score, reasons);
             checkAmlRules(transaction, features, decision, reasons);
-            saveFeaturesAndDecision(transaction, score, features, decision);
-            logger.info("Decision for transaction {}: {} (score={})", 
+            saveFeaturesAndDecision(transaction, score, features, decision, latencyMs);
+            logger.info("Decision for transaction {}: {} (score={})",
                 transaction.getTxnId(), decision.getAction(), score);
             return decision;
         }
-        
-        // Check HOLD (medium priority)
+
         if (isHold) {
             List<String> reasons = new ArrayList<>();
             reasons.add(String.format("Score %.3f >= hold threshold %.3f", score, holdThreshold));
             takeHoldAction(transaction, score, reasons);
             DecisionResult decision = new DecisionResult("HOLD", score, reasons);
             checkAmlRules(transaction, features, decision, reasons);
-            saveFeaturesAndDecision(transaction, score, features, decision);
-            logger.info("Decision for transaction {}: {} (score={})", 
+            saveFeaturesAndDecision(transaction, score, features, decision, latencyMs);
+            logger.info("Decision for transaction {}: {} (score={})",
                 transaction.getTxnId(), decision.getAction(), score);
             return decision;
         }
-        
-        // Default to ALLOW (lowest priority)
+
         List<String> reasons = new ArrayList<>();
         reasons.add(String.format("Score %.3f < hold threshold %.3f", score, holdThreshold));
         DecisionResult decision = new DecisionResult("ALLOW", score, reasons);
 
-        // Check AML rules
         checkAmlRules(transaction, features, decision, reasons);
-        saveFeaturesAndDecision(transaction, score, features, decision);
-        logger.info("Decision for transaction {}: {} (score={})", 
+        saveFeaturesAndDecision(transaction, score, features, decision, latencyMs);
+        logger.info("Decision for transaction {}: {} (score={})",
             transaction.getTxnId(), decision.getAction(), score);
         return decision;
     }
@@ -275,18 +280,23 @@ public class DecisionEngine {
         }
     }
 
-    private void saveFeaturesAndDecision(TransactionEntity transaction, Double score, 
-                                        Map<String, Object> features, DecisionResult decision) {
+    private void saveFeaturesAndDecision(TransactionEntity transaction, Double score,
+                                        Map<String, Object> features, DecisionResult decision,
+                                        Long latencyMs) {
         try {
             TransactionFeatures txnFeatures = new TransactionFeatures();
             txnFeatures.setTxnId(transaction.getTxnId());
             txnFeatures.setScore(score);
             txnFeatures.setActionTaken(decision.getAction());
-            
-            // Store features as JSON
+            if (latencyMs != null) {
+                txnFeatures.setLatencyMs(latencyMs.intValue());
+            }
+            // Denormalize psp_id so per-PSP metrics queries don't need a join
+            txnFeatures.setPspId(transaction.getPspId());
+
             String featureJson = objectMapper.writeValueAsString(features);
             txnFeatures.setFeatureJson(featureJson);
-            
+
             featuresRepository.save(txnFeatures);
         } catch (Exception e) {
             logger.error("Failed to save transaction features for {}", transaction.getTxnId(), e);

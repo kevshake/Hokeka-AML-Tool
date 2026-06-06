@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
 import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../lib/apiClient";
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -52,13 +53,22 @@ const [resetLoading, setResetLoading] = useState(false);
 };
 
 const handleResetSubmit = async () => {
+    if (!resetEmail.trim()) {
+        setResetError("Please enter your email or username.");
+        return;
+    }
     setResetLoading(true);
+    setResetError("");
     try {
-        // await yourApi.sendResetEmail(resetEmail);
+        // Backend always 200s on /auth/password-reset/request to avoid user
+        // enumeration; the snackbar copy reflects that — we don't claim the
+        // email was definitely sent, only that one will be sent if the account
+        // exists. The token + email delivery is owned by PasswordResetService.
+        await apiClient.post("auth/password-reset/request", { identifier: resetEmail.trim() });
         handleForgotClose();
-        setInfoSnackbar("Reset instructions sent! Check your email.");
+        setInfoSnackbar("If that account exists, reset instructions have been sent. Check your email.");
     } catch (err: any) {
-        setResetError(err.message || "Failed to send reset email.");
+        setResetError(err?.message || "Failed to submit reset request. Please try again.");
     } finally {
         setResetLoading(false);
     }

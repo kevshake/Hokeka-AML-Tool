@@ -1,19 +1,21 @@
 package com.posgateway.aml.service.workflow;
 
+import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.model.RiskLevel;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.notification.NotificationService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 
-// @RequiredArgsConstructor removed
 @Service
 public class WorkflowAutomationService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkflowAutomationService.class);
@@ -21,12 +23,16 @@ public class WorkflowAutomationService {
     private final MerchantRepository merchantRepository;
     private final ComplianceCaseRepository complianceCaseRepository;
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     public WorkflowAutomationService(MerchantRepository merchantRepository,
-            ComplianceCaseRepository complianceCaseRepository, NotificationService notificationService) {
+            ComplianceCaseRepository complianceCaseRepository,
+            NotificationService notificationService,
+            UserRepository userRepository) {
         this.merchantRepository = merchantRepository;
         this.complianceCaseRepository = complianceCaseRepository;
         this.notificationService = notificationService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -35,59 +41,95 @@ public class WorkflowAutomationService {
     @Async
     @Transactional
     public void autoApproveLowRisk(Merchant merchant, RiskLevel riskLevel) {
-        if (riskLevel == RiskLevel.LOW) {
-            log.info("🤖 Auto-approving Low Risk Merchant: {}", merchant.getMerchantId());
-
-            // Update Merchant Status
-            merchant.setStatus("ACTIVE");
-            merchant.setUpdatedAt(LocalDateTime.now());
-            merchantRepository.save(merchant);
-
-            // Close any open cases linked to this merchant
-            List<ComplianceCase> merchantCases = complianceCaseRepository.findByMerchantId(merchant.getMerchantId());
-            LocalDateTime now = LocalDateTime.now();
-            for (ComplianceCase c : merchantCases) {
-                if (c.getStatus() == com.posgateway.aml.model.CaseStatus.NEW
-                        || c.getStatus() == com.posgateway.aml.model.CaseStatus.IN_PROGRESS
-                        || c.getStatus() == com.posgateway.aml.model.CaseStatus.ASSIGNED) {
-                    c.setStatus(com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED);
-                    c.setResolution("Auto-approved: Low Risk merchant");
-                    c.setResolvedAt(now);
-                    c.setUpdatedAt(now);
-                    complianceCaseRepository.save(c);
-                    log.info("Closed case {} for auto-approved merchant {}", c.getId(), merchant.getMerchantId());
-                }
-            }
-
-            notificationService.sendEmail(merchant.getContactEmail(), "Welcome to POS Gateway",
-                    "Your account has been auto-approved.");
+        if (riskLevel != RiskLevel.LOW) {
+            return;
         }
+        log.info("Auto-approving low-risk merchant: {}", merchant.getMerchantId());
+
+        merchant.setStatus("ACTIVE");
+        merchant.setUpdatedAt(LocalDateTime.now());
+        merchantRepository.save(merchant);
+
+        // Close any open onboarding compliance cases for this merchant. The
+        // ComplianceCase entity exposes findByMerchantId — case_reference for
+        // onboarding cases is "ONBOARD-{merchantId}" so we filter on either.
+        List<ComplianceCase> cases = complianceCaseRepository.findByMerchantId(merchant.getMerchantId());
+        int closed = 0;
+        for (ComplianceCase c : cases) {
+            com.posgateway.aml.model.CaseStatus s = c.getStatus();
+            boolean isOpen = s != com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED
+                    && s != com.posgateway.aml.model.CaseStatus.CLOSED_SAR_FILED
+                    && s != com.posgateway.aml.model.CaseStatus.CLOSED_BLOCKED
+                    && s != com.posgateway.aml.model.CaseStatus.CLOSED_REJECTED;
+            boolean isOnboarding = c.getCaseReference() != null
+                    && c.getCaseReference().startsWith("ONBOARD-");
+            if (isOpen && isOnboarding) {
+                c.setStatus(com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED);
+                c.setResolution("Auto-approved — low risk");
+                c.setResolvedAt(LocalDateTime.now());
+                c.setUpdatedAt(LocalDateTime.now());
+                complianceCaseRepository.save(c);
+                closed++;
+            }
+        }
+        if (closed > 0) {
+            log.info("Closed {} onboarding case(s) for merchant {}", closed, merchant.getMerchantId());
+        }
+
+        notificationService.sendEmail(merchant.getContactEmail(), "Welcome to POS Gateway",
+                "Your account has been auto-approved.");
     }
 
     /**
-     * Auto-assign cases based on priority
+     * Auto-assign new cases. CRITICAL/HIGH go to COMPLIANCE_OFFICER (senior),
+     * everything else to INVESTIGATOR (junior). Among candidates we pick the
+     * user with the fewest currently-open cases — basic round-robin by load.
      */
     @Async
     @Transactional
     public void autoAssignCase(ComplianceCase complianceCase) {
-        if (complianceCase.getStatus() == com.posgateway.aml.model.CaseStatus.NEW
-                && complianceCase.getAssignedTo() == null) {
-            // Determine assignee logic here (requires User entity lookup)
-            // For now, log the action
-            log.info("🤖 Auto-assignment needed for Case {}", complianceCase.getId());
-            notificationService.sendSystemAlert("compliance-team", "New Case Assigned: " + complianceCase.getId());
+        if (complianceCase.getStatus() != com.posgateway.aml.model.CaseStatus.NEW
+                || complianceCase.getAssignedTo() != null) {
+            return;
         }
+        String roleName = isHighPriority(complianceCase) ? "COMPLIANCE_OFFICER" : "INVESTIGATOR";
+        List<User> candidates = userRepository.findByRole_NameAndEnabled(roleName, true);
+        if (candidates.isEmpty()) {
+            // Fallback: anyone enabled in either role
+            candidates = userRepository.findByRole_NameAndEnabled("INVESTIGATOR", true);
+            if (candidates.isEmpty()) {
+                candidates = userRepository.findByRole_NameAndEnabled("COMPLIANCE_OFFICER", true);
+            }
+        }
+        if (candidates.isEmpty()) {
+            log.warn("Auto-assignment: no eligible users in role={} for case {}", roleName, complianceCase.getId());
+            return;
+        }
+        List<com.posgateway.aml.model.CaseStatus> openStatuses = List.of(
+                com.posgateway.aml.model.CaseStatus.NEW,
+                com.posgateway.aml.model.CaseStatus.ASSIGNED,
+                com.posgateway.aml.model.CaseStatus.IN_PROGRESS,
+                com.posgateway.aml.model.CaseStatus.PENDING_INFO,
+                com.posgateway.aml.model.CaseStatus.PENDING_REVIEW,
+                com.posgateway.aml.model.CaseStatus.ESCALATED,
+                com.posgateway.aml.model.CaseStatus.REOPENED);
+        User assignee = candidates.stream()
+                .min(Comparator.comparingLong(u ->
+                        complianceCaseRepository.countByAssignedTo_IdAndStatusIn(u.getId(), openStatuses)))
+                .orElse(candidates.get(0));
+        complianceCase.setAssignedTo(assignee);
+        complianceCase.setStatus(com.posgateway.aml.model.CaseStatus.ASSIGNED);
+        complianceCase.setUpdatedAt(LocalDateTime.now());
+        complianceCaseRepository.save(complianceCase);
+        log.info("Auto-assigned case {} to {} ({}+open caseload)",
+                complianceCase.getId(), assignee.getUsername(), roleName);
+        notificationService.sendSystemAlert(assignee.getUsername(),
+                "Case " + complianceCase.getId() + " auto-assigned to you");
     }
 
-    @SuppressWarnings("unused")
-    private String determineAssignee(ComplianceCase c) {
-        // Mock logic: Assign based on priority
-        // Adapted to new Enum
-        if (c.getPriority() == com.posgateway.aml.model.CasePriority.CRITICAL
-                || c.getPriority() == com.posgateway.aml.model.CasePriority.HIGH) {
-            return "senior_officer";
-        }
-        return "junior_officer";
+    private static boolean isHighPriority(ComplianceCase c) {
+        return c.getPriority() == com.posgateway.aml.model.CasePriority.CRITICAL
+                || c.getPriority() == com.posgateway.aml.model.CasePriority.HIGH;
     }
 
     /**

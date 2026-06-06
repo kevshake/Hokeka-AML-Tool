@@ -43,12 +43,6 @@ public class ComplianceCaseWorkflowController {
         return ResponseEntity.ok(created);
     }
 
-    private User getAuthenticatedUser() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || "anonymousUser".equals(auth.getPrincipal())) return null;
-        return userRepository.findByUsername(auth.getName()).orElse(null);
-    }
-
     @PostMapping("/assign")
     public ResponseEntity<ComplianceCase> assignCase(@RequestBody AssignCaseRequest request) {
         User assigner = getAuthenticatedUser();
@@ -98,6 +92,12 @@ public class ComplianceCaseWorkflowController {
     private User fetchUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    private User getAuthenticatedUser() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || "anonymousUser".equals(auth.getPrincipal())) return null;
+        return userRepository.findByUsername(auth.getName()).orElse(null);
     }
 
     public static class CreateCaseRequest {

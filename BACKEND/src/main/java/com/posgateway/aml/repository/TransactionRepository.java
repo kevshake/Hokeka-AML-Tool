@@ -233,6 +233,7 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     /**
      * Find all transactions in a date window regardless of PSP (platform admin view).
      * Replaces findAll() + in-memory filter in regulatory reporting.
+     * Indexed on (txn_ts) — used by RegulatoryReportingService instead of findAll() + in-memory filter.
      */
     List<TransactionEntity> findByTxnTsBetween(LocalDateTime start, LocalDateTime end);
 
@@ -296,6 +297,7 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     BigDecimal sumAmountByPspAndPeriod(@Param("pspId") Long pspId,
                                        @Param("start") LocalDateTime start,
                                        @Param("end") LocalDateTime end);
+
 
     // -----------------------------------------------------------------------
     // Live monitoring page — indexed top-N queries (replace findAll() + filter)

@@ -201,8 +201,12 @@ public class RulesController {
             }
         }
 
-        // Update rule fields
-        if (rule.getName() != null) existing.setName(rule.getName());
+        // System-managed rules: lock identity (name + external_code) so the
+        // catalog stays referenceable from compliance docs. Everything else —
+        // parameters, threshold, description, action, enabled — is editable.
+        boolean isSystem = existing.isSystemManaged();
+
+        if (!isSystem && rule.getName() != null) existing.setName(rule.getName());
         if (rule.getDescription() != null) existing.setDescription(rule.getDescription());
         if (rule.getRuleJson() != null) existing.setRuleJson(rule.getRuleJson());
         if (rule.getDrlContent() != null) existing.setDrlContent(rule.getDrlContent());
@@ -211,6 +215,12 @@ public class RulesController {
         if (rule.getRuleExpression() != null) existing.setRuleExpression(rule.getRuleExpression());
         if (rule.getScore() != null) existing.setScore(rule.getScore());
         if (rule.getAction() != null) existing.setAction(rule.getAction());
+        if (rule.getCategory() != null && !isSystem) existing.setCategory(rule.getCategory());
+        if (rule.getRuleSubtype() != null && !isSystem) existing.setRuleSubtype(rule.getRuleSubtype());
+        if (rule.getAppliesTo() != null && !isSystem) existing.setAppliesTo(rule.getAppliesTo());
+        if (rule.getTypology() != null) existing.setTypology(rule.getTypology());
+        if (rule.getChecksFor() != null) existing.setChecksFor(rule.getChecksFor());
+        if (rule.getParameters() != null) existing.setParameters(rule.getParameters());
         existing.setEnabled(rule.isEnabled());
         existing.setUpdatedBy(currentUser.getId());
 
@@ -326,6 +336,15 @@ public class RulesController {
 
         RuleDefinition existing = ruleRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Rule not found"));
+
+        // System-managed rules (the seeded default catalog) can never be deleted —
+        // operators must use POST /rules/{id}/disable instead. They CAN edit
+        // parameters / description / threshold via PUT.
+        if (existing.isSystemManaged()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .header("X-Reason", "system-managed-rule")
+                    .build();
+        }
 
         // Check if rule is owned by super admin
         if (isSuperAdminRule(existing)) {

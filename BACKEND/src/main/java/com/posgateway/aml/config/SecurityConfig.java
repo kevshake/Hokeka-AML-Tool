@@ -77,9 +77,11 @@ public class SecurityConfig {
                                                 .permitAll()
                                                 // Role-based access control examples
                                                 // Role-based access control
-                                                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                                                .requestMatchers("/api/v1/users/**").hasAnyRole("ADMIN", "MANAGE_USERS")
-                                                .requestMatchers("/api/v1/roles/**").hasAnyRole("ADMIN", "MANAGE_ROLES")
+                                                .requestMatchers("/api/v1/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
+                                                .requestMatchers("/api/v1/users/**").hasAnyAuthority(
+                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN", "ROLE_PSP_ADMIN", "MANAGE_USERS")
+                                                .requestMatchers("/api/v1/roles/**").hasAnyAuthority(
+                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN", "ROLE_PSP_ADMIN", "MANAGE_ROLES")
                                                 // Login endpoints - permit all (REST API, not form-based)
                                                 .requestMatchers("/auth/login", "/api/v1/auth/login", "/api/v1/psps/auth/login")
                                                 .permitAll()

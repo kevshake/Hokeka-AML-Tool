@@ -87,10 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         (window as any).apiClient.setPspId(pspId);
                     }
                     
-                    // Store session ID if available
-                    if (userWithPspId.id) {
-                        localStorage.setItem("authToken", "session"); // Placeholder for session-based auth
-                    }
+                    // Backend issues HTTP-only session cookies — the localStorage
+                    // entry is a presence flag so ProtectedRoute / apiClient know
+                    // a session is active without re-hitting /me on every render.
+                    const sessionMarker = (userData as any).sessionId
+                        ?? (userData as any).token
+                        ?? `s:${userWithPspId.id}:${Date.now()}`;
+                    localStorage.setItem("authToken", sessionMarker);
                 } else {
                     // Not JSON response
                     setUser(null);

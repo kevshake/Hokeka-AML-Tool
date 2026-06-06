@@ -143,12 +143,29 @@ export default function RulesGenerationPage() {
   // Helper function to check if user can modify a rule
   const canModifyRule = (rule: any) => {
     if (!rule) return false;
+    // System-managed seeded rules are editable (parameters / threshold / enabled)
+    // by anyone who can otherwise modify rules — only delete is locked.
     // Super admin can modify all rules
     if (isCurrentUserSuperAdmin()) return true;
     // PSP users can only modify their own PSP's rules (not super admin rules)
     if (rule.isSuperAdmin || !rule.pspId) return false;
     // PSP users can modify their own PSP's rules
     return rule.pspId === currentUser?.pspId;
+  };
+
+  // System-managed rules from the seeded catalog (V135) cannot be deleted —
+  // operators can only disable or edit them. User-created rules remain freely
+  // deletable, so this flag is per-row from the backend.
+  const canDeleteRule = (rule: any) => {
+    if (!rule) return false;
+    if (rule.isSystemManaged) return false;
+    return canModifyRule(rule);
+  };
+
+  const ruleDeleteTitle = (rule: any) => {
+    if (rule?.isSystemManaged) return "System rules cannot be deleted — use Disable";
+    if (!canModifyRule(rule)) return "Cannot delete super admin rules";
+    return "Delete rule";
   };
 
   // Helper function to get rule color
@@ -644,9 +661,9 @@ export default function RulesGenerationPage() {
                         <IconButton
                           size="small"
                           onClick={() => rule.id && handleDeleteRule(rule.id, "aml")}
-                          disabled={!canModifyRule(rule)}
-                          sx={{ color: canModifyRule(rule) ? "#e74c3c" : "rgba(255,255,255,0.3)" }}
-                          title={!canModifyRule(rule) ? "Cannot delete super admin rules" : "Delete rule"}
+                          disabled={!canDeleteRule(rule)}
+                          sx={{ color: canDeleteRule(rule) ? "#e74c3c" : "rgba(255,255,255,0.3)" }}
+                          title={ruleDeleteTitle(rule)}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -784,9 +801,9 @@ export default function RulesGenerationPage() {
                         <IconButton
                           size="small"
                           onClick={() => rule.id && handleDeleteRule(rule.id, "velocity")}
-                          disabled={!canModifyRule(rule)}
-                          sx={{ color: canModifyRule(rule) ? "#e74c3c" : "rgba(255,255,255,0.3)" }}
-                          title={!canModifyRule(rule) ? "Cannot delete super admin rules" : "Delete rule"}
+                          disabled={!canDeleteRule(rule)}
+                          sx={{ color: canDeleteRule(rule) ? "#e74c3c" : "rgba(255,255,255,0.3)" }}
+                          title={ruleDeleteTitle(rule)}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -978,8 +995,36 @@ function RuleDialog({
   rule: any;
   ruleType: "aml" | "velocity" | "threshold";
 }) {
+  // Backend RuleDefinition exposes the rule name as `name` (not `ruleName`).
+  // The form binds to `ruleName`, so without this normalization the field
+  // opens blank when editing — that was the "edit doesn't preload" bug.
+  // Parameters come back as a JSON string from JSONB; parse for the editor.
+  const normalizeRuleForForm = (r: any) => {
+    if (!r) return r;
+    let parsedParams = r.parameters;
+    if (typeof parsedParams === "string") {
+      try { parsedParams = JSON.parse(parsedParams); } catch { /* keep raw string */ }
+    }
+    return {
+      ...r,
+      ruleName: r.ruleName ?? r.name ?? "",
+      action: r.action ?? "ALERT",
+      ruleType: r.ruleType ?? "SPEL",
+      ruleExpression: r.ruleExpression ?? "",
+      priority: r.priority ?? 100,
+      enabled: r.enabled ?? false,
+      parameters: parsedParams ?? {},
+      // taxonomy defaults so dropdowns render even on legacy rules
+      category: r.category ?? "AML",
+      appliesTo: r.appliesTo ?? "Transaction",
+      ruleSubtype: r.ruleSubtype ?? "",
+      typology: r.typology ?? "",
+      checksFor: r.checksFor ?? "",
+    };
+  };
+
   const getInitialData = () => {
-    if (rule) return rule;
+    if (rule) return normalizeRuleForForm(rule);
     return {
       ruleName: "",
       description: "",
@@ -988,6 +1033,12 @@ function RuleDialog({
       priority: 100,
       enabled: true,
       action: "ALERT",
+      category: "AML",
+      appliesTo: "Transaction",
+      ruleSubtype: "",
+      typology: "",
+      checksFor: "",
+      parameters: {},
       ...(ruleType === "velocity"
         ? {
             maxTransactions: 10,
@@ -1020,15 +1071,42 @@ function RuleDialog({
   }, [open, rule, ruleType]);
 
   const handleSubmit = () => {
-    onSave(formData);
+    // Translate back to the backend shape: include both `name` (canonical) and
+    // keep `ruleName` for any FE consumers still reading it. Re-serialize the
+    // parameters object to JSONB-friendly string.
+    const payload = {
+      ...formData,
+      name: formData.ruleName,
+      parameters:
+        typeof formData.parameters === "string"
+          ? formData.parameters
+          : JSON.stringify(formData.parameters ?? {}),
+    };
+    onSave(payload);
   };
+
+  const isSystemRule = Boolean(rule?.isSystemManaged);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ backgroundColor: "background.paper", color: "text.primary" }}>
         {rule ? "Edit Rule" : "Create New Rule"}
+        {isSystemRule && (
+          <Chip
+            size="small"
+            label={`System default${rule?.externalCode ? ` · ${rule.externalCode}` : ""}`}
+            sx={{ ml: 1, backgroundColor: "#3498db", color: "#fff" }}
+          />
+        )}
       </DialogTitle>
       <DialogContent sx={{ backgroundColor: "background.paper" }}>
+        {isSystemRule && (
+          <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
+            This is a curated default rule. You can change parameters, action, and
+            enable/disable it, but the rule name and category are locked. Use{" "}
+            <strong>Disable</strong> to take it out of evaluation; deletion is not allowed.
+          </Alert>
+        )}
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={12}>
             <TextField
@@ -1037,6 +1115,8 @@ function RuleDialog({
               value={formData.ruleName}
               onChange={(e) => setFormData({ ...formData, ruleName: e.target.value })}
               required
+              disabled={isSystemRule}
+              helperText={isSystemRule ? "Locked — system rule identity" : undefined}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   color: "text.primary",
@@ -1066,13 +1146,115 @@ function RuleDialog({
 
           {ruleType === "aml" && (
             <>
+              {/* ── Taxonomy: dropdown-driven so users don't need to memorize values ── */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel sx={{ color: "text.secondary" }}>Category</InputLabel>
+                  <Select
+                    value={formData.category ?? "AML"}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    label="Category"
+                    disabled={isSystemRule}
+                    sx={{ color: "text.primary" }}
+                  >
+                    <MenuItem value="AML">AML — Anti-Money Laundering</MenuItem>
+                    <MenuItem value="FRAUD">Fraud</MenuItem>
+                    <MenuItem value="SCREENING">Screening (Sanctions / PEP / AM)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel sx={{ color: "text.secondary" }}>Applies To</InputLabel>
+                  <Select
+                    value={formData.appliesTo ?? "Transaction"}
+                    onChange={(e) => setFormData({ ...formData, appliesTo: e.target.value })}
+                    label="Applies To"
+                    disabled={isSystemRule}
+                    sx={{ color: "text.primary" }}
+                  >
+                    <MenuItem value="Transaction">Transaction</MenuItem>
+                    <MenuItem value="User">User</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel sx={{ color: "text.secondary" }}>Detection Method</InputLabel>
+                  <Select
+                    value={formData.ruleSubtype ?? ""}
+                    onChange={(e) => setFormData({ ...formData, ruleSubtype: e.target.value })}
+                    label="Detection Method"
+                    sx={{ color: "text.primary" }}
+                  >
+                    <MenuItem value="">— Select —</MenuItem>
+                    <MenuItem value="Velocity">Velocity</MenuItem>
+                    <MenuItem value="Velocity comparison">Velocity comparison</MenuItem>
+                    <MenuItem value="Volume">Volume</MenuItem>
+                    <MenuItem value="Volume comparison">Volume comparison</MenuItem>
+                    <MenuItem value="Anomaly detection">Anomaly detection</MenuItem>
+                    <MenuItem value="Pattern recognition">Pattern recognition</MenuItem>
+                    <MenuItem value="Diversity">Diversity</MenuItem>
+                    <MenuItem value="Blacklist">Blacklist</MenuItem>
+                    <MenuItem value="Screening">Screening</MenuItem>
+                    <MenuItem value="New activity">New activity</MenuItem>
+                    <MenuItem value="Risk exposure">Risk exposure</MenuItem>
+                    <MenuItem value="Merchant monitoring">Merchant monitoring</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel sx={{ color: "text.secondary" }}>Rule Type</InputLabel>
+                  <InputLabel sx={{ color: "text.secondary" }}>Typology</InputLabel>
+                  <Select
+                    value={formData.typology ?? ""}
+                    onChange={(e) => setFormData({ ...formData, typology: e.target.value })}
+                    label="Typology"
+                    sx={{ color: "text.primary" }}
+                  >
+                    <MenuItem value="">— Select —</MenuItem>
+                    <MenuItem value="Unusual behaviour">Unusual behaviour</MenuItem>
+                    <MenuItem value="Structuring">Structuring</MenuItem>
+                    <MenuItem value="Money mules">Money mules</MenuItem>
+                    <MenuItem value="Layering">Layering</MenuItem>
+                    <MenuItem value="High risk transactions">High risk transactions</MenuItem>
+                    <MenuItem value="Hidden/unusual relationships">Hidden / unusual relationships</MenuItem>
+                    <MenuItem value="Account takeover fraud">Account takeover fraud</MenuItem>
+                    <MenuItem value="Card fraud">Card fraud</MenuItem>
+                    <MenuItem value="Acquiring fraud">Acquiring fraud</MenuItem>
+                    <MenuItem value="Issuing fraud">Issuing fraud</MenuItem>
+                    <MenuItem value="Internal blacklists">Internal blacklists</MenuItem>
+                    <MenuItem value="Screening hits">Screening hits</MenuItem>
+                    <MenuItem value="Terrorist financing">Terrorist financing</MenuItem>
+                    <MenuItem value="Scams">Scams (romance, Nigerian Prince, inheritance, etc.)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Checks For (input variables)"
+                  placeholder="e.g. Transaction amount, Time"
+                  value={formData.checksFor ?? ""}
+                  onChange={(e) => setFormData({ ...formData, checksFor: e.target.value })}
+                  helperText="Comma-separated list of fields the rule examines"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      color: "text.primary",
+                      "& fieldset": { borderColor: "rgba(255,255,255,0.3)" },
+                    },
+                    "& .MuiInputLabel-root": { color: "text.secondary" },
+                  }}
+                />
+              </Grid>
+              {/* ── Engine + Action ── */}
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel sx={{ color: "text.secondary" }}>Rule Engine</InputLabel>
                   <Select
                     value={formData.ruleType}
                     onChange={(e) => setFormData({ ...formData, ruleType: e.target.value })}
-                    label="Rule Type"
+                    label="Rule Engine"
                     sx={{ color: "text.primary" }}
                   >
                     <MenuItem value="SPEL">SpEL Expression</MenuItem>
@@ -1090,10 +1272,10 @@ function RuleDialog({
                     label="Action"
                     sx={{ color: "text.primary" }}
                   >
-                    <MenuItem value="BLOCK">Block</MenuItem>
-                    <MenuItem value="HOLD">Hold</MenuItem>
-                    <MenuItem value="ALERT">Alert</MenuItem>
-                    <MenuItem value="ALLOW">Allow</MenuItem>
+                    <MenuItem value="BLOCK">Block — decline transaction</MenuItem>
+                    <MenuItem value="HOLD">Hold — suspend for review</MenuItem>
+                    <MenuItem value="ALERT">Alert — flag for analyst</MenuItem>
+                    <MenuItem value="ALLOW">Allow — pass through</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>

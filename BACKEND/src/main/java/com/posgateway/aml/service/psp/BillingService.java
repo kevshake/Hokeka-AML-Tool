@@ -65,119 +65,77 @@ public class BillingService {
         }
 
         BillingRate rate = rateOpt.get();
-        if ("PER_REQUEST".equals(rate.getPricingModel()) && rate.getBaseRate() != null) {
-            return rate.getBaseRate().multiply(BigDecimal.valueOf(count));
-        } else if ("TIERED".equals(rate.getPricingModel())) {
-            return calculateTieredPrice(rate, count);
-        }
+        String model = rate.getPricingModel();
+        if (model == null) return BigDecimal.ZERO;
 
+        if ("PER_REQUEST".equals(model) && rate.getBaseRate() != null) {
+            return rate.getBaseRate().multiply(BigDecimal.valueOf(count));
+        }
+        if ("SUBSCRIPTION".equals(model)) {
+            BigDecimal monthly = rate.getMonthlyFee() == null ? BigDecimal.ZERO : rate.getMonthlyFee();
+            int included = rate.getIncludedRequests() == null ? 0 : rate.getIncludedRequests();
+            BigDecimal overage = rate.getOverageRate() == null ? BigDecimal.ZERO : rate.getOverageRate();
+            int over = Math.max(0, count - included);
+            return monthly.add(overage.multiply(BigDecimal.valueOf(over)));
+        }
+        if ("TIERED".equals(model)) {
+            return computeTieredCost(rate, count);
+        }
         return BigDecimal.ZERO;
     }
 
     /**
-     * Calculate cost using tiered pricing based on the rate's tier_config JSON.
-     *
-     * Expected JSON shape (stored as a Map under tier_config jsonb column):
-     *   { "tiers": [
-     *       { "upTo": 1000,  "rate": 0.50 },
-     *       { "upTo": 10000, "rate": 0.40 },
-     *       { "upTo": null,  "rate": 0.30 }   // null upTo = unlimited (catch-all)
-     *     ]
-     *   }
-     *
-     * The "upTo" value is a cumulative threshold — units between the previous
-     * threshold and this one are billed at this tier's "rate". A null or absent
-     * "upTo" on the final tier consumes all remaining units.
-     *
-     * Falls back to flat baseRate * count if the JSON is missing, malformed, or
-     * the resulting tier list is empty.
+     * Tier config JSON shape:
+     * <pre>{@code
+     * { "tiers": [
+     *     { "up_to": 10000, "rate": "0.0050" },
+     *     { "up_to": 100000, "rate": "0.0040" },
+     *     { "up_to": null,   "rate": "0.0030" }   // last tier: null/missing up_to = unlimited
+     * ] }
+     * }</pre>
+     * Each request is billed at the rate of the tier its count falls into
+     * (cumulative across tiers). If {@code tier_config} is missing or malformed
+     * we fall back to baseRate × count so billing never returns silently zero.
      */
-    BigDecimal calculateTieredPrice(BillingRate rate, long count) {
-        if (count <= 0) {
-            return BigDecimal.ZERO;
+    private BigDecimal computeTieredCost(BillingRate rate, int count) {
+        java.util.Map<String, Object> cfg = rate.getTierConfig();
+        if (cfg == null || !(cfg.get("tiers") instanceof java.util.List<?> tiers) || tiers.isEmpty()) {
+            BigDecimal base = rate.getBaseRate() == null ? BigDecimal.ZERO : rate.getBaseRate();
+            return base.multiply(BigDecimal.valueOf(count));
         }
-
-        BigDecimal baseRate = rate.getBaseRate();
-        BigDecimal flatFallback = (baseRate != null)
-                ? baseRate.multiply(BigDecimal.valueOf(count))
-                : BigDecimal.ZERO;
-
-        Map<String, Object> tierConfig = rate.getTierConfig();
-        if (tierConfig == null || tierConfig.isEmpty()) {
-            return flatFallback;
+        BigDecimal total = BigDecimal.ZERO;
+        int remaining = count;
+        long consumed = 0;
+        for (Object t : tiers) {
+            if (!(t instanceof java.util.Map<?, ?> tier) || remaining <= 0) continue;
+            Object upToRaw = tier.get("up_to");
+            Object rateRaw = tier.get("rate");
+            if (rateRaw == null) continue;
+            BigDecimal tierRate;
+            try {
+                tierRate = new BigDecimal(rateRaw.toString());
+            } catch (NumberFormatException nfe) {
+                log.warn("Skipping malformed tier rate in tier_config: {}", rateRaw);
+                continue;
+            }
+            long upTo = (upToRaw == null) ? Long.MAX_VALUE : ((Number) upToRaw).longValue();
+            long sliceCap = Math.max(0L, upTo - consumed);
+            long slice = Math.min(remaining, sliceCap);
+            total = total.add(tierRate.multiply(BigDecimal.valueOf(slice)));
+            consumed += slice;
+            remaining -= (int) slice;
         }
-
-        try {
-            // tier_config may either be the tier array directly under "tiers",
-            // or already be a List serialized as a Map (defensive — re-marshal).
-            Object tiersObj = tierConfig.get("tiers");
-            List<Map<String, Object>> tiers;
-            if (tiersObj instanceof List<?>) {
-                String reserialized = objectMapper.writeValueAsString(tiersObj);
-                tiers = objectMapper.readValue(reserialized,
-                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-            } else {
-                log.warn("tier_config for rate {} has no 'tiers' array — falling back to flat rate",
-                        rate.getRateId());
-                return flatFallback;
+        // If config didn't cover the full count (no unlimited last tier), bill remainder at the last seen rate.
+        if (remaining > 0) {
+            BigDecimal lastRate;
+            try {
+                lastRate = new BigDecimal(((java.util.Map<?, ?>) tiers.get(tiers.size() - 1)).get("rate").toString());
+            } catch (Exception e) {
+                lastRate = rate.getBaseRate() == null ? BigDecimal.ZERO : rate.getBaseRate();
             }
-
-            if (tiers == null || tiers.isEmpty()) {
-                return flatFallback;
-            }
-
-            BigDecimal total = BigDecimal.ZERO;
-            long remaining = count;
-            long processed = 0;
-
-            for (Map<String, Object> tier : tiers) {
-                if (remaining <= 0) break;
-
-                Object upToObj = tier.get("upTo");
-                Object rateObj = tier.get("rate");
-                if (rateObj == null) {
-                    continue;
-                }
-                BigDecimal tierRate = new BigDecimal(rateObj.toString());
-
-                Long upTo = (upToObj == null) ? null : ((Number) upToObj).longValue();
-
-                long applicable;
-                if (upTo == null) {
-                    applicable = remaining;
-                } else {
-                    long capacity = upTo - processed;
-                    if (capacity <= 0) {
-                        continue;
-                    }
-                    applicable = Math.min(remaining, capacity);
-                }
-                if (applicable <= 0) continue;
-
-                total = total.add(tierRate.multiply(BigDecimal.valueOf(applicable)));
-                remaining -= applicable;
-                processed += applicable;
-            }
-
-            // If remaining units were not absorbed (no catch-all tier), bill them
-            // at the last tier's rate to avoid silently under-billing.
-            if (remaining > 0) {
-                Map<String, Object> lastTier = tiers.get(tiers.size() - 1);
-                Object lastRateObj = lastTier.get("rate");
-                if (lastRateObj != null) {
-                    BigDecimal lastRate = new BigDecimal(lastRateObj.toString());
-                    total = total.add(lastRate.multiply(BigDecimal.valueOf(remaining)));
-                } else if (baseRate != null) {
-                    total = total.add(baseRate.multiply(BigDecimal.valueOf(remaining)));
-                }
-            }
-
-            return total;
-        } catch (Exception e) {
-            log.warn("Failed to parse tier_config for rate {} — falling back to flat rate: {}",
-                    rate.getRateId(), e.getMessage());
-            return flatFallback;
+            total = total.add(lastRate.multiply(BigDecimal.valueOf(remaining)));
         }
+        return total;
     }
 
     @Transactional

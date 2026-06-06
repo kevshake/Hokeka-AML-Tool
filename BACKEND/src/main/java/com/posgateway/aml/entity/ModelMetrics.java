@@ -33,6 +33,33 @@ public class ModelMetrics {
     @Column(name = "drift_score")
     private Double driftScore;
 
+    @Column(name = "p50_latency_ms")
+    private Double p50LatencyMs;
+
+    @Column(name = "p95_latency_ms")
+    private Double p95LatencyMs;
+
+    @Column(name = "p99_latency_ms")
+    private Double p99LatencyMs;
+
+    @Column(name = "total_scored")
+    private Integer totalScored;
+
+    @Column(name = "total_labeled")
+    private Integer totalLabeled;
+
+    @Column(name = "fraud_count")
+    private Integer fraudCount;
+
+    @Column(name = "baseline_avg_score")
+    private Double baselineAvgScore;
+
+    @Column(name = "psi_drift")
+    private Double psiDrift;
+
+    @Column(name = "model_version")
+    private String modelVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -96,6 +123,78 @@ public class ModelMetrics {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Double getP50LatencyMs() {
+        return p50LatencyMs;
+    }
+
+    public void setP50LatencyMs(Double p50LatencyMs) {
+        this.p50LatencyMs = p50LatencyMs;
+    }
+
+    public Double getP95LatencyMs() {
+        return p95LatencyMs;
+    }
+
+    public void setP95LatencyMs(Double p95LatencyMs) {
+        this.p95LatencyMs = p95LatencyMs;
+    }
+
+    public Double getP99LatencyMs() {
+        return p99LatencyMs;
+    }
+
+    public void setP99LatencyMs(Double p99LatencyMs) {
+        this.p99LatencyMs = p99LatencyMs;
+    }
+
+    public Integer getTotalScored() {
+        return totalScored;
+    }
+
+    public void setTotalScored(Integer totalScored) {
+        this.totalScored = totalScored;
+    }
+
+    public Integer getTotalLabeled() {
+        return totalLabeled;
+    }
+
+    public void setTotalLabeled(Integer totalLabeled) {
+        this.totalLabeled = totalLabeled;
+    }
+
+    public Integer getFraudCount() {
+        return fraudCount;
+    }
+
+    public void setFraudCount(Integer fraudCount) {
+        this.fraudCount = fraudCount;
+    }
+
+    public Double getBaselineAvgScore() {
+        return baselineAvgScore;
+    }
+
+    public void setBaselineAvgScore(Double baselineAvgScore) {
+        this.baselineAvgScore = baselineAvgScore;
+    }
+
+    public Double getPsiDrift() {
+        return psiDrift;
+    }
+
+    public void setPsiDrift(Double psiDrift) {
+        this.psiDrift = psiDrift;
+    }
+
+    public String getModelVersion() {
+        return modelVersion;
+    }
+
+    public void setModelVersion(String modelVersion) {
+        this.modelVersion = modelVersion;
     }
 }
 

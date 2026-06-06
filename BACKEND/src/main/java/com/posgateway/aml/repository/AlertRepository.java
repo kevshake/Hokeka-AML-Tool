@@ -39,6 +39,13 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     Long countByStatus(String status);
 
     /**
+     * Count alerts for a merchant created on/after a given timestamp.
+     * Used by Customer Risk Assessment to weight historical alert volume.
+     */
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.merchantId = :merchantId AND a.createdAt >= :since")
+    long countByMerchantIdSince(@Param("merchantId") Long merchantId, @Param("since") LocalDateTime since);
+
+    /**
      * Find alerts created in time range
      */
     @Query("SELECT a FROM Alert a WHERE a.createdAt >= :startTime AND a.createdAt <= :endTime")

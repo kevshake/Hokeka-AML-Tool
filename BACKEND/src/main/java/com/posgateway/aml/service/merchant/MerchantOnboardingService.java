@@ -71,8 +71,15 @@ public class MerchantOnboardingService {
     @Autowired
     private WorkflowAutomationService workflowAutomationService;
 
+    @Autowired
+    private com.posgateway.aml.repository.limits.RiskThresholdRepository riskThresholdRepository;
+
     @Value("${risk.mcc.high_risk:6211,7995,7273,5993,6051}")
     private List<String> highRiskMccsList;
+
+    /** Final fallback when no risk_thresholds row exists for the calculated level. */
+    @Value("${merchant.onboarding.fallback_daily_limit:10000}")
+    private java.math.BigDecimal fallbackDailyLimit;
 
     /**
      * Onboard new merchant with complete screening
@@ -100,9 +107,15 @@ public class MerchantOnboardingService {
         // Step 4: Make decision
         String decision = makeDecision(riskScore, merchantScreeningResult, ownerResults);
         String status = determineStatus(decision);
+        String riskLevel = riskScore >= 80 ? "CRITICAL"
+                : riskScore >= 60 ? "HIGH"
+                : riskScore >= 30 ? "MEDIUM"
+                : "LOW";
 
-        // Step 5: Update merchant status
+        // Step 5: Update merchant status + per-risk-level daily cap
         merchant.setStatus(status);
+        merchant.setRiskLevel(riskLevel);
+        merchant.setDailyLimit(resolveDailyLimit(riskLevel));
         merchantRepository.save(merchant);
 
         // Step 6: Create compliance case if needed
@@ -306,9 +319,22 @@ public class MerchantOnboardingService {
 
         merchant.setKycStatus("PENDING");
         merchant.setContractStatus("NO_CONTRACT");
-        merchant.setDailyLimit(java.math.BigDecimal.valueOf(10000)); // Default limit
-
+        // Daily limit deliberately left null here — the onboardMerchant flow
+        // computes a risk score, then setDailyLimitForRiskLevel below stamps the
+        // limit configured for that level in risk_thresholds. Hardcoding 10,000
+        // at this point would mask any per-PSP override.
         return merchant;
+    }
+
+    /**
+     * Pull the configured per-day cap for a given risk level from {@code risk_thresholds}.
+     * Falls back to {@link #fallbackDailyLimit} when no row is configured.
+     */
+    private java.math.BigDecimal resolveDailyLimit(String riskLevel) {
+        if (riskLevel == null) return fallbackDailyLimit;
+        return riskThresholdRepository.findByRiskLevel(riskLevel)
+                .map(rt -> rt.getDailyLimit() != null ? rt.getDailyLimit() : fallbackDailyLimit)
+                .orElse(fallbackDailyLimit);
     }
 
     /**

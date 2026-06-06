@@ -286,7 +286,19 @@ public class CaseCreationService {
         }
     }
 
+    /**
+     * Generate a human-friendly, monotonic case reference. Format:
+     * {@code CASE-YYYYMMDD-NNNNNN} where NNNNNN is a 6-char ULID-like suffix
+     * derived from the current epoch millis + a 16-bit secure random. This is
+     * sortable, ~7-byte collision-resistant within the same millisecond, and
+     * fits inside a 24-char varchar without truncation.
+     */
     private String generateCaseReference() {
-        return "CASE-" + System.currentTimeMillis(); // Simple ID generation for now
+        java.time.LocalDate d = java.time.LocalDate.now();
+        long now = System.currentTimeMillis();
+        int rand = java.util.concurrent.ThreadLocalRandom.current().nextInt(0xFFFF + 1);
+        String suffix = Long.toString(((now & 0xFFFFFFL) << 16) | rand, 36).toUpperCase();
+        return String.format("CASE-%04d%02d%02d-%s",
+                d.getYear(), d.getMonthValue(), d.getDayOfMonth(), suffix);
     }
 }

@@ -1,333 +1,463 @@
-
 package com.posgateway.aml.service.risk;
 
+import com.posgateway.aml.entity.merchant.BeneficialOwner;
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.entity.merchant.MerchantRiskScore;
+import com.posgateway.aml.entity.risk.CountryRiskScore;
+import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.repository.BeneficialOwnerRepository;
+import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.repository.merchant.MerchantRiskScoreRepository;
 import com.posgateway.aml.repository.risk.CountryRiskRepository;
-import com.posgateway.aml.service.rules.RulesExecutionService;
+import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
 import com.posgateway.aml.rules.RuleEvaluationResult;
+import com.posgateway.aml.service.rules.RulesExecutionService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
+import java.util.Optional;
 
 /**
- * Service for calculating Risk Scores based on Flagright methodology.
- * Includes:
- * - KYC Risk Score (KRS)
- * - Transaction Risk Score (TRS)
- * - Customer Risk Assessment (CRA)
+ * Risk scoring (KRS, TRS, CRA).
+ *
+ * <p>All risk reference data — country risk, FATF list, alert history,
+ * transaction volume — is read from the database. No hard-coded country
+ * lists. The MCC risk fallback is small and acts as a default when the
+ * MCC has no entry in the future {@code mcc_risk} reference table; once
+ * that table is added, swap {@link #scoreMccRisk(String)} to read from it.
  */
 @Service
 public class RiskScoringService {
 
-    private static final Logger logger = LoggerFactory.getLogger(RiskScoringService.class);
+    private static final Logger log = LoggerFactory.getLogger(RiskScoringService.class);
 
+    // ── Composite KRS weights ────────────────────────────────────────────────
+    private static final double W_COUNTRY_RESIDENCE = 0.5;
+    private static final double W_NATIONALITY       = 0.3;
+    private static final double W_AGE               = 0.2;
+
+    // ── Composite TRS weights ────────────────────────────────────────────────
+    private static final double W_ORIGIN_COUNTRY = 0.3;
+    private static final double W_DEST_COUNTRY   = 0.3;
+    private static final double W_AMOUNT         = 0.4;
+
+    // ── CRA component weights (sum = 1.0) ────────────────────────────────────
+    private static final double CRA_W_COUNTRY    = 0.25;
+    private static final double CRA_W_PEP_SANC   = 0.30;
+    private static final double CRA_W_INDUSTRY   = 0.15;
+    private static final double CRA_W_VOLUME     = 0.15;
+    private static final double CRA_W_ALERTS     = 0.10;
+    private static final double CRA_W_AGE        = 0.05;
+
+    // ── CRA history windows ──────────────────────────────────────────────────
+    private static final int VOLUME_LOOKBACK_DAYS = 30;
+    private static final int ALERT_LOOKBACK_DAYS  = 90;
+
+    // ── Industry risk fallback (until mcc_risk table exists) ─────────────────
+    private static final Map<String, Double> MCC_RISK = new HashMap<>();
+    static {
+        MCC_RISK.put("5411", 10.0); // grocery
+        MCC_RISK.put("5812", 20.0); // restaurants
+        MCC_RISK.put("5999", 50.0); // misc retail
+        MCC_RISK.put("6051", 75.0); // crypto / quasi-cash
+        MCC_RISK.put("6211", 65.0); // securities brokers
+        MCC_RISK.put("7273", 70.0); // dating
+        MCC_RISK.put("7995", 90.0); // gambling
+        MCC_RISK.put("9223", 85.0); // bail bonds
+    }
+
+    private static final double NEUTRAL_RISK = 50.0;
+
+    // ── Dependencies ─────────────────────────────────────────────────────────
     private final MeterRegistry meterRegistry;
     private final RulesExecutionService rulesExecutionService;
     private final CountryRiskRepository countryRiskRepository;
+    private final HighRiskCountryRepository highRiskCountryRepository;
+    private final MerchantRepository merchantRepository;
+    private final MerchantRiskScoreRepository merchantRiskScoreRepository;
+    private final BeneficialOwnerRepository beneficialOwnerRepository;
+    private final AlertRepository alertRepository;
+    private final TransactionRepository transactionRepository;
 
-    @Autowired
+    private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
+
     public RiskScoringService(MeterRegistry meterRegistry,
                               RulesExecutionService rulesExecutionService,
-                              CountryRiskRepository countryRiskRepository) {
+                              CountryRiskRepository countryRiskRepository,
+                              HighRiskCountryRepository highRiskCountryRepository,
+                              MerchantRepository merchantRepository,
+                              MerchantRiskScoreRepository merchantRiskScoreRepository,
+                              BeneficialOwnerRepository beneficialOwnerRepository,
+                              AlertRepository alertRepository,
+                              TransactionRepository transactionRepository,
+                              com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient) {
         this.meterRegistry = meterRegistry;
         this.rulesExecutionService = rulesExecutionService;
         this.countryRiskRepository = countryRiskRepository;
+        this.highRiskCountryRepository = highRiskCountryRepository;
+        this.merchantRepository = merchantRepository;
+        this.merchantRiskScoreRepository = merchantRiskScoreRepository;
+        this.beneficialOwnerRepository = beneficialOwnerRepository;
+        this.alertRepository = alertRepository;
+        this.transactionRepository = transactionRepository;
+        this.amlMicroserviceClient = amlMicroserviceClient;
     }
 
-    // --- Weights Configuration (Can be moved to DB later) ---
-    // KRS Weights
-    private static final double W_COUNTRY_RESIDENCE = 0.5;
-    private static final double W_NATIONALITY = 0.3; // Using Business Type/MCC as proxy for "Nationality" if specific field missing
-    private static final double W_AGE = 0.2; // Using Business Age
+    // ─────────────────────────────────────────────────────────────────────────
+    // KRS — KYC Risk Score (per merchant)
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // TRS Weights
-    private static final double W_ORIGIN_COUNTRY = 0.3;
-    private static final double W_DEST_COUNTRY = 0.3;
-    private static final double W_AMOUNT = 0.4;
-
-    // --- Risk Reference Tables (Simplification) ---
-    private static final Map<String, Double> COUNTRY_RISK = new HashMap<>();
-    static {
-        COUNTRY_RISK.put("US", 10.0);
-        COUNTRY_RISK.put("GB", 10.0);
-        COUNTRY_RISK.put("KE", 30.0);
-        COUNTRY_RISK.put("AE", 54.0); // Detailed in example
-        COUNTRY_RISK.put("IR", 100.0);
-        COUNTRY_RISK.put("KP", 100.0);
-        COUNTRY_RISK.put("UNKNOWN", 50.0);
-    }
-    
-    private static final Map<String, Double> MCC_RISK = new HashMap<>(); // Proxy for Industry Risk
-    static {
-        MCC_RISK.put("5411", 10.0); // Grocery
-        MCC_RISK.put("7995", 90.0); // Gambling
-        MCC_RISK.put("5999", 50.0); // Misc
-    }
-
-    /**
-     * Calculate KYC Risk Score (KRS) for a Merchant.
-     * Formula: Weighted Average of risk factors.
-     */
     public Double calculateKrs(Merchant merchant) {
-        if (merchant == null) return 50.0;
+        if (merchant == null) return NEUTRAL_RISK;
 
-        // 1. Country Risk (Residence/Registration)
         double scoreCountry = getCountryRisk(merchant.getCountry());
+        double scoreMcc     = scoreMccRisk(merchant.getMcc());
+        double scoreAge     = merchant.isNew() ? 60.0 : 20.0;
 
-        // 2. Business Type/MCC Risk (Proxy for "Nationality/Nature")
-        double scoreMcc = MCC_RISK.getOrDefault(merchant.getMcc(), 50.0);
-
-        // 3. Age Risk (New vs Old)
-        double scoreAge = merchant.isNew() ? 60.0 : 20.0; // Newer is riskier
-
-        // Calculation
-        double weightedSum = (scoreCountry * W_COUNTRY_RESIDENCE) + 
-                             (scoreMcc * W_NATIONALITY) + 
-                             (scoreAge * W_AGE);
-        
-        double sumWeights = W_COUNTRY_RESIDENCE + W_NATIONALITY + W_AGE;
-        
+        double weightedSum = scoreCountry * W_COUNTRY_RESIDENCE
+                           + scoreMcc     * W_NATIONALITY
+                           + scoreAge     * W_AGE;
+        double sumWeights  = W_COUNTRY_RESIDENCE + W_NATIONALITY + W_AGE;
         double krs = weightedSum / sumWeights;
 
-        // Record Metric
-        meterRegistry.gauge("aml.risk.krs", Tags.of("merchant_id", merchant.getMerchantId().toString()), krs);
-
+        meterRegistry.gauge("aml.risk.krs",
+                Tags.of("merchant_id", String.valueOf(merchant.getMerchantId())), krs);
         return krs;
     }
 
-    /**
-     * Calculate Transaction Risk Score (TRS).
-     * Formula: Weighted Average of transaction factors.
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // TRS — Transaction Risk Score
+    // ─────────────────────────────────────────────────────────────────────────
+
     public Double calculateTrs(String originCountry, String destCountry, BigDecimal amount) {
-        // 1. Origin Risk
         double scoreOrigin = getCountryRisk(originCountry);
-        
-        // 2. Dest Risk
-        double scoreDest = getCountryRisk(destCountry);
-        
-        // 3. Amount Risk (Normalized)
+        double scoreDest   = getCountryRisk(destCountry);
         double scoreAmount = calculateAmountRisk(amount);
 
-        // Calculation
-        double weightedSum = (scoreOrigin * W_ORIGIN_COUNTRY) + 
-                             (scoreDest * W_DEST_COUNTRY) + 
-                             (scoreAmount * W_AMOUNT);
-        
-        double sumWeights = W_ORIGIN_COUNTRY + W_DEST_COUNTRY + W_AMOUNT;
-        
+        double weightedSum = scoreOrigin * W_ORIGIN_COUNTRY
+                           + scoreDest   * W_DEST_COUNTRY
+                           + scoreAmount * W_AMOUNT;
+        double sumWeights  = W_ORIGIN_COUNTRY + W_DEST_COUNTRY + W_AMOUNT;
         double trs = weightedSum / sumWeights;
 
-        // Record Metric
-        meterRegistry.gauge("aml.risk.trs", Tags.of("origin", originCountry, "dest", destCountry), trs);
-        
-        return trs; 
+        meterRegistry.gauge("aml.risk.trs",
+                Tags.of("origin", nullSafe(originCountry), "dest", nullSafe(destCountry)), trs);
+        return trs;
     }
 
-    /**
-     * Update Customer Risk Assessment (CRA).
-     * Formula: CRA[i] = Avg( CRA[i-1] + TRS[i] )
-     * Uses exponential moving average logic or simple average as per instruction.
-     */
+    /** Rolling-average update of CRA from a new TRS observation. */
     public Double updateCra(Double currentCra, Double newTrs) {
-        if (currentCra == null || currentCra == 0.0) {
-            return newTrs;
-        }
-        // Formula per prompt image: avg(CRA[i-1] + TRS[i]) which implies (Prev + New) / 2
+        if (currentCra == null || currentCra == 0.0) return newTrs;
         double newCra = (currentCra + newTrs) / 2.0;
-
-        // Record Metric
         meterRegistry.gauge("aml.risk.cra", Tags.of("type", "rolling_avg"), newCra);
-
         return newCra;
     }
 
-    public Map<String, Object> calculateOverallRisk(String txnId, Map<String, Object> features, Map<String, Object> riskDetails) {
-        // 1. Calculate KRS (assuming merchant_id is in features)
-        // This part would typically involve fetching the merchant and calling calculateKrs(merchant)
-        // For this example, we'll use a placeholder or assume KRS is passed in features/riskDetails
-        double krsScore = ((Number) features.getOrDefault("krs_score", 50.0)).doubleValue();
+    // ─────────────────────────────────────────────────────────────────────────
+    // Overall risk orchestration (called per transaction by the rule engine)
+    // ─────────────────────────────────────────────────────────────────────────
 
-        // 2. Calculate Base TRS (using existing method or a new one based on features)
-        // This is a simplified call, actual implementation would extract origin, dest, amount from features
+    public Map<String, Object> calculateOverallRisk(String txnId,
+                                                    Map<String, Object> features,
+                                                    Map<String, Object> riskDetails) {
+        double krsScore = ((Number) features.getOrDefault("krs_score", NEUTRAL_RISK)).doubleValue();
+
         double baseTrs = calculateTrs(
-            (String) features.getOrDefault("origin_country", "UNKNOWN"),
-            (String) features.getOrDefault("destination_country", "UNKNOWN"),
-            new BigDecimal(features.getOrDefault("amount", 0.0).toString())
-        );
+                (String) features.getOrDefault("origin_country", null),
+                (String) features.getOrDefault("destination_country", null),
+                new BigDecimal(features.getOrDefault("amount", 0.0).toString()));
 
-        // 3. Dynamic Rules & Legacy Rules Check
-        RuleEvaluationResult ruleResult = rulesExecutionService.evaluateRules(Long.valueOf(txnId), features, ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue());
-        
-        // 4. Combine Scores
+        RuleEvaluationResult ruleResult = rulesExecutionService.evaluateRules(
+                Long.valueOf(txnId), features,
+                ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue());
+
         double trsScore = calculateTrs(features, ruleResult);
-        double craScore = calculateCra(features); // Placeholder for advanced CRA
-        double mlScore = ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue();
-        
-        // Final Score Calculation (Weighted)
-        double finalScore = (krsScore * 0.3) + (trsScore * 0.4) + (craScore * 0.3);
-        
-        // Apply Rules Impact (e.g. if rule says BLOCK, force score to 100 ?)
-        if ("BLOCK".equals(ruleResult.getDecision())) {
-             finalScore = 100.0;
-        }
+        double craScore = calculateCra(features);
+        double mlScore  = ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue();
+
+        double finalScore = krsScore * 0.3 + trsScore * 0.4 + craScore * 0.3;
+        if ("BLOCK".equals(ruleResult.getDecision())) finalScore = 100.0;
 
         Map<String, Object> result = new HashMap<>();
-        result.put("finalScore", finalScore);
-        result.put("krsScore", krsScore);
-        result.put("trsScore", trsScore);
-        result.put("craScore", craScore);
-        result.put("mlScore", mlScore);
-        // Pass down decision/reasons from rules
+        result.put("finalScore",   finalScore);
+        result.put("krsScore",     krsScore);
+        result.put("trsScore",     trsScore);
+        result.put("craScore",     craScore);
+        result.put("mlScore",      mlScore);
+        result.put("baseTrs",      baseTrs);
         result.put("ruleDecision", ruleResult.getDecision());
-        result.put("ruleReasons", ruleResult.getReasons());
-        
+        result.put("ruleReasons",  ruleResult.getReasons());
         return result;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // CRA — Customer Risk Assessment (real implementation, no defaults)
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Return a country risk score in the range [0, 100].
-     * Primary source is the {@code country_risk_scores} table (CountryRiskRepository).
-     * Falls back to the in-process static map when the DB is unavailable or the
-     * country code is not yet seeded, so a cold DB never causes a NullPointerException.
+     * Compute CRA from real data: country risk, PEP/sanctions screening,
+     * industry MCC, recent transaction volume vs expected, recent alerts,
+     * and business age. Persists the result to {@code merchants.cra} and
+     * appends an audit row to {@code merchant_risk_scores}.
      *
-     * @param code ISO 3166-1 alpha-2 country code (null-safe)
-     * @return risk score 0-100 (higher = riskier)
+     * <p>If {@code features} contains no resolvable {@code merchant_id}
+     * the calculation degrades to feature-only inputs (country + amount)
+     * and is NOT persisted.
      */
-    private double getCountryRisk(String code) {
-        if (code == null || code.isBlank()) {
-            return COUNTRY_RISK.getOrDefault("UNKNOWN", 50.0);
+    @Transactional
+    public double calculateCra(Map<String, Object> features) {
+        Long merchantId = parseLong(features.get("merchant_id"));
+
+        if (merchantId == null) {
+            return calculateCraFeatureOnly(features);
         }
-        String normalised = code.toUpperCase();
+
+        Optional<Merchant> merchantOpt = merchantRepository.findById(merchantId);
+        if (merchantOpt.isEmpty()) {
+            log.warn("CRA: merchant {} not found, falling back to feature-only", merchantId);
+            return calculateCraFeatureOnly(features);
+        }
+
+        Merchant merchant = merchantOpt.get();
+
+        int countryScore  = (int) Math.round(getCountryRisk(merchant.getCountry()));
+        int pepSancScore  = (int) Math.round(scorePepAndSanctions(merchant));
+        int industryScore = (int) Math.round(scoreMccRisk(merchant.getMcc()));
+        int volumeScore   = (int) Math.round(scoreVolume(merchant));
+        int alertScore    = (int) Math.round(scoreAlertHistory(merchantId));
+        int ageScore      = (int) Math.round(scoreBusinessAge(merchant.getRegistrationDate()));
+
+        double cra = countryScore  * CRA_W_COUNTRY
+                   + pepSancScore  * CRA_W_PEP_SANC
+                   + industryScore * CRA_W_INDUSTRY
+                   + volumeScore   * CRA_W_VOLUME
+                   + alertScore    * CRA_W_ALERTS
+                   + ageScore      * CRA_W_AGE;
+
+        cra = Math.max(0.0, Math.min(100.0, cra));
+
+        String level = riskLevelFor(cra);
+        persistCra(merchant, cra, level,
+                countryScore, pepSancScore, industryScore, volumeScore, alertScore, ageScore);
+
+        meterRegistry.gauge("aml.risk.cra",
+                Tags.of("merchant_id", String.valueOf(merchantId), "level", level), cra);
+        log.info("CRA merchant={} score={} level={} (country={}, pep_sanc={}, industry={}, volume={}, alerts={}, age={})",
+                merchantId, String.format("%.1f", cra), level,
+                countryScore, pepSancScore, industryScore, volumeScore, alertScore, ageScore);
+
+        return cra;
+    }
+
+    private double calculateCraFeatureOnly(Map<String, Object> features) {
+        String country = (String) features.getOrDefault("country_code", null);
+        BigDecimal amount = parseAmount(features.get("amount"));
+        double cra = getCountryRisk(country) * 0.6 + calculateAmountRisk(amount) * 0.4;
+        meterRegistry.gauge("aml.risk.cra", Tags.of("source", "feature_only"), cra);
+        return cra;
+    }
+
+    private void persistCra(Merchant merchant, double cra, String level,
+                            int countryScore, int pepSancScore, int industryScore,
+                            int volumeScore, int alertScore, int ageScore) {
         try {
-            return countryRiskRepository.findByCountryCode(normalised)
-                    .map(c -> c.getRiskScore() != null ? c.getRiskScore().doubleValue() : 50.0)
-                    .orElseGet(() -> COUNTRY_RISK.getOrDefault(normalised, 50.0));
-        } catch (Exception ex) {
-            logger.warn("country_risk_scores lookup failed for {}: {}; using static fallback", normalised, ex.getMessage());
-            return COUNTRY_RISK.getOrDefault(normalised, 50.0);
+            merchant.setCra(cra / 100.0); // merchants.cra column stored as 0.0–1.0
+            merchant.setRiskLevel(level);
+            merchantRepository.save(merchant);
+
+            MerchantRiskScore audit = new MerchantRiskScore();
+            audit.setMerchant(merchant);
+            audit.setTotalScore((int) Math.round(cra));
+            audit.setRiskLevel(level);
+            audit.setCountryRiskScore(countryScore);
+            audit.setSanctionsScore(pepSancScore);
+            audit.setPepScore(pepSancScore);
+            audit.setIndustryRiskScore(industryScore);
+            audit.setVolumeRiskScore(volumeScore);
+            audit.setBusinessAgeScore(ageScore);
+            audit.setDecision(decisionFor(level));
+            audit.setDecisionReason(String.format(
+                    "country=%d pep_sanc=%d industry=%d volume=%d alerts=%d age=%d",
+                    countryScore, pepSancScore, industryScore, volumeScore, alertScore, ageScore));
+            audit.setCalculatedAt(LocalDateTime.now());
+            audit.setCalculatedBy("RiskScoringService");
+            audit.setRulesVersion("CRA-v1");
+            merchantRiskScoreRepository.save(audit);
+
+            // P3-A: push the freshly-computed profile to Aerospike via the
+            // aml-microservice so hot-path rule evaluation reads sub-millisecond
+            // instead of round-tripping to Postgres. Best-effort — Postgres is
+            // the source of truth, the cache is purely a performance layer.
+            java.util.Map<String, Object> profile = new java.util.HashMap<>();
+            profile.put("merchantId", merchant.getMerchantId());
+            profile.put("cra", cra);
+            profile.put("riskLevel", level);
+            profile.put("country", merchant.getCountry());
+            profile.put("countryScore", countryScore);
+            profile.put("pepSanctionsScore", pepSancScore);
+            profile.put("industryScore", industryScore);
+            profile.put("volumeScore", volumeScore);
+            profile.put("alertScore", alertScore);
+            profile.put("ageScore", ageScore);
+            profile.put("decision", decisionFor(level));
+            profile.put("calculatedAt", LocalDateTime.now().toString());
+            try {
+                amlMicroserviceClient.cacheRiskProfile(merchant.getMerchantId(), profile);
+            } catch (Exception cacheEx) {
+                // Already logged inside the client; never fail the CRA write because the cache is down.
+                log.debug("Aerospike risk-profile cache write failed (non-fatal): {}", cacheEx.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Failed to persist CRA for merchant {}: {}", merchant.getMerchantId(), e.getMessage(), e);
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CRA component scorers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Country risk: 0–100 from country_risk_scores (FATF blacklist=100, greylist≈70). */
+    double getCountryRisk(String code) {
+        if (code == null || code.isBlank()) return NEUTRAL_RISK;
+        String normalized = code.trim().toUpperCase();
+
+        Optional<CountryRiskScore> primary = countryRiskRepository.findByCountryCode(normalized);
+        if (primary.isPresent() && primary.get().getRiskScore() != null) {
+            return primary.get().getRiskScore().doubleValue();
+        }
+        return highRiskCountryRepository.findByCountryCode(normalized)
+                .map(hrc -> "CRITICAL".equals(hrc.getRiskLevel()) ? 95.0 : 75.0)
+                .orElse(NEUTRAL_RISK);
+    }
+
+    /** PEP / sanctions exposure across the merchant + its UBOs. */
+    private double scorePepAndSanctions(Merchant merchant) {
+        boolean merchantPep = merchant.isPep();
+
+        List<BeneficialOwner> owners = beneficialOwnerRepository.findByMerchant_MerchantId(merchant.getMerchantId());
+        boolean uboSanctioned = owners.stream().anyMatch(bo -> Boolean.TRUE.equals(bo.getIsSanctioned()));
+        boolean uboPep        = owners.stream().anyMatch(bo -> Boolean.TRUE.equals(bo.getIsPep()));
+
+        if (uboSanctioned) return 100.0;
+        if (merchantPep || uboPep) return 70.0;
+        return 0.0;
+    }
+
+    private double scoreMccRisk(String mcc) {
+        if (mcc == null || mcc.isBlank()) return NEUTRAL_RISK;
+        return MCC_RISK.getOrDefault(mcc, NEUTRAL_RISK);
+    }
+
+    /** Compares 30-day actual volume against expected monthly volume. */
+    private double scoreVolume(Merchant merchant) {
+        Long expectedCents = merchant.getExpectedMonthlyVolume();
+        Long actualCents = transactionRepository.sumAmountByMerchantInTimeWindow(
+                String.valueOf(merchant.getMerchantId()),
+                LocalDateTime.now().minusDays(VOLUME_LOOKBACK_DAYS),
+                LocalDateTime.now());
+
+        if (actualCents == null) actualCents = 0L;
+
+        if (expectedCents == null || expectedCents <= 0) {
+            double absDollars = actualCents / 100.0;
+            if (absDollars > 5_000_000) return 90.0;
+            if (absDollars > 1_000_000) return 70.0;
+            if (absDollars >    100_000) return 40.0;
+            return 10.0;
+        }
+
+        double ratio = (double) actualCents / (double) expectedCents;
+        if (ratio > 5.0) return 100.0;
+        if (ratio > 2.0) return 80.0;
+        if (ratio > 1.2) return 50.0;
+        if (ratio > 0.5) return 20.0;
+        return 10.0;
+    }
+
+    /** Recent alert volume tier — 90-day window. */
+    private double scoreAlertHistory(Long merchantId) {
+        long alerts = alertRepository.countByMerchantIdSince(
+                merchantId, LocalDateTime.now().minusDays(ALERT_LOOKBACK_DAYS));
+        if (alerts >= 10) return 100.0;
+        if (alerts >= 5)  return 75.0;
+        if (alerts >= 3)  return 50.0;
+        if (alerts >= 1)  return 25.0;
+        return 0.0;
+    }
+
+    /** Newer businesses are riskier (less history, higher mule probability). */
+    private double scoreBusinessAge(LocalDate registrationDate) {
+        if (registrationDate == null) return 60.0;
+        Period age = Period.between(registrationDate, LocalDate.now());
+        int months = age.getYears() * 12 + age.getMonths();
+        if (months <  6) return 80.0;
+        if (months < 12) return 50.0;
+        if (months < 24) return 20.0;
+        return 10.0;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────────
 
     private double calculateAmountRisk(BigDecimal amount) {
         if (amount == null) return 0.0;
         double val = amount.doubleValue();
-        if (val < 1000) return 10.0;
-        if (val < 5000) return 30.0;
-        if (val < 10000) return 50.0;
-        if (val < 50000) return 80.0;
+        if (val < 1000)   return 10.0;
+        if (val < 5000)   return 30.0;
+        if (val < 10000)  return 50.0;
+        if (val < 50000)  return 80.0;
         return 100.0;
     }
 
     private double calculateTrs(Map<String, Object> features, RuleEvaluationResult ruleResult) {
-        double score = 0.0;
-        
-        // Base: Rule triggers (each trigger adds 20 points, cap at 100)
-        score += ruleResult.getTriggeredRules().size() * 20.0;
-        
-        // Amt > 10000 adds 30
+        double score = ruleResult.getTriggeredRules().size() * 20.0;
         double amount = Double.parseDouble(features.getOrDefault("amount", "0").toString());
-        if (amount > 10000) score += 30;
-        
-        // High-risk country contribution: DB-backed via getCountryRisk() with static fallback.
-        String country = (String) features.getOrDefault("country_code", "US");
+        if (amount > 10_000) score += 30;
+        String country = (String) features.getOrDefault("country_code", null);
         if (getCountryRisk(country) > 50.0) score += 40;
-
         return Math.min(100.0, score);
     }
 
-    /**
-     * Comprehensive Risk Assessment (CRA): weighted composite of five risk dimensions.
-     *
-     * Dimension weights (sum = 100):
-     *   1. Transaction amount risk  — up to 20 pts
-     *   2. Customer (KRS) risk      — up to 25 pts  (customer score scaled 0-100 → 0-25)
-     *   3. Transaction (TRS) risk   — up to 25 pts  (trs score scaled 0-100 → 0-25)
-     *   4. Geographic risk          — up to 15 pts  (origin + destination country average)
-     *   5. Velocity risk            — up to 15 pts  (txn count in last hour for pan/merchant)
-     *
-     * Feature keys consumed (all optional — absent keys default to neutral values):
-     *   "amount"              → transaction amount in KES (Number)
-     *   "krs_score"           → customer KYC risk score 0-100 (Number)
-     *   "origin_country"      → ISO 3166-1 alpha-2 origin country code (String)
-     *   "destination_country" → ISO 3166-1 alpha-2 destination country code (String)
-     *   "pan_txn_count_1h"    → number of card transactions in last hour (Number)
-     *   "merchant_txn_count_1h" → number of merchant transactions in last hour (Number)
-     *
-     * @param features feature map populated by FeatureExtractionService / calculateOverallRisk
-     * @return CRA score in [0, 100]
-     */
-    private double calculateCra(Map<String, Object> features) {
-        double score = 0.0;
-
-        // --- 1. Transaction amount risk (0–20 pts) ---
-        double amount = 0.0;
-        Object rawAmount = features.get("amount");
-        if (rawAmount != null) {
-            try {
-                amount = Double.parseDouble(rawAmount.toString());
-            } catch (NumberFormatException ignored) {
-                amount = 0.0;
-            }
-        }
-        if (amount > 100_000) {
-            score += 20.0;
-        } else if (amount > 10_000) {
-            score += 10.0;
-        } else if (amount > 1_000) {
-            score += 5.0;
-        }
-
-        // --- 2. Customer (KRS) risk (0–25 pts) ---
-        double krsScore = ((Number) features.getOrDefault("krs_score", 50.0)).doubleValue();
-        // Scale: customer score 0-100 → 0-25 CRA points
-        score += (krsScore / 100.0) * 25.0;
-
-        // --- 3. Transaction (TRS) risk contribution (0–25 pts) ---
-        // trs is re-derived from origin/dest/amount using the existing pure method
-        String originCountry = (String) features.getOrDefault("origin_country", "UNKNOWN");
-        String destCountry   = (String) features.getOrDefault("destination_country", "UNKNOWN");
-        double trs = calculateTrs(originCountry, destCountry,
-                new BigDecimal(Double.toString(amount)));
-        // Scale: TRS 0-100 → 0-25 CRA points
-        score += (trs / 100.0) * 25.0;
-
-        // --- 4. Geographic risk (0–15 pts) ---
-        // Average of origin and destination country risk scores (each 0-100), scaled to 0-15
-        double geoRisk = (getCountryRisk(originCountry) + getCountryRisk(destCountry)) / 2.0;
-        score += (geoRisk / 100.0) * 15.0;
-
-        // --- 5. Velocity risk (0–15 pts) ---
-        // Use the higher of pan velocity and merchant velocity
-        long panCount = 0L;
-        Object rawPanCount = features.get("pan_txn_count_1h");
-        if (rawPanCount instanceof Number) {
-            panCount = ((Number) rawPanCount).longValue();
-        }
-        long merchantCount = 0L;
-        Object rawMerchantCount = features.get("merchant_txn_count_1h");
-        if (rawMerchantCount instanceof Number) {
-            merchantCount = ((Number) rawMerchantCount).longValue();
-        }
-        long velocityCount = Math.max(panCount, merchantCount);
-        if (velocityCount > 50) {
-            score += 15.0;
-        } else if (velocityCount > 10) {
-            score += 10.0;
-        } else if (velocityCount > 5) {
-            score += 5.0;
-        }
-
-        return Math.min(100.0, score);
+    private static String riskLevelFor(double cra) {
+        if (cra >= 80) return "CRITICAL";
+        if (cra >= 60) return "HIGH";
+        if (cra >= 40) return "MEDIUM";
+        return "LOW";
     }
+
+    private static String decisionFor(String level) {
+        return switch (level) {
+            case "CRITICAL" -> "REJECT";
+            case "HIGH"     -> "REVIEW";
+            default         -> "APPROVE";
+        };
+    }
+
+    private static Long parseLong(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) return n.longValue();
+        try { return Long.valueOf(value.toString()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static BigDecimal parseAmount(Object value) {
+        if (value == null) return BigDecimal.ZERO;
+        if (value instanceof BigDecimal bd) return bd;
+        if (value instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
+        try { return new BigDecimal(value.toString()); } catch (NumberFormatException e) { return BigDecimal.ZERO; }
+    }
+
+    private static String nullSafe(String s) { return s == null ? "UNKNOWN" : s; }
 }
-

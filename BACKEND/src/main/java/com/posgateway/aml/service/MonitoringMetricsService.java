@@ -6,228 +6,244 @@ import com.posgateway.aml.repository.ModelMetricsRepository;
 import com.posgateway.aml.repository.TransactionFeaturesRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * Monitoring and Metrics Service
- * Tracks model performance metrics: AUC, precision@k, latency, drift
- * Runs scheduled tasks to compute daily metrics
+ * Computes daily model performance metrics from {@code transaction_features}:
+ *   - AUC (Mann-Whitney U over labeled rows)
+ *   - precision@K (top-K by score, fraction labeled fraud)
+ *   - latency: avg + p50 / p95 / p99 from per-txn latency_ms
+ *   - drift: PSI of yesterday's score histogram vs a 30-day rolling baseline
+ *
+ * Heavy aggregations run as Postgres queries (percentile_cont, bucketed counts)
+ * so the JVM never holds millions of rows. AUC needs per-row scores so it loads
+ * the labeled subset only, which is small.
  */
 @Service
 public class MonitoringMetricsService {
 
     private static final Logger logger = LoggerFactory.getLogger(MonitoringMetricsService.class);
 
+    private static final int    PRECISION_K          = 100;
+    private static final int    MIN_LABELED_FOR_AUC  = 10;
+    private static final int    PSI_BUCKETS          = 10;
+    private static final int    BASELINE_WINDOW_DAYS = 30;
+    /** Floor used in PSI to avoid log(0) on empty buckets. */
+    private static final double PSI_EPSILON          = 1.0e-4;
+
     private final ModelMetricsRepository metricsRepository;
     private final TransactionFeaturesRepository featuresRepository;
 
-    @Autowired
     public MonitoringMetricsService(ModelMetricsRepository metricsRepository,
-                                   TransactionFeaturesRepository featuresRepository) {
+                                    TransactionFeaturesRepository featuresRepository) {
         this.metricsRepository = metricsRepository;
         this.featuresRepository = featuresRepository;
     }
 
-    /**
-     * Compute and store daily metrics
-     * Scheduled to run daily at midnight
-     */
-    @Scheduled(cron = "0 0 0 * * ?") // Daily at midnight
+    @Scheduled(cron = "0 0 0 * * ?")
     @Transactional
     public void computeDailyMetrics() {
-        logger.info("Computing daily model metrics");
+        computeMetricsForDate(LocalDate.now().minusDays(1));
+    }
 
-        LocalDate today = LocalDate.now();
-        LocalDate yesterday = today.minusDays(1);
-        LocalDateTime startOfDay = yesterday.atStartOfDay();
-        LocalDateTime endOfDay = yesterday.atTime(23, 59, 59);
+    @Transactional
+    public ModelMetrics computeMetricsForDate(LocalDate date) {
+        logger.info("Computing model metrics for {}", date);
 
-        // Get transactions scored yesterday
-        List<TransactionFeatures> features = featuresRepository.findScoredInTimeRange(startOfDay, endOfDay);
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay   = date.atTime(23, 59, 59, 999_999_999);
 
-        if (features.isEmpty()) {
-            logger.warn("No transactions found for metrics computation on {}", yesterday);
-            return;
+        long totalScored = featuresRepository.countScoredInRange(startOfDay, endOfDay);
+        if (totalScored == 0) {
+            logger.warn("No scored transactions for {} — skipping metrics", date);
+            return null;
         }
 
-        ModelMetrics metrics = new ModelMetrics();
-        metrics.setDate(yesterday);
+        ModelMetrics metrics = metricsRepository.findByDate(date).orElseGet(ModelMetrics::new);
+        metrics.setDate(date);
+        metrics.setTotalScored((int) Math.min(Integer.MAX_VALUE, totalScored));
 
-        // Compute AUC (simplified - would need proper ROC curve calculation)
-        metrics.setAuc(computeAUC(features));
+        // Labeled subset (small) — drives AUC + precision@K + fraud_count.
+        List<TransactionFeatures> labeled = loadLabeledSorted(startOfDay, endOfDay);
+        metrics.setTotalLabeled(labeled.size());
+        metrics.setFraudCount(countFraud(labeled));
+        metrics.setAuc(computeAUC(labeled));
+        metrics.setPrecisionAt100(computePrecisionAtK(labeled, PRECISION_K));
 
-        // Compute precision@100 (top 100 highest scores)
-        metrics.setPrecisionAt100(computePrecisionAtK(features, 100));
+        metrics.setAvgLatencyMs(featuresRepository.findAverageLatencyInRange(startOfDay, endOfDay));
+        Object[] percentiles = featuresRepository.findLatencyPercentilesInRange(startOfDay, endOfDay);
+        if (percentiles != null && percentiles.length >= 3) {
+            metrics.setP50LatencyMs(toDouble(percentiles[0]));
+            metrics.setP95LatencyMs(toDouble(percentiles[1]));
+            metrics.setP99LatencyMs(toDouble(percentiles[2]));
+        }
 
-        // Compute average latency
-        metrics.setAvgLatencyMs(computeAverageLatency(features));
-
-        // Compute drift score (simplified - compares score distribution)
-        metrics.setDriftScore(computeDriftScore(features));
+        DriftResult drift = computePsiDrift(date);
+        metrics.setPsiDrift(drift.psi);
+        metrics.setBaselineAvgScore(drift.baselineAvgScore);
+        // Keep legacy drift_score populated for dashboards still reading it.
+        metrics.setDriftScore(drift.psi);
 
         metricsRepository.save(metrics);
-        logger.info("Daily metrics computed for {}: AUC={}, Precision@100={}, AvgLatency={}ms, Drift={}",
-            yesterday, metrics.getAuc(), metrics.getPrecisionAt100(), 
-            metrics.getAvgLatencyMs(), metrics.getDriftScore());
+
+        logger.info("Metrics for {}: scored={} labeled={} fraud={} auc={} p@100={} avgLat={}ms p95={}ms PSI={}",
+                date, metrics.getTotalScored(), metrics.getTotalLabeled(), metrics.getFraudCount(),
+                metrics.getAuc(), metrics.getPrecisionAt100(),
+                metrics.getAvgLatencyMs(), metrics.getP95LatencyMs(), metrics.getPsiDrift());
+
+        return metrics;
     }
 
-    /**
-     * Compute AUC (Area Under ROC Curve) via trapezoidal rule over the ROC curve.
-     * Requires labeled transactions (label=1 fraud, label=0 legitimate) with model scores.
-     * Falls back to the most recently stored ModelMetrics.auc when insufficient labeled
-     * data is present in the provided batch.
-     */
-    private Double computeAUC(List<TransactionFeatures> features) {
-        // Filter to labeled records that carry a model score
-        List<TransactionFeatures> labeled = features.stream()
-            .filter(tf -> tf.getLabel() != null && tf.getScore() != null)
-            .collect(Collectors.toList());
+    // ──────────────────────────────────────────────────────────────────────
+    // AUC — Mann-Whitney U statistic with average-rank tie handling
+    // ──────────────────────────────────────────────────────────────────────
 
-        long fraudCount = labeled.stream().filter(tf -> tf.getLabel() == 1).count();
-        long goodCount  = labeled.size() - fraudCount;
+    Double computeAUC(List<TransactionFeatures> labeledSortedDesc) {
+        if (labeledSortedDesc.size() < MIN_LABELED_FOR_AUC) return null;
 
-        if (labeled.size() < 10 || fraudCount == 0 || goodCount == 0) {
-            // Not enough labeled data for this batch — use the latest persisted AUC
-            return metricsRepository.findFirstByOrderByDateDesc()
-                .map(ModelMetrics::getAuc)
-                .orElse(0.0);
-        }
+        long nPos = labeledSortedDesc.stream().filter(f -> isFraud(f.getLabel())).count();
+        long nNeg = labeledSortedDesc.size() - nPos;
+        if (nPos == 0 || nNeg == 0) return null;
 
-        // Sort by predicted score descending (highest-risk first)
-        labeled.sort((a, b) -> Double.compare(
-            b.getScore() != null ? b.getScore() : 0.0,
-            a.getScore() != null ? a.getScore() : 0.0));
+        List<TransactionFeatures> asc = new ArrayList<>(labeledSortedDesc);
+        asc.sort(Comparator.comparingDouble(f -> nullSafe(f.getScore())));
 
-        // Trapezoidal AUC: walk the ROC curve accumulating area
-        double auc = 0.0;
-        long tp = 0;
-        long fp = 0;
-        double prevTpr = 0.0;
-        double prevFpr = 0.0;
-
-        for (TransactionFeatures tf : labeled) {
-            if (tf.getLabel() == 1) {
-                tp++;
-            } else {
-                fp++;
+        double rankSumPositives = 0.0;
+        int i = 0;
+        int n = asc.size();
+        while (i < n) {
+            int j = i;
+            double currentScore = nullSafe(asc.get(i).getScore());
+            while (j + 1 < n && nullSafe(asc.get(j + 1).getScore()) == currentScore) j++;
+            double avgRank = ((i + 1) + (j + 1)) / 2.0;
+            for (int k = i; k <= j; k++) {
+                if (isFraud(asc.get(k).getLabel())) rankSumPositives += avgRank;
             }
-            double tpr = (double) tp / fraudCount;
-            double fpr = (double) fp / goodCount;
-            // Trapezoid: width = delta FPR, height = average TPR
-            auc += (fpr - prevFpr) * (tpr + prevTpr) / 2.0;
-            prevTpr = tpr;
-            prevFpr = fpr;
+            i = j + 1;
         }
 
-        return Math.min(1.0, Math.max(0.0, auc));
+        double auc = (rankSumPositives - nPos * (nPos + 1) / 2.0) / ((double) nPos * nNeg);
+        return clamp01(auc);
     }
 
-    /**
-     * Compute precision at K (top K highest scores)
-     */
-    private Double computePrecisionAtK(List<TransactionFeatures> features, int k) {
-        List<TransactionFeatures> labeled = features.stream()
-            .filter(tf -> tf.getLabel() != null && tf.getScore() != null)
-            .sorted((a, b) -> Double.compare(
-                b.getScore() != null ? b.getScore() : 0.0,
-                a.getScore() != null ? a.getScore() : 0.0))
-            .limit(k)
-            .collect(Collectors.toList());
+    // ──────────────────────────────────────────────────────────────────────
+    // Precision@K — denominator is K; null when fewer than K labeled rows
+    // ──────────────────────────────────────────────────────────────────────
 
-        if (labeled.isEmpty()) {
-            return null;
-        }
-
-        long fraudInTopK = labeled.stream().filter(tf -> tf.getLabel() == 1).count();
-        return (double) fraudInTopK / labeled.size();
+    Double computePrecisionAtK(List<TransactionFeatures> labeledSortedDesc, int k) {
+        if (k <= 0 || labeledSortedDesc.size() < k) return null;
+        long fraudInTopK = labeledSortedDesc.stream()
+                .limit(k)
+                .filter(f -> isFraud(f.getLabel()))
+                .count();
+        return (double) fraudInTopK / k;
     }
 
-    /**
-     * Compute average scoring latency in milliseconds.
-     * Latency per record is (scoredAt - transaction.createdAt).
-     * Only records where both timestamps are present and non-negative are included.
-     * Returns 0.0 when no usable data is found.
-     */
-    private Double computeAverageLatency(List<TransactionFeatures> features) {
-        double[] latencies = features.stream()
-            .filter(tf -> tf.getScoredAt() != null
-                && tf.getTransaction() != null
-                && tf.getTransaction().getCreatedAt() != null)
-            .mapToDouble(tf -> {
-                long millis = java.time.Duration.between(
-                    tf.getTransaction().getCreatedAt(), tf.getScoredAt()).toMillis();
-                return millis;
-            })
-            .filter(ms -> ms >= 0)
-            .toArray();
+    // ──────────────────────────────────────────────────────────────────────
+    // Drift — Population Stability Index
+    // PSI < 0.10 stable, 0.10-0.25 minor shift, > 0.25 major shift
+    // ──────────────────────────────────────────────────────────────────────
 
-        if (latencies.length == 0) {
-            return 0.0;
+    DriftResult computePsiDrift(LocalDate date) {
+        LocalDateTime targetStart = date.atStartOfDay();
+        LocalDateTime targetEnd   = date.atTime(23, 59, 59, 999_999_999);
+        LocalDateTime baseEnd     = date.atStartOfDay().minusNanos(1);
+        LocalDateTime baseStart   = date.minusDays(BASELINE_WINDOW_DAYS).atStartOfDay();
+
+        double[] target   = bucketize(featuresRepository.findScoreHistogramInRange(targetStart, targetEnd));
+        double[] baseline = bucketize(featuresRepository.findScoreHistogramInRange(baseStart, baseEnd));
+
+        Double baselineAvg = featuresRepository.findAverageScoreInRange(baseStart, baseEnd);
+
+        double targetTotal   = sum(target);
+        double baselineTotal = sum(baseline);
+        if (targetTotal == 0 || baselineTotal == 0) {
+            return new DriftResult(null, baselineAvg);
         }
 
-        double sum = 0.0;
-        for (double ms : latencies) {
-            sum += ms;
+        double psi = 0.0;
+        for (int b = 0; b < PSI_BUCKETS; b++) {
+            double actual   = Math.max(target[b]   / targetTotal,   PSI_EPSILON);
+            double expected = Math.max(baseline[b] / baselineTotal, PSI_EPSILON);
+            psi += (actual - expected) * Math.log(actual / expected);
         }
-        return sum / latencies.length;
+        return new DriftResult(psi, baselineAvg);
     }
 
-    /**
-     * Compute drift score (simplified - compares score distribution)
-     */
-    private Double computeDriftScore(List<TransactionFeatures> features) {
-        if (features.isEmpty()) {
-            return null;
+    private double[] bucketize(List<Object[]> rows) {
+        double[] buckets = new double[PSI_BUCKETS];
+        if (rows == null) return buckets;
+        for (Object[] row : rows) {
+            int idx    = ((Number) row[0]).intValue();
+            long count = ((Number) row[1]).longValue();
+            if (idx >= 0 && idx < PSI_BUCKETS) buckets[idx] = count;
         }
-
-        // Get average score
-        double avgScore = features.stream()
-            .filter(tf -> tf.getScore() != null)
-            .mapToDouble(tf -> tf.getScore())
-            .average()
-            .orElse(0.0);
-
-        // Historical AUC average over the last 30 days used as the score baseline.
-        // Falls back to 0.5 (neutral midpoint) when no prior metrics exist.
-        double baseline = metricsRepository
-                .findAverageAucSince(LocalDate.now().minusDays(30))
-                .orElse(0.5);
-        double drift = Math.abs(avgScore - baseline);
-
-        return drift;
+        return buckets;
     }
 
-    /**
-     * Get latest metrics
-     */
+    private double sum(double[] a) {
+        double s = 0;
+        for (double v : a) s += v;
+        return s;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Helpers / read accessors
+    // ──────────────────────────────────────────────────────────────────────
+
+    private List<TransactionFeatures> loadLabeledSorted(LocalDateTime start, LocalDateTime end) {
+        List<TransactionFeatures> rows = featuresRepository.findScoredInTimeRange(start, end);
+        rows.removeIf(r -> r.getLabel() == null || r.getScore() == null);
+        rows.sort(Comparator.comparingDouble((TransactionFeatures f) -> nullSafe(f.getScore())).reversed());
+        return rows;
+    }
+
+    private static int countFraud(List<TransactionFeatures> labeled) {
+        return (int) labeled.stream().filter(f -> isFraud(f.getLabel())).count();
+    }
+
+    private static boolean isFraud(Short label)   { return label != null && label == 1; }
+    private static double  nullSafe(Double d)     { return d == null ? 0.0 : d; }
+    private static double  clamp01(double v)      { return v < 0 ? 0.0 : (v > 1 ? 1.0 : v); }
+
+    private static Double toDouble(Object o) {
+        if (o == null) return null;
+        if (o instanceof Number n) return n.doubleValue();
+        try { return Double.parseDouble(o.toString()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
     public ModelMetrics getLatestMetrics() {
-        return metricsRepository.findFirstByOrderByDateDesc()
-            .orElse(null);
+        return metricsRepository.findFirstByOrderByDateDesc().orElse(null);
     }
 
-    /**
-     * Get metrics for a specific date
-     */
     public ModelMetrics getMetricsForDate(LocalDate date) {
-        return metricsRepository.findByDate(date)
-            .orElse(null);
+        return metricsRepository.findByDate(date).orElse(null);
     }
 
-    /**
-     * Get metrics for date range
-     */
     public List<ModelMetrics> getMetricsForDateRange(LocalDate startDate, LocalDate endDate) {
         return metricsRepository.findAll().stream()
-            .filter(m -> !m.getDate().isBefore(startDate) && !m.getDate().isAfter(endDate))
-            .collect(Collectors.toList());
+                .filter(m -> m.getDate() != null
+                        && !m.getDate().isBefore(startDate)
+                        && !m.getDate().isAfter(endDate))
+                .sorted(Comparator.comparing(ModelMetrics::getDate))
+                .toList();
+    }
+
+    static final class DriftResult {
+        final Double psi;
+        final Double baselineAvgScore;
+        DriftResult(Double psi, Double baselineAvgScore) {
+            this.psi = psi;
+            this.baselineAvgScore = baselineAvgScore;
+        }
     }
 }
-

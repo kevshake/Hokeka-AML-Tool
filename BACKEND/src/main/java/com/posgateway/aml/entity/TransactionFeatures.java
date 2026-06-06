@@ -37,6 +37,15 @@ public class TransactionFeatures {
     @Column(name = "scored_at")
     private LocalDateTime scoredAt;
 
+    @Column(name = "latency_ms")
+    private Integer latencyMs;
+
+    @Column(name = "model_version")
+    private String modelVersion;
+
+    @Column(name = "psp_id")
+    private Long pspId;
+
     @PrePersist
     protected void onCreate() {
         if (scoredAt == null) {
@@ -99,6 +108,30 @@ public class TransactionFeatures {
 
     public void setScoredAt(LocalDateTime scoredAt) {
         this.scoredAt = scoredAt;
+    }
+
+    public Integer getLatencyMs() {
+        return latencyMs;
+    }
+
+    public void setLatencyMs(Integer latencyMs) {
+        this.latencyMs = latencyMs;
+    }
+
+    public String getModelVersion() {
+        return modelVersion;
+    }
+
+    public void setModelVersion(String modelVersion) {
+        this.modelVersion = modelVersion;
+    }
+
+    public Long getPspId() {
+        return pspId;
+    }
+
+    public void setPspId(Long pspId) {
+        this.pspId = pspId;
     }
 }
 

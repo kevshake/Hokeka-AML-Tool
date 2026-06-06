@@ -50,24 +50,47 @@ export default function RolesTab() {
         permissions: [] as Permission[],
     });
 
+    // Helper — every API call must carry the session cookie so Spring Security
+    // sees the authenticated principal. Without `credentials: include` the request
+    // is anonymous and the @PreAuthorize check returns 403, surfacing as
+    // "Failed to save role".
+    const apiFetch = async (input: string, init: RequestInit = {}) => {
+        const response = await fetch(input, {
+            ...init,
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+                ...(init.headers || {}),
+            },
+        });
+        if (!response.ok) {
+            let message = `${response.status} ${response.statusText}`;
+            try {
+                const body = await response.clone().json();
+                message = body.message || body.error || JSON.stringify(body);
+            } catch {
+                try {
+                    const txt = await response.text();
+                    if (txt) message = txt;
+                } catch { /* ignore */ }
+            }
+            const err = new Error(message);
+            (err as any).status = response.status;
+            throw err;
+        }
+        return response;
+    };
+
     // Fetch roles
     const { data: roles, isLoading } = useQuery<Role[]>({
         queryKey: ["roles"],
-        queryFn: async () => {
-            const response = await fetch("/api/v1/roles");
-            if (!response.ok) throw new Error("Failed to fetch roles");
-            return response.json();
-        },
+        queryFn: async () => (await apiFetch("/api/v1/roles")).json(),
     });
 
-    // Fetch PSPs for dropdown
+    // Fetch PSPs for dropdown — admin endpoint returns full Psp entity (pspId/legalName/pspCode)
     const { data: psps } = useQuery<Psp[]>({
         queryKey: ["psps"],
-        queryFn: async () => {
-            const response = await fetch("/api/v1/psp");
-            if (!response.ok) throw new Error("Failed to fetch PSPs");
-            return response.json();
-        },
+        queryFn: async () => (await apiFetch("/api/v1/admin/psp")).json(),
     });
 
     // Create/Update role mutation
@@ -75,12 +98,10 @@ export default function RolesTab() {
         mutationFn: async (roleData: any) => {
             const url = editingRole ? `/api/v1/roles/${editingRole.id}` : "/api/v1/roles";
             const method = editingRole ? "PUT" : "POST";
-            const response = await fetch(url, {
+            const response = await apiFetch(url, {
                 method,
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(roleData),
             });
-            if (!response.ok) throw new Error("Failed to save role");
             return response.json();
         },
         onSuccess: () => {
@@ -92,8 +113,7 @@ export default function RolesTab() {
     // Delete role mutation
     const deleteRoleMutation = useMutation({
     mutationFn: async (roleId: number) => {
-        const response = await fetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
-        if (!response.ok) throw new Error("Failed to delete role");
+        await apiFetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["roles"] });
@@ -106,10 +126,11 @@ export default function RolesTab() {
     const handleOpenDialog = (role?: Role) => {
         if (role) {
             setEditingRole(role);
+            const scopedPspId = role.psp?.pspId ?? role.psp?.id ?? role.pspId;
             setFormData({
                 name: role.name,
                 description: role.description,
-                pspId: role.psp?.id.toString() || "",
+                pspId: scopedPspId != null ? String(scopedPspId) : "",
                 permissions: role.permissions,
             });
         } else {
@@ -209,15 +230,23 @@ const handleConfirmDelete = () => {
                                     <TableCell sx={{ color: "text.primary", fontWeight: 500 }}>{role.name}</TableCell>
                                     <TableCell sx={{ color: "text.primary" }}>{role.description}</TableCell>
                                     <TableCell>
-                                        <Chip
-                                            label={role.psp ? role.psp.name : "System"}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: role.psp ? "#f39c1220" : "#8B404920",
-                                                color: role.psp ? "#f39c12" : "#8B4049",
-                                                border: `1px solid ${role.psp ? "#f39c12" : "#8B4049"}`,
-                                            }}
-                                        />
+                                        {(() => {
+                                            const scopeLabel = role.psp
+                                                ? (role.psp.legalName || role.psp.name || role.psp.pspCode || role.psp.code || "PSP")
+                                                : "System";
+                                            const scoped = !!role.psp;
+                                            return (
+                                                <Chip
+                                                    label={scopeLabel}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: scoped ? "#f39c1220" : "#8B404920",
+                                                        color: scoped ? "#f39c12" : "#8B4049",
+                                                        border: `1px solid ${scoped ? "#f39c12" : "#8B4049"}`,
+                                                    }}
+                                                />
+                                            );
+                                        })()}
                                     </TableCell>
                                     <TableCell>
                                         <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -253,7 +282,9 @@ const handleConfirmDelete = () => {
                 <DialogContent>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
                         {saveRoleMutation.isError && (
-                            <Alert severity="error">Failed to save role. Please try again.</Alert>
+                            <Alert severity="error">
+                                {(saveRoleMutation.error as Error)?.message || "Failed to save role. Please try again."}
+                            </Alert>
                         )}
 
                         <TextField
@@ -283,11 +314,16 @@ const handleConfirmDelete = () => {
                                 label="PSP Scope (Optional)"
                             >
                                 <MenuItem value="">System Role (Global)</MenuItem>
-                                {psps?.map((psp) => (
-                                    <MenuItem key={psp.id} value={psp.id.toString()}>
-                                        {psp.name}
-                                    </MenuItem>
-                                ))}
+                                {psps?.map((psp) => {
+                                    const id = psp.pspId ?? psp.id;
+                                    if (id == null) return null;
+                                    const label = psp.legalName || psp.name || psp.pspCode || psp.code || `PSP ${id}`;
+                                    return (
+                                        <MenuItem key={id} value={String(id)}>
+                                            {label}
+                                        </MenuItem>
+                                    );
+                                })}
                             </Select>
                         </FormControl>
 

@@ -97,10 +97,12 @@ public class CaseEnrichmentService {
                     null);
             caseEntityRepository.save(customEntity);
 
-            // 2. Fetch merchant and perform real-time KYC/AML screening
+            // 2. Fetch merchant and perform real-time KYC/AML screening via Sumsub
             try {
                 Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
-                if (merchant != null) {
+                if (merchant == null) {
+                    addSystemNote(cCase, "KYC trigger skipped — merchant " + ref + " not found");
+                } else {
                     String merchantName = merchant.getLegalName() != null
                             ? merchant.getLegalName()
                             : merchant.getTradingName();
@@ -113,10 +115,8 @@ public class CaseEnrichmentService {
                                     + ", kycStatus=" + kycStatus);
 
                     sumsubAmlService.screenMerchantWithSumsub(merchant);
-                    addSystemNote(cCase, "KYC screening triggered for merchant " + merchantName + " (id=" + merchantId + ")");
-                } else {
-                    addSystemNote(cCase, "Triggered background KYC check for merchant id=" + merchantId
-                            + " (merchant record not found in local DB)");
+                    addSystemNote(cCase, "Triggered Sumsub KYC/AML re-screen for merchant "
+                            + ref + " (" + merchantName + ")");
                 }
             } catch (Exception e) {
                 logger.error("KYC trigger failed for merchant {}", merchantId, e);

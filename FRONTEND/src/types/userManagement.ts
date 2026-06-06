@@ -20,10 +20,15 @@ export interface Role {
     pspId?: number;
 }
 
+// Backend serializes Psp with `pspId` (the @Id column) and `legalName`/`pspCode`.
+// Optional `id`/`name` aliases stay around for any callers that hand-build PSP objects.
 export interface Psp {
-    id: number;
-    name: string;
-    code: string;
+    pspId?: number;
+    pspCode?: string;
+    legalName?: string;
+    id?: number;
+    name?: string;
+    code?: string;
 }
 
 export enum Permission {

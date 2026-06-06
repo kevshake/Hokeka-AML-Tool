@@ -130,7 +130,10 @@ export default function UsersTab() {
                 lastName: user.lastName,
                 password: "",
                 roleId: user.role.id.toString(),
-                pspId: user.psp?.id.toString() || "",
+                pspId: (() => {
+                    const id = user.psp?.pspId ?? user.psp?.id;
+                    return id != null ? String(id) : "";
+                })(),
                 enabled: user.enabled,
             });
         } else {

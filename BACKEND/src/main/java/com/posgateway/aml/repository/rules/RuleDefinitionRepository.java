@@ -11,7 +11,5 @@ import java.util.Optional;
 public interface RuleDefinitionRepository extends JpaRepository<RuleDefinition, Long> {
     Optional<RuleDefinition> findByName(String name);
     List<RuleDefinition> findByEnabledTrueOrderByPriorityDesc();
-    // HOK-40: PSP isolation filter
     List<RuleDefinition> findByPspId(Long pspId);
 }
-

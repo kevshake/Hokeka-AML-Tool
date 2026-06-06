@@ -1,29 +1,37 @@
 -- V110__dashboard_psp_performance_indexes.sql
 -- PSP-scoped composite indexes to eliminate full-table scans on dashboard endpoints.
--- Targets: /dashboard/stats (295ms->sub-100ms), /dashboard/cases/priority,
---          /dashboard/risk-distribution, /dashboard/live-alerts, /dashboard/recent-transactions
+-- Uses conditional blocks so this migration is safe on DBs where psp_id columns
+-- were added by intermediate migrations (V18-V107) vs created fresh by Hibernate ddl-auto.
 
 -- merchants: PSP-filtered status and risk-level counts
-CREATE INDEX IF NOT EXISTS idx_merchant_psp_status
-    ON merchants(psp_id, status);
-
-CREATE INDEX IF NOT EXISTS idx_merchant_psp_risk
-    ON merchants(psp_id, risk_level);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='merchants' AND column_name='psp_id') THEN
+        CREATE INDEX IF NOT EXISTS idx_merchant_psp_status  ON merchants(psp_id, status);
+        CREATE INDEX IF NOT EXISTS idx_merchant_psp_risk    ON merchants(psp_id, risk_level);
+    END IF;
+END $$;
 
 -- compliance_cases: PSP-filtered status and priority counts
-CREATE INDEX IF NOT EXISTS idx_case_psp_status
-    ON compliance_cases(psp_id, status);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='compliance_cases' AND column_name='psp_id') THEN
+        CREATE INDEX IF NOT EXISTS idx_case_psp_status   ON compliance_cases(psp_id, status);
+        CREATE INDEX IF NOT EXISTS idx_case_psp_priority ON compliance_cases(psp_id, priority);
+    END IF;
+END $$;
 
-CREATE INDEX IF NOT EXISTS idx_case_psp_priority
-    ON compliance_cases(psp_id, priority);
+-- alerts: support dashboard live-alerts queries ordered by status + time
+-- (merchant_id on alerts is added by a later migration; join to merchants is via txn_id)
+CREATE INDEX IF NOT EXISTS idx_alert_status_ts ON alerts(status, created_at DESC);
 
--- alerts: supports the INNER JOIN to merchants + PSP filter + ORDER BY
-CREATE INDEX IF NOT EXISTS idx_alert_merchant_status_ts
-    ON alerts(merchant_id, status, created_at DESC);
-
--- transactions: PSP-filtered time-ordered scans (recent-transactions, daily volume)
-CREATE INDEX IF NOT EXISTS idx_txn_psp_time
-    ON transactions(psp_id, txn_ts DESC);
+-- transactions: PSP-filtered time-ordered scans
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name='transactions' AND column_name='psp_id') THEN
+        CREATE INDEX IF NOT EXISTS idx_txn_psp_time ON transactions(psp_id, txn_ts DESC);
+    END IF;
+END $$;
 
 -- Update planner statistics for the changed tables
 ANALYZE merchants;

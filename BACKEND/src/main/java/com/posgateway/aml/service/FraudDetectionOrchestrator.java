@@ -60,8 +60,9 @@ public class FraudDetectionOrchestrator {
                 transaction.getTxnId(), features);
         Double score = scoringResult.getScore();
 
-        // Step 3: Make decision
-        DecisionResult decision = decisionEngine.evaluate(transaction, score, features);
+        // Step 3: Make decision (forward scoring latency for monitoring)
+        DecisionResult decision = decisionEngine.evaluate(transaction, score, features,
+                scoringResult.getLatencyMs());
 
         // Enrich risk details with stored Risk Scores (KRS, TRS, CRA)
         Map<String, Object> finalRiskDetails = scoringResult.getRiskDetails();

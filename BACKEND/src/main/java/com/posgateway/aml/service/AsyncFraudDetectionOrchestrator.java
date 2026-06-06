@@ -64,11 +64,13 @@ public class AsyncFraudDetectionOrchestrator {
                 CompletableFuture.supplyAsync(() ->
                     scoringService.scoreTransaction(transaction.getTxnId(), features)));
 
-            // Step 3: Make decision (depends on score)
+            // Step 3: Make decision (depends on score). Pass scoring latency so it
+            // is persisted on transaction_features for monitoring percentiles.
             CompletableFuture<DecisionResult> decisionFuture = scoringFuture.thenCompose(scoringResult ->
                 featuresFuture.thenCompose(features ->
                     CompletableFuture.supplyAsync(() ->
-                        decisionEngine.evaluate(transaction, scoringResult.getScore(), features))));
+                        decisionEngine.evaluate(transaction, scoringResult.getScore(), features,
+                                scoringResult.getLatencyMs()))));
 
             // Combine results
             return decisionFuture.thenCombine(scoringFuture, (decision, scoringResult) -> {

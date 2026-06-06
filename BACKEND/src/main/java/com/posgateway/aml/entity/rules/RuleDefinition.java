@@ -58,6 +58,38 @@ public class RuleDefinition {
     @Column(name = "updated_by")
     private Long updatedBy;
 
+    /** TRUE for the curated default catalog seeded in V135. Cannot be deleted. */
+    @Column(name = "is_system_managed", nullable = false)
+    private boolean systemManaged = false;
+
+    @Column(name = "category", length = 20)
+    private String category; // AML | FRAUD | SCREENING
+
+    @Column(name = "rule_subtype", length = 64)
+    private String ruleSubtype; // Velocity, Anomaly detection, Pattern recognition, Blacklist, Screening, ...
+
+    @Column(name = "applies_to", length = 20)
+    private String appliesTo; // Transaction | User
+
+    @Column(name = "typology")
+    private String typology; // Money mules, Structuring, Unusual behaviour, ...
+
+    @Column(name = "checks_for", columnDefinition = "TEXT")
+    private String checksFor;
+
+    @Column(name = "external_code", length = 20)
+    private String externalCode; // R-1, R-2, ...
+
+    @Column(name = "recommended", nullable = false)
+    private boolean recommended = false;
+
+    @Column(name = "sample_use_case", columnDefinition = "TEXT")
+    private String sampleUseCase;
+
+    @Column(name = "parameters", columnDefinition = "JSONB")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String parameters; // JSON string — editor renders dropdown form from this schema
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -197,4 +229,34 @@ public class RuleDefinition {
     public void setUpdatedBy(Long updatedBy) {
         this.updatedBy = updatedBy;
     }
+
+    public boolean isSystemManaged() { return systemManaged; }
+    public void setSystemManaged(boolean systemManaged) { this.systemManaged = systemManaged; }
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+
+    public String getRuleSubtype() { return ruleSubtype; }
+    public void setRuleSubtype(String ruleSubtype) { this.ruleSubtype = ruleSubtype; }
+
+    public String getAppliesTo() { return appliesTo; }
+    public void setAppliesTo(String appliesTo) { this.appliesTo = appliesTo; }
+
+    public String getTypology() { return typology; }
+    public void setTypology(String typology) { this.typology = typology; }
+
+    public String getChecksFor() { return checksFor; }
+    public void setChecksFor(String checksFor) { this.checksFor = checksFor; }
+
+    public String getExternalCode() { return externalCode; }
+    public void setExternalCode(String externalCode) { this.externalCode = externalCode; }
+
+    public boolean isRecommended() { return recommended; }
+    public void setRecommended(boolean recommended) { this.recommended = recommended; }
+
+    public String getSampleUseCase() { return sampleUseCase; }
+    public void setSampleUseCase(String sampleUseCase) { this.sampleUseCase = sampleUseCase; }
+
+    public String getParameters() { return parameters; }
+    public void setParameters(String parameters) { this.parameters = parameters; }
 }

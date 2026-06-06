@@ -28,10 +28,6 @@ public class MessagesController {
         this.messageService = messageService;
     }
 
-    /**
-     * Get all messages for current user.
-     * GET /api/v1/messages
-     */
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getMessages(
             @AuthenticationPrincipal User currentUser,
@@ -42,10 +38,6 @@ public class MessagesController {
         return ResponseEntity.ok(messageService.listForUser(currentUser.getId(), unreadOnly));
     }
 
-    /**
-     * Mark message as read.
-     * PUT /api/v1/messages/{id}/read
-     */
     @PutMapping("/{id}/read")
     public ResponseEntity<Void> markAsRead(@AuthenticationPrincipal User currentUser,
                                            @PathVariable Long id) {
@@ -56,10 +48,6 @@ public class MessagesController {
         return ok ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 
-    /**
-     * Mark all messages as read for the current user.
-     * PUT /api/v1/messages/read-all
-     */
     @PutMapping("/read-all")
     public ResponseEntity<Map<String, Integer>> markAllAsRead(@AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {
@@ -69,10 +57,6 @@ public class MessagesController {
         return ResponseEntity.ok(Map.of("updated", updated));
     }
 
-    /**
-     * Get unread message count.
-     * GET /api/v1/messages/unread/count
-     */
     @GetMapping("/unread/count")
     public ResponseEntity<Map<String, Long>> getUnreadCount(@AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {

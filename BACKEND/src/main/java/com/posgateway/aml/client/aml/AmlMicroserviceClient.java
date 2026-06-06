@@ -90,4 +90,106 @@ public class AmlMicroserviceClient {
                 req != null ? req.transactionId() : null, t.getMessage());
         return null;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Aerospike risk-profile cache (P3-A)
+    //
+    // Fire-and-forget PUT to /internal/v1/cache/risk-profile/{customerId}. The
+    // microservice owns the Aerospike client; BACKEND just emits the write so
+    // the rule engine's hot path can read sub-millisecond instead of round-
+    // tripping to Postgres for every transaction.
+    //
+    // We deliberately swallow non-2xx responses and timeouts here — the cache
+    // is best-effort. The DB row written by RiskScoringService is the source of
+    // truth; a missed cache write only costs a future cache miss, not data loss.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "cacheRiskProfileFallback")
+    public void cacheRiskProfile(Long customerId, java.util.Map<String, Object> profile) {
+        if (!properties.isEnabled() || customerId == null) {
+            return;
+        }
+        try {
+            webClient.put()
+                    .uri("/internal/v1/cache/risk-profile/{customerId}", customerId)
+                    .bodyValue(profile != null ? profile : java.util.Map.of())
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(Duration.ofMillis(properties.getReadTimeoutMs() + 100L));
+            log.debug("Risk profile cached in Aerospike for customerId={}", customerId);
+        } catch (Exception e) {
+            // Best-effort; do not bubble up to the scoring transaction.
+            log.warn("Aerospike risk-profile cache write failed for customerId={}: {}",
+                    customerId, e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private void cacheRiskProfileFallback(Long customerId, java.util.Map<String, Object> profile, Throwable t) {
+        log.debug("AML microservice cache fallback (customerId={}, reason={})",
+                customerId, t.getMessage());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // P3-B: velocity counter cache write
+    // PUT /internal/v1/cache/velocity/{customerId}
+    // Body: { "ts_ms": long, "amount_cents": long, "country": "..." }
+    // The microservice maintains a sliding-window counter in Aerospike set
+    // {@code velocity}; reads happen via getVelocity below or directly from
+    // the rule engine running inside the microservice.
+    // ─────────────────────────────────────────────────────────────────────────
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "cacheGenericFallback")
+    public void recordVelocityEvent(String customerId, java.util.Map<String, Object> event) {
+        if (!properties.isEnabled() || customerId == null || customerId.isBlank()) return;
+        try {
+            webClient.put()
+                    .uri("/internal/v1/cache/velocity/{customerId}", customerId)
+                    .bodyValue(event != null ? event : java.util.Map.of())
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(Duration.ofMillis(properties.getReadTimeoutMs() + 100L));
+        } catch (Exception e) {
+            log.warn("Aerospike velocity cache write failed for customer {}: {}", customerId, e.getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // P3-C: device fingerprint + IP reputation cache writes
+    // PUT /internal/v1/cache/device/{fingerprint}
+    // PUT /internal/v1/cache/ip-reputation/{ip}
+    // ─────────────────────────────────────────────────────────────────────────
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "cacheGenericFallback")
+    public void recordDeviceObservation(String fingerprint, java.util.Map<String, Object> obs) {
+        if (!properties.isEnabled() || fingerprint == null || fingerprint.isBlank()) return;
+        try {
+            webClient.put()
+                    .uri("/internal/v1/cache/device/{fp}", fingerprint)
+                    .bodyValue(obs != null ? obs : java.util.Map.of())
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(Duration.ofMillis(properties.getReadTimeoutMs() + 100L));
+        } catch (Exception e) {
+            log.warn("Aerospike device cache write failed for fp {}: {}", fingerprint, e.getMessage());
+        }
+    }
+
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "cacheGenericFallback")
+    public void recordIpObservation(String ip, java.util.Map<String, Object> obs) {
+        if (!properties.isEnabled() || ip == null || ip.isBlank()) return;
+        try {
+            webClient.put()
+                    .uri("/internal/v1/cache/ip-reputation/{ip}", ip)
+                    .bodyValue(obs != null ? obs : java.util.Map.of())
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(Duration.ofMillis(properties.getReadTimeoutMs() + 100L));
+        } catch (Exception e) {
+            log.warn("Aerospike IP cache write failed for ip {}: {}", ip, e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private void cacheGenericFallback(String key, java.util.Map<String, Object> body, Throwable t) {
+        log.debug("AML microservice cache fallback (key={}, reason={})", key, t.getMessage());
+    }
 }

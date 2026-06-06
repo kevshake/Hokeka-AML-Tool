@@ -25,9 +25,9 @@ public class Role {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "psp_id")
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"users", "hibernateLazyInitializer", "handler"})
     private Psp psp; // NULL = System global role, NOT NULL = PSP specific role
 
     @ElementCollection(targetClass = Permission.class, fetch = FetchType.EAGER)

@@ -2,11 +2,15 @@ package com.posgateway.aml.service;
 
 import com.posgateway.aml.config.FraudProperties;
 import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.limits.VelocityRule;
 import com.posgateway.aml.model.RiskAssessment;
 import com.posgateway.aml.model.RiskLevel;
 import com.posgateway.aml.model.Transaction;
 import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.repository.limits.VelocityRuleRepository;
 import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
+import com.posgateway.aml.service.cache.FeatureCacheService;
+import com.posgateway.aml.service.enrichment.IpGeoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,16 +54,45 @@ public class FraudDetectionService {
             "185.", "194.", "195.", "198.", "199."               // common VPN/hosting ASNs
     );
 
+    // Score weights (integer points added to fraudScore, max ~100)
+    private static final int SCORE_DEVICE_MISSING     = 10;
+    private static final int SCORE_DEVICE_BLACKLISTED = 40;
+    private static final int SCORE_DEVICE_NEW         = 15;
+    private static final int SCORE_IP_MISSING         = 10;
+    private static final int SCORE_IP_BLACKLISTED     = 30;
+    private static final int SCORE_COUNTRY_HIGH       = 20;
+    private static final int SCORE_COUNTRY_CRITICAL   = 35;
+    private static final int SCORE_GEO_HOPPING        = 15;  // >3 unique countries in 24h
+    private static final int SCORE_VELOCITY_LOW       = 10;
+    private static final int SCORE_VELOCITY_MEDIUM    = 20;
+    private static final int SCORE_VELOCITY_HIGH      = 30;
+    private static final int SCORE_VELOCITY_CRITICAL  = 45;
+
+    // Device counter TTL: 7 days (matching FeatureCacheService TTL_FEATURES_DAYS)
+    private static final long DEVICE_COUNTER_TTL_S = 7 * 24 * 3600L;
+
     private final FraudProperties fraudProperties;
     private final TransactionRepository transactionRepository;
+    private final FeatureCacheService featureCacheService;
     private final HighRiskCountryRepository highRiskCountryRepository;
+    private final VelocityRuleRepository velocityRuleRepository;
+    private final IpGeoService ipGeoService;
+    private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
 
     public FraudDetectionService(FraudProperties fraudProperties,
                                  TransactionRepository transactionRepository,
-                                 HighRiskCountryRepository highRiskCountryRepository) {
+                                 FeatureCacheService featureCacheService,
+                                 HighRiskCountryRepository highRiskCountryRepository,
+                                 VelocityRuleRepository velocityRuleRepository,
+                                 IpGeoService ipGeoService,
+                                 com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient) {
         this.fraudProperties = fraudProperties;
         this.transactionRepository = transactionRepository;
+        this.featureCacheService = featureCacheService;
         this.highRiskCountryRepository = highRiskCountryRepository;
+        this.velocityRuleRepository = velocityRuleRepository;
+        this.ipGeoService = ipGeoService;
+        this.amlMicroserviceClient = amlMicroserviceClient;
     }
 
     // =========================================================================
@@ -100,7 +133,7 @@ public class FraudDetectionService {
         assessment.setRiskFactors(riskFactors);
         assessment.setAssessedAt(LocalDateTime.now());
 
-        logger.info("Fraud risk assessment completed for transaction {}: Score={}, Level={}",
+        logger.info("Fraud assessment txn={} score={} level={}",
                 transaction.getTransactionId(), fraudScore, riskLevel);
 
         return assessment;
@@ -198,83 +231,127 @@ public class FraudDetectionService {
     // Private helpers — model.Transaction scoring
     // =========================================================================
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Device risk
+    // ──────────────────────────────────────────────────────────────────────────
+
     private int assessDeviceRisk(Transaction transaction, List<String> riskFactors) {
-        int score = 0;
+        String fingerprint = transaction.getDeviceFingerprint();
 
-        String deviceFingerprint = transaction.getDeviceFingerprint();
-        if (deviceFingerprint == null || deviceFingerprint.isBlank()) {
-            score += 30;
+        if (fingerprint == null || fingerprint.isBlank()) {
             riskFactors.add("Missing device fingerprint");
-            return score;
+            return SCORE_DEVICE_MISSING;
         }
 
-        // Check for CRITICAL (fraud) alerts linked to this device fingerprint.
-        Long fraudAlerts = safeQueryLong(() ->
-                transactionRepository.countFraudAlertsByDeviceFingerprint(deviceFingerprint));
-        if (fraudAlerts > 0) {
-            score += 90;
-            riskFactors.add("Device fingerprint associated with fraud alerts");
-            return score;
-        }
+        int score = 0;
+        String customerId = transaction.getAccountNumber();
 
-        // Count distinct merchants visited in the last 24 h (card-testing signal).
-        LocalDateTime since = LocalDateTime.now().minusHours(24);
-        Long distinctMerchants = safeQueryLong(() ->
-                transactionRepository.countDistinctMerchantsByDeviceSince(
-                        deviceFingerprint, since, LocalDateTime.now()));
+        try {
+            // Hard-stop: device is on the explicit blacklist
+            if (featureCacheService.isBlacklisted("device", fingerprint)) {
+                riskFactors.add("Blacklisted device fingerprint: " + fingerprint);
+                return SCORE_DEVICE_BLACKLISTED; // nothing else needed
+            }
 
-        if (distinctMerchants > 5) {
-            score += 80;
-            riskFactors.add("Device used at " + distinctMerchants + " distinct merchants in last 24h");
-        } else if (distinctMerchants >= 3) {
-            score += 50;
-            riskFactors.add("Device used at multiple merchants in last 24h");
-        } else {
-            score += 10;
+            // New device for this customer (counter == 0 means never seen before)
+            String deviceCounterKey = "device:" + fingerprint;
+            long seenCount = featureCacheService.getCounter(customerId, deviceCounterKey);
+            if (seenCount == 0) {
+                score += SCORE_DEVICE_NEW;
+                riskFactors.add("New device fingerprint for this customer");
+            }
+            featureCacheService.incrementCounter(customerId, deviceCounterKey, DEVICE_COUNTER_TTL_S);
+
+            // P3-C shadow write to Aerospike via aml-microservice (fire-and-forget).
+            // Redis remains the read-side source of truth; once aml-microservice
+            // exposes /internal/v1/cache/device, the rule engine inside that
+            // service can read from Aerospike directly with sub-ms latency.
+            try {
+                java.util.Map<String, Object> obs = new java.util.HashMap<>();
+                obs.put("customerId", customerId);
+                obs.put("seenCount", seenCount + 1);
+                obs.put("lastSeenMs", System.currentTimeMillis());
+                amlMicroserviceClient.recordDeviceObservation(fingerprint, obs);
+            } catch (Exception ignore) { /* logged by client */ }
+
+        } catch (Exception e) {
+            logger.warn("Device risk check failed for txn={}: {}", transaction.getTransactionId(), e.getMessage());
         }
 
         return score;
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // IP / geo risk
+    // ──────────────────────────────────────────────────────────────────────────
 
     private int assessIpRisk(Transaction transaction, List<String> riskFactors) {
-        int score = 0;
+        String ip = transaction.getIpAddress();
 
-        String ipAddress = transaction.getIpAddress();
-        if (ipAddress == null || ipAddress.isBlank()) {
-            score += 10;
+        if (ip == null || ip.isBlank()) {
             riskFactors.add("Missing IP address");
-            return score;
+            return SCORE_IP_MISSING;
         }
 
-        int accumulated = 0;
+        int score = 0;
+        String customerId = transaction.getAccountNumber();
 
-        // Velocity: count transactions from this IP in the last hour.
-        LocalDateTime hourAgo = LocalDateTime.now().minusHours(1);
-        Long ipTxCount = safeQueryLong(() ->
-                transactionRepository.countByIpAddressSince(ipAddress, hourAgo, LocalDateTime.now()));
-        if (ipTxCount > 20) {
-            accumulated += 85;
-            riskFactors.add("High transaction velocity from IP: " + ipTxCount + " transactions in last hour");
-        }
-
-        // High-risk country check via repository (with FATF static fallback).
-        String countryCode = transaction.getCountryCode();
-        if (countryCode != null && !countryCode.isBlank()) {
-            boolean highRiskCountry = isHighRiskCountry(countryCode);
-            if (highRiskCountry) {
-                accumulated += 30;
-                riskFactors.add("Transaction from high-risk country: " + countryCode);
+        try {
+            // Hard-stop: IP is on the explicit blacklist
+            if (featureCacheService.isBlacklisted("ip", ip)) {
+                score += SCORE_IP_BLACKLISTED;
+                riskFactors.add("Blacklisted IP address: " + ip);
             }
+
+            // Resolve country — prefer the field already on the transaction (set by enrichment
+            // pipeline), fall back to real-time GeoIP lookup
+            String countryCode = transaction.getCountryCode();
+            if (countryCode == null || countryCode.isBlank()) {
+                countryCode = ipGeoService.lookupCountry(ip).orElse(null);
+            }
+
+            if (countryCode != null) {
+                // High-risk / critical country check (reads from high_risk_countries table)
+                var hrcOpt = highRiskCountryRepository.findByCountryCode(countryCode);
+                if (hrcOpt.isPresent()) {
+                    String level = hrcOpt.get().getRiskLevel();
+                    if ("CRITICAL".equals(level)) {
+                        score += SCORE_COUNTRY_CRITICAL;
+                        riskFactors.add("Transaction from CRITICAL risk country: " + countryCode);
+                    } else {
+                        score += SCORE_COUNTRY_HIGH;
+                        riskFactors.add("Transaction from HIGH risk country: " + countryCode);
+                    }
+                }
+
+                // Track distinct countries per customer (24h window) and flag geo-hopping
+                featureCacheService.addCountry(customerId, countryCode, 24);
+                int uniqueCountries = featureCacheService.getUniqueCountryCount(customerId, 24);
+                if (uniqueCountries > 3) {
+                    score += SCORE_GEO_HOPPING;
+                    riskFactors.add("Geo-hopping detected: " + uniqueCountries + " countries in 24h");
+                }
+            }
+
+            // P3-C shadow write of IP observation to Aerospike (fire-and-forget)
+            try {
+                java.util.Map<String, Object> obs = new java.util.HashMap<>();
+                obs.put("customerId", customerId);
+                obs.put("country", countryCode);
+                obs.put("lastSeenMs", System.currentTimeMillis());
+                amlMicroserviceClient.recordIpObservation(ip, obs);
+            } catch (Exception ignore) { /* logged by client */ }
+
+        } catch (Exception e) {
+            logger.warn("IP risk check failed for txn={}: {}", transaction.getTransactionId(), e.getMessage());
         }
 
-        // Apply a base score of 10 for a recognised IP with no risk signals.
-        if (accumulated == 0) {
-            accumulated = 10;
-        }
-
-        score += Math.min(accumulated, 95);
         return score;
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Behavioral risk (time, MCC patterns — future expansion point)
+    // ──────────────────────────────────────────────────────────────────────────
 
     private int assessBehavioralRisk(Transaction transaction, List<String> riskFactors) {
         int score = 5; // floor
@@ -288,8 +365,6 @@ public class FraudDetectionService {
         String accountNumber = transaction.getAccountNumber();
         if (accountNumber != null && !accountNumber.isBlank()) {
             // Use average from last 30 transactions for this PAN (best proxy available).
-            // The panHash is not available on model.Transaction, so we use the account
-            // number column (same logical identity for this model).
             Double avg = safeQueryDouble(() ->
                     transactionRepository.avgAmountByPanInTimeWindow(
                             accountNumber,
@@ -317,26 +392,52 @@ public class FraudDetectionService {
         return Math.min(score, 95);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Velocity risk — evaluated against active rules from velocity_rules table
+    // ──────────────────────────────────────────────────────────────────────────
+
     private int assessVelocityRisk(Transaction transaction, List<String> riskFactors) {
         int score = 0;
+        String customerId = transaction.getAccountNumber();
+        long nowMs = System.currentTimeMillis();
 
-        String accountNumber = transaction.getAccountNumber();
-        if (accountNumber == null || accountNumber.isBlank()) {
-            return score;
-        }
+        // Record this transaction in the sliding window before evaluating so rules
+        // include the current txn in their counts
+        featureCacheService.recordTransaction(customerId, nowMs, nowMs);
 
-        // Count transactions for this account in the configured velocity window.
-        int windowMinutes = fraudProperties.getVelocity().getWindowMinutes();
-        int maxTransactions = fraudProperties.getVelocity().getMaxTransactions();
-        LocalDateTime windowStart = LocalDateTime.now().minusMinutes(windowMinutes);
+        // P3-B shadow write to Aerospike velocity counter (fire-and-forget)
+        try {
+            java.util.Map<String, Object> event = new java.util.HashMap<>();
+            event.put("tsMs", nowMs);
+            if (transaction.getAmount() != null) {
+                event.put("amountCents", transaction.getAmount().movePointRight(2).longValueExact());
+            }
+            event.put("country", transaction.getCountryCode());
+            amlMicroserviceClient.recordVelocityEvent(customerId, event);
+        } catch (Exception ignore) { /* logged by client */ }
 
-        Long count = safeQueryLong(() ->
-                transactionRepository.countByPanInTimeWindow(
-                        accountNumber, windowStart, LocalDateTime.now()));
+        try {
+            List<VelocityRule> activeRules = velocityRuleRepository.findByStatus("ACTIVE");
 
-        if (count > maxTransactions) {
-            score += 30;
-            riskFactors.add("Velocity exceeded: " + count + " transactions in " + windowMinutes + " minutes");
+            for (VelocityRule rule : activeRules) {
+                // PSP-scoped rules apply only to their PSP; global rules (pspId null) apply to all
+                if (rule.getPspId() != null && !rule.getPspId().equals(transaction.getPspId())) {
+                    continue;
+                }
+
+                long windowMs = (long) rule.getTimeWindowMinutes() * 60_000L;
+                long txCount = featureCacheService.getTxCountInWindow(customerId, windowMs);
+
+                if (txCount > rule.getMaxTransactions()) {
+                    score += velocityScoreForLevel(rule.getRiskLevel());
+                    riskFactors.add(String.format(
+                            "Velocity rule '%s' breached: %d txns in %d min (limit %d)",
+                            rule.getRuleName(), txCount, rule.getTimeWindowMinutes(), rule.getMaxTransactions()));
+                }
+            }
+
+        } catch (Exception e) {
+            logger.warn("Velocity risk check failed for txn={}: {}", transaction.getTransactionId(), e.getMessage());
         }
 
         return score;
@@ -354,6 +455,16 @@ public class FraudDetectionService {
                     countryCode, ex.getMessage());
             return FATF_HIGH_RISK_COUNTRIES.contains(countryCode);
         }
+    }
+
+    private int velocityScoreForLevel(String riskLevel) {
+        if (riskLevel == null) return SCORE_VELOCITY_LOW;
+        return switch (riskLevel.toUpperCase()) {
+            case "CRITICAL" -> SCORE_VELOCITY_CRITICAL;
+            case "HIGH"     -> SCORE_VELOCITY_HIGH;
+            case "MEDIUM"   -> SCORE_VELOCITY_MEDIUM;
+            default         -> SCORE_VELOCITY_LOW;
+        };
     }
 
     /**
@@ -385,13 +496,8 @@ public class FraudDetectionService {
     private RiskLevel determineRiskLevel(int fraudScore) {
         int threshold = fraudProperties.getScoring().getThreshold();
         int mediumThreshold = (int) (threshold * 0.7);
-
-        if (fraudScore >= threshold) {
-            return RiskLevel.HIGH;
-        }
-        if (fraudScore >= mediumThreshold) {
-            return RiskLevel.MEDIUM;
-        }
+        if (fraudScore >= threshold)       return RiskLevel.HIGH;
+        if (fraudScore >= mediumThreshold) return RiskLevel.MEDIUM;
         return RiskLevel.LOW;
     }
 

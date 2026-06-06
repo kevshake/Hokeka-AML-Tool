@@ -20,7 +20,7 @@ import java.util.Optional;
  * executor — it runs on the {@code amlTaskExecutor} thread pool so the hot
  * scoring path is not blocked by JDBC writes.
  */
-@Service
+@Service("ruleExecutionEffectivenessService")
 public class RuleEffectivenessService {
 
     private static final Logger logger = LoggerFactory.getLogger(RuleEffectivenessService.class);
