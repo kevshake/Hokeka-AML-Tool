@@ -311,13 +311,23 @@ export default function RulesGenerationPage() {
         <Tab label="Velocity Rules" />
         <Tab label="Risk Thresholds" />
       </Tabs>
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Visual Rule Builder</Typography>
-        <VisualRuleBuilder onChange={(expr, json) => { setEditingRule({ ruleName: "Visual Rule", ruleExpression: expr, ruleType: "SPEL", ruleJson: JSON.stringify(json) }); setOpenDialog(true); }} />
-      </Box>
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>Visual Rule Builder (Beta)</Typography>
-        <VisualRuleBuilder onChange={(expr, json) => console.log("Generated Rule:", expr, json)} />
+
+      <Box sx={{ mt: 4, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>Visual Rule Builder</Typography>
+        <VisualRuleBuilder
+          onChange={(expr, json) =>
+            setEditingRule({
+              ruleName: "Visual Rule",
+              ruleExpression: expr,
+              ruleType: "SPEL",
+              ruleJson: JSON.stringify(json),
+            })
+          }
+          onSave={(rule) => {
+            setEditingRule(rule);
+            setOpenDialog(true);
+          }}
+        />
       </Box>
 
       {/* AML Rules Tab */}
@@ -1586,4 +1596,3 @@ function EffectivenessDialog({
     </Dialog>
   );
 }
-

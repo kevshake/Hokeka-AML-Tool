@@ -84,17 +84,17 @@ public class CaseAssignmentService {
         if (role == null)
             return;
 
-        // 1. Find users with this role (Simplification: assumes repository method
-        // exists)
-        // In real app: userRepository.findByRole(role)
-        List<User> eligibleUsers = userRepository.findAll(); // specific method needed in repo
+        List<User> eligibleUsers = userRepository.findByRole_NameAndEnabled(role, true);
+        if (eligibleUsers.isEmpty()) {
+            logger.warn("No eligible active users found for queue {} target role {}",
+                    queue.getQueueName(), role);
+            return;
+        }
 
         User bestCandidate = null;
         long minPayload = Long.MAX_VALUE;
 
-        // 2. Find user with lowest open case count
         for (User user : eligibleUsers) {
-            // Need a way to check role, skipping for brevity in this snippet
             long openCases = complianceCaseRepository.countByAssignedTo_IdAndStatusIn(
                     user.getId(),
                     List.of(CaseStatus.NEW, CaseStatus.IN_PROGRESS, CaseStatus.ASSIGNED));
@@ -105,7 +105,6 @@ public class CaseAssignmentService {
             }
         }
 
-        // 3. Assign
         if (bestCandidate != null) {
             assignCaseToUser(cCase.getId(), bestCandidate.getId(), null); // System assignment
         }

@@ -11,8 +11,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -70,18 +73,15 @@ public class ContentMonitoringService {
     }
 
     private void checkMerchantWebsite(Merchant merchant) {
-        String url = normalizeUrl(merchant.getWebsite());
-        if (url == null) return;
         try {
-            ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
-            if (resp.getStatusCode().isError() || resp.getBody() == null) {
-                log.debug("G2 scan: {} returned status={} for merchant {}",
-                        url, resp.getStatusCode(), merchant.getLegalName());
+            String url = normalizeWebsiteUrl(merchant.getWebsite());
+            String htmlContent = restTemplate.getForObject(url, String.class);
+            if (htmlContent == null || htmlContent.isBlank()) {
+                log.debug("No website content returned for merchant {}", merchant.getLegalName());
                 return;
             }
-            String body = resp.getBody();
-            if (body.length() > maxBytes) body = body.substring(0, maxBytes);
-            String lower = body.toLowerCase();
+
+            String lower = htmlContent.toLowerCase();
             for (String keyword : RISKY_KEYWORDS) {
                 if (lower.contains(keyword)) {
                     log.warn("RISK DETECTED: Merchant {} website {} contains keyword '{}'",
@@ -91,19 +91,26 @@ public class ContentMonitoringService {
                     return;
                 }
             }
-        } catch (Exception e) {
-            log.warn("G2 scan failed for merchant {} ({}): {}",
-                    merchant.getLegalName(), url, e.getMessage());
+        } catch (URISyntaxException | IllegalArgumentException e) {
+            log.warn("Skipping invalid website URL for merchant {}: {}", merchant.getLegalName(), merchant.getWebsite());
+        } catch (RestClientException e) {
+            log.warn("Failed to scan website for merchant {}: {}", merchant.getLegalName(), e.getMessage());
         }
     }
 
-    private static String normalizeUrl(String raw) {
-        if (raw == null) return null;
-        String trimmed = raw.trim();
-        if (trimmed.isEmpty()) return null;
+    private String normalizeWebsiteUrl(String website) throws URISyntaxException {
+        String trimmed = website.trim();
         if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
             trimmed = "https://" + trimmed;
         }
-        return trimmed;
+        URI uri = new URI(trimmed);
+        if (uri.getHost() == null) {
+            throw new URISyntaxException(trimmed, "Website URL must include a host");
+        }
+        String scheme = uri.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            throw new URISyntaxException(trimmed, "Only HTTP and HTTPS website URLs are supported");
+        }
+        return uri.toString();
     }
 }

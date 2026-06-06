@@ -1,5 +1,6 @@
 package com.posgateway.aml.service.risk;
 
+import com.posgateway.aml.client.aml.AmlMicroserviceClient;
 import com.posgateway.aml.entity.merchant.BeneficialOwner;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.merchant.MerchantRiskScore;
@@ -84,34 +85,33 @@ public class RiskScoringService {
     private final MeterRegistry meterRegistry;
     private final RulesExecutionService rulesExecutionService;
     private final CountryRiskRepository countryRiskRepository;
-    private final HighRiskCountryRepository highRiskCountryRepository;
     private final MerchantRepository merchantRepository;
-    private final MerchantRiskScoreRepository merchantRiskScoreRepository;
+    private final HighRiskCountryRepository highRiskCountryRepository;
     private final BeneficialOwnerRepository beneficialOwnerRepository;
-    private final AlertRepository alertRepository;
     private final TransactionRepository transactionRepository;
-
-    private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
+    private final AlertRepository alertRepository;
+    private final MerchantRiskScoreRepository merchantRiskScoreRepository;
+    private final AmlMicroserviceClient amlMicroserviceClient;
 
     public RiskScoringService(MeterRegistry meterRegistry,
                               RulesExecutionService rulesExecutionService,
                               CountryRiskRepository countryRiskRepository,
-                              HighRiskCountryRepository highRiskCountryRepository,
                               MerchantRepository merchantRepository,
-                              MerchantRiskScoreRepository merchantRiskScoreRepository,
+                              HighRiskCountryRepository highRiskCountryRepository,
                               BeneficialOwnerRepository beneficialOwnerRepository,
-                              AlertRepository alertRepository,
                               TransactionRepository transactionRepository,
-                              com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient) {
+                              AlertRepository alertRepository,
+                              MerchantRiskScoreRepository merchantRiskScoreRepository,
+                              AmlMicroserviceClient amlMicroserviceClient) {
         this.meterRegistry = meterRegistry;
         this.rulesExecutionService = rulesExecutionService;
         this.countryRiskRepository = countryRiskRepository;
-        this.highRiskCountryRepository = highRiskCountryRepository;
         this.merchantRepository = merchantRepository;
-        this.merchantRiskScoreRepository = merchantRiskScoreRepository;
+        this.highRiskCountryRepository = highRiskCountryRepository;
         this.beneficialOwnerRepository = beneficialOwnerRepository;
-        this.alertRepository = alertRepository;
         this.transactionRepository = transactionRepository;
+        this.alertRepository = alertRepository;
+        this.merchantRiskScoreRepository = merchantRiskScoreRepository;
         this.amlMicroserviceClient = amlMicroserviceClient;
     }
 
@@ -165,14 +165,11 @@ public class RiskScoringService {
         return newCra;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Overall risk orchestration (called per transaction by the rule engine)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    public Map<String, Object> calculateOverallRisk(String txnId,
-                                                    Map<String, Object> features,
-                                                    Map<String, Object> riskDetails) {
-        double krsScore = ((Number) features.getOrDefault("krs_score", NEUTRAL_RISK)).doubleValue();
+    public Map<String, Object> calculateOverallRisk(String txnId, Map<String, Object> features, Map<String, Object> riskDetails) {
+        // 1. Calculate KRS from the persisted merchant profile when merchant_id is present.
+        double krsScore = resolveMerchant(features)
+                .map(this::calculateKrs)
+                .orElseGet(() -> ((Number) features.getOrDefault("krs_score", 50.0)).doubleValue());
 
         double baseTrs = calculateTrs(
                 (String) features.getOrDefault("origin_country", null),
@@ -202,9 +199,22 @@ public class RiskScoringService {
         return result;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // CRA — Customer Risk Assessment (real implementation, no defaults)
-    // ─────────────────────────────────────────────────────────────────────────
+    private java.util.Optional<Merchant> resolveMerchant(Map<String, Object> features) {
+        Object rawMerchantId = features.get("merchant_id");
+        if (rawMerchantId == null) {
+            rawMerchantId = features.get("merchantId");
+        }
+        if (rawMerchantId == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            Long merchantId = Long.valueOf(rawMerchantId.toString());
+            return merchantRepository.findByMerchantId(merchantId);
+        } catch (NumberFormatException ex) {
+            log.warn("Cannot resolve merchant KRS for non-numeric merchant_id={}", rawMerchantId);
+            return java.util.Optional.empty();
+        }
+    }
 
     /**
      * Compute CRA from real data: country risk, PEP/sanctions screening,

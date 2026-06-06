@@ -50,4 +50,30 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
     // a "related SARs in the same case" count.
     List<SuspiciousActivityReport> findByComplianceCase_Id(Long complianceCaseId);
     long countByComplianceCase_Id(Long complianceCaseId);
+
+    // -----------------------------------------------------------------------
+    // Dashboard SAR-filing-SLA aggregates
+    // -----------------------------------------------------------------------
+
+    /** Count SARs that have been filed (filed_at IS NOT NULL) since :since. */
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT COUNT(s) FROM SuspiciousActivityReport s " +
+        "WHERE s.filedAt IS NOT NULL AND s.filedAt >= :since")
+    long countFiledSince(@org.springframework.data.repository.query.Param("since") LocalDateTime since);
+
+    /**
+     * Count SARs filed within {@code slaDays} of the linked case being opened.
+     * Used as the numerator of the SAR filing SLA percentage. The case opened
+     * time is joined from the {@code compliance_cases.created_at} column.
+     */
+    @org.springframework.data.jpa.repository.Query(value =
+        "SELECT COUNT(*) FROM suspicious_activity_reports s " +
+        "JOIN compliance_cases c ON c.id = s.case_id " +
+        "WHERE s.filed_at IS NOT NULL " +
+        "  AND s.filed_at >= :since " +
+        "  AND s.filed_at <= c.created_at + (:slaDays * INTERVAL '1 day')",
+        nativeQuery = true)
+    long countFiledWithinSla(
+        @org.springframework.data.repository.query.Param("since") LocalDateTime since,
+        @org.springframework.data.repository.query.Param("slaDays") int slaDays);
 }

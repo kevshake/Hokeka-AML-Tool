@@ -200,4 +200,36 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
             "ORDER BY COUNT(c.id) DESC",
            nativeQuery = true)
     List<Object[]> countOpenCasesByAssignee();
+
+    // -----------------------------------------------------------------------
+    // Dashboard aggregates (DashboardController)
+    // -----------------------------------------------------------------------
+
+    /** Count cases whose status is in :statuses and were resolved within [start, end). */
+    @Query("SELECT COUNT(c) FROM ComplianceCase c " +
+           "WHERE c.status IN :statuses " +
+           "AND c.resolvedAt IS NOT NULL " +
+           "AND c.resolvedAt >= :start AND c.resolvedAt < :end")
+    long countByStatusInAndResolvedAtBetween(@Param("statuses") List<CaseStatus> statuses,
+                                              @Param("start") LocalDateTime start,
+                                              @Param("end") LocalDateTime end);
+
+    /** Count any open cases (used as denominator for closure rate). */
+    @Query("SELECT COUNT(c) FROM ComplianceCase c WHERE c.status IN :statuses")
+    long countByStatusIn(@Param("statuses") List<CaseStatus> statuses);
+
+    /**
+     * Daily resolved-case counts for the sparkline. Returns rows of
+     * [date (java.sql.Date), count (Long)] grouped by DATE(resolved_at).
+     */
+    @Query(value = "SELECT DATE(c.resolved_at) AS d, COUNT(*) AS cnt " +
+                   "FROM compliance_cases c " +
+                   "WHERE c.resolved_at IS NOT NULL " +
+                   "  AND c.resolved_at >= :start AND c.resolved_at < :end " +
+                   "GROUP BY DATE(c.resolved_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyResolvedCounts(@Param("start") LocalDateTime start,
+                                          @Param("end") LocalDateTime end);
+
+    /** Cases created within a window (for SAR-filing-SLA denominator). */
+    long countByCreatedAtAfter(LocalDateTime since);
 }

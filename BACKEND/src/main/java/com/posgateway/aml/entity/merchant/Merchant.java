@@ -111,6 +111,15 @@ public class Merchant {
     @Column(name = "next_screening_due")
     private LocalDate nextScreeningDue;
 
+    // CDD / EDD review tracking (V140__compliance_review_tracking.sql) — used
+    // by the dashboard Compliance Health aggregate. NULL means "no review on
+    // record" (we deliberately do not back-fill with synthetic dates).
+    @Column(name = "last_cdd_review_at")
+    private LocalDateTime lastCddReviewAt;
+
+    @Column(name = "last_edd_review_at")
+    private LocalDateTime lastEddReviewAt;
+
     // Enhanced Dashboard Fields
     @Column(name = "kyc_status", length = 50)
     private String kycStatus = "PENDING"; // PENDING, APPROVED, REJECTED
@@ -409,6 +418,22 @@ public class Merchant {
 
     public void setNextScreeningDue(LocalDate nextScreeningDue) {
         this.nextScreeningDue = nextScreeningDue;
+    }
+
+    public LocalDateTime getLastCddReviewAt() {
+        return lastCddReviewAt;
+    }
+
+    public void setLastCddReviewAt(LocalDateTime lastCddReviewAt) {
+        this.lastCddReviewAt = lastCddReviewAt;
+    }
+
+    public LocalDateTime getLastEddReviewAt() {
+        return lastEddReviewAt;
+    }
+
+    public void setLastEddReviewAt(LocalDateTime lastEddReviewAt) {
+        this.lastEddReviewAt = lastEddReviewAt;
     }
 
     public String getKycStatus() {

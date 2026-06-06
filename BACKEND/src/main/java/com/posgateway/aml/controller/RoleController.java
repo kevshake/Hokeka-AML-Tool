@@ -111,13 +111,17 @@ public class RoleController {
     @PutMapping("/{id}")
     public ResponseEntity<Role> updateRole(@PathVariable Long id, @RequestBody UpdateRoleRequest req,
             @AuthenticationPrincipal User currentUser) {
-        // Security checks similar to create...
-        // Simplified for brevity:
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_ROLES)) {
             throw new SecurityException("Not authorized");
         }
 
-        // In real app, check if role belongs to user's PSP
+        Role existing = roleService.getRoleById(id);
+        if (currentUser != null && currentUser.getPsp() != null) {
+            if (existing.getPsp() == null
+                    || !existing.getPsp().getPspId().equals(currentUser.getPsp().getPspId())) {
+                throw new SecurityException("Cannot update role outside your PSP");
+            }
+        }
 
         Role updated = roleService.updateRole(id, req.getName(), req.getDescription());
         if (req.getPermissions() != null) {
@@ -130,6 +134,13 @@ public class RoleController {
     public ResponseEntity<Void> deleteRole(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_ROLES)) {
             throw new SecurityException("Not authorized");
+        }
+        Role existing = roleService.getRoleById(id);
+        if (currentUser != null && currentUser.getPsp() != null) {
+            if (existing.getPsp() == null
+                    || !existing.getPsp().getPspId().equals(currentUser.getPsp().getPspId())) {
+                throw new SecurityException("Cannot delete role outside your PSP");
+            }
         }
         roleService.deleteRole(id);
         return ResponseEntity.noContent().build();

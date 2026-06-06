@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Shadcn HSL tokens mapped to the Hokeka palette */
+    --background: 210 40% 98%;
+    --foreground: 218 65% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 218 65% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 218 65% 14%;
+
+    --primary: 218 69% 14%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 214 84% 52%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 214 84% 52%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 73% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 156 100% 33%;
+    --warning: 38 92% 50%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 214 84% 52%;
+
+    --radius: 12px;
+
+    /* Literal Hokeka hex tokens for direct CSS usage */
+    --hokeka-primary: #0B1F3A;
+    --hokeka-secondary: #1F6FEB;
+    --hokeka-success: #00A86B;
+    --hokeka-warning: #F59E0B;
+    --hokeka-critical: #DC2626;
+    --hokeka-sidebar: #07142E;
+    --hokeka-sidebar-hover: #102A52;
+    --hokeka-background: #F8FAFC;
+    --hokeka-card: #FFFFFF;
+    --hokeka-border: #E2E8F0;
+  }
+
+  .dark {
+    --background: 218 65% 8%;
+    --foreground: 210 40% 98%;
+    --card: 218 65% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 218 65% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 214 84% 52%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 214 84% 52%;
+  }
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #F8FAFC;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

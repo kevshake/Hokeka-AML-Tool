@@ -50,6 +50,8 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSp
      */
     List<Merchant> findByPspPspId(Long pspId);
 
+    Optional<Merchant> findByMerchantId(Long merchantId);
+
     /**
      * Find by PSP ID and Status
      */
@@ -100,4 +102,84 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSp
      */
     @Query(value = "SELECT risk_level, COUNT(*) FROM merchants GROUP BY risk_level", nativeQuery = true)
     List<Object[]> countAllGroupByRiskLevel();
+
+    // -----------------------------------------------------------------------
+    // Dashboard aggregates (DashboardController)
+    // -----------------------------------------------------------------------
+
+    /** Total merchants count (used as denominator for compliance health %). */
+    @Query("SELECT COUNT(m) FROM Merchant m")
+    long countAllMerchants();
+
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.psp.pspId = :pspId")
+    long countAllMerchantsByPsp(@Param("pspId") Long pspId);
+
+    /** Merchants with kyc_status = 'APPROVED' (numerator for KYC completion). */
+    long countByKycStatus(String kycStatus);
+
+    long countByPspPspIdAndKycStatus(Long pspId, String kycStatus);
+
+    /** CDD review numerator: merchants whose last_cdd_review_at >= since. */
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.lastCddReviewAt >= :since")
+    long countWithCddReviewSince(@Param("since") java.time.LocalDateTime since);
+
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.psp.pspId = :pspId AND m.lastCddReviewAt >= :since")
+    long countWithCddReviewSinceByPsp(@Param("pspId") Long pspId,
+                                      @Param("since") java.time.LocalDateTime since);
+
+    /** EDD review denominator: HIGH-risk merchants. */
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.riskLevel = 'HIGH'")
+    long countHighRiskMerchants();
+
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.psp.pspId = :pspId AND m.riskLevel = 'HIGH'")
+    long countHighRiskMerchantsByPsp(@Param("pspId") Long pspId);
+
+    /** EDD review numerator: HIGH-risk merchants whose last_edd_review_at >= since. */
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.riskLevel = 'HIGH' AND m.lastEddReviewAt >= :since")
+    long countHighRiskWithEddReviewSince(@Param("since") java.time.LocalDateTime since);
+
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.psp.pspId = :pspId AND m.riskLevel = 'HIGH' AND m.lastEddReviewAt >= :since")
+    long countHighRiskWithEddReviewSinceByPsp(@Param("pspId") Long pspId,
+                                              @Param("since") java.time.LocalDateTime since);
+
+    /**
+     * Top-N merchants by stored risk score (krs), then by riskLevel ordinal.
+     * Uses a native query so we can rank LOW/MEDIUM/HIGH/CRITICAL/UNKNOWN
+     * inside the database and push the LIMIT to Postgres. Returns rows of
+     * [merchant_id (BIGINT), legal_name (TEXT), trading_name (TEXT),
+     *  krs (DOUBLE), risk_level (TEXT)].
+     */
+    @Query(value =
+        "SELECT m.merchant_id, m.legal_name, m.trading_name, " +
+        "       COALESCE(m.krs, 0) AS krs, " +
+        "       COALESCE(m.risk_level, 'UNKNOWN') AS risk_level " +
+        "FROM merchants m " +
+        "ORDER BY " +
+        "  CASE COALESCE(m.risk_level, 'UNKNOWN') " +
+        "       WHEN 'CRITICAL' THEN 0 " +
+        "       WHEN 'HIGH'     THEN 1 " +
+        "       WHEN 'MEDIUM'   THEN 2 " +
+        "       WHEN 'LOW'      THEN 3 " +
+        "       ELSE 4 END, " +
+        "  COALESCE(m.krs, 0) DESC " +
+        "LIMIT :limit", nativeQuery = true)
+    List<Object[]> findTopRiskMerchants(@Param("limit") int limit);
+
+    @Query(value =
+        "SELECT m.merchant_id, m.legal_name, m.trading_name, " +
+        "       COALESCE(m.krs, 0) AS krs, " +
+        "       COALESCE(m.risk_level, 'UNKNOWN') AS risk_level " +
+        "FROM merchants m " +
+        "WHERE m.psp_id = :pspId " +
+        "ORDER BY " +
+        "  CASE COALESCE(m.risk_level, 'UNKNOWN') " +
+        "       WHEN 'CRITICAL' THEN 0 " +
+        "       WHEN 'HIGH'     THEN 1 " +
+        "       WHEN 'MEDIUM'   THEN 2 " +
+        "       WHEN 'LOW'      THEN 3 " +
+        "       ELSE 4 END, " +
+        "  COALESCE(m.krs, 0) DESC " +
+        "LIMIT :limit", nativeQuery = true)
+    List<Object[]> findTopRiskMerchantsByPsp(@Param("pspId") Long pspId,
+                                              @Param("limit") int limit);
 }

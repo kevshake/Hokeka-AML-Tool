@@ -2,6 +2,7 @@ package com.posgateway.aml.config;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
+import com.posgateway.aml.entity.User;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -22,10 +23,10 @@ public class RlsContextFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth != null && auth.isAuthenticated()) {
-            // In real implementation, extract pspId from user details or JWT
-            // For now we set a default for testing
-            RlsContextHolder.setCurrentPspId(1L);
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof User user) {
+            if (user.getPsp() != null) {
+                RlsContextHolder.setCurrentPspId(user.getPsp().getPspId());
+            }
         }
 
         try {

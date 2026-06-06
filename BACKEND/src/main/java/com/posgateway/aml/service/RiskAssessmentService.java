@@ -333,8 +333,8 @@ public class RiskAssessmentService {
                 LocalDateTime now = LocalDateTime.now();
                 long recentJustBelow = transactionRepository.countByAccountAndAmountRangeAndPeriod(
                         account,
-                        lower.multiply(java.math.BigDecimal.valueOf(100)).longValue(),
-                        structuringThreshold.multiply(java.math.BigDecimal.valueOf(100)).longValue(),
+                        lower,
+                        structuringThreshold,
                         now.minusHours(STRUCTURING_WINDOW_HOURS),
                         now);
                 repeatedJustBelow = recentJustBelow >= STRUCTURING_REPEAT_COUNT;

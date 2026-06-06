@@ -4,7 +4,7 @@ import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.rules.RuleEvaluationResult;
 import com.posgateway.aml.rules.TransactionFact;
-import com.posgateway.aml.service.feature.AerospikeFeatureStore;
+import com.posgateway.aml.service.feature.FeatureStoreService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,10 +15,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Unified Rules Execution Service.
- * Orchestrates SpEL rules per-rule; delegates DROOLS rules to DroolsRulesService.
+ * Orchestrates execution of Drools, SpEL, and other rule types.
+ * Integrated with Redis-backed feature storage for velocity and risk features.
  */
 @Service
 public class RulesExecutionService {
@@ -29,14 +31,14 @@ public class RulesExecutionService {
     private final DroolsRulesService droolsService;
     private final SpelRuleExecutor spelExecutor;
     private final RuleEffectivenessService effectivenessService;
-    private final AerospikeFeatureStore featureStore;
+    private final FeatureStoreService featureStore;
 
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
                                  DroolsRulesService droolsService,
                                  SpelRuleExecutor spelExecutor,
                                  RuleEffectivenessService effectivenessService,
-                                 AerospikeFeatureStore featureStore) {
+                                 FeatureStoreService featureStore) {
         this.ruleRepository = ruleRepository;
         this.droolsService = droolsService;
         this.spelExecutor = spelExecutor;
@@ -48,7 +50,7 @@ public class RulesExecutionService {
      * Convenience overload used by RiskScoringService — builds a TransactionFact from the features map.
      */
     public RuleEvaluationResult evaluateRules(Long txnId, Map<String, Object> features, double mlScore) {
-        TransactionFact fact = buildFact(txnId, features, mlScore);
+        TransactionFact fact = droolsService.buildTransactionFactPublic(txnId, features, mlScore);
         return evaluateTransaction(txnId, fact, features, mlScore);
     }
 
@@ -58,7 +60,7 @@ public class RulesExecutionService {
     public RuleEvaluationResult evaluateTransaction(Long txnId, TransactionFact fact,
                                                     Map<String, Object> features, Double mlScore) {
         logger.info("Evaluating rules for transaction: {}", txnId);
-        long start = System.currentTimeMillis();
+        long startedAt = System.currentTimeMillis();
 
         // Store velocity features (null-safe)
         featureStore.incrementCounter("txn_velocity:" + txnId, "count", 1);
@@ -70,98 +72,65 @@ public class RulesExecutionService {
         List<String> triggeredRules = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
         double scoreAdjustment = 0.0;
-        int rulesExecuted = 0;
+        String decision = "ALLOW";
         boolean sarRequired = false;
         boolean ctrRequired = false;
+        boolean droolsEvaluated = false;
 
-        // DROOLS rules: delegate entire evaluation to DroolsRulesService
-        boolean hasDropped = allRules.stream().anyMatch(r -> "DROOLS_DRL".equals(r.getRuleType()));
-        if (hasDropped) {
-            try {
-                RuleEvaluationResult droolsResult = droolsService.evaluate(txnId, features, mlScore);
-                if (droolsResult != null) {
-                    if (droolsResult.getTriggeredRules() != null) {
-                        triggeredRules.addAll(droolsResult.getTriggeredRules());
-                    }
-                    if (droolsResult.getReasons() != null) {
-                        reasons.addAll(droolsResult.getReasons());
-                    }
-                    sarRequired = droolsResult.isSarRequired();
-                    ctrRequired = droolsResult.isCtrRequired();
-                    rulesExecuted += droolsResult.getRulesExecuted();
-                }
-            } catch (Exception e) {
-                logger.warn("Drools evaluation failed for txn {}: {}", txnId, e.getMessage());
-            }
-        }
-
-        // SPEL rules: evaluate per-rule
-        TransactionFact evalFact = fact != null ? fact : buildFact(txnId, features, mlScore != null ? mlScore : 0.0);
         for (RuleDefinition rule : allRules) {
-            if (!"SPEL".equals(rule.getRuleType())) continue;
-            rulesExecuted++;
-            try {
-                boolean triggered = spelExecutor.evaluate(rule, evalFact);
-                if (triggered) {
-                    triggeredRules.add(rule.getName());
-                    reasons.add(rule.getDescription() != null ? rule.getDescription() : rule.getName());
-                    scoreAdjustment += rule.getScore() != null ? rule.getScore() : 10;
-                    if ("SUSPEND".equals(rule.getAction())) sarRequired = true;
-                    logger.info("Rule triggered: {}", rule.getName());
+            boolean triggered = false;
+
+            if ("DROOLS_DRL".equals(rule.getRuleType())) {
+                if (!droolsEvaluated) {
+                    RuleEvaluationResult droolsResult = droolsService.evaluate(txnId, features, mlScore);
+                    triggeredRules.addAll(droolsResult.getTriggeredRules());
+                    reasons.addAll(droolsResult.getReasons());
+                    decision = strongestDecision(decision, droolsResult.getDecision());
+                    sarRequired = sarRequired || droolsResult.isSarRequired();
+                    ctrRequired = ctrRequired || droolsResult.isCtrRequired();
+                    scoreAdjustment += droolsResult.getTriggeredRules().size() * 10.0;
+                    droolsEvaluated = true;
                 }
-            } catch (Exception e) {
-                logger.debug("SPEL rule {} evaluation error: {}", rule.getName(), e.getMessage());
+            } else if ("SPEL".equals(rule.getRuleType())) {
+                triggered = spelExecutor.evaluate(rule, fact);
+            }
+
+            if (triggered) {
+                triggeredRules.add(rule.getName());
+                reasons.add(rule.getDescription() != null ? rule.getDescription() : rule.getName());
+                scoreAdjustment += rule.getScore() != null ? rule.getScore() : 10;
+                decision = strongestDecision(decision, rule.getAction());
+                logger.info("Rule triggered: {}", rule.getName());
             }
         }
 
         featureStore.storeRiskScore("txn:" + txnId, scoreAdjustment, "rule_based");
 
-        String decision = sarRequired ? "BLOCK" : (scoreAdjustment > 70 ? "REVIEW" : "APPROVE");
-        long evaluationTimeMs = System.currentTimeMillis() - start;
-
-        return new RuleEvaluationResult(txnId, decision, reasons, triggeredRules,
-                sarRequired, ctrRequired, rulesExecuted, evaluationTimeMs);
-    }
-
-    private TransactionFact buildFact(Long txnId, Map<String, Object> features, double mlScore) {
-        Object amtRaw = features.get("amount");
-        BigDecimal amount = BigDecimal.ZERO;
-        if (amtRaw instanceof BigDecimal) {
-            amount = (BigDecimal) amtRaw;
-        } else if (amtRaw instanceof Number) {
-            amount = new BigDecimal(amtRaw.toString());
-        }
-        return new TransactionFact(
+        return new RuleEvaluationResult(
                 txnId,
-                (String) features.getOrDefault("merchant_id", "UNKNOWN"),
-                amount,
-                (String) features.getOrDefault("currency", "USD"),
-                (String) features.getOrDefault("country_code", "UNK"),
-                LocalDateTime.now(),
-                (String) features.getOrDefault("channel", "POS"),
-                (String) features.get("pan_hash"),
-                mlScore,
-                toDouble(features.get("pageRank")),
-                toLong(features.get("communityId")),
-                toDouble(features.get("betweenness")),
-                toLong(features.get("connectionCount")),
-                toLong(features.get("pan_txn_count_1h")),
-                toDouble(features.get("pan_txn_amount_sum_24h")),
-                toDouble(features.get("merchant_txn_amount_sum_24h")),
-                toDouble(features.get("krs_score")),
-                toDouble(features.get("cra_score")),
-                toDouble(features.get("trs_score")));
+                decision,
+                reasons,
+                triggeredRules.stream().distinct().collect(Collectors.toList()),
+                sarRequired,
+                ctrRequired,
+                allRules.size(),
+                System.currentTimeMillis() - startedAt);
     }
 
-    private double toDouble(Object v) {
-        if (v == null) return 0.0;
-        if (v instanceof Number) return ((Number) v).doubleValue();
-        try { return Double.parseDouble(v.toString()); } catch (Exception e) { return 0.0; }
-    }
-
-    private long toLong(Object v) {
-        if (v == null) return 0L;
-        if (v instanceof Number) return ((Number) v).longValue();
-        try { return Long.parseLong(v.toString()); } catch (Exception e) { return 0L; }
+    private String strongestDecision(String current, String candidate) {
+        if (candidate == null || candidate.isBlank()) {
+            return current;
+        }
+        String normalized = candidate.toUpperCase();
+        if ("BLOCK".equals(normalized) || "SUSPEND".equals(normalized)) {
+            return "BLOCK";
+        }
+        if ("HOLD".equals(normalized) && !"BLOCK".equals(current)) {
+            return "HOLD";
+        }
+        if (("ALERT".equals(normalized) || "FLAG".equals(normalized)) && "ALLOW".equals(current)) {
+            return "REVIEW";
+        }
+        return current;
     }
 }

@@ -90,7 +90,11 @@ export default function RolesTab() {
     // Fetch PSPs for dropdown — admin endpoint returns full Psp entity (pspId/legalName/pspCode)
     const { data: psps } = useQuery<Psp[]>({
         queryKey: ["psps"],
-        queryFn: async () => (await apiFetch("/api/v1/admin/psp")).json(),
+        queryFn: async () => {
+            const response = await fetch("/api/v1/psps");
+            if (!response.ok) throw new Error("Failed to fetch PSPs");
+            return response.json();
+        },
     });
 
     // Create/Update role mutation

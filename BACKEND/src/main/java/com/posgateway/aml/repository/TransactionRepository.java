@@ -77,6 +77,23 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             @Param("endTime") LocalDateTime endTime);
 
     /**
+     * Count repeated just-below-threshold transactions for an account surrogate.
+     * The raw transaction store keeps PAN hash rather than account number, so callers
+     * pass the model account identifier that maps to pan_hash.
+     */
+    @Query(value = "SELECT COUNT(*) FROM transactions t " +
+            "WHERE t.pan_hash = :account " +
+            "AND (t.amount_cents / 100.0) >= :minAmount " +
+            "AND (t.amount_cents / 100.0) < :maxAmount " +
+            "AND t.txn_ts >= :startTime AND t.txn_ts <= :endTime",
+            nativeQuery = true)
+    Long countByAccountAndAmountRangeAndPeriod(@Param("account") String account,
+            @Param("minAmount") BigDecimal minAmount,
+            @Param("maxAmount") BigDecimal maxAmount,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
+
+    /**
      * Find last transaction timestamp for PAN
      */
     @Query("SELECT MAX(t.txnTs) FROM TransactionEntity t WHERE t.panHash = :panHash")
@@ -490,13 +507,59 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
 
+    // -----------------------------------------------------------------------
+    // Dashboard aggregates (DashboardController)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Count transactions in a window whose status reflects a flagged outcome
+     * (DECLINED / MANUAL_REVIEW) OR whose stored risk score is above the
+     * threshold. Used by /dashboard/stats for the "Flagged Today" KPI.
+     */
     @Query("SELECT COUNT(t) FROM TransactionEntity t " +
-           "WHERE t.panHash = :account " +
-           "AND t.amountCents >= :lowerCents AND t.amountCents < :upperCents " +
-           "AND t.txnTs >= :from AND t.txnTs <= :to")
-    long countByAccountAndAmountRangeAndPeriod(@Param("account") String account,
-                                               @Param("lowerCents") Long lowerCents,
-                                               @Param("upperCents") Long upperCents,
-                                               @Param("from") LocalDateTime from,
-                                               @Param("to") LocalDateTime to);
+           "WHERE t.txnTs >= :start AND t.txnTs < :end " +
+           "AND (t.decision IN ('DECLINED','MANUAL_REVIEW') " +
+           "     OR t.riskLevel IN ('HIGH','CRITICAL') " +
+           "     OR COALESCE(t.trs, 0) >= :threshold)")
+    long countFlaggedInPeriod(@Param("start") LocalDateTime start,
+                              @Param("end") LocalDateTime end,
+                              @Param("threshold") double threshold);
+
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE t.pspId = :pspId AND t.txnTs >= :start AND t.txnTs < :end " +
+           "AND (t.decision IN ('DECLINED','MANUAL_REVIEW') " +
+           "     OR t.riskLevel IN ('HIGH','CRITICAL') " +
+           "     OR COALESCE(t.trs, 0) >= :threshold)")
+    long countFlaggedInPeriodByPsp(@Param("pspId") Long pspId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end,
+                                   @Param("threshold") double threshold);
+
+    /**
+     * Risk-heatmap aggregate: per-country transaction count + alert count.
+     * Joins alerts via the transactions table (transactions.txn_id = alerts.txn_id).
+     * Returns rows of [countryCode (String), txnCount (Long), alertCount (Long)]
+     * sorted by txnCount DESC.
+     */
+    @Query(value = "SELECT COALESCE(t.merchant_country, 'XXX') AS country_code, " +
+                   "       COUNT(*) AS txn_count, " +
+                   "       COUNT(DISTINCT a.alert_id) AS alert_count " +
+                   "FROM transactions t " +
+                   "LEFT JOIN alerts a ON a.txn_id = t.txn_id " +
+                   "GROUP BY COALESCE(t.merchant_country, 'XXX') " +
+                   "ORDER BY txn_count DESC " +
+                   "LIMIT :limit", nativeQuery = true)
+    List<Object[]> getCountryTransactionAndAlertCounts(@Param("limit") int limit);
+
+    @Query(value = "SELECT COALESCE(t.merchant_country, 'XXX') AS country_code, " +
+                   "       COUNT(*) AS txn_count, " +
+                   "       COUNT(DISTINCT a.alert_id) AS alert_count " +
+                   "FROM transactions t " +
+                   "LEFT JOIN alerts a ON a.txn_id = t.txn_id " +
+                   "WHERE t.psp_id = :pspId " +
+                   "GROUP BY COALESCE(t.merchant_country, 'XXX') " +
+                   "ORDER BY txn_count DESC " +
+                   "LIMIT :limit", nativeQuery = true)
+    List<Object[]> getCountryTransactionAndAlertCountsByPsp(@Param("pspId") Long pspId,
+                                                            @Param("limit") int limit);
 }

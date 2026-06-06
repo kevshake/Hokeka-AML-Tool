@@ -3,10 +3,14 @@ package com.posgateway.aml.service.workflow;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.model.CasePriority;
+import com.posgateway.aml.model.CaseStatus;
 import com.posgateway.aml.model.RiskLevel;
+import com.posgateway.aml.model.UserRole;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.case_management.CaseAssignmentService;
 import com.posgateway.aml.service.notification.NotificationService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -22,27 +26,52 @@ public class WorkflowAutomationService {
 
     private final MerchantRepository merchantRepository;
     private final ComplianceCaseRepository complianceCaseRepository;
+    private final CaseAssignmentService caseAssignmentService;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
 
     public WorkflowAutomationService(MerchantRepository merchantRepository,
             ComplianceCaseRepository complianceCaseRepository,
+            CaseAssignmentService caseAssignmentService,
             NotificationService notificationService,
             UserRepository userRepository) {
         this.merchantRepository = merchantRepository;
         this.complianceCaseRepository = complianceCaseRepository;
+        this.caseAssignmentService = caseAssignmentService;
         this.notificationService = notificationService;
         this.userRepository = userRepository;
     }
 
     /**
-     * Automate approval for Low Risk merchants
+     * Automate approval for low-risk merchants.
      */
     @Async
     @Transactional
     public void autoApproveLowRisk(Merchant merchant, RiskLevel riskLevel) {
-        if (riskLevel != RiskLevel.LOW) {
-            return;
+        if (riskLevel == RiskLevel.LOW) {
+            log.info("Auto-approving low-risk merchant: {}", merchant.getMerchantId());
+
+            merchant.setStatus("ACTIVE");
+            merchant.setUpdatedAt(LocalDateTime.now());
+            merchantRepository.save(merchant);
+
+            List<ComplianceCase> merchantCases = complianceCaseRepository.findByMerchantId(merchant.getMerchantId());
+            LocalDateTime now = LocalDateTime.now();
+            for (ComplianceCase c : merchantCases) {
+                if (c.getStatus() == CaseStatus.NEW
+                        || c.getStatus() == CaseStatus.IN_PROGRESS
+                        || c.getStatus() == CaseStatus.ASSIGNED) {
+                    c.setStatus(CaseStatus.CLOSED_CLEARED);
+                    c.setResolution("Auto-approved: Low Risk merchant");
+                    c.setResolvedAt(now);
+                    c.setUpdatedAt(now);
+                    complianceCaseRepository.save(c);
+                    log.info("Closed case {} for auto-approved merchant {}", c.getId(), merchant.getMerchantId());
+                }
+            }
+
+            notificationService.sendEmail(merchant.getContactEmail(), "Welcome to POS Gateway",
+                    "Your account has been auto-approved.");
         }
         log.info("Auto-approving low-risk merchant: {}", merchant.getMerchantId());
 
@@ -81,16 +110,25 @@ public class WorkflowAutomationService {
     }
 
     /**
-     * Auto-assign new cases. CRITICAL/HIGH go to COMPLIANCE_OFFICER (senior),
-     * everything else to INVESTIGATOR (junior). Among candidates we pick the
-     * user with the fewest currently-open cases — basic round-robin by load.
+     * Auto-assign cases to the least-loaded user in the role required by priority.
      */
     @Async
     @Transactional
     public void autoAssignCase(ComplianceCase complianceCase) {
-        if (complianceCase.getStatus() != com.posgateway.aml.model.CaseStatus.NEW
-                || complianceCase.getAssignedTo() != null) {
-            return;
+        if (complianceCase.getStatus() == CaseStatus.NEW && complianceCase.getAssignedTo() == null) {
+            UserRole targetRole = determineAssigneeRole(complianceCase);
+            var assignedUser = caseAssignmentService.assignCaseByWorkload(complianceCase, targetRole);
+
+            if (assignedUser != null) {
+                log.info("Auto-assigned case {} to {}", complianceCase.getId(), assignedUser.getUsername());
+                notificationService.sendSystemAlert(assignedUser.getUsername(),
+                        "New Case Assigned: " + complianceCase.getId());
+            } else {
+                log.warn("No eligible users available to auto-assign case {} for role {}",
+                        complianceCase.getId(), targetRole);
+                notificationService.sendSystemAlert("compliance-team",
+                        "New Case Awaiting Assignment: " + complianceCase.getId());
+            }
         }
         String roleName = isHighPriority(complianceCase) ? "COMPLIANCE_OFFICER" : "INVESTIGATOR";
         List<User> candidates = userRepository.findByRole_NameAndEnabled(roleName, true);
@@ -127,32 +165,37 @@ public class WorkflowAutomationService {
                 "Case " + complianceCase.getId() + " auto-assigned to you");
     }
 
-    private static boolean isHighPriority(ComplianceCase c) {
-        return c.getPriority() == com.posgateway.aml.model.CasePriority.CRITICAL
-                || c.getPriority() == com.posgateway.aml.model.CasePriority.HIGH;
+    private boolean isHighPriority(ComplianceCase c) {
+        CasePriority p = c.getPriority();
+        return p == CasePriority.CRITICAL || p == CasePriority.HIGH;
+    }
+
+    private UserRole determineAssigneeRole(ComplianceCase c) {
+        if (c.getPriority() == CasePriority.CRITICAL || c.getPriority() == CasePriority.HIGH) {
+            return UserRole.SENIOR_ANALYST;
+        }
+        return UserRole.ANALYST;
     }
 
     /**
-     * Scheduled Job: Escalate overdue cases
-     * Runs every hour
+     * Scheduled Job: Escalate overdue cases. Runs every hour.
      */
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 * * * ?")
     @Transactional
     public void escalateOverdueCases() {
-        log.info("⏰ Running scheduled job: Escalate Overdue Cases");
+        log.info("Running scheduled job: Escalate Overdue Cases");
 
         LocalDateTime now = LocalDateTime.now();
-        // Updated repository method call
         List<ComplianceCase> overdueCases = complianceCaseRepository.findBySlaDeadlineBeforeAndStatusNot(
-                now, com.posgateway.aml.model.CaseStatus.CLOSED_CLEARED); // Example status
+                now, CaseStatus.CLOSED_CLEARED);
 
         for (ComplianceCase c : overdueCases) {
-            if (!Boolean.TRUE.equals(c.getEscalated())) { // Use wrapper check
+            if (!Boolean.TRUE.equals(c.getEscalated())) {
                 log.warn("Escalating overdue case: {}", c.getId());
 
                 c.setEscalated(true);
-                c.setStatus(com.posgateway.aml.model.CaseStatus.ESCALATED);
-                c.setPriority(com.posgateway.aml.model.CasePriority.CRITICAL);
+                c.setStatus(CaseStatus.ESCALATED);
+                c.setPriority(CasePriority.CRITICAL);
                 c.setUpdatedAt(now);
                 complianceCaseRepository.save(c);
 

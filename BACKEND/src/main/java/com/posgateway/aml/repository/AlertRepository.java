@@ -133,5 +133,39 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     long countFraudAlertsByPspAndPeriod(@Param("pspId") Long pspId,
                                         @Param("start") java.time.LocalDateTime start,
                                         @Param("end") java.time.LocalDateTime end);
+
+    // -----------------------------------------------------------------------
+    // Dashboard alert-trend / count-in-window aggregates
+    // -----------------------------------------------------------------------
+
+    @Query("SELECT COUNT(a) FROM Alert a WHERE a.createdAt >= :start AND a.createdAt < :end")
+    long countCreatedInPeriod(@Param("start") LocalDateTime start,
+                              @Param("end") LocalDateTime end);
+
+    @Query(value = "SELECT COUNT(DISTINCT a.alert_id) FROM alerts a " +
+                   "JOIN merchants m ON m.merchant_id = a.merchant_id " +
+                   "WHERE m.psp_id = :pspId AND a.created_at >= :start AND a.created_at < :end",
+           nativeQuery = true)
+    long countCreatedInPeriodByPsp(@Param("pspId") Long pspId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end);
+
+    /** Daily alert counts for the trend chart. Returns [date, count]. */
+    @Query(value = "SELECT DATE(a.created_at) AS d, COUNT(*) AS cnt " +
+                   "FROM alerts a " +
+                   "WHERE a.created_at >= :start AND a.created_at < :end " +
+                   "GROUP BY DATE(a.created_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyAlertCounts(@Param("start") LocalDateTime start,
+                                       @Param("end") LocalDateTime end);
+
+    @Query(value = "SELECT DATE(a.created_at) AS d, COUNT(DISTINCT a.alert_id) AS cnt " +
+                   "FROM alerts a " +
+                   "JOIN merchants m ON m.merchant_id = a.merchant_id " +
+                   "WHERE m.psp_id = :pspId " +
+                   "  AND a.created_at >= :start AND a.created_at < :end " +
+                   "GROUP BY DATE(a.created_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyAlertCountsByPsp(@Param("pspId") Long pspId,
+                                             @Param("start") LocalDateTime start,
+                                             @Param("end") LocalDateTime end);
 }
 

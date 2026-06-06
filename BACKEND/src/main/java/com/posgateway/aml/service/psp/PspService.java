@@ -22,7 +22,6 @@ public class PspService {
     private final PspRepository pspRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    @SuppressWarnings("unused")
     private final PasswordEncoder passwordEncoder;
 
     public PspService(PspRepository pspRepository, UserRepository userRepository, RoleRepository roleRepository,
@@ -174,7 +173,7 @@ public class PspService {
         // but if User has specific overrides we might need logic. For now, Role governs
         // permissions)
 
-        String encodedPassword = request.getPassword(); // REPLACE WITH ENC when PasswordEncoder available
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
 
         com.posgateway.aml.entity.User user = com.posgateway.aml.entity.User.builder()
                 .psp(psp)
@@ -198,8 +197,7 @@ public class PspService {
 
         if (userOpt.isPresent()) {
             com.posgateway.aml.entity.User user = userOpt.get();
-            // Verify password - replace with encoder check
-            if (user.getPasswordHash().equals(rawPassword)) {
+            if (passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
                 return Optional.of(user);
             }
         }

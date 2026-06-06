@@ -1,5 +1,29 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-05-15_
+_Last updated: 2026-06-06_
+
+---
+
+## Wave 12 — Dashboard redesign (Tailwind + Shadcn migration) 🚧
+
+Pixel-match the Hokeka AML mockup; full migration off MUI to Tailwind + Shadcn + lucide + framer-motion + recharts + react-simple-maps.
+
+- [x] **#69** Phase 1 — Tailwind+Shadcn foundation (deps, tailwind.config, CSS vars, Inter font, cn helper)
+- [x] **#70** Phase 2 — DashboardLayout: 280px dark sidebar (#07142E), grouped nav, Hokeka SVG logo, header
+- [x] **#71** Phase 3 — Dashboard widgets: 6 KPI cards, Risk Gauge, Live Alert Queue, Risk Heatmap, Investigation Cases donut, Alert Trends, Screening Results, Top Risk Merchants, Compliance Health
+  - [x] Create `src/hooks/useDashboard.ts` with typed React Query hooks
+  - [x] Build `src/components/kpi/KpiCard.tsx`
+  - [x] Build `src/components/charts/RiskGauge.tsx`
+  - [x] Build `src/components/Alerts/LiveAlertQueue.tsx`
+  - [x] Build `src/components/charts/RiskHeatmap.tsx`
+  - [x] Build `src/components/Cases/InvestigationCases.tsx`
+  - [x] Build `src/components/charts/AlertTrends.tsx`
+  - [x] Build `src/components/Alerts/ScreeningResults.tsx`
+  - [x] Build `src/components/Alerts/TopRiskMerchants.tsx`
+  - [x] Build `src/components/compliance/ComplianceHealth.tsx`
+  - [x] Replace `src/pages/Dashboard/DashboardPage.tsx`
+  - [x] `npm run typecheck` passes with zero errors
+- [x] **#72** Phase 4 — Backend aggregate endpoints (extended `/dashboard/stats` + new `/risk-heatmap`, `/cases/closed-recent`, `/screening/results-today`, `/merchants/top-risk`, `/compliance/health`, `/alerts/trends`); V140 migration for CDD/EDD review timestamps; all widgets now consume real data
+- [ ] **#73** Phase 5 — Migrate remaining pages off MUI, drop @mui/material (long tail — separate session)
 
 ---
 

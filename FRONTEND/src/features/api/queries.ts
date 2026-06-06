@@ -377,14 +377,6 @@ export const useMonitoringDashboardStats = () => {
   });
 };
 
-export const useTransactionStats = () => {
-  return useQuery<Record<string, any>>({
-    queryKey: ["monitoring", "transaction-stats"],
-    queryFn: () => apiClient.get<Record<string, any>>("monitoring/dashboard/stats").catch(() => ({})),
-    refetchInterval: 30_000,
-  });
-};
-
 export const useMonitoringRiskDistribution = () => {
   return useQuery<Record<string, number>>({
     queryKey: ["monitoring", "risk-distribution"],
@@ -606,7 +598,7 @@ export const usePspSystemInterruptions = (pspId: number | string) =>
 export const usePspComplaints = (pspId: number | string) =>
   useQuery<any[]>({
     queryKey: ["psp", pspId, "complaints"],
-    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/complaints`).catch(() => []),
+    queryFn: () => apiClient.get<any[]>(`psps/${pspId}/cbk/customer-complaints`).catch(() => []),
     enabled: !!pspId,
   });
 
@@ -766,6 +758,8 @@ export interface ModelMetrics {
   driftScore: number | null;
 }
 
+export type ModelMetricsEntry = ModelMetrics;
+
 export const useModelMetricsLatest = () => {
   return useQuery<ModelMetrics | null>({
     queryKey: ["analytics", "model-metrics", "latest"],
@@ -799,5 +793,25 @@ export const useAlertTrends = (days: number = 30) => {
       apiClient
         .get<AlertTrendsEntry[]>(`analytics/alert-trends?days=${days}`)
         .catch(() => []),
+  });
+};
+
+export interface TransactionStats {
+  totalCount: number;
+  approvedCount: number;
+  declinedCount: number;
+  manualReviewCount: number;
+  highRiskCount: number;
+  mediumRiskCount: number;
+  lowRiskCount: number;
+  totalAmountCents: number;
+  averageAmountCents: number;
+  fraudAlertCount: number;
+}
+
+export const useTransactionStats = () => {
+  return useQuery<TransactionStats>({
+    queryKey: ["monitoring", "dashboard-stats"],
+    queryFn: () => apiClient.get<TransactionStats>("monitoring/dashboard/stats"),
   });
 };

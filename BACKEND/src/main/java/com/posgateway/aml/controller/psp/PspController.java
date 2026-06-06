@@ -31,7 +31,6 @@ import java.util.stream.Collectors;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
-@PreAuthorize("isAuthenticated()")
 @RestController
 @RequestMapping("/psps")
 public class PspController {
@@ -82,13 +81,30 @@ public class PspController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<PspResponse> registerPsp(@RequestBody PspRegistrationRequest request) {
         log.info("Received PSP registration request");
         Psp psp = pspService.registerPsp(request);
         return ResponseEntity.ok(pspMapper.toResponse(psp));
     }
 
+    @PostMapping("/register")
+    public ResponseEntity<PspResponse> publicRegisterPsp(@RequestBody PspRegistrationRequest request) {
+        log.info("Received public PSP registration request");
+        Psp psp = pspService.registerPsp(request);
+        return ResponseEntity.ok(pspMapper.toResponse(psp));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER','APP_CONTROLLER')")
+    public ResponseEntity<List<PspResponse>> listPsps() {
+        return ResponseEntity.ok(pspRepository.findAll().stream()
+                .map(pspMapper::toResponse)
+                .toList());
+    }
+
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<Void> updatePspStatus(@PathVariable Long id, @RequestBody PspStatusUpdateRequest request) {
         log.info("Received status update for PSP {}", id);
         pspService.updatePspStatus(id, request.getStatus());
@@ -96,6 +112,7 @@ public class PspController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN')")
     public ResponseEntity<PspResponse> updatePspProfile(@PathVariable Long id, @RequestBody PspUpdateRequest request) {
         log.info("Received profile update for PSP {}", id);
         Psp psp = pspService.updatePspProfile(id, request);
@@ -103,6 +120,7 @@ public class PspController {
     }
 
     @PostMapping("/users")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN')")
     public ResponseEntity<PspUserResponse> createPspUser(@RequestBody PspUserCreationRequest request) {
         log.info("Received PSP user creation request");
         User user = pspService.createPspUser(request);
@@ -110,6 +128,7 @@ public class PspController {
     }
 
     @PostMapping("/auth/login")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<PspUserResponse> login(@RequestBody PspLoginRequest request) {
         Optional<User> userOpt = pspService.authenticatePspUser(request.getEmail(), request.getPassword());
         return userOpt.map(user -> ResponseEntity.ok(pspMapper.toResponse(user)))

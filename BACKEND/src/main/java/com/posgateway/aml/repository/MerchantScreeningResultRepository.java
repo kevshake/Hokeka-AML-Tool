@@ -63,4 +63,21 @@ public interface MerchantScreeningResultRepository extends JpaRepository<Merchan
      */
     @Query("SELECT COUNT(msr) FROM MerchantScreeningResult msr WHERE msr.screeningStatus = :status AND msr.screenedAt >= :since")
     long countByScreeningStatusAndScreenedAtAfter(@Param("status") String status, @Param("since") LocalDateTime since);
+
+    /**
+     * Per-hit-list-type counts for today's screening results. The
+     * MerchantScreeningResult entity stores the matched list type as
+     * {@code match_details->>'hitListType'} (JSONB). We group on that key
+     * and only count rows whose screening_status is a positive match.
+     *
+     * Returns rows of [hit_list_type (TEXT, may be NULL), count (BIGINT)].
+     */
+    @Query(value = "SELECT COALESCE(msr.match_details->>'hitListType', 'UNKNOWN') AS hit_list_type, " +
+                   "       COUNT(*) AS cnt " +
+                   "FROM merchant_screening_results msr " +
+                   "WHERE msr.screened_at >= :since " +
+                   "  AND msr.screening_status IN ('MATCH','POTENTIAL_MATCH') " +
+                   "GROUP BY COALESCE(msr.match_details->>'hitListType', 'UNKNOWN')",
+           nativeQuery = true)
+    List<Object[]> countTodayByHitListType(@Param("since") LocalDateTime since);
 }

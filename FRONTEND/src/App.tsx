@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import MainLayout from "./components/Layout/MainLayout";
+import HokekaLayout from "./layouts/HokekaLayout";
 import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
 
 // Auth pages — small, load eagerly so login is instant
@@ -67,6 +68,20 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route
+                path="/dashboard/*"
+                element={
+                  <ProtectedRoute>
+                    <HokekaLayout>
+                      <RouteErrorBoundary>
+                        <Suspense fallback={<PageLoader />}>
+                          <DashboardPage />
+                        </Suspense>
+                      </RouteErrorBoundary>
+                    </HokekaLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/*"
                 element={
                   <ProtectedRoute>
@@ -75,7 +90,6 @@ function App() {
                         <Suspense fallback={<PageLoader />}>
                         <Routes>
                           <Route index element={<Navigate to="/dashboard" replace />} />
-                          <Route path="dashboard/*" element={<DashboardPage />} />
                           <Route path="cases/*" element={<CasesPage />} />
                           <Route path="alerts" element={<AlertsPage />} />
                           <Route path="risk-analytics" element={<RiskAnalyticsPage />} />
