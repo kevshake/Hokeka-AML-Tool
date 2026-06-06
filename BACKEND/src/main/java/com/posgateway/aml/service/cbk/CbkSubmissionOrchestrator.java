@@ -361,7 +361,7 @@ public class CbkSubmissionOrchestrator {
                             institutionCode));
             case SHAREHOLDERS -> cbkGdiClient.submitShareholders(ctx,
                     PspShareholderMapper.toRecords(
-                            shareholderRepository.findActiveInWindow(pspId, windowStart, windowEnd),
+                            shareholderRepository.findActiveInWindow(pspId, windowEnd),
                             institutionCode));
 
             // --- Monthly (entity-backed) ---

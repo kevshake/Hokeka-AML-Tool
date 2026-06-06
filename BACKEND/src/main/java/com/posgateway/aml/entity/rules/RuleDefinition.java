@@ -86,8 +86,7 @@ public class RuleDefinition {
     @Column(name = "sample_use_case", columnDefinition = "TEXT")
     private String sampleUseCase;
 
-    @Column(name = "parameters", columnDefinition = "JSONB")
-    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "parameters", columnDefinition = "TEXT")
     private String parameters; // JSON string — editor renders dropdown form from this schema
 
     @PrePersist

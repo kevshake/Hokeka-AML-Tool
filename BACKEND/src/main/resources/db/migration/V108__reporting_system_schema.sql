@@ -383,18 +383,20 @@ CREATE OR REPLACE FUNCTION purge_expired_report_data()
 RETURNS INTEGER AS $$
 DECLARE
     deleted_count INTEGER := 0;
+    last_deleted  INTEGER := 0;
     report_record RECORD;
 BEGIN
-    FOR report_record IN 
+    FOR report_record IN
         SELECT id, retention_days FROM reports WHERE retention_days IS NOT NULL
     LOOP
-        DELETE FROM report_executions 
-        WHERE report_id = report_record.id 
-        AND created_at < NOW() - INTERVAL '1 day' * report_record.retention_days;
-        
-        GET DIAGNOSTICS deleted_count = deleted_count + ROW_COUNT;
+        DELETE FROM report_executions
+        WHERE report_id = report_record.id
+          AND created_at < NOW() - INTERVAL '1 day' * report_record.retention_days;
+
+        GET DIAGNOSTICS last_deleted = ROW_COUNT;
+        deleted_count := deleted_count + last_deleted;
     END LOOP;
-    
+
     RETURN deleted_count;
 END;
 $$ LANGUAGE plpgsql;

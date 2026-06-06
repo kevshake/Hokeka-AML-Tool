@@ -226,7 +226,7 @@ function RevenueTab() {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
             <XAxis dataKey="name" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-            <RechartsTooltip formatter={(v: number | undefined) => v != null ? fmt(v, currency) : "—"} />
+            <RechartsTooltip formatter={(v: unknown) => typeof v === "number" ? fmt(v, currency) : "—"} />
             <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

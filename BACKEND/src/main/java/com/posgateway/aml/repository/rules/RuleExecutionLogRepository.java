@@ -37,7 +37,8 @@ public interface RuleExecutionLogRepository extends JpaRepository<RuleExecutionL
     @Modifying
     @Transactional
     @Query("UPDATE RuleExecutionLog l SET l.disposition = :disposition " +
-           "WHERE l.txnId = :txnId AND l.result = com.posgateway.aml.entity.rules.RuleExecutionLog.Result.MATCH")
+           "WHERE l.txnId = :txnId AND l.result = :matchResult")
     int updateDispositionForMatches(@Param("txnId") String txnId,
-                                    @Param("disposition") String disposition);
+                                    @Param("disposition") String disposition,
+                                    @Param("matchResult") RuleExecutionLog.Result matchResult);
 }

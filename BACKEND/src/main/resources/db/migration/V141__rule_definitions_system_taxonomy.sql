@@ -25,7 +25,7 @@ ALTER TABLE rule_definitions
     ADD COLUMN IF NOT EXISTS external_code     VARCHAR(20),    -- R-1, R-2, R-3, ...
     ADD COLUMN IF NOT EXISTS recommended       BOOLEAN     NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS sample_use_case   TEXT,
-    ADD COLUMN IF NOT EXISTS parameters        JSONB;
+    ADD COLUMN IF NOT EXISTS parameters        TEXT;   -- JSON string stored as text for compatibility
 
 -- The ruleset list page filters by category and is_system_managed, so index both.
 CREATE INDEX IF NOT EXISTS idx_rule_definitions_category
@@ -37,13 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_rule_definitions_system
     WHERE is_system_managed = TRUE;
 
 -- external_code is unique among system-managed rules so we can re-run the seed
--- migration safely (V135 uses ON CONFLICT (external_code) DO NOTHING).
+-- migration safely (V142 uses ON CONFLICT DO NOTHING).
 CREATE UNIQUE INDEX IF NOT EXISTS uk_rule_definitions_external_code
     ON rule_definitions(external_code)
     WHERE external_code IS NOT NULL;
-
--- GIN on parameters: editor reads it, reporting may want to query "all rules
--- with a high_risk_country list", and no other index type supports JSONB.
-CREATE INDEX IF NOT EXISTS idx_rule_definitions_parameters_gin
-    ON rule_definitions USING GIN (parameters)
-    WHERE parameters IS NOT NULL;

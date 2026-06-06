@@ -74,8 +74,8 @@ public class RuleDataSeeder {
         rule.setPriority(priority);
         rule.setEnabled(true);
         rule.setPspId(null);
-        rule.setIsSystemRule(true);
-        rule.setOwnerType("SYSTEM");
+        rule.setSystemManaged(true);
+        rule.setParameters("[]");
         return rule;
     }
 }

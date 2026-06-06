@@ -25,7 +25,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
@@ -51,6 +53,33 @@ public class PspController {
         this.cbkProperties = cbkProperties;
     }
 
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR')")
+    public ResponseEntity<List<PspResponse>> getAllPsps() {
+        List<PspResponse> list = pspRepository.findAll().stream()
+                .map(pspMapper::toResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(list);
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','INVESTIGATOR')")
+    public ResponseEntity<PspResponse> getPsp(@PathVariable Long id) {
+        return pspRepository.findById(id)
+                .map(pspMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<Void> deletePsp(@PathVariable Long id) {
+        if (!pspRepository.existsById(id)) return ResponseEntity.notFound().build();
+        pspRepository.deleteById(id);
+        log.info("Deleted PSP {}", id);
+        return ResponseEntity.noContent().build();
+    }
 
     @PostMapping
     public ResponseEntity<PspResponse> registerPsp(@RequestBody PspRegistrationRequest request) {

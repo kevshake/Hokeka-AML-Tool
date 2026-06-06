@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS psp_system_interruptions (
     psp_id                           BIGINT        NOT NULL,
     reporting_date                   DATE,
     sub_county_code                  VARCHAR(32),
-    system_owner_flag                VARCHAR(8),
+    system_owner_flag                VARCHAR(16),
     third_party_owned_category       VARCHAR(64),
     third_party_name                 VARCHAR(256),
     product_type                     VARCHAR(64),

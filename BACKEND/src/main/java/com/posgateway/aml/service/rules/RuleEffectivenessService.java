@@ -89,7 +89,8 @@ public class RuleEffectivenessService {
     public void recordDisposition(String txnId, String disposition) {
         if (txnId == null || disposition == null) return;
         try {
-            int updated = repository.updateDispositionForMatches(txnId, disposition);
+            int updated = repository.updateDispositionForMatches(txnId, disposition,
+                    com.posgateway.aml.entity.rules.RuleExecutionLog.Result.MATCH);
             if (updated > 0) {
                 logger.debug("Back-filled disposition={} for {} rule_execution_logs (txn={})",
                         disposition, updated, txnId);

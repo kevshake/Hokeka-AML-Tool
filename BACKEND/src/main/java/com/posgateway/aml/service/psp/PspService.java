@@ -85,12 +85,24 @@ public class PspService {
 
         log.info("Updating PSP profile for ID: {}", pspId);
 
+        if (request.getLegalName() != null) psp.setLegalName(request.getLegalName());
         if (request.getTradingName() != null) psp.setTradingName(request.getTradingName());
+        if (request.getCountry() != null) psp.setCountry(request.getCountry());
+        if (request.getRegistrationNumber() != null) psp.setRegistrationNumber(request.getRegistrationNumber());
+        if (request.getTaxId() != null) psp.setTaxId(request.getTaxId());
         if (request.getContactEmail() != null) psp.setContactEmail(request.getContactEmail());
         if (request.getContactPhone() != null) psp.setContactPhone(request.getContactPhone());
         if (request.getContactAddress() != null) psp.setContactAddress(request.getContactAddress());
+        if (request.getBillingPlan() != null) psp.setBillingPlan(request.getBillingPlan());
+        if (request.getBillingCycle() != null) psp.setBillingCycle(request.getBillingCycle());
+        if (request.getCurrency() != null) psp.setCurrency(request.getCurrency());
+        if (request.getPaymentTerms() != null) psp.setPaymentTerms(request.getPaymentTerms());
+        if (request.getIsTestMode() != null) psp.setIsTestMode(request.getIsTestMode());
         if (request.getBrandingTheme() != null) psp.setBrandingTheme(request.getBrandingTheme());
         if (request.getLogoUrl() != null) psp.setLogoUrl(request.getLogoUrl());
+        if (request.getPrimaryColor() != null) psp.setPrimaryColor(request.getPrimaryColor());
+        if (request.getSecondaryColor() != null) psp.setSecondaryColor(request.getSecondaryColor());
+        if (request.getAccentColor() != null) psp.setAccentColor(request.getAccentColor());
 
         return pspRepository.save(psp);
     }

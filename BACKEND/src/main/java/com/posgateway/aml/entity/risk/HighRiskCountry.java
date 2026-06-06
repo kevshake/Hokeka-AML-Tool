@@ -53,4 +53,12 @@ public class HighRiskCountry {
     public void setCountryCode(String countryCode) {
         this.countryCode = countryCode;
     }
+
+    public String getRiskLevel() {
+        return riskLevel;
+    }
+
+    public void setRiskLevel(String riskLevel) {
+        this.riskLevel = riskLevel;
+    }
 }

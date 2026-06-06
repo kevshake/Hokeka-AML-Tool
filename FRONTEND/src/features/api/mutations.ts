@@ -262,6 +262,31 @@ export interface UpdatePspCbkConfigRequest {
   cbkAllowLive?: boolean;
 }
 
+export const useRegisterPsp = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.post("psps", body),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psps"] }); },
+  });
+};
+
+export const useUpdatePspStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiClient.put(`psps/${id}/status`, { status }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psps"] }); },
+  });
+};
+
+export const useDeletePsp = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`psps/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["psps"] }); },
+  });
+};
+
 export const useUpdatePspCbkConfig = () => {
   const queryClient = useQueryClient();
   return useMutation({

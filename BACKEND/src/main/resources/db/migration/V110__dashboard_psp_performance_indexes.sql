@@ -5,18 +5,24 @@
 
 -- merchants: PSP-filtered status and risk-level counts
 DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns
-               WHERE table_name='merchants' AND column_name='psp_id') THEN
-        CREATE INDEX IF NOT EXISTS idx_merchant_psp_status  ON merchants(psp_id, status);
-        CREATE INDEX IF NOT EXISTS idx_merchant_psp_risk    ON merchants(psp_id, risk_level);
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='merchants' AND column_name='psp_id')
+   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='merchants' AND column_name='status') THEN
+        CREATE INDEX IF NOT EXISTS idx_merchant_psp_status ON merchants(psp_id, status);
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='merchants' AND column_name='psp_id')
+   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='merchants' AND column_name='risk_level') THEN
+        CREATE INDEX IF NOT EXISTS idx_merchant_psp_risk ON merchants(psp_id, risk_level);
     END IF;
 END $$;
 
 -- compliance_cases: PSP-filtered status and priority counts
 DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns
-               WHERE table_name='compliance_cases' AND column_name='psp_id') THEN
-        CREATE INDEX IF NOT EXISTS idx_case_psp_status   ON compliance_cases(psp_id, status);
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='compliance_cases' AND column_name='psp_id')
+   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='compliance_cases' AND column_name='status') THEN
+        CREATE INDEX IF NOT EXISTS idx_case_psp_status ON compliance_cases(psp_id, status);
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='compliance_cases' AND column_name='psp_id')
+   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='compliance_cases' AND column_name='priority') THEN
         CREATE INDEX IF NOT EXISTS idx_case_psp_priority ON compliance_cases(psp_id, priority);
     END IF;
 END $$;
@@ -27,14 +33,24 @@ CREATE INDEX IF NOT EXISTS idx_alert_status_ts ON alerts(status, created_at DESC
 
 -- transactions: PSP-filtered time-ordered scans
 DO $$ BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns
-               WHERE table_name='transactions' AND column_name='psp_id') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='psp_id')
+   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='txn_ts') THEN
         CREATE INDEX IF NOT EXISTS idx_txn_psp_time ON transactions(psp_id, txn_ts DESC);
     END IF;
 END $$;
 
--- Update planner statistics for the changed tables
-ANALYZE merchants;
-ANALYZE compliance_cases;
-ANALYZE alerts;
-ANALYZE transactions;
+-- Update planner statistics for the changed tables (skip if table missing)
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='merchants') THEN
+        ANALYZE merchants;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='compliance_cases') THEN
+        ANALYZE compliance_cases;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='alerts') THEN
+        ANALYZE alerts;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='transactions') THEN
+        ANALYZE transactions;
+    END IF;
+END $$;

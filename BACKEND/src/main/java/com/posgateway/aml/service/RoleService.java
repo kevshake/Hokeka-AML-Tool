@@ -110,13 +110,26 @@ public class RoleService {
 
     @PostConstruct
     public void initDefaultRoles() {
-        // Initialize basic system roles if they don't exist
-        initializeSystemRole("ADMIN", "System Administrator", Set.of(Permission.values()));
-        initializeSystemRole("VIEWER", "Read Only User",
-                Set.of(Permission.VIEW_CASES, Permission.VIEW_SAR, Permission.VIEW_TRANSACTION_DETAILS));
-        initializeSystemRole("COMPLIANCE_OFFICER", "Compliance Officer",
-                Set.of(Permission.VIEW_CASES, Permission.VIEW_SCREENING_RESULTS, Permission.ASSIGN_CASES,
-                        Permission.FILE_SAR));
+        initializeSystemRole("SUPER_ADMIN",       "Super Administrator",    Set.of(Permission.values()));
+        initializeSystemRole("ADMIN",             "Platform Administrator", Set.of(Permission.values()));
+        initializeSystemRole("PSP_ADMIN",         "PSP Administrator",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_TRANSACTION_DETAILS,
+                       Permission.VIEW_SCREENING_RESULTS, Permission.VIEW_SAR,
+                       Permission.MANAGE_PSP_THEME));
+        initializeSystemRole("COMPLIANCE_OFFICER","Compliance Officer",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_SCREENING_RESULTS,
+                       Permission.ASSIGN_CASES, Permission.FILE_SAR, Permission.ADD_CASE_EVIDENCE,
+                       Permission.ESCALATE_CASES, Permission.MANAGE_WATCHLISTS));
+        initializeSystemRole("INVESTIGATOR",      "Investigator",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_TRANSACTION_DETAILS,
+                       Permission.VIEW_SCREENING_RESULTS, Permission.ADD_CASE_EVIDENCE,
+                       Permission.ASSIGN_CASES));
+        initializeSystemRole("ANALYST",           "Risk Analyst",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_TRANSACTION_DETAILS,
+                       Permission.VIEW_SCREENING_RESULTS));
+        initializeSystemRole("VIEWER",            "Read Only",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_SAR,
+                       Permission.VIEW_TRANSACTION_DETAILS));
     }
 
     private void initializeSystemRole(String name, String description, Set<Permission> permissions) {

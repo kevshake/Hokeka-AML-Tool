@@ -377,6 +377,14 @@ export const useMonitoringDashboardStats = () => {
   });
 };
 
+export const useTransactionStats = () => {
+  return useQuery<Record<string, any>>({
+    queryKey: ["monitoring", "transaction-stats"],
+    queryFn: () => apiClient.get<Record<string, any>>("monitoring/dashboard/stats").catch(() => ({})),
+    refetchInterval: 30_000,
+  });
+};
+
 export const useMonitoringRiskDistribution = () => {
   return useQuery<Record<string, number>>({
     queryKey: ["monitoring", "risk-distribution"],

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Paper,
@@ -8,7 +8,6 @@ import {
   Select,
   MenuItem,
   TextField,
-  Chip,
   Divider
 } from '@mui/material';
 import { Add, Delete, DragIndicator } from '@mui/icons-material';
@@ -31,7 +30,7 @@ interface VisualRuleBuilderProps {
   onSave?: (rule: any) => void;
 }
 
-export default function VisualRuleBuilder({ onChange }: VisualRuleBuilderProps) {
+export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilderProps) {
   const [groups, setGroups] = useState<RuleGroup[]>([
     {
       id: 'group-1',
@@ -193,9 +192,19 @@ export default function VisualRuleBuilder({ onChange }: VisualRuleBuilderProps) 
 
       <Button variant="outlined" onClick={addGroup} startIcon={<Add />}>
         Add Logic Group
-      <Button variant="contained" onClick={() => onSave onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })}onSave && onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")).join(" OR "), ruleType: "SPEL" })} onSave({ ruleName: "Visual Rule", ruleExpression: groups.map(g => `(${g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`).join(" " + groups[0]?.logic + " "), ruleType: "SPEL" })} sx={{ ml: 2 }}>
-        Save Rule
       </Button>
+      <Button
+        variant="contained"
+        onClick={() => onSave && onSave({
+          ruleName: "Visual Rule",
+          ruleExpression: groups.map(g =>
+            `(${g.conditions.map(c => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`
+          ).join(" " + (groups[0]?.logic ?? "AND") + " "),
+          ruleType: "SPEL",
+        })}
+        sx={{ ml: 2 }}
+      >
+        Save Rule
       </Button>
 
       <Divider sx={{ my: 2 }} />

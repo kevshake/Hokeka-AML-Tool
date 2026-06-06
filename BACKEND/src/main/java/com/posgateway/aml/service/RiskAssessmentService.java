@@ -333,8 +333,8 @@ public class RiskAssessmentService {
                 LocalDateTime now = LocalDateTime.now();
                 long recentJustBelow = transactionRepository.countByAccountAndAmountRangeAndPeriod(
                         account,
-                        lower,
-                        structuringThreshold,
+                        lower.multiply(java.math.BigDecimal.valueOf(100)).longValue(),
+                        structuringThreshold.multiply(java.math.BigDecimal.valueOf(100)).longValue(),
                         now.minusHours(STRUCTURING_WINDOW_HOURS),
                         now);
                 repeatedJustBelow = recentJustBelow >= STRUCTURING_REPEAT_COUNT;
@@ -430,27 +430,4 @@ public class RiskAssessmentService {
         return 1.0 - ((double) distance / maxLen);
     }
 
-    /**
-     * Classic dynamic-programming Levenshtein distance. O(n*m) time, O(n*m)
-     * space — acceptable for short name strings.
-     */
-    private int levenshtein(String s, String t) {
-        int n = s.length();
-        int m = t.length();
-        int[][] dp = new int[n + 1][m + 1];
-        for (int i = 0; i <= n; i++) {
-            dp[i][0] = i;
-        }
-        for (int j = 0; j <= m; j++) {
-            dp[0][j] = j;
-        }
-        for (int i = 1; i <= n; i++) {
-            for (int j = 1; j <= m; j++) {
-                dp[i][j] = (s.charAt(i - 1) == t.charAt(j - 1))
-                        ? dp[i - 1][j - 1]
-                        : 1 + Math.min(dp[i - 1][j - 1], Math.min(dp[i - 1][j], dp[i][j - 1]));
-            }
-        }
-        return dp[n][m];
-    }
 }

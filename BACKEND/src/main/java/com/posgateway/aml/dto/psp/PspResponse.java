@@ -1,125 +1,116 @@
 package com.posgateway.aml.dto.psp;
 
+import java.time.LocalDateTime;
+
 public class PspResponse {
     private Long id;
     private String pspCode;
     private String legalName;
+    private String tradingName;
+    private String country;
+    private String contactEmail;
+    private String contactPhone;
+    private String contactAddress;
+    private String registrationNumber;
+    private String taxId;
     private String status;
+    private Boolean isTestMode;
     private String billingPlan;
+    private String billingCycle;
+    private String currency;
+    private Integer paymentTerms;
+    private Boolean cbkReportingEnabled;
+    private String cbkEnvironment;
+    private String logoUrl;
+    private String primaryColor;
+    private String secondaryColor;
+    private String accentColor;
+    private String fontFamily;
     private String brandingTheme;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime onboardedAt;
 
-    public PspResponse() {
-    }
+    public PspResponse() {}
 
-    public PspResponse(Long id, String pspCode, String legalName, String status, String billingPlan, String brandingTheme) {
-        this.id = id;
-        this.pspCode = pspCode;
-        this.legalName = legalName;
-        this.status = status;
-        this.billingPlan = billingPlan;
-        this.brandingTheme = brandingTheme;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public Long getId() {
-        return id;
-    }
+    public String getPspCode() { return pspCode; }
+    public void setPspCode(String pspCode) { this.pspCode = pspCode; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getLegalName() { return legalName; }
+    public void setLegalName(String legalName) { this.legalName = legalName; }
 
-    public String getPspCode() {
-        return pspCode;
-    }
+    public String getTradingName() { return tradingName; }
+    public void setTradingName(String tradingName) { this.tradingName = tradingName; }
 
-    public void setPspCode(String pspCode) {
-        this.pspCode = pspCode;
-    }
+    public String getCountry() { return country; }
+    public void setCountry(String country) { this.country = country; }
 
-    public String getLegalName() {
-        return legalName;
-    }
+    public String getContactEmail() { return contactEmail; }
+    public void setContactEmail(String contactEmail) { this.contactEmail = contactEmail; }
 
-    public void setLegalName(String legalName) {
-        this.legalName = legalName;
-    }
+    public String getContactPhone() { return contactPhone; }
+    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
 
-    public String getStatus() {
-        return status;
-    }
+    public String getContactAddress() { return contactAddress; }
+    public void setContactAddress(String contactAddress) { this.contactAddress = contactAddress; }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    public String getRegistrationNumber() { return registrationNumber; }
+    public void setRegistrationNumber(String registrationNumber) { this.registrationNumber = registrationNumber; }
 
-    public String getBillingPlan() {
-        return billingPlan;
-    }
+    public String getTaxId() { return taxId; }
+    public void setTaxId(String taxId) { this.taxId = taxId; }
 
-    public void setBillingPlan(String billingPlan) {
-        this.billingPlan = billingPlan;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
-    public String getBrandingTheme() {
-        return brandingTheme;
-    }
+    public Boolean getIsTestMode() { return isTestMode; }
+    public void setIsTestMode(Boolean isTestMode) { this.isTestMode = isTestMode; }
 
-    public void setBrandingTheme(String brandingTheme) {
-        this.brandingTheme = brandingTheme;
-    }
+    public String getBillingPlan() { return billingPlan; }
+    public void setBillingPlan(String billingPlan) { this.billingPlan = billingPlan; }
 
-    public static PspResponseBuilder builder() {
-        return new PspResponseBuilder();
-    }
+    public String getBillingCycle() { return billingCycle; }
+    public void setBillingCycle(String billingCycle) { this.billingCycle = billingCycle; }
 
-    public static class PspResponseBuilder {
-        private Long id;
-        private String pspCode;
-        private String legalName;
-        private String status;
-        private String billingPlan;
-        private String brandingTheme;
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
 
-        PspResponseBuilder() {
-        }
+    public Integer getPaymentTerms() { return paymentTerms; }
+    public void setPaymentTerms(Integer paymentTerms) { this.paymentTerms = paymentTerms; }
 
-        public PspResponseBuilder id(Long id) {
-            this.id = id;
-            return this;
-        }
+    public Boolean getCbkReportingEnabled() { return cbkReportingEnabled; }
+    public void setCbkReportingEnabled(Boolean cbkReportingEnabled) { this.cbkReportingEnabled = cbkReportingEnabled; }
 
-        public PspResponseBuilder pspCode(String pspCode) {
-            this.pspCode = pspCode;
-            return this;
-        }
+    public String getCbkEnvironment() { return cbkEnvironment; }
+    public void setCbkEnvironment(String cbkEnvironment) { this.cbkEnvironment = cbkEnvironment; }
 
-        public PspResponseBuilder legalName(String legalName) {
-            this.legalName = legalName;
-            return this;
-        }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
 
-        public PspResponseBuilder status(String status) {
-            this.status = status;
-            return this;
-        }
+    public String getPrimaryColor() { return primaryColor; }
+    public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
 
-        public PspResponseBuilder billingPlan(String billingPlan) {
-            this.billingPlan = billingPlan;
-            return this;
-        }
+    public String getSecondaryColor() { return secondaryColor; }
+    public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
 
-        public PspResponseBuilder brandingTheme(String brandingTheme) {
-            this.brandingTheme = brandingTheme;
-            return this;
-        }
+    public String getAccentColor() { return accentColor; }
+    public void setAccentColor(String accentColor) { this.accentColor = accentColor; }
 
-        public PspResponse build() {
-            return new PspResponse(id, pspCode, legalName, status, billingPlan, brandingTheme);
-        }
+    public String getFontFamily() { return fontFamily; }
+    public void setFontFamily(String fontFamily) { this.fontFamily = fontFamily; }
 
-        public String toString() {
-            return "PspResponse.PspResponseBuilder(id=" + this.id + ", pspCode=" + this.pspCode + ", legalName="
-                    + this.legalName + ", status=" + this.status + ", billingPlan=" + this.billingPlan + ", brandingTheme=" + this.brandingTheme + ")";
-        }
-    }
+    public String getBrandingTheme() { return brandingTheme; }
+    public void setBrandingTheme(String brandingTheme) { this.brandingTheme = brandingTheme; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public LocalDateTime getOnboardedAt() { return onboardedAt; }
+    public void setOnboardedAt(LocalDateTime onboardedAt) { this.onboardedAt = onboardedAt; }
 }

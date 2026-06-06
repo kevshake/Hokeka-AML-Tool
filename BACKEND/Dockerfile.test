@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline
 
 # Copy source and build
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN mvn clean package -Dmaven.test.skip=true
 
 # Production stage - Using Ubuntu-based JRE to avoid Alpine native library issues
 FROM eclipse-temurin:17-jre

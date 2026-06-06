@@ -21,6 +21,5 @@ public interface PspShareholderRepository extends JpaRepository<PspShareholder, 
     @Query("SELECT s FROM PspShareholder s WHERE s.pspId = :pspId " +
            "AND (s.onboardingDate IS NULL OR s.onboardingDate <= :windowEnd)")
     List<PspShareholder> findActiveInWindow(@Param("pspId") Long pspId,
-                                            @Param("windowStart") LocalDate windowStart,
                                             @Param("windowEnd") LocalDate windowEnd);
 }

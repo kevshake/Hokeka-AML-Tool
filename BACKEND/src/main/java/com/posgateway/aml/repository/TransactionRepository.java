@@ -489,4 +489,14 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     List<Object[]> findFailedRejectedForPspByDay(@Param("pspId") Long pspId,
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(t) FROM TransactionEntity t " +
+           "WHERE t.panHash = :account " +
+           "AND t.amountCents >= :lowerCents AND t.amountCents < :upperCents " +
+           "AND t.txnTs >= :from AND t.txnTs <= :to")
+    long countByAccountAndAmountRangeAndPeriod(@Param("account") String account,
+                                               @Param("lowerCents") Long lowerCents,
+                                               @Param("upperCents") Long upperCents,
+                                               @Param("from") LocalDateTime from,
+                                               @Param("to") LocalDateTime to);
 }

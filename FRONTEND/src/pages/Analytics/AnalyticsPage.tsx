@@ -41,7 +41,7 @@ import {
   useModelMetricsRange,
   useAlertTrends,
   useDashboardGlobalStats,
-  type ModelMetricsEntry,
+  type ModelMetrics,
 } from "../../features/api/queries";
 
 // Grafana base URL — optional; when set, an extra "Advanced Analytics" tab appears
@@ -448,8 +448,8 @@ function ModelPerformanceTab() {
   const { data: metricsRange, isLoading: rangeLoading } = useModelMetricsRange(startDate, endDate);
 
   const aucTrend = (metricsRange ?? [])
-    .filter((m: ModelMetricsEntry) => m.auc !== null)
-    .map((m: ModelMetricsEntry) => ({ date: m.date, auc: Number(m.auc) }));
+    .filter((m: ModelMetrics) => m.auc !== null)
+    .map((m: ModelMetrics) => ({ date: m.date, auc: Number(m.auc) }));
 
   const anyLoading = fmLoading || latestLoading;
 

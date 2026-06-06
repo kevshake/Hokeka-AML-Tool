@@ -11,6 +11,7 @@ import org.mapstruct.Mapping;
 public interface PspMapper {
 
     @Mapping(target = "id", source = "pspId")
+    @Mapping(target = "isTestMode", source = "isTestMode")
     PspResponse toResponse(Psp psp);
 
     @Mapping(target = "id", source = "id")
