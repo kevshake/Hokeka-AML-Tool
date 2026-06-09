@@ -24,12 +24,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         pattern = "com\\.posgateway\\.aml\\.repository\\.graph\\..*"
     )
 )
-// NOTE: Neo4j repository scanning is delegated to Neo4jConfig, which is
-// @ConditionalOnProperty(neo4j.enabled=true). The previous hard-coded
-// @EnableNeo4jRepositories on the main class forced Spring to build
-// neo4jTemplate at startup even when neo4j.enabled=false, which broke the
-// local in-memory `h2` profile. Keeping the gating in one place (Neo4jConfig)
-// is consistent with the Driver/TransactionManager beans there.
+@org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories(
+    basePackages = "com.posgateway.aml.repository.graph"
+)
 public class AmlFraudDetectorApplication {
 
     public static void main(String[] args) {

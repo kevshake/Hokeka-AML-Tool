@@ -113,13 +113,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- H2 Database (for local in-memory profile only) -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
         <!-- Aerospike removed: Aerospike now lives only in aml-microservice and is
              reached over HTTP via AmlMicroserviceClient (see com.posgateway.aml.client.aml). -->
 
