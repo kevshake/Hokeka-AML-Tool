@@ -1,4 +1,5 @@
--- V133: Real monitoring metrics support
+-- V145: Real monitoring metrics support
+-- (Renumbered from duplicate V140; compliance review tracking retains V140.)
 --
 -- Adds the columns required by MonitoringMetricsService to compute true
 -- AUC, latency percentiles, and PSI drift from per-transaction data

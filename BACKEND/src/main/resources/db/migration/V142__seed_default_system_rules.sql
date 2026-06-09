@@ -519,4 +519,4 @@ INSERT INTO rule_definitions (
  'A transactions payment details are checked when no userId is mentioned, against Sanctions/PEP/AM lists.',
  '{"providers": ["sanctions", "pep", "adverse_media"]}'::jsonb)
 
-ON CONFLICT (external_code) DO NOTHING;
+ON CONFLICT (external_code) WHERE external_code IS NOT NULL DO NOTHING;
