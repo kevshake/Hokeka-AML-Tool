@@ -1,4 +1,5 @@
 import VisualRuleBuilder from "../../components/VisualRuleBuilder";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import { useState, useEffect } from "react";
 import {
   Box,
@@ -265,11 +266,9 @@ export default function RulesGenerationPage() {
   };
 
   return (
+    <HokekaPageShell title="Risk Rules" subtitle="Create and manage AML detection rules" noCard>
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-          Rules Generation
-        </Typography>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 2 }}>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel sx={{ color: "text.secondary" }}>Filter</InputLabel>
@@ -940,6 +939,7 @@ export default function RulesGenerationPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </HokekaPageShell>
   );
 }
 

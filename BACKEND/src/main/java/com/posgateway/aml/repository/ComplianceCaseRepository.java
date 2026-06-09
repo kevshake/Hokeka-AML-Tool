@@ -230,6 +230,26 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
     List<Object[]> getDailyResolvedCounts(@Param("start") LocalDateTime start,
                                           @Param("end") LocalDateTime end);
 
+    /**
+     * Daily new-case counts for KPI sparklines. Returns rows of
+     * [date (java.sql.Date), count (Long)] grouped by DATE(created_at).
+     */
+    @Query(value = "SELECT DATE(c.created_at) AS d, COUNT(*) AS cnt " +
+                   "FROM compliance_cases c " +
+                   "WHERE c.created_at >= :start AND c.created_at < :end " +
+                   "GROUP BY DATE(c.created_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyCreatedCounts(@Param("start") LocalDateTime start,
+                                         @Param("end") LocalDateTime end);
+
+    @Query(value = "SELECT DATE(c.created_at) AS d, COUNT(*) AS cnt " +
+                   "FROM compliance_cases c " +
+                   "WHERE c.psp_id = :pspId " +
+                   "  AND c.created_at >= :start AND c.created_at < :end " +
+                   "GROUP BY DATE(c.created_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyCreatedCountsByPsp(@Param("pspId") Long pspId,
+                                              @Param("start") LocalDateTime start,
+                                              @Param("end") LocalDateTime end);
+
     /** Cases created within a window (for SAR-filing-SLA denominator). */
     long countByCreatedAtAfter(LocalDateTime since);
 }

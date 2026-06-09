@@ -23,6 +23,7 @@ import { useState, useEffect } from "react";
 import { BRAND_THEMES } from "../../config/themes";
 import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 
 interface Psp {
@@ -225,11 +226,12 @@ export default function SettingsPage() {
   };
 
   return (
+    <HokekaPageShell
+      title={isPspUser && user?.psp?.name ? `Settings — ${user.psp.name}` : "Settings"}
+      subtitle="Platform configuration, themes, and preferences"
+      noCard
+    >
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
-        {isPspUser && user?.psp?.name ? `Settings — ${user.psp.name}` : "Settings"}
-      </Typography>
-
       <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         {!isPspUser && <Tab label="PSP Theme Management" />}
         {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
@@ -563,5 +565,6 @@ export default function SettingsPage() {
         </TabPanel>
       )}
     </Box>
+    </HokekaPageShell>
   );
 }

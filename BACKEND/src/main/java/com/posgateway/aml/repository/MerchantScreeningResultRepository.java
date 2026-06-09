@@ -80,4 +80,16 @@ public interface MerchantScreeningResultRepository extends JpaRepository<Merchan
                    "GROUP BY COALESCE(msr.match_details->>'hitListType', 'UNKNOWN')",
            nativeQuery = true)
     List<Object[]> countTodayByHitListType(@Param("since") LocalDateTime since);
+
+    /**
+     * Daily watchlist/sanctions match counts for KPI sparklines.
+     * Returns rows of [date (java.sql.Date), count (Long)].
+     */
+    @Query(value = "SELECT DATE(msr.screened_at) AS d, COUNT(*) AS cnt " +
+                   "FROM merchant_screening_results msr " +
+                   "WHERE msr.screened_at >= :start AND msr.screened_at < :end " +
+                   "  AND msr.screening_status IN ('MATCH','POTENTIAL_MATCH') " +
+                   "GROUP BY DATE(msr.screened_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyMatchCounts(@Param("start") LocalDateTime start,
+                                       @Param("end") LocalDateTime end);
 }

@@ -64,6 +64,7 @@ import {
   type ReportApiError,
 } from "../../features/api/reportQueries";
 import { useToast } from "../../hooks/useToast";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import ReportCard from "./components/ReportCard";
 import ReportHistory from "./components/ReportHistory";
 import ScheduleReportDialog from "./components/ScheduleReportDialog";
@@ -72,6 +73,7 @@ import ReportProgress from "./components/ReportProgress";
 import ReportErrorBoundary from "./components/ReportErrorBoundary";
 import EmptyState from "./components/EmptyState";
 import CbkSubmissionPanel from "./components/CbkSubmissionPanel";
+import ChargebackDisputesPanel from "./components/ChargebackDisputesPanel";
 
 // Category Icons mapping
 const CATEGORY_ICONS: Record<string, typeof Gavel> = {
@@ -286,50 +288,20 @@ export default function ReportsCenterPage() {
 
   return (
     <ReportErrorBoundary reportName="Reports Center">
-      <Box sx={{ p: { xs: 1.5, md: 2 } }}>
-        {/* Header */}
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                borderRadius: "16px",
-                background: "linear-gradient(135deg, #800020 0%, #a52a2a 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ReportsIcon sx={{ color: "#FFD700", fontSize: 28 }} />
-            </Box>
-            <Box>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontWeight: 700,
-                  color: "#2c3e50",
-                  fontSize: { xs: "1.5rem", md: "2rem" },
-                }}
-              >
-                Reports Center
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {REPORT_DEFINITIONS.length}+ AML and compliance reports across{" "}
-                {REPORT_CATEGORIES.length} categories
-              </Typography>
-            </Box>
-          </Box>
-
+      <HokekaPageShell
+        title="Reports Center"
+        subtitle="Generate, schedule, and download AML compliance reports"
+        noCard
+      >
+      <Box sx={{ p: { xs: 0, md: 0 } }}>
           {/* Progress indicator for active generation */}
           {generatingReportId && progressData && (
             <Fade in>
-              <Box sx={{ mt: 2, maxWidth: 600 }}>
+              <Box sx={{ mb: 2, maxWidth: 600 }}>
                 <ReportProgress progress={progressData} />
               </Box>
             </Fade>
           )}
-        </Box>
 
         {/* Error Alert */}
         {historyError && (
@@ -615,6 +587,10 @@ export default function ReportsCenterPage() {
                   <CbkSubmissionPanel onSubmitSuccess={refetchHistory} />
                 </Box>
               )}
+
+              {selectedCategory === "chargeback-dispute" && (
+                <ChargebackDisputesPanel />
+              )}
             </Grid>
           </Grid>
         ) : (
@@ -681,6 +657,7 @@ export default function ReportsCenterPage() {
           </Alert>
         </Snackbar>
       </Box>
+      </HokekaPageShell>
     </ReportErrorBoundary>
   );
 }

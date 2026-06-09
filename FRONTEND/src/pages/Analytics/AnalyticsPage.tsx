@@ -4,8 +4,6 @@ import {
   Typography,
   Paper,
   Grid,
-  Card,
-  CardContent,
   Alert,
   CircularProgress,
   Tab,
@@ -17,6 +15,7 @@ import {
   TableContainer,
   TableRow,
 } from "@mui/material";
+import GlassCard, { type GlassCardGlowVariant } from "../../components/Common/GlassCard";
 import {
   LineChart,
   Line,
@@ -43,6 +42,7 @@ import {
   useDashboardGlobalStats,
   type ModelMetrics,
 } from "../../features/api/queries";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 // Grafana base URL — optional; when set, an extra "Advanced Analytics" tab appears
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL as string | undefined;
@@ -65,28 +65,22 @@ function KpiCard({
   value,
   sub,
   color = BRAND,
+  glowVariant = "burgundy",
 }: {
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
+  glowVariant?: GlassCardGlowVariant;
 }) {
   return (
-    <Card sx={{ height: "100%" }}>
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="body2" sx={{ color: "text.secondary", mb: 1, fontWeight: 500 }}>
-          {label}
-        </Typography>
-        <Typography variant="h4" sx={{ color, fontWeight: 700, mb: 0.5 }}>
-          {value}
-        </Typography>
-        {sub && (
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            {sub}
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
+    <GlassCard padding="md" glowVariant={glowVariant} className="h-full">
+      <p className="mb-1 text-sm font-medium text-glass-muted">{label}</p>
+      <p className="mb-0.5 text-3xl font-bold" style={{ color }}>
+        {value}
+      </p>
+      {sub && <p className="text-xs text-glass-muted">{sub}</p>}
+    </GlassCard>
   );
 }
 
@@ -96,18 +90,18 @@ function ChartShell({
   loading,
   empty,
   children,
+  glowVariant = "burgundy",
 }: {
   title: string;
   height?: number;
   loading: boolean;
   empty: boolean;
   children: React.ReactNode;
+  glowVariant?: GlassCardGlowVariant;
 }) {
   return (
-    <Paper sx={{ p: 3, borderRadius: 2, border: "1px solid rgba(0,0,0,0.08)", height: "100%" }}>
-      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-        {title}
-      </Typography>
+    <GlassCard padding="md" glowVariant={glowVariant} className="h-full">
+      <h3 className="mb-4 text-base font-semibold text-white">{title}</h3>
       {loading ? (
         <Box sx={{ height, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <CircularProgress size={36} sx={{ color: BRAND }} />
@@ -121,7 +115,7 @@ function ChartShell({
       ) : (
         <Box sx={{ height }}>{children}</Box>
       )}
-    </Paper>
+    </GlassCard>
   );
 }
 
@@ -161,6 +155,7 @@ function TransactionOverviewTab() {
             label="Total This Month"
             value={totalMonth.toLocaleString()}
             sub="transactions"
+            glowVariant="burgundy"
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -169,6 +164,7 @@ function TransactionOverviewTab() {
             value={statsLoading ? "…" : avgPerDay.toLocaleString()}
             sub="transactions / day"
             color="#3498db"
+            glowVariant="teal"
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -177,6 +173,7 @@ function TransactionOverviewTab() {
             value={peakDay ? peakDay.count.toLocaleString() : "—"}
             sub={peakDay?.date ?? ""}
             color="#27ae60"
+            glowVariant="green"
           />
         </Grid>
       </Grid>
@@ -187,6 +184,7 @@ function TransactionOverviewTab() {
             title="Daily Transaction Volume (Last 30 Days)"
             loading={volLoading}
             empty={volData.length === 0}
+            glowVariant="burgundy"
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={volData}>
@@ -213,6 +211,7 @@ function TransactionOverviewTab() {
             title="Decision Breakdown"
             loading={statsLoading}
             empty={decisionData.length === 0}
+            glowVariant="teal"
           >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -271,6 +270,7 @@ function RiskAnalyticsTab() {
             label="Total Cases"
             value={trends?.totalCases?.toLocaleString() ?? "—"}
             sub="in selected window"
+            glowVariant="amber"
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -279,6 +279,7 @@ function RiskAnalyticsTab() {
             value={trends?.highRiskCases?.toLocaleString() ?? "—"}
             sub="requires attention"
             color={COLORS.HIGH}
+            glowVariant="red"
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -293,6 +294,13 @@ function RiskAnalyticsTab() {
                 ? COLORS.LOW
                 : "#3498db"
             }
+            glowVariant={
+              trends?.trendDirection === "INCREASING"
+                ? "red"
+                : trends?.trendDirection === "DECREASING"
+                ? "green"
+                : "teal"
+            }
           />
         </Grid>
       </Grid>
@@ -303,6 +311,7 @@ function RiskAnalyticsTab() {
             title="Risk Distribution"
             loading={distLoading}
             empty={distData.length === 0}
+            glowVariant="orange"
           >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -331,6 +340,7 @@ function RiskAnalyticsTab() {
             title="Risk Score Trend (Last 30 Days)"
             loading={trendsLoading}
             empty={trendData.length === 0}
+            glowVariant="red"
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData}>
@@ -372,7 +382,11 @@ function AlertTrendsTab() {
     <Box>
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={4}>
-          <KpiCard label="Total Alerts (30d)" value={totalAlerts.toLocaleString()} />
+          <KpiCard
+            label="Total Alerts (30d)"
+            value={totalAlerts.toLocaleString()}
+            glowVariant="red"
+          />
         </Grid>
         <Grid item xs={12} sm={4}>
           <KpiCard
@@ -380,6 +394,7 @@ function AlertTrendsTab() {
             value={resolutionRate}
             sub="resolved / total"
             color="#27ae60"
+            glowVariant="green"
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -388,6 +403,7 @@ function AlertTrendsTab() {
             value={totalResolved.toLocaleString()}
             sub="last 30 days"
             color="#27ae60"
+            glowVariant="teal"
           />
         </Grid>
       </Grid>
@@ -398,6 +414,7 @@ function AlertTrendsTab() {
             title="Alerts Per Day"
             loading={isLoading}
             empty={trends.length === 0}
+            glowVariant="red"
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trends}>
@@ -416,6 +433,7 @@ function AlertTrendsTab() {
             title="Alerts by Status"
             loading={isLoading}
             empty={trends.length === 0}
+            glowVariant="amber"
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trends}>
@@ -462,6 +480,7 @@ function ModelPerformanceTab() {
             value={anyLoading ? "…" : latest?.auc != null ? latest.auc.toFixed(3) : "—"}
             sub="latest model"
             color={BRAND}
+            glowVariant="burgundy"
           />
         </Grid>
         <Grid item xs={12} sm={3}>
@@ -470,6 +489,7 @@ function ModelPerformanceTab() {
             value={anyLoading ? "…" : fraudMetrics?.precision ?? "—"}
             sub="at threshold"
             color="#3498db"
+            glowVariant="teal"
           />
         </Grid>
         <Grid item xs={12} sm={3}>
@@ -478,6 +498,7 @@ function ModelPerformanceTab() {
             value={anyLoading ? "…" : fraudMetrics?.recall ?? "—"}
             sub="at threshold"
             color="#27ae60"
+            glowVariant="green"
           />
         </Grid>
         <Grid item xs={12} sm={3}>
@@ -486,6 +507,7 @@ function ModelPerformanceTab() {
             value={anyLoading ? "…" : fraudMetrics?.f1 ?? "—"}
             sub="harmonic mean"
             color="#f39c12"
+            glowVariant="gold"
           />
         </Grid>
       </Grid>
@@ -496,6 +518,7 @@ function ModelPerformanceTab() {
             title="AUC Trend (Last 12 Months)"
             loading={rangeLoading}
             empty={aucTrend.length === 0}
+            glowVariant="purple"
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={aucTrend}>
@@ -518,7 +541,7 @@ function ModelPerformanceTab() {
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, borderRadius: 2, border: "1px solid rgba(0,0,0,0.08)", height: "100%" }}>
+          <GlassCard padding="md" glowVariant="charcoal" className="h-full">
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
               Latest Model Snapshot
             </Typography>
@@ -567,7 +590,7 @@ function ModelPerformanceTab() {
                 </Table>
               </TableContainer>
             )}
-          </Paper>
+          </GlassCard>
         </Grid>
       </Grid>
     </Box>
@@ -666,12 +689,10 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState(0);
 
   return (
+    <HokekaPageShell title="Analytics" subtitle="Transaction overview, risk analytics, and alert trends" noCard>
     <Box>
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-          <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-            Analytics &amp; Monitoring
-          </Typography>
           {GRAFANA_BASE_URL && (
             <Chip label="Grafana Connected" size="small" sx={{ backgroundColor: "#e8f5e9", color: "#27ae60", fontWeight: 600 }} />
           )}
@@ -706,5 +727,6 @@ export default function AnalyticsPage() {
       {activeTab === 3 && <ModelPerformanceTab />}
       {activeTab === 4 && GRAFANA_BASE_URL && <GrafanaSection />}
     </Box>
+    </HokekaPageShell>
   );
 }

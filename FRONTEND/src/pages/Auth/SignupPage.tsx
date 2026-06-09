@@ -128,12 +128,12 @@ export default function SignupPage() {
                         }}
                     >
                         <img
-                            src="/hokeka-logo.jpg"
+                            src="/images/hokeka-logo.png"
                             alt="Hokeka Logo"
                             style={{
                                 width: "100%",
                                 height: "100%",
-                                objectFit: "cover"
+                                objectFit: "contain"
                             }}
                         />
                     </Box>

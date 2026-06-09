@@ -74,6 +74,7 @@ import {
 import type { Invoice, Subscription, SubscriptionRequest } from "../../types/billing";
 import type { Psp } from "../../types";
 import { getApiUrl } from "../../config/api";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const ACCENT = "#8B4049";
 
@@ -1037,14 +1038,8 @@ export default function BillingPage() {
   const [tab, setTab] = useState(0);
 
   return (
+    <HokekaPageShell title="Billing" subtitle="Revenue, subscriptions, invoices, and usage management" noCard>
     <Box>
-      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-        Billing
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Revenue, subscriptions, invoices, and usage management.
-      </Typography>
-
       <Paper sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, mb: 0 }}>
         <Tabs
           value={tab}
@@ -1071,5 +1066,6 @@ export default function BillingPage() {
         </Box>
       </Paper>
     </Box>
+    </HokekaPageShell>
   );
 }

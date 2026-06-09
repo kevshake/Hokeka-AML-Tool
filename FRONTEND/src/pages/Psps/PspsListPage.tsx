@@ -48,6 +48,7 @@ import {
   useUpdatePspStatus,
   useDeletePsp,
 } from "../../features/api/mutations";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const ACCENT = "#8B4049";
 
@@ -148,11 +149,9 @@ export default function PspsListPage() {
   };
 
   return (
+    <HokekaPageShell title="PSPs" subtitle="Payment service provider onboarding and configuration" noCard>
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Payment Service Providers
-        </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 0.5 }}>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -518,5 +517,6 @@ export default function PspsListPage() {
         </DialogActions>
       </Dialog>
     </Box>
+    </HokekaPageShell>
   );
 }

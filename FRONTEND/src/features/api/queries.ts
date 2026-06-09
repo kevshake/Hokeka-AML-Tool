@@ -453,6 +453,17 @@ export const useRuleEffectiveness = (id: number) => {
   });
 };
 
+export const useChargebackDisputes = (merchantId?: number) => {
+  return useQuery({
+    queryKey: ["chargeback", "disputes", merchantId ?? "all"],
+    queryFn: () =>
+      apiClient
+        .get<any[]>(`chargeback/disputes${merchantId ? `?merchantId=${merchantId}` : ""}`)
+        .catch(() => []),
+    refetchInterval: 60_000,
+  });
+};
+
 export const useVelocityRules = () => {
   return useQuery({
     queryKey: ["rules", "velocity"],

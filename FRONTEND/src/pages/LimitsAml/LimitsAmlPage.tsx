@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Paper, Typography, TextField, Button, Grid, Snackbar, Alert, CircularProgress } from "@mui/material";
 import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 export default function LimitsAmlPage() {
   const [transactionLimit, setTransactionLimit] = useState("");
@@ -34,11 +35,8 @@ export default function LimitsAmlPage() {
   };
 
   return (
+    <HokekaPageShell title="Transaction Limits" subtitle="Configure AML transaction and daily volume limits">
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
-        Limits & AML
-      </Typography>
-
       <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <Typography variant="h6" sx={{ color: "text.primary", mb: 3 }}>
           AML Limits Configuration
@@ -94,5 +92,6 @@ export default function LimitsAmlPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </HokekaPageShell>
   );
 }

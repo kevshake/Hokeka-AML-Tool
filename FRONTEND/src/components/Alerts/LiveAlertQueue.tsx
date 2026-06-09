@@ -10,8 +10,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import GlassCard from '../Common/GlassCard'
+import RiskBadge from '../Common/RiskBadge'
 import { useLiveAlerts } from '../../hooks/useDashboard'
-import { cn } from '../../lib/utils'
 import type { Alert } from '../../types'
 
 function alertIconFor(type: string | undefined): { icon: LucideIcon; bg: string } {
@@ -19,24 +20,9 @@ function alertIconFor(type: string | undefined): { icon: LucideIcon; bg: string 
   if (t.includes('SANCTION')) return { icon: Octagon, bg: '#DC2626' }
   if (t.includes('STRUCTUR')) return { icon: Users, bg: '#F59E0B' }
   if (t.includes('VELOCITY')) return { icon: Activity, bg: '#EAB308' }
-  if (t.includes('COUNTRY') || t.includes('GEO')) return { icon: Globe, bg: '#1F6FEB' }
+  if (t.includes('COUNTRY') || t.includes('GEO')) return { icon: Globe, bg: '#7B2332' }
   if (t.includes('CASH') || t.includes('DEPOSIT')) return { icon: Banknote, bg: '#DC2626' }
   return { icon: Bell, bg: '#64748B' }
-}
-
-function riskBadgeClass(priority: string | undefined) {
-  switch ((priority ?? '').toUpperCase()) {
-    case 'CRITICAL':
-      return 'bg-red-100 text-red-700'
-    case 'HIGH':
-      return 'bg-red-50 text-red-600'
-    case 'MEDIUM':
-      return 'bg-amber-100 text-amber-700'
-    case 'LOW':
-      return 'bg-green-100 text-green-700'
-    default:
-      return 'bg-slate-100 text-slate-600'
-  }
 }
 
 function timeAgo(iso?: string) {
@@ -50,44 +36,72 @@ function timeAgo(iso?: string) {
   return `${Math.round(diffSec / 86400)}d ago`
 }
 
+function statusLabel(status?: string) {
+  switch ((status ?? '').toUpperCase()) {
+    case 'OPEN':
+      return 'New'
+    case 'INVESTIGATING':
+      return 'Investigating'
+    case 'RESOLVED':
+      return 'Resolved'
+    default:
+      return status ?? '—'
+  }
+}
+
+function statusClass(status?: string) {
+  switch ((status ?? '').toUpperCase()) {
+    case 'OPEN':
+      return 'bg-danger/20 text-danger'
+    case 'INVESTIGATING':
+      return 'bg-warning/20 text-warning'
+    case 'RESOLVED':
+      return 'bg-success/20 text-success'
+    default:
+      return 'bg-burgundy-850/50 text-white/55'
+  }
+}
+
 export default function LiveAlertQueue() {
   const { data, isLoading, error } = useLiveAlerts(6)
   const alerts = data ?? []
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-hokeka-border bg-hokeka-card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-900">Live Alert Queue</h3>
+    <GlassCard padding="sm" glowVariant="charcoal" className="flex h-full min-h-0 flex-col !p-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-white">Live Alert Queue</h3>
         <Link
           to="/alerts"
-          className="flex items-center gap-1 text-sm font-medium text-hokeka-secondary hover:underline"
+          className="flex items-center gap-1 text-[10px] font-medium text-gold hover:underline"
         >
-          View all alerts <ArrowRight size={14} />
+          View all alerts <ArrowRight size={12} />
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="space-y-1.5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded bg-slate-100" />
+            <div key={i} className="h-8 animate-pulse rounded bg-glass-skeleton" />
           ))}
         </div>
       ) : error ? (
-        <p className="text-sm text-hokeka-critical">Could not load</p>
+        <p className="text-xs text-danger">Could not load</p>
       ) : alerts.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center py-16 text-sm text-slate-400">
+        <div className="flex flex-1 items-center justify-center py-6 text-[10px] text-glass-muted">
           No live alerts
         </div>
       ) : (
-        <div className="-mx-2 overflow-x-auto">
-          <table className="w-full text-left text-sm">
+        <div className="-mx-1 min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+          <table className="w-full min-w-[480px] text-left text-[10px]">
             <thead>
-              <tr className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                <th className="px-2 py-2">Alert</th>
-                <th className="px-2 py-2">Customer / Merchant</th>
-                <th className="px-2 py-2">Risk</th>
-                <th className="px-2 py-2">Time</th>
-                <th className="px-2 py-2" />
+              <tr className="text-[9px] font-medium uppercase tracking-wide text-glass-muted">
+                <th className="px-1.5 py-1">Alert</th>
+                <th className="px-1.5 py-1">Entity</th>
+                <th className="px-1.5 py-1">Risk</th>
+                <th className="px-1.5 py-1">Age</th>
+                <th className="px-1.5 py-1">Status</th>
+                <th className="px-1.5 py-1">Owner</th>
+                <th className="px-1.5 py-1" />
               </tr>
             </thead>
             <tbody>
@@ -96,42 +110,41 @@ export default function LiveAlertQueue() {
                 return (
                   <tr
                     key={a.id}
-                    className="border-t border-hokeka-border transition-colors hover:bg-slate-50"
+                    className="border-t border-glass-border transition-colors hover:bg-burgundy-850/55"
                   >
-                    <td className="px-2 py-3">
-                      <div className="flex items-center gap-3">
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex items-center gap-1.5">
                         <span
-                          className="flex h-8 w-8 items-center justify-center rounded-lg"
+                          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md"
                           style={{ backgroundColor: bg }}
                         >
-                          <Icon size={16} color="#FFFFFF" />
+                          <Icon size={12} color="#FFFFFF" />
                         </span>
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {a.alertType || 'Alert'}
-                          </p>
-                          <p className="truncate text-xs text-slate-500">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-white">{a.alertType || 'Alert'}</p>
+                          <p className="truncate text-[9px] text-glass-muted">
                             {a.description || `#${a.id}`}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-slate-600">
+                    <td className="px-1.5 py-1.5 text-white/70">
                       {a.transactionId ? `Txn #${a.transactionId}` : a.caseId ? `Case #${a.caseId}` : '—'}
                     </td>
-                    <td className="px-2 py-3">
+                    <td className="px-1.5 py-1.5">
+                      <RiskBadge level={a.priority} />
+                    </td>
+                    <td className="px-1.5 py-1.5 text-glass-muted">{timeAgo(a.createdAt)}</td>
+                    <td className="px-1.5 py-1.5">
                       <span
-                        className={cn(
-                          'rounded-full px-2.5 py-1 text-xs font-semibold',
-                          riskBadgeClass(a.priority)
-                        )}
+                        className={`inline-flex rounded px-1.5 py-0.5 text-[9px] font-semibold ${statusClass(a.status)}`}
                       >
-                        {a.priority ?? '—'}
+                        {statusLabel(a.status)}
                       </span>
                     </td>
-                    <td className="px-2 py-3 text-slate-500">{timeAgo(a.createdAt)}</td>
-                    <td className="px-2 py-3 text-slate-400">
-                      <MoreVertical size={16} />
+                    <td className="px-1.5 py-1.5 text-glass-muted">Unassigned</td>
+                    <td className="px-1.5 py-1.5 text-glass-muted">
+                      <MoreVertical size={12} />
                     </td>
                   </tr>
                 )
@@ -140,6 +153,6 @@ export default function LiveAlertQueue() {
           </table>
         </div>
       )}
-    </div>
+    </GlassCard>
   )
 }

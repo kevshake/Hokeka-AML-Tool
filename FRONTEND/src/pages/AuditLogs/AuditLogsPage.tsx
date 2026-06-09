@@ -8,7 +8,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
   TextField,
   MenuItem,
   Grid,
@@ -21,6 +20,7 @@ import { alpha } from "@mui/material/styles";
 import { Search as SearchIcon, FilterList as FilterIcon } from "@mui/icons-material";
 import { useAuditLogs, useAllPsps } from "../../features/api/queries";
 import { useAuth } from "../../contexts/AuthContext";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 export default function AuditLogsPage() {
   const { user } = useAuth();
@@ -84,11 +84,9 @@ export default function AuditLogsPage() {
   };
 
   return (
+    <HokekaPageShell title="Audit Logs" subtitle="Platform activity and compliance audit trail" noCard>
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-          Audit Logs
-        </Typography>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 2 }}>
         <Button
           size="small"
           variant="outlined"
@@ -278,5 +276,6 @@ export default function AuditLogsPage() {
         />
       </TableContainer>
     </Box>
+    </HokekaPageShell>
   );
 }

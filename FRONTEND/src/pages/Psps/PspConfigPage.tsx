@@ -23,6 +23,7 @@ import ProductsTab from "./tabs/ProductsTab";
 import TrustAccountsTab from "./tabs/TrustAccountsTab";
 import TariffsTab from "./tabs/TariffsTab";
 import BillingTab from "./tabs/BillingTab";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const ACCENT = "#8B4049";
 
@@ -56,6 +57,7 @@ export default function PspConfigPage() {
     `PSP ${pspId}`;
 
   return (
+    <HokekaPageShell title={pspName} subtitle="PSP configuration and compliance settings" noCard>
     <Box>
       {/* Breadcrumb */}
       <Breadcrumbs sx={{ mb: 1 }}>
@@ -132,5 +134,6 @@ export default function PspConfigPage() {
         </>
       )}
     </Box>
+    </HokekaPageShell>
   );
 }

@@ -1,64 +1,67 @@
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import GlassCard from '../Common/GlassCard'
 import { useComplianceHealth } from '../../hooks/useDashboard'
 
 interface Row {
   label: string
-  pct: number | null
+  pct: number
 }
 
 function barColor(pct: number) {
-  if (pct >= 90) return 'bg-hokeka-success'
-  if (pct >= 70) return 'bg-hokeka-warning'
-  return 'bg-hokeka-critical'
+  if (pct >= 90) return '#22C55E'
+  if (pct >= 75) return '#F59E0B'
+  return '#EF4444'
 }
 
 export default function ComplianceHealth() {
   const { data, isLoading, error } = useComplianceHealth()
 
   const rows: Row[] = [
-    { label: 'KYC Completion', pct: data?.kycCompletion ?? null },
-    { label: 'CDD Reviews', pct: data?.cddReviews ?? null },
-    { label: 'EDD Reviews', pct: data?.eddReviews ?? null },
-    { label: 'SAR Filing SLA', pct: data?.sarFilingSla ?? null },
+    { label: 'KYC Completion', pct: data?.kycCompletion ?? 0 },
+    { label: 'CDD Reviews', pct: data?.cddReviews ?? 0 },
+    { label: 'EDD Reviews', pct: data?.eddReviews ?? 0 },
+    { label: 'SAR Filing SLA', pct: data?.sarFilingSla ?? 0 },
   ]
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-hokeka-border bg-hokeka-card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-900">Compliance Health</h3>
+    <GlassCard padding="sm" glowVariant="teal" className="flex h-full min-h-0 flex-col !p-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-white">Compliance Health</h3>
         <Link
           to="/regulatory-reports"
-          className="flex items-center gap-1 text-sm font-medium text-hokeka-secondary hover:underline"
+          className="flex items-center gap-1 text-[10px] font-medium text-gold hover:underline"
         >
-          View compliance <ArrowRight size={14} />
+          View compliance <ArrowRight size={12} />
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-8 animate-pulse rounded bg-slate-100" />
+            <div key={i} className="h-5 animate-pulse rounded bg-glass-skeleton" />
           ))}
         </div>
       ) : error ? (
-        <p className="text-sm text-hokeka-critical">Could not load</p>
+        <p className="text-xs text-danger">Could not load</p>
       ) : (
-        <div className="flex flex-1 flex-col justify-between gap-4">
+        <div className="flex min-h-0 flex-1 flex-col justify-between gap-2">
           {rows.map((r) => {
-            const pct = r.pct ?? 0
+            const color = barColor(r.pct)
             return (
               <div key={r.label}>
-                <div className="mb-1.5 flex items-center justify-between text-sm">
-                  <span className="text-slate-600">{r.label}</span>
-                  <span className="font-semibold text-slate-900">
-                    {r.pct === null ? '—' : `${r.pct}%`}
-                  </span>
+                <div className="mb-0.5 flex items-center justify-between text-[10px]">
+                  <span className="text-white/70">{r.label}</span>
+                  <span className="font-semibold text-white">{r.pct}%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-1 w-full overflow-hidden rounded-full bg-burgundy-950/80">
                   <div
-                    style={{ width: `${pct}%` }}
-                    className={`h-full ${barColor(pct)}`}
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${r.pct}%`,
+                      backgroundColor: color,
+                      boxShadow: `0 0 6px ${color}88`,
+                    }}
                   />
                 </div>
               </div>
@@ -66,6 +69,6 @@ export default function ComplianceHealth() {
           })}
         </div>
       )}
-    </div>
+    </GlassCard>
   )
 }

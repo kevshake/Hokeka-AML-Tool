@@ -28,6 +28,7 @@ import { useState } from "react";
 import { useMerchants } from "../../features/api/queries";
 import { useCreateMerchant, type CreateMerchantRequest } from "../../features/api/mutations";
 import type { Merchant } from "../../types";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const riskColors: Record<string, string> = {
   LOW: "#2ecc71",
@@ -102,12 +103,10 @@ export default function MerchantsPage() {
   };
 
   return (
+    <HokekaPageShell title="Merchants" subtitle="Onboard and monitor merchant risk profiles" noCard>
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-            Merchants
-          </Typography>
           <Button
             size="small"
             variant="outlined"
@@ -364,5 +363,6 @@ export default function MerchantsPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </HokekaPageShell>
   );
 }

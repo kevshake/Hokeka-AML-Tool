@@ -1,66 +1,83 @@
-import { Search, Bell, Calendar, ChevronDown } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, ChevronDown } from 'lucide-react'
+import GlassInput from '../Common/GlassInput'
 
 interface HokekaHeaderProps {
   userName?: string
   notificationCount?: number
 }
 
+function formatTime(d: Date) {
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
+}
+
 export default function HokekaHeader({
   userName = 'Admin',
-  notificationCount = 8,
+  notificationCount,
 }: HokekaHeaderProps) {
+  const [now, setNow] = useState(() => formatTime(new Date()))
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(formatTime(new Date())), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   return (
-    <header className="sticky top-0 z-10 h-20 flex items-center justify-between px-6 bg-hokeka-background">
-      {/* Left: welcome */}
-      <div className="flex flex-col">
-        <h1 className="text-2xl font-semibold text-slate-900 leading-tight">
+    <header className="sticky top-0 z-10 flex h-[72px] flex-shrink-0 items-center justify-between gap-4 border-b border-glass-border bg-glass-panel/90 px-5 backdrop-blur-glass">
+      <div className="min-w-0 flex-shrink">
+        <h1 className="truncate text-xl font-semibold text-white leading-tight">
           Welcome back, {userName} <span aria-hidden>👋</span>
         </h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <p className="mt-0.5 truncate text-xs text-glass-muted">
           Here&apos;s what&apos;s happening in your compliance environment today.
         </p>
       </div>
 
-      {/* Right: actions */}
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="relative w-80">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-          <input
-            type="text"
-            placeholder="Search anything..."
-            className="w-full h-10 pl-9 pr-14 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-hokeka-secondary/30 focus:border-hokeka-secondary transition"
-          />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 leading-none">
-            ⌘K
-          </kbd>
+      <div className="flex flex-shrink-0 items-center gap-3">
+        <GlassInput
+          placeholder="Search anything..."
+          shortcut="⌘K"
+          showSearchIcon
+          className="w-72 hidden lg:block"
+        />
+
+        <div className="hidden h-10 flex-col justify-center rounded-full border border-glass-border bg-glass-panel px-3 sm:flex">
+          <div className="flex items-center gap-2">
+            <span className="relative inline-flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-success live-dot-glow" />
+            </span>
+            <span className="text-sm font-semibold leading-none text-success">LIVE</span>
+          </div>
+          <span className="mt-0.5 text-[10px] leading-none text-glass-muted">
+            Last sync: {now}
+          </span>
         </div>
 
-        {/* Notifications */}
         <button
           type="button"
-          className="relative h-10 w-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-glass-border bg-glass-panel text-white/85 transition-colors hover:border-glass-border-hover hover:bg-burgundy-850/70 hover:text-white"
           aria-label="Notifications"
         >
           <Bell size={18} />
-          {notificationCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none">
+          {notificationCount !== undefined && notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-white">
               {notificationCount}
             </span>
           )}
         </button>
 
-        {/* Date picker */}
         <button
           type="button"
-          className="h-10 inline-flex items-center gap-2 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          className="flex h-10 items-center gap-2 rounded-full border border-glass-border bg-glass-panel px-2 transition-colors hover:border-glass-border-hover hover:bg-burgundy-850/70"
         >
-          <Calendar size={16} className="text-slate-500" />
-          <span>Today</span>
-          <ChevronDown size={14} className="text-slate-500" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-burgundy-700 to-gold text-xs font-semibold text-white">
+            {userName.charAt(0).toUpperCase()}
+          </div>
+          <ChevronDown size={14} className="hidden text-white/60 sm:block" />
         </button>
       </div>
     </header>

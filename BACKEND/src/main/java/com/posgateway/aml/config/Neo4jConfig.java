@@ -22,6 +22,9 @@ import org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories;
 @Configuration
 @ConditionalOnProperty(name = "neo4j.enabled", havingValue = "true", matchIfMissing = false)
 @EnableNeo4jRepositories(basePackages = "com.posgateway.aml.repository.graph")
+// When neo4j.enabled=false the @EnableNeo4jRepositories above is not
+// activated, so neo4jTemplate is never required and the app can boot
+// without a Neo4j server (used by the local h2 profile).
 public class Neo4jConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(Neo4jConfig.class);

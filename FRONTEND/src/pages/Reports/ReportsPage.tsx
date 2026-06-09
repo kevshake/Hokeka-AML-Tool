@@ -1,6 +1,7 @@
 import { Box, Paper, Typography, Grid, Card, CardContent, Button } from "@mui/material";
 import { useDashboardStats } from "../../features/api/queries";
 import { Download as DownloadIcon } from "@mui/icons-material";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 export default function ReportsPage() {
   const { data: stats, isLoading } = useDashboardStats();
@@ -33,11 +34,8 @@ export default function ReportsPage() {
   };
 
   return (
+    <HokekaPageShell title="Reports" subtitle="Generate and export compliance reports" noCard>
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
-        Reports
-      </Typography>
-
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid item xs={12} md={4}>
           <Card sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
@@ -197,6 +195,7 @@ export default function ReportsPage() {
         <Typography sx={{ color: "text.disabled", mt: 2 }}>Loading report data...</Typography>
       )}
     </Box>
+    </HokekaPageShell>
   );
 }
 

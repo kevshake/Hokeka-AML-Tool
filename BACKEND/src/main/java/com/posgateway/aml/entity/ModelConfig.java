@@ -21,7 +21,12 @@ public class ModelConfig {
     @Column(name = "config_key", unique = true, nullable = false)
     private String configKey;
 
-    @Column(name = "value", nullable = false)
+    // `value` is a reserved word in H2 (and several other dialects). Wrapping
+    // the name in backticks tells Hibernate to emit a portably-quoted
+    // identifier on every dialect (Postgres + H2). The existing Postgres
+    // column is already named `value` so this is a no-op on prod (where DDL
+    // is managed by Flyway and ddl-auto=none).
+    @Column(name = "`value`", nullable = false)
     private String value;
 
     @Column(name = "description", columnDefinition = "TEXT")

@@ -3,16 +3,16 @@ import { ArrowRight } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
+import GlassCard from '../Common/GlassCard'
 import { useRiskHeatmap, type CountryRisk } from '../../hooks/useDashboard'
 
-// World atlas TopoJSON — IDs are ISO-3166-1 numeric codes as strings.
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
 const COLORS = {
-  LOW: '#86EFAC',
-  MEDIUM: '#FCD34D',
-  HIGH: '#DC2626',
-  NONE: '#E5E7EB',
+  LOW: '#22C55E',
+  MEDIUM: '#F59E0B',
+  HIGH: '#EF4444',
+  NONE: 'rgba(18, 6, 10, 0.92)',
 }
 
 const TABS = [
@@ -25,8 +25,6 @@ const TABS = [
 export default function RiskHeatmap() {
   const { data, isLoading, error } = useRiskHeatmap()
 
-  // Index by both ISO-3 alpha code and country name (lowercased) so the map
-  // tile can look up its band by whichever identifier the topojson exposes.
   const indexAlpha: Record<string, CountryRisk> = useMemo(() => {
     const out: Record<string, CountryRisk> = {}
     for (const c of data ?? []) {
@@ -46,10 +44,13 @@ export default function RiskHeatmap() {
   const topCountries = useMemo(() => {
     const list = [...(data ?? [])]
     list.sort((a, b) => b.transactionCount - a.transactionCount)
-    return list.slice(0, 8)
+    return list.slice(0, 6)
   }, [data])
 
-  function fillForGeo(geo: { id?: string | number; properties?: { name?: string; iso_a3?: string } }) {
+  function fillForGeo(geo: {
+    id?: string | number
+    properties?: { name?: string; iso_a3?: string }
+  }) {
     const iso3 = geo?.properties?.iso_a3?.toUpperCase()
     const name = geo?.properties?.name?.toLowerCase()
     const hit = (iso3 && indexAlpha[iso3]) || (name && indexName[name])
@@ -60,40 +61,40 @@ export default function RiskHeatmap() {
   }
 
   return (
-    <div className="rounded-2xl border border-hokeka-border bg-hokeka-card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-900">Risk Heatmap</h3>
+    <GlassCard padding="sm" glowVariant="red" className="flex h-full min-h-0 flex-col !p-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-white">Risk Heatmap</h3>
         <Link
           to="/risk-analytics"
-          className="flex items-center gap-1 text-sm font-medium text-hokeka-secondary hover:underline"
+          className="flex items-center gap-1 text-[10px] font-medium text-gold hover:underline"
         >
-          View full map <ArrowRight size={14} />
+          View full map <ArrowRight size={12} />
         </Link>
       </div>
 
-      <Tabs.Root defaultValue="geography" className="flex flex-col">
-        <Tabs.List className="mb-4 flex gap-6 border-b border-hokeka-border">
+      <Tabs.Root defaultValue="geography" className="flex min-h-0 flex-1 flex-col">
+        <Tabs.List className="mb-1.5 flex gap-3 border-b border-glass-border">
           {TABS.map((t) => (
             <Tabs.Trigger
               key={t.value}
               value={t.value}
-              className="-mb-px border-b-2 border-transparent pb-2 text-sm font-medium text-slate-500 outline-none transition-colors data-[state=active]:border-hokeka-secondary data-[state=active]:text-hokeka-secondary"
+              className="-mb-px border-b-2 border-transparent pb-1 text-[10px] font-medium text-glass-muted outline-none transition-colors data-[state=active]:border-gold data-[state=active]:text-gold"
             >
               {t.label}
             </Tabs.Trigger>
           ))}
         </Tabs.List>
 
-        <Tabs.Content value="geography" className="outline-none">
+        <Tabs.Content value="geography" className="flex min-h-0 flex-1 flex-col outline-none">
           {isLoading ? (
-            <div className="h-[260px] w-full animate-pulse rounded bg-slate-100" />
+            <div className="h-full w-full animate-pulse rounded bg-glass-skeleton" />
           ) : error ? (
-            <p className="text-sm text-hokeka-critical">Could not load</p>
+            <p className="text-xs text-danger">Could not load</p>
           ) : (
             <>
-              <div className="h-[260px] w-full">
+              <div className="min-h-0 flex-1">
                 <ComposableMap
-                  projectionConfig={{ scale: 140 }}
+                  projectionConfig={{ scale: 115 }}
                   style={{ width: '100%', height: '100%' }}
                 >
                   <Geographies geography={GEO_URL}>
@@ -103,11 +104,11 @@ export default function RiskHeatmap() {
                           key={geo.rsmKey}
                           geography={geo}
                           fill={fillForGeo(geo)}
-                          stroke="#FFFFFF"
-                          strokeWidth={0.5}
+                          stroke="rgba(123, 35, 50, 0.35)"
+                          strokeWidth={0.4}
                           style={{
                             default: { outline: 'none' },
-                            hover: { outline: 'none', fill: '#1F6FEB' },
+                            hover: { outline: 'none', fill: '#C9A96E' },
                             pressed: { outline: 'none' },
                           }}
                         />
@@ -117,20 +118,19 @@ export default function RiskHeatmap() {
                 </ComposableMap>
               </div>
 
-              <div className="mt-4 flex items-center justify-center gap-6 text-xs text-slate-500">
+              <div className="mt-1 flex items-center justify-center gap-4 text-[9px] text-glass-muted">
                 <LegendDot color={COLORS.LOW} label="Low" />
                 <LegendDot color={COLORS.MEDIUM} label="Medium" />
                 <LegendDot color={COLORS.HIGH} label="High" />
-                <LegendDot color={COLORS.NONE} label="No data" />
               </div>
 
               {topCountries.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-600">
+                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
                   {topCountries.map((c) => (
                     <div key={c.countryCode} className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 truncate">
+                      <span className="flex items-center gap-1.5 truncate text-white/70">
                         <span
-                          className="inline-block h-2 w-2 rounded-full"
+                          className="inline-block h-1.5 w-1.5 rounded-full"
                           style={{
                             backgroundColor:
                               c.riskLevel === 'HIGH'
@@ -140,9 +140,9 @@ export default function RiskHeatmap() {
                                   : COLORS.LOW,
                           }}
                         />
-                        <span className="truncate">{c.countryName || c.countryCode}</span>
+                        {c.countryName || c.countryCode}
                       </span>
-                      <span className="font-medium text-slate-700">
+                      <span className="font-medium text-white/90">
                         {c.transactionCount.toLocaleString()}
                       </span>
                     </div>
@@ -154,24 +154,19 @@ export default function RiskHeatmap() {
         </Tabs.Content>
 
         {TABS.slice(1).map((t) => (
-          <Tabs.Content key={t.value} value={t.value}>
-            <div className="flex h-[260px] items-center justify-center text-sm text-slate-400">
-              No {t.label.toLowerCase()} data available
-            </div>
+          <Tabs.Content key={t.value} value={t.value} className="flex flex-1 items-center justify-center">
+            <p className="text-[10px] text-glass-muted">No {t.label.toLowerCase()} data available</p>
           </Tabs.Content>
         ))}
       </Tabs.Root>
-    </div>
+    </GlassCard>
   )
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span
-        className="inline-block h-2.5 w-2.5 rounded-full"
-        style={{ backgroundColor: color }}
-      />
+      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
       <span>{label}</span>
     </div>
   )

@@ -95,13 +95,9 @@ public class PspController {
         return ResponseEntity.ok(pspMapper.toResponse(psp));
     }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER','APP_CONTROLLER')")
-    public ResponseEntity<List<PspResponse>> listPsps() {
-        return ResponseEntity.ok(pspRepository.findAll().stream()
-                .map(pspMapper::toResponse)
-                .toList());
-    }
+    // NOTE: the previous `listPsps()` @GetMapping("") method was a duplicate of
+    // getAllPsps() above and produced an ambiguous-mapping error on startup.
+    // Removed to unblock the local h2 profile boot.
 
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")

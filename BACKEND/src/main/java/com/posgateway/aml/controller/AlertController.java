@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/alerts")
-@PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'ANALYST')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'ANALYST', 'PSP_ADMIN')")
 @SuppressWarnings("null") // PathVariable Long parameters and repository Optional returns are safe
 public class AlertController {
 
@@ -175,7 +175,7 @@ public class AlertController {
      * PUT /alerts/{id}/resolve
      */
     @PutMapping("/{id}/resolve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR')")
     @SuppressWarnings("null")
     public ResponseEntity<?> resolveAlert(
             @PathVariable Long id,
@@ -252,7 +252,7 @@ public class AlertController {
      * PUT /alerts/{id}/status   body: { "status": "open" | "resolved" | "false_positive" | ... }
      */
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR')")
     @SuppressWarnings("null")
     public ResponseEntity<?> updateAlertStatus(
             @PathVariable Long id,
@@ -313,7 +313,7 @@ public class AlertController {
      * DELETE /alerts/{id}
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPLIANCE_OFFICER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER')")
     @SuppressWarnings("null")
     public ResponseEntity<?> deleteAlert(@PathVariable Long id) {
         Long userPspId = pspIsolationService.getCurrentUserPspId();

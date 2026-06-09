@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { ArrowDown, ArrowUp, type LucideIcon } from 'lucide-react'
-import { Line, LineChart, ResponsiveContainer } from 'recharts'
+import GlassCard, { type GlassCardGlowVariant } from '../Common/GlassCard'
+import Sparkline, { type SparklineGlow } from './Sparkline'
 import { cn } from '../../lib/utils'
 
 export interface KpiTrend {
@@ -18,8 +19,18 @@ export interface KpiCardProps {
   trend?: KpiTrend
   sparklineData?: number[]
   sparklineColor?: string
+  sparklineGlow?: SparklineGlow
   loading?: boolean
   error?: boolean
+  glowVariant?: GlassCardGlowVariant
+}
+
+const GLOW_BY_VARIANT: Partial<Record<GlassCardGlowVariant, SparklineGlow>> = {
+  burgundy: 'burgundy',
+  red: 'red',
+  amber: 'amber',
+  green: 'green',
+  gold: 'gold',
 }
 
 export default function KpiCard({
@@ -30,82 +41,78 @@ export default function KpiCard({
   iconBg,
   trend,
   sparklineData,
-  sparklineColor = '#1F6FEB',
+  sparklineColor = '#C9A96E',
+  sparklineGlow,
   loading = false,
   error = false,
+  glowVariant,
 }: KpiCardProps) {
   const trendPositive = trend?.direction === 'up'
   const trendNegative = trend?.direction === 'down'
   const trendColor = trendPositive
-    ? 'text-hokeka-success'
+    ? 'text-success'
     : trendNegative
-      ? 'text-hokeka-critical'
-      : 'text-slate-500'
+      ? 'text-danger'
+      : 'text-glass-muted'
 
-  const sparkData = (sparklineData ?? []).map((v, i) => ({ i, v }))
+  const glow = sparklineGlow ?? (glowVariant ? GLOW_BY_VARIANT[glowVariant] : undefined) ?? 'gold'
 
   return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      transition={{ duration: 0.2 }}
-      className="rounded-2xl border border-hokeka-border bg-hokeka-card p-4 shadow-sm"
-    >
-      <div className="flex items-start justify-between">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{ backgroundColor: iconBg }}
-        >
-          <Icon size={20} color="#FFFFFF" />
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-medium text-slate-600">{title}</p>
-          <p className="text-xs text-slate-400">{subtitle}</p>
-        </div>
-      </div>
-
-      <div className="my-2">
-        {loading ? (
-          <div className="h-8 w-24 animate-pulse rounded bg-slate-100" />
-        ) : error ? (
-          <p className="text-sm text-hokeka-critical">Could not load</p>
-        ) : (
-          <p className="text-3xl font-bold text-slate-900">
-            {value === null || value === undefined || value === '' ? '—' : value}
-          </p>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between">
-        {trend ? (
-          <div className={cn('flex items-center gap-1 text-xs font-medium', trendColor)}>
-            {trendPositive && <ArrowUp size={12} />}
-            {trendNegative && <ArrowDown size={12} />}
-            <span>
-              {trend.value > 0 ? '+' : ''}
-              {trend.value}%
-            </span>
-            <span className="text-slate-400">{trend.label ?? 'vs yesterday'}</span>
+    <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.2 }}>
+      <GlassCard
+        padding="sm"
+        glowVariant={glowVariant}
+        className="flex h-[84px] items-stretch gap-2 !p-3"
+      >
+        <div className="flex min-w-0 flex-1 flex-col justify-between">
+          <div className="flex items-start justify-between gap-1.5">
+            <div
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: iconBg }}
+            >
+              <Icon size={15} color="#FFFFFF" />
+            </div>
+            <div className="min-w-0 text-right">
+              <p className="truncate text-[10px] font-medium leading-tight text-white/80">{title}</p>
+              <p className="text-[9px] text-glass-muted">{subtitle}</p>
+            </div>
           </div>
-        ) : (
-          <span />
-        )}
-        {sparkData.length > 1 && (
-          <div className="h-6 w-16">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={sparkData}>
-                <Line
-                  type="monotone"
-                  dataKey="v"
-                  stroke={sparklineColor}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+
+          <div>
+            {loading ? (
+              <div className="h-5 w-16 animate-pulse rounded bg-glass-skeleton" />
+            ) : error ? (
+              <p className="text-[10px] text-danger">Could not load</p>
+            ) : (
+              <p className="text-lg font-bold leading-tight text-white">
+                {value === null || value === undefined || value === '' ? '—' : value}
+              </p>
+            )}
+          </div>
+
+          <div>
+            {trend ? (
+              <div className={cn('flex items-center gap-0.5 text-[9px] font-medium', trendColor)}>
+                {trendPositive && <ArrowUp size={10} />}
+                {trendNegative && <ArrowDown size={10} />}
+                <span>
+                  {trend.value > 0 ? '+' : ''}
+                  {trend.value}%
+                </span>
+                <span className="text-glass-subtle">{trend.label ?? 'vs yesterday'}</span>
+              </div>
+            ) : (
+              <span className="inline-block h-[14px]" />
+            )}
+          </div>
+        </div>
+
+        {!loading && !error && (
+          <div className="flex flex-shrink-0 items-center self-center">
+            <Sparkline data={sparklineData} color={sparklineColor} glow={glow} />
           </div>
         )}
-      </div>
+      </GlassCard>
     </motion.div>
   )
 }

@@ -35,6 +35,7 @@ export interface Case {
   updatedAt: string;
   slaDeadline?: string;
   daysOpen?: number;
+  alerts?: { id: number }[];
 }
 
 export type CaseStatus =

@@ -3,6 +3,7 @@ import { Box, Paper, Typography, Button, Tabs, Tab, Grid, Card, CardContent, Tab
 import { useRegulatoryReport } from "../../features/api/queries";
 import { Download as DownloadIcon } from "@mui/icons-material";
 import CbkSubmissionsTab from "./tabs/CbkSubmissionsTab";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 type MainTab = "reports" | "cbk-submissions";
 
@@ -45,11 +46,8 @@ export default function RegulatoryReportsPage() {
   };
 
   return (
+    <HokekaPageShell title="Regulatory Reports" subtitle="FIU reports and CBK submissions" noCard>
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
-        Regulatory Reports
-      </Typography>
-
       {/* Top-level tab: FIU reports vs CBK submissions */}
       <Tabs
         value={mainTab}
@@ -202,6 +200,7 @@ export default function RegulatoryReportsPage() {
       </Paper>
       </>}
     </Box>
+    </HokekaPageShell>
   );
 }
 

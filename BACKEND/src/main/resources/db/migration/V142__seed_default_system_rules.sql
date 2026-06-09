@@ -1,6 +1,6 @@
--- V135: Seed 53 default system rules (AML / Fraud / Screening)
+-- V142: Seed 55 default system rules (AML / Fraud / Screening)
 --
--- Source: compliance team rule catalog (R-1 through R-170, 53 entries).
+-- Source: compliance team rule catalog (R-1 through R-170, 55 entries).
 -- All seeded with:
 --   is_system_managed = TRUE   → cannot be deleted, only disabled or edited
 --   enabled           = FALSE  → operators must explicitly enable per PSP
@@ -519,4 +519,4 @@ INSERT INTO rule_definitions (
  'A transactions payment details are checked when no userId is mentioned, against Sanctions/PEP/AM lists.',
  '{"providers": ["sanctions", "pep", "adverse_media"]}'::jsonb)
 
-ON CONFLICT DO NOTHING;
+ON CONFLICT (external_code) DO NOTHING;

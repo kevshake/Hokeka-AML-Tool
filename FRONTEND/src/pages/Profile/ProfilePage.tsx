@@ -37,6 +37,7 @@ import { useCurrentUser } from "../../features/api/queries";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import { PERMISSION_LABELS, Permission } from "../../types/userManagement";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -132,11 +133,8 @@ export default function ProfilePage() {
   }
 
   return (
+    <HokekaPageShell title="My Profile" subtitle="Personal information, security, and permissions" noCard>
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
-        My Profile
-      </Typography>
-
       {/* Profile Header Card */}
       <Card sx={{ mb: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <CardContent sx={{ p: 3 }}>
@@ -476,6 +474,7 @@ export default function ProfilePage() {
         </TabPanel>
       </Paper>
     </Box>
+    </HokekaPageShell>
   );
 }
 

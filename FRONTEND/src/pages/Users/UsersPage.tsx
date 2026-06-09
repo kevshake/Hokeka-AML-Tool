@@ -1,6 +1,7 @@
-import { Box, Typography } from "@mui/material";
 import { Routes, Route, Navigate } from "react-router-dom";
 import TabNavigation from "../../components/Common/TabNavigation";
+import GlassCard from "../../components/Common/GlassCard";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import UsersTab from "./UsersTab";
 import RolesTab from "./RolesTab";
 
@@ -11,19 +12,15 @@ export default function UsersPage() {
   ];
 
   return (
-    <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
-        User Management
-      </Typography>
-
-      <TabNavigation tabs={tabs} />
-
-  <Routes>
-  <Route path="/" element={<Navigate to="list" replace />} />
-  <Route path="list" element={<UsersTab />} />
-  <Route path="roles" element={<RolesTab />} />
-</Routes>
-    </Box>
+    <HokekaPageShell title="Users" subtitle="Manage platform users and role permissions" noCard>
+      <GlassCard padding="md">
+        <TabNavigation tabs={tabs} />
+        <Routes>
+          <Route path="/" element={<Navigate to="list" replace />} />
+          <Route path="list" element={<UsersTab />} />
+          <Route path="roles" element={<RolesTab />} />
+        </Routes>
+      </GlassCard>
+    </HokekaPageShell>
   );
 }
-

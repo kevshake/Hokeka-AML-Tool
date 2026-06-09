@@ -88,6 +88,10 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
         Predicate<Environment> isProduction = e ->
                 Arrays.asList(e.getActiveProfiles()).contains("production")
                         || Arrays.asList(e.getActiveProfiles()).contains("prod");
+        // H2 profile uses an in-memory datasource configured in application-h2.properties,
+        // so the external Postgres env vars don't apply.
+        Predicate<Environment> externalDbRequired = e ->
+                !Arrays.asList(e.getActiveProfiles()).contains("h2");
         Predicate<Environment> aerospikeEnabled = e ->
                 Boolean.parseBoolean(e.getProperty("aerospike.enabled", "false"));
         Predicate<Environment> neo4jEnabled = e ->
@@ -111,12 +115,12 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 && Boolean.parseBoolean(e.getProperty("regulators.fca.enabled", "false"));
 
         return List.of(
-                // --- Core: always required ---
-                EnvVarSpec.required("DATABASE_URL",
+                // --- Core: required unless the in-memory h2 profile is active ---
+                EnvVarSpec.requiredIf("DATABASE_URL", externalDbRequired,
                         "Postgres JDBC URL the app connects to (e.g. jdbc:postgresql://host:5432/db)"),
-                EnvVarSpec.required("DATABASE_USERNAME",
+                EnvVarSpec.requiredIf("DATABASE_USERNAME", externalDbRequired,
                         "Postgres user"),
-                EnvVarSpec.required("DATABASE_PASSWORD",
+                EnvVarSpec.requiredIf("DATABASE_PASSWORD", externalDbRequired,
                         "Postgres password"),
 
                 // --- Auth ---

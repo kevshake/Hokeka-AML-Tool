@@ -92,7 +92,7 @@ public class RulesExecutionService {
                     droolsEvaluated = true;
                 }
             } else if ("SPEL".equals(rule.getRuleType())) {
-                triggered = spelExecutor.evaluate(rule, fact);
+                triggered = spelExecutor.evaluate(rule, fact, features);
             }
 
             if (triggered) {

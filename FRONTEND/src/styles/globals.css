@@ -1,84 +1,733 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+
+
 @tailwind base;
+
 @tailwind components;
+
 @tailwind utilities;
 
+
+
 @layer base {
+
   :root {
+
     /* Shadcn HSL tokens mapped to the Hokeka palette */
+
     --background: 210 40% 98%;
+
     --foreground: 218 65% 14%;
 
+
+
     --card: 0 0% 100%;
+
     --card-foreground: 218 65% 14%;
 
+
+
     --popover: 0 0% 100%;
+
     --popover-foreground: 218 65% 14%;
 
+
+
     --primary: 218 69% 14%;
+
     --primary-foreground: 210 40% 98%;
 
+
+
     --secondary: 214 84% 52%;
+
     --secondary-foreground: 210 40% 98%;
 
+
+
     --muted: 210 40% 96%;
+
     --muted-foreground: 215 16% 47%;
 
+
+
     --accent: 214 84% 52%;
+
     --accent-foreground: 210 40% 98%;
 
+
+
     --destructive: 0 73% 50%;
+
     --destructive-foreground: 210 40% 98%;
 
+
+
     --success: 156 100% 33%;
+
     --warning: 38 92% 50%;
 
+
+
     --border: 214 32% 91%;
+
     --input: 214 32% 91%;
+
     --ring: 214 84% 52%;
+
+
 
     --radius: 12px;
 
+
+
     /* Literal Hokeka hex tokens for direct CSS usage */
-    --hokeka-primary: #0B1F3A;
-    --hokeka-secondary: #1F6FEB;
-    --hokeka-success: #00A86B;
+
+    --hokeka-primary: #7B2332;
+
+    --hokeka-primary-light: #8D3042;
+
+    --hokeka-wine: #5A1823;
+
+    --hokeka-charcoal: #0a0a0a;
+
+    --hokeka-gold: #C9A96E;
+
+    --hokeka-secondary: #7B2332;
+
+    --hokeka-success: #22C55E;
+
     --hokeka-warning: #F59E0B;
-    --hokeka-critical: #DC2626;
-    --hokeka-sidebar: #07142E;
-    --hokeka-sidebar-hover: #102A52;
-    --hokeka-background: #F8FAFC;
-    --hokeka-card: #FFFFFF;
-    --hokeka-border: #E2E8F0;
+
+    --hokeka-critical: #EF4444;
+
+    --hokeka-sidebar: #1A0508;
+
+    --hokeka-sidebar-hover: #3D0B16;
+
+    --hokeka-sidebar-active: #5A1823;
+
+    --hokeka-background: #0a0a0a;
+
+    --hokeka-card: rgba(18, 6, 10, 0.82);
+
+    --hokeka-border: rgba(123, 35, 50, 0.28);
+
+
+
+    /* Dark saturated glass tokens (NOT pale white frost) */
+
+    --burgundy-950: #1A0508;
+
+    --burgundy-900: #4A0F1C;
+
+    --burgundy-850: #3D0B16;
+
+    --burgundy-800: #5A1823;
+
+    --burgundy-700: #7B2332;
+
+    --gold: #C9A96E;
+
+    --charcoal: #0a0a0a;
+
+    --charcoal-alt: #111827;
+
+    --success: #22C55E;
+
+    --warning: #F59E0B;
+
+    --danger: #DC2626;
+
+    --risk-critical: #EF4444;
+
+    --risk-high: #F97316;
+
+    --risk-medium: #F59E0B;
+
+    --risk-low: #22C55E;
+
+    --glass: rgba(22, 8, 12, 0.78);
+
+    --glass-surface: rgba(18, 6, 10, 0.85);
+
+    --glass-panel: rgba(10, 8, 10, 0.92);
+
+    --glass-border: rgba(123, 35, 50, 0.32);
+
+    --glass-border-hover: rgba(220, 38, 38, 0.45);
+
+    --glass-skeleton: rgba(74, 15, 28, 0.38);
+
+    --glass-inner-glow: inset 0 1px 0 rgba(220, 38, 38, 0.08), inset 0 0 28px rgba(74, 15, 28, 0.22);
+
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.48), var(--glass-inner-glow);
+
+    --glass-glow: 0 0 24px rgba(220, 38, 38, 0.14), 0 8px 32px rgba(0, 0, 0, 0.42);
+
   }
+
+
 
   .dark {
+
     --background: 218 65% 8%;
+
     --foreground: 210 40% 98%;
+
     --card: 218 65% 10%;
+
     --card-foreground: 210 40% 98%;
+
     --popover: 218 65% 10%;
+
     --popover-foreground: 210 40% 98%;
+
     --primary: 214 84% 52%;
+
     --primary-foreground: 210 40% 98%;
+
     --secondary: 217 33% 17%;
+
     --secondary-foreground: 210 40% 98%;
+
     --muted: 217 33% 17%;
+
     --muted-foreground: 215 20% 65%;
+
     --accent: 217 33% 17%;
+
     --accent-foreground: 210 40% 98%;
+
     --destructive: 0 63% 31%;
+
     --destructive-foreground: 210 40% 98%;
+
     --border: 217 33% 17%;
+
     --input: 217 33% 17%;
+
     --ring: 214 84% 52%;
+
   }
+
 }
 
+
+
 body {
+
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #F8FAFC;
+
+  background-color: #0a0a0a;
+
   -webkit-font-smoothing: antialiased;
+
   -moz-osx-font-smoothing: grayscale;
+
 }
+
+
+
+/* Hokeka dashboard shell — solid base; bg image lives on main column only */
+
+.hokeka-dashboard {
+
+  position: relative;
+
+  min-height: 100vh;
+
+  background-color: #0b0000;
+
+  color: rgba(255, 255, 255, 0.95);
+
+}
+
+
+
+/* Main content column — background image + darker overlay (sidebar excluded) */
+
+.hokeka-dashboard-main {
+
+  position: relative;
+
+  background-color: #0b0000;
+
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.9)),
+    url('/images/hokeka-dashboard-bg.png');
+
+  background-size: cover;
+
+  background-position: center right;
+
+  background-repeat: no-repeat;
+
+  background-attachment: fixed;
+
+}
+
+
+
+@layer utilities {
+
+  .text-glass-muted {
+
+    color: rgba(255, 255, 255, 0.58);
+
+  }
+
+  .text-glass-subtle {
+
+    color: rgba(255, 255, 255, 0.38);
+
+  }
+
+  .text-gold-label {
+
+    color: var(--gold);
+
+  }
+
+  .bg-glass-skeleton {
+
+    background-color: var(--glass-skeleton);
+
+  }
+
+  .chart-neon-red {
+
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.65));
+
+  }
+
+  .chart-neon-gold {
+
+    filter: drop-shadow(0 0 4px rgba(201, 169, 110, 0.55));
+
+  }
+
+  .chart-neon-green {
+
+    filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.55));
+
+  }
+
+  .chart-neon-amber {
+
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.55));
+
+  }
+
+  .chart-neon-burgundy {
+
+    filter: drop-shadow(0 0 4px rgba(123, 35, 50, 0.55));
+
+  }
+
+  .live-dot-glow {
+
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.75);
+
+  }
+
+}
+
+
+
+@layer components {
+
+  .hokeka-glass-card {
+
+    background: var(--glass-surface);
+
+    border: 1px solid var(--glass-border);
+
+    box-shadow: var(--glass-shadow);
+
+    backdrop-filter: blur(12px);
+
+    -webkit-backdrop-filter: blur(12px);
+
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  }
+
+
+
+  .hokeka-glass-card:hover {
+
+    border-color: var(--glass-border-hover);
+
+    box-shadow: var(--glass-glow);
+
+  }
+
+
+
+  .hokeka-nav-active {
+
+    background: linear-gradient(135deg, #5A1823 0%, #7B2332 100%);
+
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+    border: 1px solid rgba(220, 38, 38, 0.35);
+
+  }
+
+  .glass-card-glow::before {
+
+    content: '';
+
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 0;
+
+    pointer-events: none;
+
+    border-radius: inherit;
+
+    background: radial-gradient(
+
+      circle at var(--glow-at, top left),
+
+      rgba(var(--glow-rgb), var(--glow-alpha, 0.12)) 0%,
+
+      transparent 70%
+
+    );
+
+  }
+
+  .glass-card-glow > * {
+
+    position: relative;
+
+    z-index: 1;
+
+  }
+
+}
+
+
+
+/* Glass theme overrides for legacy MUI pages inside the Hokeka shell */
+
+.hokeka-dashboard .MuiPaper-root,
+
+.hokeka-dashboard .MuiCard-root {
+
+  background: var(--glass-surface) !important;
+
+  border: 1px solid var(--glass-border);
+
+  color: rgba(255, 255, 255, 0.95);
+
+  box-shadow: var(--glass-shadow);
+
+  backdrop-filter: blur(12px);
+
+}
+
+
+
+.hokeka-dashboard .MuiTypography-root {
+
+  color: rgba(255, 255, 255, 0.92);
+
+}
+
+
+
+.hokeka-dashboard .MuiTypography-colorTextSecondary,
+
+.hokeka-dashboard .MuiTypography-body2 {
+
+  color: rgba(255, 255, 255, 0.58) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiTableCell-root {
+
+  border-color: rgba(123, 35, 50, 0.22);
+
+  color: rgba(255, 255, 255, 0.88);
+
+}
+
+
+
+.hokeka-dashboard .MuiTableHead-root .MuiTableCell-root {
+
+  color: var(--gold);
+
+  font-size: 0.65rem;
+
+  font-weight: 600;
+
+  letter-spacing: 0.04em;
+
+  text-transform: uppercase;
+
+}
+
+
+
+.hokeka-dashboard .MuiTableRow-root:hover {
+
+  background-color: rgba(90, 24, 35, 0.55);
+
+}
+
+
+
+.hokeka-dashboard .MuiDivider-root {
+
+  border-color: rgba(123, 35, 50, 0.25);
+
+}
+
+
+
+.hokeka-dashboard .MuiInputBase-root,
+
+.hokeka-dashboard .MuiOutlinedInput-root {
+
+  color: rgba(255, 255, 255, 0.95);
+
+  background: rgba(10, 8, 10, 0.75);
+
+}
+
+
+
+.hokeka-dashboard .MuiOutlinedInput-notchedOutline {
+
+  border-color: var(--glass-border) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+
+  border-color: rgba(220, 38, 38, 0.5) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiInputLabel-root {
+
+  color: rgba(255, 255, 255, 0.58) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiButton-containedPrimary {
+
+  background: linear-gradient(135deg, #7b2332 0%, #4a0f1c 100%) !important;
+
+  box-shadow: 0 4px 16px rgba(123, 35, 50, 0.35) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiButton-outlined {
+
+  border-color: rgba(123, 35, 50, 0.45) !important;
+
+  color: rgba(255, 255, 255, 0.9) !important;
+
+  background: rgba(10, 8, 10, 0.5) !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiDialog-paper {
+
+  background: linear-gradient(160deg, #0a0a0a 0%, #4a0f1c 45%, #1a0508 100%) !important;
+
+  border: 1px solid var(--glass-border);
+
+  box-shadow: var(--glass-glow);
+
+}
+
+
+
+.hokeka-dashboard .MuiTabs-root {
+
+  min-height: 40px;
+
+}
+
+
+
+.hokeka-dashboard .MuiTab-root {
+
+  color: rgba(255, 255, 255, 0.58) !important;
+
+  min-height: 40px;
+
+  text-transform: none;
+
+}
+
+
+
+.hokeka-dashboard .MuiTab-root.Mui-selected {
+
+  color: var(--gold) !important;
+
+  font-weight: 600;
+
+}
+
+
+
+.hokeka-dashboard .MuiTabs-indicator {
+
+  background-color: #dc2626 !important;
+
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
+
+}
+
+
+
+.hokeka-dashboard .MuiTablePagination-root,
+
+.hokeka-dashboard .MuiTablePagination-selectIcon,
+
+.hokeka-dashboard .MuiIconButton-root {
+
+  color: rgba(255, 255, 255, 0.7);
+
+}
+
+
+
+.hokeka-dashboard .MuiCircularProgress-root {
+
+  color: #dc2626 !important;
+
+}
+
+
+
+.hokeka-dashboard .MuiCheckbox-root {
+
+  color: rgba(255, 255, 255, 0.4);
+
+}
+
+
+
+.hokeka-dashboard .MuiCheckbox-root.Mui-checked {
+
+  color: var(--gold) !important;
+
+}
+
+
+
+/* Login page — split-screen hero (image as-is, no crop/filter) */
+
+.login-hero-panel {
+
+  background-color: #0a0a0a;
+
+}
+
+
+
+.login-hero-panel__img {
+
+  display: block;
+
+  height: 100vh;
+
+  width: auto;
+
+  max-width: none;
+
+  object-fit: contain;
+
+  object-position: left center;
+
+  image-rendering: auto;
+
+}
+
+
+
+.login-hero-panel--mobile {
+
+  height: 200px;
+
+  background-color: #0a0a0a;
+
+}
+
+
+
+.login-hero-panel__img--mobile {
+
+  height: 100%;
+
+  width: 100%;
+
+  object-fit: contain;
+
+  object-position: center center;
+
+  image-rendering: auto;
+
+}
+
+
+
+.login-primary-btn {
+
+  background: linear-gradient(135deg, #7b2332 0%, #4a0f1c 100%);
+
+  box-shadow: 0 8px 24px rgba(123, 35, 50, 0.45);
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+}
+
+
+
+.login-primary-btn:hover:not(:disabled) {
+
+  transform: translateY(-2px);
+
+  box-shadow: 0 12px 32px rgba(220, 38, 38, 0.35);
+
+}
+
+
+
+.login-card-shadow {
+
+  box-shadow:
+
+    0 4px 6px rgba(0, 0, 0, 0.2),
+
+    0 24px 48px rgba(74, 15, 28, 0.25),
+
+    0 48px 80px rgba(0, 0, 0, 0.35);
+
+}
+
+

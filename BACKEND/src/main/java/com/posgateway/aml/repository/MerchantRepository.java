@@ -143,6 +143,29 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSp
                                               @Param("since") java.time.LocalDateTime since);
 
     /**
+     * Daily high-risk merchant activity for KPI sparklines — merchants
+     * currently HIGH/CRITICAL whose record was updated on that day.
+     * Returns rows of [date (java.sql.Date), count (Long)].
+     */
+    @Query(value = "SELECT DATE(m.updated_at) AS d, COUNT(*) AS cnt " +
+                   "FROM merchants m " +
+                   "WHERE m.updated_at >= :start AND m.updated_at < :end " +
+                   "  AND m.risk_level IN ('HIGH', 'CRITICAL') " +
+                   "GROUP BY DATE(m.updated_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyHighRiskActivityCounts(@Param("start") java.time.LocalDateTime start,
+                                                  @Param("end") java.time.LocalDateTime end);
+
+    @Query(value = "SELECT DATE(m.updated_at) AS d, COUNT(*) AS cnt " +
+                   "FROM merchants m " +
+                   "WHERE m.psp_id = :pspId " +
+                   "  AND m.updated_at >= :start AND m.updated_at < :end " +
+                   "  AND m.risk_level IN ('HIGH', 'CRITICAL') " +
+                   "GROUP BY DATE(m.updated_at) ORDER BY d", nativeQuery = true)
+    List<Object[]> getDailyHighRiskActivityCountsByPsp(@Param("pspId") Long pspId,
+                                                       @Param("start") java.time.LocalDateTime start,
+                                                       @Param("end") java.time.LocalDateTime end);
+
+    /**
      * Top-N merchants by stored risk score (krs), then by riskLevel ordinal.
      * Uses a native query so we can rank LOW/MEDIUM/HIGH/CRITICAL/UNKNOWN
      * inside the database and push the LIMIT to Postgres. Returns rows of

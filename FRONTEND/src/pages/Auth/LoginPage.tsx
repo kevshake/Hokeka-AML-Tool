@@ -1,273 +1,239 @@
-import { useState } from "react";
+import { useState, type FormEvent } from 'react'
 import {
-    Box,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Alert,
-    InputAdornment,
-    IconButton,
-    CircularProgress,
-    Tooltip,
-    Snackbar,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-} from "@mui/material";
-import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
-import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../lib/apiClient";
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Globe2,
+  Loader2,
+  Lock,
+  Shield,
+  User,
+  Users,
+} from 'lucide-react'
+import HokekaLogo, { HOKEKA_LOGO_SRC } from '../../components/branding/HokekaLogo'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function LoginPage() {
-    const { login } = useAuth();
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-    const [infoSnackbar, setInfoSnackbar] = useState("");
-    const [forgotOpen, setForgotOpen] = useState(false);
-const [resetEmail, setResetEmail] = useState("");
-const [resetError, setResetError] = useState("");
-const [resetLoading, setResetLoading] = useState(false);
+  const { login } = useAuth()
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
-        setIsLoading(true);
-
-        try {
-            await login(username, password);
-        } catch (err: any) {
-            setError(err.message || "Invalid username or password");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    const handleForgotClose = () => {
-    setForgotOpen(false);
-    setResetEmail("");
-    setResetError("");
-};
-
-const handleResetSubmit = async () => {
-    if (!resetEmail.trim()) {
-        setResetError("Please enter your email or username.");
-        return;
-    }
-    setResetLoading(true);
-    setResetError("");
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
     try {
-        // Backend always 200s on /auth/password-reset/request to avoid user
-        // enumeration; the snackbar copy reflects that — we don't claim the
-        // email was definitely sent, only that one will be sent if the account
-        // exists. The token + email delivery is owned by PasswordResetService.
-        await apiClient.post("auth/password-reset/request", { identifier: resetEmail.trim() });
-        handleForgotClose();
-        setInfoSnackbar("If that account exists, reset instructions have been sent. Check your email.");
+      await login(username, password)
     } catch (err: any) {
-        setResetError(err?.message || "Failed to submit reset request. Please try again.");
+      setError(err?.message || 'Invalid username or password')
     } finally {
-        setResetLoading(false);
+      setIsLoading(false)
     }
-};
+  }
 
-    return (
-        <>
-        <Box
-            sx={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "linear-gradient(135deg, #FAF8F5 0%, #F5F0E8 100%)",
-            }}
+  return (
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* LEFT — Hero image sized by aspect ratio at full viewport height */}
+      <div
+        className="login-hero-panel relative hidden shrink-0 lg:block lg:h-screen lg:w-auto"
+        aria-hidden="true"
+      >
+        <img
+          src="/images/login-hero-panel.png"
+          alt=""
+          className="login-hero-panel__img"
+          draggable={false}
+        />
+      </div>
+
+      {/* Mobile hero strip — cropped top of full panel */}
+      <div className="login-hero-panel login-hero-panel--mobile relative overflow-hidden lg:hidden">
+        <img
+          src="/images/login-hero-panel.png"
+          alt=""
+          className="login-hero-panel__img login-hero-panel__img--mobile"
+          draggable={false}
+        />
+      </div>
+
+      {/* RIGHT — Login Form (fills remaining width) */}
+      <div className="relative flex min-h-screen min-w-0 flex-1 flex-col bg-[#F8F9FA]">
+        <button
+          type="button"
+          className="absolute right-6 top-6 z-10 flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-charcoal shadow-sm transition-colors hover:bg-gray-50"
         >
-            <Paper
-                elevation={3}
-                sx={{
-                    p: 4,
-                    maxWidth: 450,
-                    width: "100%",
-                    mx: 2,
-                    borderRadius: 3,
-                    boxShadow: "0 8px 32px rgba(139, 64, 73, 0.15)",
-                }}
-            >
-                {/* Logo */}
-                <Box sx={{ textAlign: "center", mb: 4 }}>
-                    <Box
-                        sx={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: "16px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            overflow: "hidden",
-                            boxShadow: "0 4px 12px rgba(139, 64, 73, 0.25)",
-                            mb: 2,
-                        }}
-                    >
-                        <img
-                            src="/hokeka-logo.jpg"
-                            alt="Hokeka Logo"
-                            style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover"
-                            }}
-                        />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: "#3D2C2E", mb: 0.5 }}>
-                        AML Fraud Detector
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                        Powered by Hokeka
-                    </Typography>
-                </Box>
+          <Globe2 className="h-4 w-4 text-gray-500" />
+          <span>English (US)</span>
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        </button>
 
-                {/* Error Alert */}
-                {error && (
-                    <Alert severity="error" sx={{ mb: 3 }}>
-                        {error}
-                    </Alert>
-                )}
+        <div className="flex flex-1 items-center justify-center px-6 py-24 sm:px-10">
+          <div className="login-card-shadow w-full max-w-[440px] rounded-3xl border border-[#ECEEF0] bg-white px-8 py-10 sm:px-10 sm:py-12">
+            <HokekaLogo size="card" showWordmark={false} className="mb-6" />
 
-                {/* Login Form */}
-                <form onSubmit={handleSubmit}>
-                    <Tooltip title="Enter your username or email address to sign in" arrow placement="top">
-                        <TextField
-                            fullWidth
-                            label="Username"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            autoFocus
-                            sx={{ mb: 2 }}
-                        />
-                    </Tooltip>
+            <h1 className="text-center text-[1.75rem] font-bold tracking-tight text-charcoal">
+              Welcome back
+            </h1>
+            <p className="mt-2 text-center text-sm text-gray-500">
+              Sign in to access your Hokeka dashboard
+            </p>
 
-                    <Tooltip title="Enter your password. Click the eye icon to show/hide password" arrow placement="top">
-                        <TextField
-                            fullWidth
-                            label="Password"
-                            type={showPassword ? "text" : "password"}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            sx={{ mb: 3 }}
-                            InputProps={{
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <Tooltip title={showPassword ? "Hide password" : "Show password"} arrow>
-                                            <IconButton
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                edge="end"
-                                            >
-                                                {showPassword ? <VisibilityOff /> : <Visibility />}
-                                            </IconButton>
-                                        </Tooltip>
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                    </Tooltip>
+            <form onSubmit={handleSubmit} className="mt-8">
+              {error && (
+                <div className="mb-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-hokeka-critical">
+                  {error}
+                </div>
+              )}
 
-                    <Tooltip title="Click to sign in to your account" arrow placement="top">
-                        <span>
-                            <Button
-                                type="submit"
-                                fullWidth
-                                variant="contained"
-                                size="large"
-                                disabled={isLoading}
-                                startIcon={isLoading ? <CircularProgress size={20} /> : <LoginIcon />}
-                                sx={{
-                                    backgroundColor: "#8B4049",
-                                    "&:hover": { backgroundColor: "#6B3037" },
-                                    py: 1.5,
-                                    fontSize: "1rem",
-                                    fontWeight: 600,
-                                }}
-                            >
-                                {isLoading ? "Signing in..." : "Sign In"}
-                            </Button>
-                        </span>
-                    </Tooltip>
-
-                    {/* Forgot Password Link */}
-                    <Box sx={{ mt: 2, textAlign: "center" }}>
-                        <Button
-                            variant="text"
-                            size="small"
-                            onClick={() => setForgotOpen(true)}
-                            sx={{ color: "#8B4049", textTransform: "none" }}
-                        >
-                            Forgot Password?
-                        </Button>
-                    </Box>
-                </form>
-
-                {/* Operator accounts are provisioned by an administrator —
-                    self-signup is intentionally not exposed for an AML platform.
-                    PSP onboarding uses /clients/register and /psps/register. */}
-
-                {/* Footer */}
-                <Box sx={{ mt: 3, textAlign: "center" }}>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                        © 2026 Hokeka. All rights reserved.
-                    </Typography>
-                </Box>
-            </Paper>
-        </Box>
-<Snackbar
-            open={!!infoSnackbar}
-            autoHideDuration={6000}
-            onClose={() => setInfoSnackbar("")}
-            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        >
-            <Alert severity="info" onClose={() => setInfoSnackbar("")} sx={{ width: "100%" }}>
-                {infoSnackbar}
-            </Alert>
-        </Snackbar>
-
-        <Dialog open={forgotOpen} onClose={handleForgotClose} maxWidth="xs" fullWidth>
-            <DialogTitle sx={{ fontWeight: 700, color: "#3D2C2E" }}>
-                Reset Your Password
-            </DialogTitle>
-            <DialogContent>
-                <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-                    Enter your email and we'll send you reset instructions.
-                </Typography>
-                {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
-                <TextField
-                    fullWidth
-                    label="Email Address"
-                    type="email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
+              <div>
+                <label htmlFor="username" className="mb-2 block text-sm font-semibold text-charcoal">
+                  Username
+                </label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    required
                     autoFocus
-                    onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
-                />
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 3 }}>
-                <Button onClick={handleForgotClose} sx={{ color: "#8B4049", textTransform: "none" }}>
-                    Cancel
-                </Button>
-                <Button
-                    onClick={handleResetSubmit}
-                    variant="contained"
-                    disabled={resetLoading}
-                    startIcon={resetLoading ? <CircularProgress size={18} /> : null}
-                    sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" }, textTransform: "none", fontWeight: 600 }}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    className="h-14 w-full rounded-2xl border-2 border-burgundy-700 bg-white pl-12 pr-4 text-sm text-charcoal placeholder:text-gray-400 transition focus:outline-none focus:ring-4 focus:ring-burgundy-700/10"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label htmlFor="password" className="mb-2 block text-sm font-semibold text-charcoal">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="h-14 w-full rounded-2xl border border-[#E5E7EB] bg-white pl-12 pr-12 text-sm text-charcoal placeholder:text-gray-400 transition focus:border-burgundy-700 focus:outline-none focus:ring-4 focus:ring-burgundy-700/10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between">
+                <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-charcoal">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span
+                    className={`flex h-[18px] w-[18px] items-center justify-center rounded border-2 border-burgundy-700 transition-colors ${
+                      rememberMe ? 'bg-burgundy-700' : 'bg-white'
+                    }`}
+                  >
+                    {rememberMe && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+                  </span>
+                  Remember me
+                </label>
+                <a
+                  href="#"
+                  className="text-sm font-semibold text-burgundy-700 transition-colors hover:text-burgundy-800"
                 >
-                    {resetLoading ? "Sending..." : "Send Reset Instructions"}
-                </Button>
-            </DialogActions>
-        </Dialog>
-    </>
-    );
+                  Forgot password?
+                </a>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="login-primary-btn mt-7 flex h-14 w-full items-center justify-center gap-3 rounded-2xl text-base font-semibold text-white disabled:opacity-60"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Signing in…
+                  </>
+                ) : (
+                  <>
+                    Sign in
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="relative mt-8 flex items-center">
+              <div className="h-px flex-1 bg-[#E5E7EB]" />
+              <div className="mx-4 flex h-9 w-9 items-center justify-center">
+                <img
+                  src={HOKEKA_LOGO_SRC}
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="object-contain opacity-80"
+                  draggable={false}
+                  aria-hidden="true"
+                />
+              </div>
+              <div className="h-px flex-1 bg-[#E5E7EB]" />
+            </div>
+
+            <div className="mt-6 flex items-start gap-3 rounded-2xl border border-gold/15 bg-[#FDF6EE] px-4 py-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-gold/25">
+                <Users className="h-4 w-4 text-gold" />
+              </div>
+              <p className="text-sm leading-relaxed text-gray-600">
+                <span className="font-semibold text-charcoal">
+                  Hokeka access is restricted to authorized users.
+                </span>{' '}
+                Need access?{' '}
+                <a
+                  href="#"
+                  className="font-semibold text-burgundy-700 hover:underline"
+                >
+                  Contact your system administrator.
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <footer className="pb-8 pt-4">
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <Shield className="h-4 w-4 text-gold" strokeWidth={1.75} />
+            <span className="font-medium text-gray-600">Secure</span>
+            <span className="text-gray-300">•</span>
+            <span className="font-medium text-gray-600">Compliant</span>
+            <span className="text-gray-300">•</span>
+            <span className="font-medium text-gray-600">Trusted</span>
+          </div>
+          <p className="mt-2 text-center text-xs text-gray-400">
+            © 2026 Hokeka. All rights reserved.
+          </p>
+        </footer>
+      </div>
+    </div>
+  )
 }

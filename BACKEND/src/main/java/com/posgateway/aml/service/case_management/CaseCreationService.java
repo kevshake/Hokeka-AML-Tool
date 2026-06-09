@@ -172,6 +172,15 @@ public class CaseCreationService {
     }
 
     /**
+     * Trigger a case from a chargeback / Verifi RDR webhook.
+     */
+    @Transactional
+    public void triggerCaseFromChargeback(Long merchantId, Long pspId, String eventType, String description) {
+        createOrUpdateCase(merchantId, pspId, "CHARGEBACK", eventType, null,
+                null, null, 0.85, description, null);
+    }
+
+    /**
      * Trigger a case from Graph Anomaly (Cycle/Mule).
      */
     @Transactional

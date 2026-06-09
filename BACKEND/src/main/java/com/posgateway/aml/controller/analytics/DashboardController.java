@@ -60,6 +60,16 @@ public class DashboardController {
     /** SAR-filing SLA — regulators expect filing within 30 days of case open. */
     private static final int SAR_FILING_SLA_DAYS = 30;
 
+    /** Non-terminal case statuses counted as active/open in KPIs and nav badges. */
+    private static final List<CaseStatus> ACTIVE_CASE_STATUSES = List.of(
+            CaseStatus.NEW,
+            CaseStatus.ASSIGNED,
+            CaseStatus.IN_PROGRESS,
+            CaseStatus.PENDING_INFO,
+            CaseStatus.PENDING_REVIEW,
+            CaseStatus.ESCALATED,
+            CaseStatus.REOPENED);
+
     public DashboardController(MerchantRepository merchantRepository, ComplianceCaseRepository caseRepository,
             com.posgateway.aml.repository.UserRepository userRepository,
             TransactionRepository transactionRepository,
@@ -102,10 +112,7 @@ public class DashboardController {
 
             // Single GROUP BY query replaces 3 separate COUNT queries for case stats
             Map<String, Long> caseCounts = rowsToMap(caseRepository.countByPspIdGroupByStatus(pspId));
-            stats.put("openCases",
-                    caseCounts.getOrDefault("NEW", 0L)
-                    + caseCounts.getOrDefault("ASSIGNED", 0L)
-                    + caseCounts.getOrDefault("IN_PROGRESS", 0L));
+            stats.put("openCases", sumActiveCases(caseCounts));
         } else {
             Map<String, Long> merchantCounts = rowsToMap(merchantRepository.countAllGroupByStatus());
             stats.put("totalMerchants", merchantCounts.values().stream().mapToLong(Long::longValue).sum());
@@ -113,10 +120,7 @@ public class DashboardController {
             stats.put("pendingScreening", merchantCounts.getOrDefault("PENDING_SCREENING", 0L));
 
             Map<String, Long> caseCounts = rowsToMap(caseRepository.countAllGroupByStatus());
-            stats.put("openCases",
-                    caseCounts.getOrDefault("NEW", 0L)
-                    + caseCounts.getOrDefault("ASSIGNED", 0L)
-                    + caseCounts.getOrDefault("IN_PROGRESS", 0L));
+            stats.put("openCases", sumActiveCases(caseCounts));
         }
         stats.put("urgentCases", 0L);
 
@@ -133,6 +137,11 @@ public class DashboardController {
                 ? transactionRepository.countFlaggedInPeriodByPsp(pspId, startOfYesterday, startOfToday, FLAGGED_RISK_THRESHOLD)
                 : transactionRepository.countFlaggedInPeriod(startOfYesterday, startOfToday, FLAGGED_RISK_THRESHOLD);
         stats.put("flaggedToday", flaggedToday);
+
+        long openAlerts = pspId != null
+                ? alertRepository.countOpenByPspId(pspId)
+                : alertRepository.countByStatus("open");
+        stats.put("openAlertsCount", openAlerts);
 
         // High-risk customers (merchants with riskLevel=HIGH)
         long highRiskMerchants = pspId != null
@@ -152,6 +161,8 @@ public class DashboardController {
         long totalTxnToday = pspId != null
                 ? transactionRepository.countByPspAndPeriod(pspId, startOfToday, now)
                 : transactionRepository.countByPspAndPeriod(null, startOfToday, now);
+        stats.put("transactionsMonitoredToday", totalTxnToday);
+
         long totalTxnYesterday = pspId != null
                 ? transactionRepository.countByPspAndPeriod(pspId, startOfYesterday, startOfToday)
                 : transactionRepository.countByPspAndPeriod(null, startOfYesterday, startOfToday);
@@ -195,6 +206,12 @@ public class DashboardController {
             }
         }
         return map;
+    }
+
+    private long sumActiveCases(Map<String, Long> caseCounts) {
+        return ACTIVE_CASE_STATUSES.stream()
+                .mapToLong(s -> caseCounts.getOrDefault(s.name(), 0L))
+                .sum();
     }
 
     @GetMapping("/cases/priority")
@@ -767,5 +784,86 @@ public class DashboardController {
         body.put("data", data);
         body.put("asOf", now.toString());
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Daily new-case counts for the Active Cases KPI sparkline.
+     * GET /api/v1/dashboard/cases/trends?days=7
+     */
+    @GetMapping("/cases/trends")
+    public ResponseEntity<Map<String, Object>> getCaseTrends(
+            @RequestParam(defaultValue = "7") int days) {
+        if (days <= 0) days = 7;
+        if (days > 90) days = 90;
+        com.posgateway.aml.entity.User user = getCurrentUser();
+        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
+
+        LocalDateTime endExclusive = LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDateTime start = LocalDate.now().minusDays(days - 1).atStartOfDay();
+
+        List<Object[]> rows = pspId != null
+                ? caseRepository.getDailyCreatedCountsByPsp(pspId, start, endExclusive)
+                : caseRepository.getDailyCreatedCounts(start, endExclusive);
+
+        return ResponseEntity.ok(buildDailyTrendResponse(days, rows));
+    }
+
+    /**
+     * Daily screening-match counts for the Watchlist Matches KPI sparkline.
+     * GET /api/v1/dashboard/screening/matches-trends?days=7
+     */
+    @GetMapping("/screening/matches-trends")
+    public ResponseEntity<Map<String, Object>> getScreeningMatchTrends(
+            @RequestParam(defaultValue = "7") int days) {
+        if (days <= 0) days = 7;
+        if (days > 90) days = 90;
+
+        LocalDateTime endExclusive = LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDateTime start = LocalDate.now().minusDays(days - 1).atStartOfDay();
+
+        List<Object[]> rows = screeningResultRepository.getDailyMatchCounts(start, endExclusive);
+        return ResponseEntity.ok(buildDailyTrendResponse(days, rows));
+    }
+
+    /**
+     * Daily high-risk merchant activity for the High Risk Customers KPI sparkline.
+     * GET /api/v1/dashboard/merchants/high-risk-trends?days=7
+     */
+    @GetMapping("/merchants/high-risk-trends")
+    public ResponseEntity<Map<String, Object>> getHighRiskTrends(
+            @RequestParam(defaultValue = "7") int days) {
+        if (days <= 0) days = 7;
+        if (days > 90) days = 90;
+        com.posgateway.aml.entity.User user = getCurrentUser();
+        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
+
+        LocalDateTime endExclusive = LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDateTime start = LocalDate.now().minusDays(days - 1).atStartOfDay();
+
+        List<Object[]> rows = pspId != null
+                ? merchantRepository.getDailyHighRiskActivityCountsByPsp(pspId, start, endExclusive)
+                : merchantRepository.getDailyHighRiskActivityCounts(start, endExclusive);
+
+        return ResponseEntity.ok(buildDailyTrendResponse(days, rows));
+    }
+
+    private Map<String, Object> buildDailyTrendResponse(int days, List<Object[]> rows) {
+        Map<LocalDate, Long> byDay = new HashMap<>();
+        for (Object[] row : rows) {
+            LocalDate d = ((java.sql.Date) row[0]).toLocalDate();
+            byDay.put(d, ((Number) row[1]).longValue());
+        }
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM d");
+        List<String> labels = new ArrayList<>(days);
+        List<Integer> data = new ArrayList<>(days);
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate d = LocalDate.now().minusDays(i);
+            labels.add(d.format(fmt));
+            data.add(byDay.getOrDefault(d, 0L).intValue());
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("labels", labels);
+        body.put("data", data);
+        return body;
     }
 }

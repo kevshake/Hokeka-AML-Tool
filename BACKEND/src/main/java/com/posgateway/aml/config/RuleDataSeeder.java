@@ -3,6 +3,7 @@ package com.posgateway.aml.config;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import jakarta.annotation.PostConstruct;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +14,11 @@ import java.util.List;
  * Production-grade system rule seeder.
  * Seeds high-quality rules for AML/Fraud detection.
  */
+/**
+ * Legacy dev seeder — disabled by default. Production rules ship via Flyway V142/V143.
+ */
 @Component
+@ConditionalOnProperty(name = "rules.legacy-seeder.enabled", havingValue = "true")
 public class RuleDataSeeder {
 
     private final RuleDefinitionRepository ruleRepository;
@@ -25,6 +30,11 @@ public class RuleDataSeeder {
     @PostConstruct
     @Transactional
     public void seedDefaultRules() {
+        // V142 Flyway migration seeds the canonical 53-rule catalog from compliance CSV.
+        // Skip legacy inline seeding when system-managed rules are already present.
+        if (ruleRepository.findAll().stream().anyMatch(RuleDefinition::isSystemManaged)) {
+            return;
+        }
         if (ruleRepository.count() > 150) return;
 
         List<RuleDefinition> rules = new ArrayList<>();

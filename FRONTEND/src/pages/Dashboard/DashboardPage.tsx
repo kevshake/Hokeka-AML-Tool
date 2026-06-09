@@ -15,20 +15,17 @@ import AlertTrends from '../../components/charts/AlertTrends'
 import RiskGauge from '../../components/charts/RiskGauge'
 import RiskHeatmap from '../../components/charts/RiskHeatmap'
 import ComplianceHealth from '../../components/compliance/ComplianceHealth'
+import InsightsPanel from '../../components/insights/InsightsPanel'
 import KpiCard from '../../components/kpi/KpiCard'
 import {
+  useAlertTrends,
+  useCaseTrends,
   useDashboardStats,
+  useHighRiskTrends,
   useSanctionsStatus,
+  useScreeningMatchTrends,
   useTransactionVolume,
 } from '../../hooks/useDashboard'
-
-// Tiny stub sparklines (purely decorative — KPI surface trends visually only).
-const SPARK = {
-  blue: [12, 18, 14, 22, 26, 20, 31],
-  red: [8, 14, 22, 18, 26, 30, 36],
-  amber: [10, 12, 18, 22, 19, 24, 28],
-  green: [22, 18, 24, 16, 19, 14, 12],
-}
 
 function trendOf(delta: number | undefined) {
   const v = delta ?? 0
@@ -38,15 +35,29 @@ function trendOf(delta: number | undefined) {
   }
 }
 
+function formatKpi(value: number | undefined, loading: boolean) {
+  if (loading) return undefined
+  return (value ?? 0).toLocaleString()
+}
+
+function sparkSeries(data: number[] | undefined): number[] | undefined {
+  if (!data?.length) return undefined
+  return data
+}
+
 export default function DashboardPage() {
   const stats = useDashboardStats()
   const sanctions = useSanctionsStatus()
   const volume = useTransactionVolume(7)
+  const alertTrends = useAlertTrends(7)
+  const caseTrends = useCaseTrends(7)
+  const screeningTrends = useScreeningMatchTrends(7)
+  const highRiskTrends = useHighRiskTrends(7)
 
-  const totalToday =
-    volume.data?.data && volume.data.data.length > 0
-      ? volume.data.data[volume.data.data.length - 1]
-      : undefined
+  const volumeSeries = volume.data?.data ?? []
+  const monitoredToday =
+    stats.data?.transactionsMonitoredToday ??
+    (volumeSeries.length > 0 ? volumeSeries[volumeSeries.length - 1] : 0)
 
   const trends = stats.data?.trends
 
@@ -55,123 +66,121 @@ export default function DashboardPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="grid grid-cols-12 gap-5 pt-2"
+      className="flex h-full max-h-full min-h-0 gap-3 overflow-hidden"
     >
-      {/* KPI ROW */}
-      <div className="col-span-12 grid grid-cols-12 gap-5">
-        <div className="col-span-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+        <div className="grid flex-shrink-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
           <KpiCard
-            title="Total Transactions"
+            title="Transactions Monitored"
             subtitle="Today"
-            value={totalToday !== undefined ? totalToday.toLocaleString() : undefined}
+            value={formatKpi(monitoredToday, stats.isLoading && volume.isLoading)}
             icon={ArrowLeftRight}
-            iconBg="#1F6FEB"
+            iconBg="#7B2332"
+            glowVariant="burgundy"
             trend={trendOf(trends?.totalTransactionsDelta)}
-            sparklineData={SPARK.blue}
-            sparklineColor="#1F6FEB"
-            loading={volume.isLoading}
-            error={!!volume.error}
+            sparklineData={sparkSeries(volumeSeries)}
+            sparklineColor="#7B2332"
+            loading={stats.isLoading || volume.isLoading}
+            error={!!stats.error || !!volume.error}
           />
-        </div>
-        <div className="col-span-2">
           <KpiCard
-            title="Flagged Transactions"
+            title="Risk Alerts Generated"
             subtitle="Today"
-            value={stats.data?.flaggedToday}
+            value={formatKpi(stats.data?.flaggedToday, stats.isLoading)}
             icon={Flag}
             iconBg="#DC2626"
+            glowVariant="red"
             trend={trendOf(trends?.flaggedDelta)}
-            sparklineData={SPARK.red}
+            sparklineData={sparkSeries(alertTrends.data?.data)}
             sparklineColor="#DC2626"
-            loading={stats.isLoading}
-            error={!!stats.error}
+            loading={stats.isLoading || alertTrends.isLoading}
+            error={!!stats.error || !!alertTrends.error}
           />
-        </div>
-        <div className="col-span-2">
           <KpiCard
-            title="Open Investigations"
+            title="Active Cases"
             subtitle="Total"
-            value={stats.data?.openCases}
+            value={formatKpi(stats.data?.openCases, stats.isLoading)}
             icon={Folder}
             iconBg="#F59E0B"
+            glowVariant="amber"
             trend={trendOf(trends?.openCasesDelta)}
-            sparklineData={SPARK.amber}
+            sparklineData={sparkSeries(caseTrends.data?.data)}
             sparklineColor="#F59E0B"
-            loading={stats.isLoading}
-            error={!!stats.error}
+            loading={stats.isLoading || caseTrends.isLoading}
+            error={!!stats.error || !!caseTrends.error}
           />
-        </div>
-        <div className="col-span-2">
           <KpiCard
             title="High Risk Customers"
             subtitle="Total"
-            value={stats.data?.highRiskCustomerCount}
+            value={formatKpi(stats.data?.highRiskCustomerCount, stats.isLoading)}
             icon={User}
-            iconBg="#EC4899"
+            iconBg="#5A1823"
+            glowVariant="red"
             trend={trendOf(trends?.highRiskCustomersDelta)}
-            sparklineData={SPARK.red}
+            sparklineData={sparkSeries(highRiskTrends.data?.data)}
             sparklineColor="#DC2626"
-            loading={stats.isLoading}
-            error={!!stats.error}
+            loading={stats.isLoading || highRiskTrends.isLoading}
+            error={!!stats.error || !!highRiskTrends.error}
           />
-        </div>
-        <div className="col-span-2">
           <KpiCard
-            title="Screening Matches"
+            title="Watchlist Matches"
             subtitle="Today"
-            value={sanctions.data?.hitsFound}
+            value={formatKpi(sanctions.data?.hitsFound, sanctions.isLoading)}
             icon={ShieldCheck}
-            iconBg="#00A86B"
+            iconBg="#22C55E"
+            glowVariant="green"
             trend={trendOf(trends?.screeningMatchesDelta)}
-            sparklineData={SPARK.green}
-            sparklineColor="#00A86B"
-            loading={sanctions.isLoading}
-            error={!!sanctions.error}
+            sparklineData={sparkSeries(screeningTrends.data?.data)}
+            sparklineColor="#22C55E"
+            loading={sanctions.isLoading || screeningTrends.isLoading}
+            error={!!sanctions.error || !!screeningTrends.error}
           />
-        </div>
-        <div className="col-span-2">
           <KpiCard
             title="Compliance Health"
             subtitle="Score"
             value={
-              stats.data?.complianceHealthScore !== undefined
-                ? `${stats.data.complianceHealthScore}`
-                : undefined
+              stats.isLoading
+                ? undefined
+                : stats.data?.complianceHealthScore !== undefined
+                  ? `${stats.data.complianceHealthScore}%`
+                  : '0%'
             }
             icon={BadgeCheck}
-            iconBg="#1F6FEB"
+            iconBg="#7B2332"
+            glowVariant="gold"
             trend={trendOf(trends?.complianceHealthDelta)}
-            sparklineData={SPARK.blue}
-            sparklineColor="#1F6FEB"
             loading={stats.isLoading}
             error={!!stats.error}
           />
         </div>
+
+        <div className="grid min-h-0 flex-[1.05] grid-cols-1 gap-2 lg:grid-cols-12 lg:grid-rows-1">
+          <div className="h-full min-h-0 lg:col-span-5">
+            <RiskGauge />
+          </div>
+          <div className="h-full min-h-0 lg:col-span-7">
+            <LiveAlertQueue />
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-[1.1] grid-cols-1 gap-2 lg:grid-cols-12 lg:grid-rows-1">
+          <div className="h-full min-h-0 lg:col-span-7">
+            <RiskHeatmap />
+          </div>
+          <div className="h-full min-h-0 lg:col-span-5">
+            <InvestigationCases />
+          </div>
+        </div>
+
+        <div className="grid flex-shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4 xl:h-[148px]">
+          <AlertTrends />
+          <ScreeningResults />
+          <TopRiskMerchants />
+          <ComplianceHealth />
+        </div>
       </div>
 
-      {/* MAIN GRID: left col-span-7 (Risk + Heatmap), right col-span-5 (Alerts + Cases) */}
-      <div className="col-span-7 flex flex-col gap-5">
-        <RiskGauge />
-        <RiskHeatmap />
-      </div>
-      <div className="col-span-5 flex flex-col gap-5">
-        <LiveAlertQueue />
-        <InvestigationCases />
-      </div>
-
-      {/* BOTTOM ROW — 4 widgets */}
-      <div className="col-span-3">
-        <AlertTrends />
-      </div>
-      <div className="col-span-3">
-        <ScreeningResults />
-      </div>
-      <div className="col-span-3">
-        <TopRiskMerchants />
-      </div>
-      <div className="col-span-3">
-        <ComplianceHealth />
-      </div>
+      <InsightsPanel />
     </motion.div>
   )
 }

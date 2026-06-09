@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import { useUpcomingDeadlines, useOverdueDeadlines } from "../../features/api/queries";
 import { useCreateDeadline, type CreateDeadlineRequest } from "../../features/api/mutations";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const deadlineTypes = ["REGULATORY", "FILING", "REVIEW", "AUDIT", "REPORTING", "OTHER"];
 
@@ -38,20 +39,21 @@ export default function ComplianceCalendarPage() {
   };
 
   return (
-    <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-          Compliance Calendar
-        </Typography>
+    <HokekaPageShell
+      title="Compliance Calendar"
+      subtitle="Regulatory deadlines and filing schedules"
+      noCard
+      actions={
         <Button
           variant="contained"
           onClick={() => setAddOpen(true)}
-          sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
+          sx={{ backgroundColor: "#7B2332", "&:hover": { backgroundColor: "#5A1823" } }}
         >
           Create Deadline
         </Button>
-      </Box>
-
+      }
+    >
+    <Box>
       <Box sx={{ display: "flex", gap: 3 }}>
         <Paper sx={{ flex: 1, p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
           <Typography variant="h6" sx={{ color: "#e74c3c", mb: 2 }}>
@@ -180,5 +182,6 @@ export default function ComplianceCalendarPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </HokekaPageShell>
   );
 }

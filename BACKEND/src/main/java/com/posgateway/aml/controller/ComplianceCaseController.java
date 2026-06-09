@@ -177,6 +177,45 @@ public class ComplianceCaseController {
     }
 
     /**
+     * Get count of active (non-closed) cases
+     * GET /compliance/cases/count/active
+     */
+    @GetMapping("/count/active")
+    public ResponseEntity<Map<String, Long>> getActiveCaseCount() {
+        com.posgateway.aml.entity.User user = getCurrentUser();
+        if (user == null)
+            return ResponseEntity.status(401).build();
+
+        com.posgateway.aml.model.UserRole role = com.posgateway.aml.model.UserRole.valueOf(user.getRole().getName());
+        boolean isPspUser = (role == com.posgateway.aml.model.UserRole.PSP_ADMIN
+                || role == com.posgateway.aml.model.UserRole.PSP_ANALYST);
+        Long pspId = (user.getPsp() != null) ? user.getPsp().getPspId() : null;
+
+        List<CaseStatus> activeStatuses = List.of(
+                CaseStatus.NEW,
+                CaseStatus.ASSIGNED,
+                CaseStatus.IN_PROGRESS,
+                CaseStatus.PENDING_INFO,
+                CaseStatus.PENDING_REVIEW,
+                CaseStatus.ESCALATED,
+                CaseStatus.REOPENED);
+
+        long count;
+        if (isPspUser && pspId != null) {
+            count = 0;
+            for (CaseStatus status : activeStatuses) {
+                count += complianceCaseRepository.countByPspIdAndStatus(pspId, status);
+            }
+        } else {
+            count = complianceCaseRepository.countByStatusIn(activeStatuses);
+        }
+
+        Map<String, Long> response = new HashMap<>();
+        response.put("count", count);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Get total count of all cases
      * GET /compliance/cases/count
      */

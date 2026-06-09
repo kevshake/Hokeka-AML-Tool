@@ -1,6 +1,7 @@
-import { Box, Typography } from "@mui/material";
 import { Routes, Route, Navigate } from "react-router-dom";
 import TabNavigation from "../../components/Common/TabNavigation";
+import GlassCard from "../../components/Common/GlassCard";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TransactionMonitoringLive from "./TransactionMonitoringLive";
 import TransactionMonitoringAnalytics from "./TransactionMonitoringAnalytics";
 import TransactionMonitoringSars from "./TransactionMonitoringSars";
@@ -15,21 +16,21 @@ export default function TransactionMonitoringPage() {
   ];
 
   return (
-    <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 2, fontWeight: 600 }}>
-        Transaction Monitoring
-      </Typography>
-
-      <TabNavigation tabs={tabs} />
-
-      <Routes>
-        <Route path="/" element={<Navigate to="/transaction-monitoring/live" replace />} />
-        <Route path="/live" element={<TransactionMonitoringLive />} />
-        <Route path="/analytics" element={<TransactionMonitoringAnalytics />} />
-        <Route path="/sars" element={<TransactionMonitoringSars />} />
-        <Route path="/reports" element={<TransactionMonitoringReports />} />
-      </Routes>
-    </Box>
+    <HokekaPageShell
+      title="Live Monitoring"
+      subtitle="Real-time transaction feed and velocity alerts"
+      noCard
+    >
+      <GlassCard padding="md">
+        <TabNavigation tabs={tabs} />
+        <Routes>
+          <Route path="/" element={<Navigate to="/transaction-monitoring/live" replace />} />
+          <Route path="/live" element={<TransactionMonitoringLive />} />
+          <Route path="/analytics" element={<TransactionMonitoringAnalytics />} />
+          <Route path="/sars" element={<TransactionMonitoringSars />} />
+          <Route path="/reports" element={<TransactionMonitoringReports />} />
+        </Routes>
+      </GlassCard>
+    </HokekaPageShell>
   );
 }
-

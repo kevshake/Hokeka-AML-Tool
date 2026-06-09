@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Paper, Typography, TextField, Button, Alert, Chip, Divider, Grid } from "@mui/material";
 import { apiClient } from "../../lib/apiClient";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -29,11 +30,8 @@ export default function ScreeningPage() {
   };
 
   return (
+    <HokekaPageShell title="Screening" subtitle="Sanctions, PEP, and watchlist screening">
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
-        Screening
-      </Typography>
-
       <Paper sx={{ p: 3, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
           Sanctions Screening
@@ -131,6 +129,7 @@ export default function ScreeningPage() {
         )}
       </Paper>
     </Box>
+    </HokekaPageShell>
   );
 }
 

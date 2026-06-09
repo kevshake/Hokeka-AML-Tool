@@ -41,6 +41,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import { getApiUrl } from "../../config/api";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 interface MerchantsPage {
     content: Array<{ id: number; businessName: string; kycStatus: string; riskLevel: string }>;
@@ -394,14 +395,8 @@ export default function KycDocumentsPage() {
     const totalElements = merchantsPage?.totalElements || 0;
 
     return (
+        <HokekaPageShell title="KYC" subtitle="Manage merchant KYC status and compliance documents" noCard>
         <Box>
-            <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
-                KYC / Documents
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Manage merchant KYC status and compliance documents.
-            </Typography>
-
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
                 <TextField
                     size="small"
@@ -527,5 +522,6 @@ export default function KycDocumentsPage() {
                 />
             )}
         </Box>
+        </HokekaPageShell>
     );
 }

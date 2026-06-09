@@ -16,18 +16,19 @@ export default function TabNavigation({ tabs }: TabNavigationProps) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Determine current tab based on location
-    const currentTab = tabs.find(tab => location.pathname === tab.path)?.value || tabs[0]?.value;
+    const currentTab =
+        tabs.find((tab) => location.pathname.startsWith(tab.path))?.value ||
+        tabs[0]?.value;
 
     const handleChange = (_event: React.SyntheticEvent, newValue: string) => {
-        const selectedTab = tabs.find(tab => tab.value === newValue);
+        const selectedTab = tabs.find((tab) => tab.value === newValue);
         if (selectedTab) {
             navigate(selectedTab.path);
         }
     };
 
     return (
-        <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: "rgba(255,255,255,0.12)", mb: 2 }}>
             <Tabs
                 value={currentTab}
                 onChange={handleChange}
@@ -37,16 +38,16 @@ export default function TabNavigation({ tabs }: TabNavigationProps) {
                         textTransform: "none",
                         fontWeight: 500,
                         fontSize: "0.8rem",
-                        color: "text.secondary",
+                        color: "rgba(255,255,255,0.55)",
                         minHeight: 40,
                         px: 2,
                         "&.Mui-selected": {
-                            color: "#8B4049",
+                            color: "#C9A96E",
                             fontWeight: 600,
                         },
                     },
                     "& .MuiTabs-indicator": {
-                        backgroundColor: "#8B4049",
+                        backgroundColor: "#C9A96E",
                         height: 2,
                         borderRadius: "2px 2px 0 0",
                     },

@@ -88,7 +88,12 @@ public class Merchant {
     private String addressCountry;
 
     // Operational Data
-    @Column(name = "operating_countries", columnDefinition = "text[]")
+    // NOTE: columnDefinition="text[]" removed so Hibernate emits a portable
+    // array type on H2 (the in-memory dev profile uses Hibernate-generated
+    // DDL). On Postgres the schema is managed by Flyway (ddl-auto=none) so
+    // this attribute is informational only and removal does not affect the
+    // running Postgres schema.
+    @Column(name = "operating_countries")
     private String[] operatingCountries;
 
     @Column(name = "registration_date")

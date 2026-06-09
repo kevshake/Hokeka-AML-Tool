@@ -61,6 +61,15 @@ public class SecurityConfig {
                                                 // Safaricom Daraja M-Pesa callback — must be publicly accessible
                                                 .requestMatchers("/api/v1/billing/payments/mpesa/callback",
                                                                 "/billing/payments/mpesa/callback").permitAll()
+                                                // Visa/Verifi RDR webhooks — HMAC/API-key verified in controller
+                                                .requestMatchers("/api/v1/integrations/verifi/rdr",
+                                                                "/integrations/verifi/rdr",
+                                                                "/api/v1/chargeback/verifi/rdr",
+                                                                "/chargeback/verifi/rdr",
+                                                                "/api/v1/integrations/verifi/rdr/health",
+                                                                "/integrations/verifi/rdr/health",
+                                                                "/api/v1/chargeback/verifi/rdr/health",
+                                                                "/chargeback/verifi/rdr/health").permitAll()
                                                 .requestMatchers("/actuator/**").permitAll()
                                                 // Swagger / OpenAPI documentation (springdoc-openapi).
                                                 // Both forms — with and without the /api/v1 context path —

@@ -28,7 +28,9 @@ import {
 import { useState } from "react";
 import { useAlerts } from "../../features/api/queries";
 import { useUpdateAlertStatus } from "../../features/api/mutations";
+import type { ApiError } from "../../lib/apiClient";
 import type { Alert, Priority } from "../../types";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 const priorityColors: Record<Priority, string> = {
   CRITICAL: "#e74c3c",
@@ -118,12 +120,10 @@ export default function AlertsPage() {
   const someSelected = selected.size > 0 && selected.size < content.length;
 
   return (
+    <HokekaPageShell title="Alerts" subtitle="Review, triage, and resolve compliance alerts" noCard>
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, pb: 2, borderBottom: "1px solid", borderColor: "divider" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-            Alerts
-          </Typography>
           <Button
             size="small"
             variant="outlined"
@@ -189,7 +189,12 @@ export default function AlertsPage() {
             ) : isError ? (
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ color: "#e74c3c", py: 2 }}>
-                  Error loading alerts: {error instanceof Error ? error.message : "Unknown error"}
+                  Error loading alerts:{" "}
+                  {error instanceof Error
+                    ? error.message
+                    : typeof error === "object" && error !== null && "message" in error
+                      ? `${(error as ApiError).status ?? ""} ${(error as ApiError).message}`.trim()
+                      : "Unknown error"}
                 </TableCell>
               </TableRow>
             ) : content.length > 0 ? (
@@ -356,5 +361,6 @@ export default function AlertsPage() {
         </MuiAlert>
       </Snackbar>
     </Box>
+    </HokekaPageShell>
   );
 }

@@ -37,6 +37,10 @@ import java.util.Map;
  * Results cached in Aerospike for fast retrieval.
  */
 @Service
+// In the local in-memory `h2` profile the ND4J native libs fail to load when
+// the project path contains a space (Windows JNI extraction bug). Skip the
+// bean entirely so the UI can be used without anomaly detection.
+@org.springframework.context.annotation.Profile("!h2")
 public class DL4JAnomalyService {
 
     private static final Logger logger = LoggerFactory.getLogger(DL4JAnomalyService.class);

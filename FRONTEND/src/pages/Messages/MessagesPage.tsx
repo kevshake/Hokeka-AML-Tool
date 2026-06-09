@@ -13,6 +13,7 @@ import {
 import { Mail as MailIcon } from "@mui/icons-material";
 import { apiClient } from "../../lib/apiClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 interface Message {
   id: string;
@@ -51,11 +52,8 @@ export default function MessagesPage() {
   };
 
   return (
+    <HokekaPageShell title="Messages" subtitle="System notifications and team communications" noCard>
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 3, fontWeight: 600 }}>
-        Messages
-      </Typography>
-
       <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
         {isLoading ? (
           <Box sx={{ p: 4, display: "flex", alignItems: "center", gap: 2 }}>
@@ -137,5 +135,6 @@ export default function MessagesPage() {
         )}
       </Paper>
     </Box>
+    </HokekaPageShell>
   );
 }

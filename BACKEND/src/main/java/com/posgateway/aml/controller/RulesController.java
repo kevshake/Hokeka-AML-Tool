@@ -150,7 +150,7 @@ public class RulesController {
         if (!pspIsolationService.isPlatformAdministrator(currentUser)) {
             Long pspId = pspIsolationService.getCurrentUserPspId();
             if (pspId != null) {
-                return ResponseEntity.ok(ruleRepository.findByPspId(pspId));
+                return ResponseEntity.ok(ruleRepository.findVisibleForPsp(pspId));
             }
         }
         return ResponseEntity.ok(ruleRepository.findAll());

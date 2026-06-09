@@ -101,6 +101,12 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
             "ORDER BY a.created_at DESC", nativeQuery = true)
     List<Alert> findAllByPspId(@Param("pspId") Long pspId);
 
+    @Query(value = "SELECT COUNT(DISTINCT a.alert_id) FROM alerts a " +
+                   "JOIN merchants m ON m.merchant_id = a.merchant_id " +
+                   "WHERE m.psp_id = :pspId AND a.status = 'open'",
+           nativeQuery = true)
+    long countOpenByPspId(@Param("pspId") Long pspId);
+
     /**
      * Find recent open alerts for all PSPs (admin view)
      * Limited to most recent alerts

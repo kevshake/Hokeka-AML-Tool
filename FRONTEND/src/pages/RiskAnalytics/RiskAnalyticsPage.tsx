@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Paper, Typography, Select, MenuItem, FormControl, InputLabel, Grid, useTheme } from "@mui/material";
+import { Box, Typography, Select, MenuItem, FormControl, InputLabel, Grid, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useRiskHeatmap, useRiskTrends } from "../../features/api/queries";
 import {
@@ -13,6 +13,8 @@ import {
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import GlassCard from "../../components/Common/GlassCard";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -40,11 +42,9 @@ export default function RiskAnalyticsPage() {
     : null;
 
   return (
+    <HokekaPageShell title="Risk Analytics" subtitle="Heatmaps, trends, and risk distribution" noCard>
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 600 }}>
-          Risk Analytics
-        </Typography>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 2 }}>
         <Box sx={{ display: "flex", gap: 2 }}>
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel sx={{ color: "text.secondary" }}>Period</InputLabel>
@@ -77,12 +77,12 @@ export default function RiskAnalyticsPage() {
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+          <GlassCard padding="md" glowVariant="red" className="h-full">
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
               Risk Heatmap - {heatmapType.charAt(0).toUpperCase() + heatmapType.slice(1)}
             </Typography>
             {heatmap ? (
-              <Box sx={{ p: 2, backgroundColor: "background.paper", borderRadius: 1 }}>
+              <Box sx={{ p: 2, borderRadius: 1 }}>
                 <Grid container spacing={1}>
                   {Object.entries(heatmap).slice(0, 20).map(([key, value]: [string, any]) => (
                     <Grid item xs={6} sm={4} md={3} key={key}>
@@ -122,10 +122,10 @@ export default function RiskAnalyticsPage() {
                 Loading heatmap data...
               </Box>
             )}
-          </Paper>
+          </GlassCard>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
+          <GlassCard padding="md" glowVariant="orange" className="h-full">
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
               Risk Trends ({period} days)
             </Typography>
@@ -151,10 +151,10 @@ export default function RiskAnalyticsPage() {
                 Loading trend data...
               </Box>
             )}
-          </Paper>
+          </GlassCard>
         </Grid>
       </Grid>
     </Box>
+    </HokekaPageShell>
   );
 }
-
