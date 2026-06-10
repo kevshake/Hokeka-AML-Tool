@@ -370,14 +370,14 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     // Native query: bucket = floor(trs/10)*10 (covers 0..100 in steps of 10).
     // -----------------------------------------------------------------------
 
-    @Query(value = "SELECT (FLOOR(COALESCE(t.trs, 0)/10)*10)::int AS bucket, COUNT(*) AS cnt " +
+    @Query(value = "SELECT CAST(FLOOR(COALESCE(t.trs, 0)/10)*10 AS int) AS bucket, COUNT(*) AS cnt " +
                    "FROM transactions t " +
                    "WHERE t.psp_id = :pspId AND t.txn_ts >= :since " +
                    "GROUP BY bucket ORDER BY bucket", nativeQuery = true)
     List<Object[]> getRiskScoreBucketsByPspSince(@Param("pspId") Long pspId,
                                                   @Param("since") LocalDateTime since);
 
-    @Query(value = "SELECT (FLOOR(COALESCE(t.trs, 0)/10)*10)::int AS bucket, COUNT(*) AS cnt " +
+    @Query(value = "SELECT CAST(FLOOR(COALESCE(t.trs, 0)/10)*10 AS int) AS bucket, COUNT(*) AS cnt " +
                    "FROM transactions t " +
                    "WHERE t.txn_ts >= :since " +
                    "GROUP BY bucket ORDER BY bucket", nativeQuery = true)
@@ -447,7 +447,7 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
      * Returns rows of [hour 0-23 (Integer), count (Long)].
      * Caller derives TPS as ceil(count / 3600.0).
      */
-    @Query(value = "SELECT EXTRACT(HOUR FROM t.txn_ts)::int AS hour, COUNT(*) AS cnt " +
+    @Query(value = "SELECT CAST(EXTRACT(HOUR FROM t.txn_ts) AS int) AS hour, COUNT(*) AS cnt " +
                    "FROM transactions t " +
                    "WHERE t.psp_id = :pspId AND t.txn_ts >= :start AND t.txn_ts <= :end " +
                    "GROUP BY EXTRACT(HOUR FROM t.txn_ts) " +

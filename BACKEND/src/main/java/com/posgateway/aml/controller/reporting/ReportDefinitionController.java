@@ -88,7 +88,10 @@ public class ReportDefinitionController {
             }
         }
         
-        Page<Report> reports = reportRepository.findByFilters(categoryFilter, typeFilter, search, pageable);
+        Page<Report> reports = reportRepository.findByFilters(
+                categoryFilter != null ? categoryFilter.name() : "",
+                typeFilter != null ? typeFilter.name() : "",
+                search != null ? search : "", pageable);
         
         Page<ReportDefinitionDTO> dtoPage = reports.map(this::convertToDTO);
         

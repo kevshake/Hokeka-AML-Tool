@@ -22,6 +22,8 @@ public class User implements UserDetails {
     @Column(unique = true, nullable = false)
     private String username;
 
+    // Never serialize the bcrypt hash in API responses (controllers return the entity directly)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(nullable = false)
     private String passwordHash;
 

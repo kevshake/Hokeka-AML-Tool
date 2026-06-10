@@ -2,6 +2,10 @@ package com.posgateway.aml.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -30,6 +34,35 @@ public class SecurityConfig {
         }
 
         // ...
+
+        /**
+         * Role hierarchy: SUPER_ADMIN inherits every lower role so all @PreAuthorize
+         * checks that list ADMIN / COMPLIANCE_OFFICER / etc. automatically pass for SUPER_ADMIN.
+         */
+        @Bean
+        public RoleHierarchy roleHierarchy() {
+                RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+                hierarchy.setHierarchy(
+                        "ROLE_SUPER_ADMIN > ROLE_ADMIN\n" +
+                        "ROLE_ADMIN > ROLE_COMPLIANCE_OFFICER\n" +
+                        "ROLE_ADMIN > ROLE_INVESTIGATOR\n" +
+                        "ROLE_ADMIN > ROLE_ANALYST\n" +
+                        "ROLE_ADMIN > ROLE_VIEWER\n" +
+                        "ROLE_ADMIN > ROLE_PSP_ADMIN\n" +
+                        "ROLE_PSP_ADMIN > ROLE_PSP_USER\n" +
+                        "ROLE_COMPLIANCE_OFFICER > ROLE_INVESTIGATOR\n" +
+                        "ROLE_INVESTIGATOR > ROLE_ANALYST\n" +
+                        "ROLE_ANALYST > ROLE_VIEWER"
+                );
+                return hierarchy;
+        }
+
+        @Bean
+        public MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+                DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
+                handler.setRoleHierarchy(roleHierarchy);
+                return handler;
+        }
 
         @Bean
         public AuthenticationProvider authenticationProvider(PasswordEncoder passwordEncoder) {
@@ -105,9 +138,9 @@ public class SecurityConfig {
                                                                                                       // registration if
                                                                                                       // public
                                                 .requestMatchers("/api/v1/cases/**")
-                                                .hasAnyRole("COMPLIANCE_OFFICER", "ADMIN", "PSP_ADMIN", "PSP_USER")
+                                                .hasAnyRole("SUPER_ADMIN", "COMPLIANCE_OFFICER", "ADMIN", "PSP_ADMIN", "PSP_USER", "INVESTIGATOR")
                                                 .requestMatchers("/api/v1/psps/**")
-                                                .hasAnyRole("ADMIN", "PSP_ADMIN", "PSP_USER", "APP_CONTROLLER")
+                                                .hasAnyRole("SUPER_ADMIN", "ADMIN", "PSP_ADMIN", "PSP_USER", "APP_CONTROLLER")
                                                 .requestMatchers("/api/v1/grafana/**").authenticated() // Grafana user context for role-based access
                                                 .requestMatchers("/api/v1/merchants/**").authenticated() // Detailed
                                                                                                          // control via

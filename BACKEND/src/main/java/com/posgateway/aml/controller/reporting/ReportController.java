@@ -92,20 +92,24 @@ public class ReportController {
         User user = (User) authentication.getPrincipal();
         Long userId = user.getId();
         Long pspId = pspIsolationService.sanitizePspId(request.getPspId());
-        
-        CompletableFuture<ReportExecutionDTO> future = reportGenerationService.generateReport(
+
+        // Mint the execution ID here so the client can poll /reports/status/{executionId}
+        String executionId = reportGenerationService.generateExecutionId();
+        reportGenerationService.generateReport(
+            executionId,
             request.getReportType(),
             request.getParameters(),
             userId,
             pspId
         );
-        
+
         // Return immediately with pending status
         ReportExecutionDTO pending = new ReportExecutionDTO();
+        pending.setExecutionId(executionId);
         pending.setStatus(com.posgateway.aml.entity.reporting.ExecutionStatus.PENDING);
         pending.setTriggeredBy(userId);
         pending.setTriggeredByName(user.getFullName());
-        
+
         return ResponseEntity.accepted().body(pending);
     }
 

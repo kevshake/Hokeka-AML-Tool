@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/customer-complaints
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/customer-complaints")
+@RequestMapping("/psps/{pspId}/cbk/customer-complaints")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspCustomerComplaintController {
 

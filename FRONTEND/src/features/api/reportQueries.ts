@@ -11,7 +11,7 @@ import type {
   ExportFormat,
   ReportDefinition,
 } from "../../types/reports/reportDefinitions";
-import { REPORT_DEFINITIONS, REPORT_CATEGORIES } from "../../types/reports/reportDefinitions";
+import { REPORT_CATEGORIES } from "../../types/reports/reportDefinitions";
 
 // Report Generation Request
 export interface GenerateReportRequest {
@@ -102,19 +102,20 @@ const handleApiError = (error: unknown): never => {
 // ==================== QUERIES ====================
 
 /**
- * Get report definitions (cached)
- * Uses local definitions as fallback if API fails
+ * Get report definitions from the server catalog (reports table)
  */
 export const useReportDefinitions = (options?: Partial<UseQueryOptions<ReportDefinition[], ReportApiError>>) => {
   return useQuery<ReportDefinition[], ReportApiError>({
     queryKey: ["reports", "definitions"],
     queryFn: async () => {
       try {
-        // Try to fetch from API first
-        const definitions = await apiClient.get<ReportDefinition[]>("reports/definitions");
-        return definitions.length > 0 ? definitions : REPORT_DEFINITIONS;
-      } catch {
-        return REPORT_DEFINITIONS;
+        // Backend returns a Spring Page<ReportDefinitionDTO>; unwrap content
+        const page = await apiClient.get<{ content?: ReportDefinition[] } | ReportDefinition[]>(
+          "reports/definitions?size=200"
+        );
+        return Array.isArray(page) ? page : page.content ?? [];
+      } catch (error) {
+        return handleApiError(error);
       }
     },
     staleTime: 1000 * 60 * 60, // 1 hour - report definitions rarely change
@@ -131,10 +132,9 @@ export const useReportCategories = (options?: Partial<UseQueryOptions<typeof REP
     queryKey: ["reports", "categories"],
     queryFn: async () => {
       try {
-        const categories = await apiClient.get<typeof REPORT_CATEGORIES>("reports/categories");
-        return categories.length > 0 ? categories : REPORT_CATEGORIES;
+        return await apiClient.get<typeof REPORT_CATEGORIES>("reports/definitions/categories");
       } catch (error) {
-        return REPORT_CATEGORIES;
+        return handleApiError(error);
       }
     },
     staleTime: 1000 * 60 * 60, // 1 hour
@@ -220,7 +220,7 @@ export const useReportInstance = (
     queryKey: ["reports", "instance", instanceId],
     queryFn: async () => {
       try {
-        return await apiClient.get<ReportInstance>(`reports/history/${instanceId}`);
+        return await apiClient.get<ReportInstance>(`reports/${instanceId}`);
       } catch (error) {
         return handleApiError(error);
       }
@@ -247,7 +247,7 @@ export const useScheduledReports = (options?: Partial<UseQueryOptions<ReportInst
     queryKey: ["reports", "scheduled"],
     queryFn: async () => {
       try {
-        return await apiClient.get<ReportInstance[]>("reports/scheduled");
+        return await apiClient.get<ReportInstance[]>("reports/schedule");
       } catch (error) {
         return handleApiError(error);
       }
@@ -297,7 +297,26 @@ export const useReportProgress = (
     queryKey: ["reports", "progress", instanceId],
     queryFn: async () => {
       try {
-        return await apiClient.get<ReportGenerationProgress>(`reports/progress/${instanceId}`);
+        // Backend ReportExecutionDTO -> normalize to ReportGenerationProgress
+        const dto = await apiClient.get<{
+          executionId: string;
+          status: string;
+          progressPercent?: number;
+          errorMessage?: string;
+        }>(`reports/status/${instanceId}`);
+        const statusMap: Record<string, ReportGenerationProgress["status"]> = {
+          PENDING: "pending",
+          RUNNING: "processing",
+          COMPLETED: "completed",
+          FAILED: "failed",
+          CANCELLED: "failed",
+        };
+        return {
+          instanceId: dto.executionId,
+          status: statusMap[dto.status] ?? "processing",
+          progress: dto.progressPercent ?? 0,
+          message: dto.errorMessage,
+        } satisfies ReportGenerationProgress;
       } catch (error) {
         return handleApiError(error);
       }
@@ -326,7 +345,12 @@ export const useGenerateReport = () => {
   return useMutation<ReportInstance, ReportApiError, GenerateReportRequest>({
     mutationFn: async (request) => {
       try {
-        return await apiClient.post<ReportInstance>("reports/generate", request);
+        // Backend ReportGenerateRequest expects reportType (= report_code) + outputFormat
+        return await apiClient.post<ReportInstance>("reports/generate", {
+          reportType: request.reportId,
+          parameters: request.parameters,
+          outputFormat: request.format,
+        });
       } catch (error) {
         return handleApiError(error);
       }
@@ -461,36 +485,13 @@ export const useDeleteReportInstance = () => {
   return useMutation<void, ReportApiError, string>({
     mutationFn: async (instanceId) => {
       try {
-        await apiClient.delete(`reports/history/${instanceId}`);
+        await apiClient.delete(`reports/${instanceId}`);
       } catch (error) {
         return handleApiError(error);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reports", "history"] });
-    },
-  });
-};
-
-/**
- * Export report to specific format
- */
-export const useExportReport = () => {
-  return useMutation<
-    { url: string; filename: string },
-    ReportApiError,
-    { reportId: string; parameters: Record<string, unknown>; format: ExportFormat }
-  >({
-    mutationFn: async ({ reportId, parameters, format }) => {
-      try {
-        const response = await apiClient.post<{ url: string; filename: string }>(
-          "reports/export",
-          { reportId, parameters, format }
-        );
-        return response;
-      } catch (error) {
-        return handleApiError(error);
-      }
     },
   });
 };

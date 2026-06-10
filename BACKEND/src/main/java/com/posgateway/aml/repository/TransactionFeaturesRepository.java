@@ -63,7 +63,7 @@ public interface TransactionFeaturesRepository extends JpaRepository<Transaction
      * Returns list of [bucket_index INT, count BIGINT] rows.
      */
     @Query(value = "SELECT bucket, COUNT(*) AS cnt FROM ( " +
-            "  SELECT LEAST(9, FLOOR(GREATEST(0.0, LEAST(1.0, score)) * 10)::int) AS bucket " +
+            "  SELECT LEAST(9, CAST(FLOOR(GREATEST(0.0, LEAST(1.0, score)) * 10) AS int)) AS bucket " +
             "  FROM transaction_features " +
             "  WHERE scored_at >= :startTime AND scored_at <= :endTime " +
             "    AND score IS NOT NULL " +

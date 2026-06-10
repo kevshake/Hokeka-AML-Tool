@@ -504,7 +504,7 @@ export const usePsp = (pspId: number) => {
 export const useRegulatoryReport = (reportType: string) => {
   return useQuery<any>({
     queryKey: ["regulatory-report", reportType],
-    queryFn: () => apiClient.get<any>(`reporting/regulatory/${reportType.toUpperCase()}`).catch(() => null),
+    queryFn: () => apiClient.get<any>(`reporting/regulatory/${reportType.toLowerCase()}`).catch(() => null),
   });
 };
 

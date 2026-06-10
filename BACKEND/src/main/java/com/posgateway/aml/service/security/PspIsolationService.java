@@ -84,25 +84,26 @@ public class PspIsolationService {
         if (user == null || user.getRole() == null) {
             return false;
         }
-        
+
         String roleName = user.getRole().getName();
-        
-        // Platform Administrators have these roles and PSP ID 0 (Super Admin PSP)
-        boolean hasAdminRole = roleName.equals("ADMIN") || 
-                roleName.equals("MLRO") || 
+
+        // Platform-level roles: no PSP constraint, full cross-PSP access
+        boolean hasAdminRole = roleName.equals("SUPER_ADMIN") ||
+                roleName.equals("ADMIN") ||
+                roleName.equals("MLRO") ||
                 roleName.equals("PLATFORM_ADMIN") ||
                 roleName.equals("APP_CONTROLLER");
-        
+
         if (!hasAdminRole) {
             return false;
         }
-        
-        // Check if user has PSP ID 0 (Super Admin PSP)
+
+        // Platform admins either have no PSP assigned (null) or PSP ID 0
         if (user.getPsp() == null) {
-            return false; // Should not happen after migration, but handle gracefully
+            return true; // SUPER_ADMIN/ADMIN users with no PSP are platform-level
         }
-        
-        return user.getPsp().getPspId() != null && user.getPsp().getPspId() == 0L;
+
+        return user.getPsp().getPspId() == null || user.getPsp().getPspId() == 0L;
     }
 
     /**

@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/senior-management
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/senior-management")
+@RequestMapping("/psps/{pspId}/cbk/senior-management")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspSeniorManagementController {
 

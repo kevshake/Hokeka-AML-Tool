@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/cyber-incidents
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/cyber-incidents")
+@RequestMapping("/psps/{pspId}/cbk/cyber-incidents")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspCyberIncidentController {
 

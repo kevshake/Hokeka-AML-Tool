@@ -67,14 +67,15 @@ public class ReportGenerationService {
      */
     @Async("taskExecutor")
     @Transactional
-    public CompletableFuture<ReportExecutionDTO> generateReport(String reportType, 
+    public CompletableFuture<ReportExecutionDTO> generateReport(String executionId,
+                                                                   String reportType,
                                                                    Map<String, Object> parameters,
-                                                                   Long userId, 
+                                                                   Long userId,
                                                                    Long pspId) {
-        logger.info("Starting report generation for type: {}, user: {}, psp: {}", reportType, userId, pspId);
-        
+        logger.info("Starting report generation for type: {}, execution: {}, user: {}, psp: {}",
+                reportType, executionId, userId, pspId);
+
         long startTime = System.currentTimeMillis();
-        String executionId = generateExecutionId();
         
         try {
             // Find report by code
@@ -240,13 +241,22 @@ public class ReportGenerationService {
     @Transactional(readOnly = true)
     public ReportExecutionDTO getReportExecutionStatus(String executionId) {
         logger.debug("Getting execution status for: {}", executionId);
-        
-        ReportExecution execution = reportExecutionRepository.findByExecutionId(executionId)
-            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
-        
+
+        // The controller hands the executionId to the client before the async
+        // worker persists the row — report PENDING until it appears.
+        java.util.Optional<ReportExecution> maybe = reportExecutionRepository.findByExecutionId(executionId);
+        if (maybe.isEmpty()) {
+            ReportExecutionDTO pending = new ReportExecutionDTO();
+            pending.setExecutionId(executionId);
+            pending.setStatus(ExecutionStatus.PENDING);
+            pending.setProgressPercent(0);
+            return pending;
+        }
+        ReportExecution execution = maybe.get();
+
         // Validate PSP access
         pspIsolationService.validatePspAccess(execution.getPspId());
-        
+
         return convertToDTO(execution);
     }
 
@@ -477,9 +487,10 @@ public class ReportGenerationService {
     }
 
     /**
-     * Generate unique execution ID
+     * Generate unique execution ID. Public so the controller can mint the ID
+     * up-front and hand it to the client for progress polling.
      */
-    private String generateExecutionId() {
+    public String generateExecutionId() {
         return "EXEC_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 

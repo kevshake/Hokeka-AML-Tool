@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/shareholders
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/shareholders")
+@RequestMapping("/psps/{pspId}/cbk/shareholders")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspShareholderController {
 

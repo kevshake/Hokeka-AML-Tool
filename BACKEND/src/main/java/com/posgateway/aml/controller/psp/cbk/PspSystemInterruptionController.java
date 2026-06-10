@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/system-interruptions
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/system-interruptions")
+@RequestMapping("/psps/{pspId}/cbk/system-interruptions")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspSystemInterruptionController {
 

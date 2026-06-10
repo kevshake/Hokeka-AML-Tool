@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/trust-accounts
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/trust-accounts")
+@RequestMapping("/psps/{pspId}/cbk/trust-accounts")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspTrustAccountController {
 

@@ -24,13 +24,15 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     Page<Report> findByEnabledTrue(Pageable pageable);
 
+    // Callers MUST pass non-null params ("" = no filter): Hibernate 6.3 cannot
+    // type null parameters inside CONCAT/comparison nodes and NPEs at render time.
     @Query("SELECT r FROM Report r WHERE r.enabled = true AND " +
-           "(:category IS NULL OR r.reportCategory = :category) AND " +
-           "(:type IS NULL OR r.reportType = :type) AND " +
-           "(:search IS NULL OR LOWER(r.reportName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "(:category = '' OR CAST(r.reportCategory AS string) = :category) AND " +
+           "(:type = '' OR CAST(r.reportType AS string) = :type) AND " +
+           "(:search = '' OR LOWER(r.reportName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "LOWER(r.reportCode) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Report> findByFilters(@Param("category") ReportCategory category,
-                                  @Param("type") ReportType type,
+    Page<Report> findByFilters(@Param("category") String category,
+                                  @Param("type") String type,
                                   @Param("search") String search,
                                   Pageable pageable);
 

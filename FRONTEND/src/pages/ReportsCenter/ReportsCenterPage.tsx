@@ -188,8 +188,8 @@ export default function ReportsCenterPage() {
           format: format as ExportFormat,
         });
 
-        // Track generation progress
-        setGeneratingReportId(result.id);
+        // Track generation progress — backend returns executionId for /reports/status polling
+        setGeneratingReportId((result as any).executionId ?? result.id ?? null);
 
         showSuccess(`Report "${report.name}" generation started`);
         refetchHistory();

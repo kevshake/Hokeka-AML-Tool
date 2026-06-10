@@ -19,10 +19,10 @@ import java.util.Optional;
 
 /**
  * CBK GDI – Payment Gateway Tariff Templates (monthly).
- * Endpoint: /api/v1/psps/{pspId}/cbk/tariff-templates
+ * Endpoint: /api/v1/psps/{pspId}/cbk/tariffs
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/tariff-templates")
+@RequestMapping("/psps/{pspId}/cbk/tariffs")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspTariffTemplateController {
 

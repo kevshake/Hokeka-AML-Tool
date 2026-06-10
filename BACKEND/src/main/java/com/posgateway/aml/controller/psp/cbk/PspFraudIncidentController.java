@@ -21,7 +21,7 @@ import java.util.Optional;
  * Endpoint: /api/v1/psps/{pspId}/cbk/fraud-incidents
  */
 @RestController
-@RequestMapping("/api/v1/psps/{pspId}/cbk/fraud-incidents")
+@RequestMapping("/psps/{pspId}/cbk/fraud-incidents")
 @PreAuthorize("hasAnyRole('ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
 public class PspFraudIncidentController {
 
