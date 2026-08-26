@@ -131,7 +131,24 @@ public class BillingService {
                 log.warn("Skipping malformed tier rate in tier_config: {}", rateRaw);
                 continue;
             }
-            long upTo = (upToRaw == null) ? Long.MAX_VALUE : ((Number) upToRaw).longValue();
+            // W37-4 fix: up_to used to be cast directly with ((Number) upToRaw).longValue(),
+            // throwing ClassCastException if the JSON value came through as a String (e.g.
+            // "10000" instead of 10000) -- unlike the adjacent tierRate parse just above, which
+            // already handles that via new BigDecimal(rateRaw.toString()). Parse the same
+            // defensive way instead of assuming Jackson always deserializes it as a Number.
+            long upTo;
+            if (upToRaw == null) {
+                upTo = Long.MAX_VALUE;
+            } else if (upToRaw instanceof Number n) {
+                upTo = n.longValue();
+            } else {
+                try {
+                    upTo = Long.parseLong(upToRaw.toString().trim());
+                } catch (NumberFormatException nfe) {
+                    log.warn("Skipping tier with malformed up_to in tier_config: {}", upToRaw);
+                    continue;
+                }
+            }
             long sliceCap = Math.max(0L, upTo - consumed);
             long slice = Math.min(remaining, sliceCap);
             total = total.add(tierRate.multiply(BigDecimal.valueOf(slice)));
@@ -160,10 +177,21 @@ public class BillingService {
         LocalDateTime startDateTime = periodStart.atStartOfDay();
         LocalDateTime endDateTime = periodEnd.atTime(23, 59, 59);
 
+        // Idempotency: one invoice per PSP per billing period. A re-run of the monthly cycle (or a
+        // second manual trigger) must return the existing invoice, never create a duplicate payable
+        // one. This is the primary guard — usage rows are also stamped with invoice_id below.
+        Optional<Invoice> existing = invoiceRepository.findByPspAndPeriod(pspId, periodStart, periodEnd);
+        if (existing.isPresent()) {
+            log.info("Invoice already exists for PSP {} period {} — returning existing #{}",
+                    psp.getPspCode(), periodStart, existing.get().getInvoiceNumber());
+            return existing.get();
+        }
+
         log.info("Generating invoice for PSP {} for period {} to {}", psp.getPspCode(), periodStart, periodEnd);
 
-        // Get usage summary
-        List<Object[]> usageSummary = apiUsageLogRepository.getUsageSummaryByService(pspId, startDateTime, endDateTime);
+        // Only usage not already rolled into a prior invoice — prevents double-billing.
+        List<Object[]> usageSummary =
+                apiUsageLogRepository.getUninvoicedUsageSummaryByService(pspId, startDateTime, endDateTime);
 
         Invoice invoice = Invoice.builder()
                 .psp(psp)
@@ -171,8 +199,9 @@ public class BillingService {
                         + UUID.randomUUID().toString().substring(0, 4))
                 .billingPeriodStart(periodStart)
                 .billingPeriodEnd(periodEnd)
-                // Issued as SENT (it is emailed to the PSP below) so it is immediately
-                // payable — PaymentController only accepts SENT/OVERDUE invoices.
+                // Issued as SENT (finalized + payable — PaymentController accepts SENT/OVERDUE).
+                // Email delivery below is best-effort and independent of this status: when SMTP is
+                // not configured the invoice is still a real payable liability.
                 .status("SENT")
                 .dueDate(periodEnd.plusDays(psp.getPaymentTerms()))
                 .currency(psp.getCurrency())
@@ -220,6 +249,11 @@ public class BillingService {
         invoice.setTotalAmount(subtotal);
 
         Invoice saved = invoiceRepository.save(invoice);
+
+        // Stamp the consumed usage rows with this invoice so they can never be billed again.
+        int marked = apiUsageLogRepository.markUsageInvoiced(pspId, saved.getInvoiceId(), startDateTime, endDateTime);
+        log.info("Invoice {} generated for PSP {} ({} usage rows consumed, total {})",
+                saved.getInvoiceNumber(), psp.getPspCode(), marked, saved.getTotalAmount());
 
         // Send invoice email asynchronously — fail-soft, never throws
         billingEmailService.sendInvoiceEmail(saved);
