@@ -67,15 +67,33 @@ Dunning (if unpaid)
 
 ## Service Types Tracked
 
-| Service | Tracking Point | Rate |
+**Corrected (W36-5):** this table previously listed a vocabulary (`TRANSACTION_PROCESSING`,
+`SANCTIONS_SCREENING`, `AML_CHECK`, `CASE_MANAGEMENT`) that `UsageTrackingFilter.URL_SERVICE_MAP`
+no longer produces — those were the original V147 seed values, since superseded. Regenerated
+directly from the filter's current mapping table:
+
+| Service | Tracking Point (path pattern, POST unless noted) | Seeded rate ($/request) |
 |---|---|---|
-| TRANSACTION_PROCESSING | /transactions/* | Per-check |
-| SANCTIONS_SCREENING | /screening/* | Per-check |
-| AML_CHECK | /aml/* | Per-check |
-| RISK_ASSESSMENT | /risk/* | Per-check |
-| REPORT_GENERATION | /reports/generate | Per report |
-| CASE_MANAGEMENT | /cases/* | Per operation |
-| MERCHANT_ONBOARDING | /merchants | Per merchant |
+| SANCTIONS_SCREENING_PERSON | `/sanctions/screen/person*`, and the generic `/sanctions/screen*` fallback | 0.50 |
+| SANCTIONS_SCREENING_ORGANIZATION | `/sanctions/screen/organization*` | 0.75 |
+| AML_SCREENING | `/aml/check*`, `/aml/detection*`, `/screening/*` | 0.10 |
+| TRANSACTION_MONITORING | `/transactions/ingest*` | 0.02 |
+| RISK_ASSESSMENT | `/risk-assessment/assess*` | (V147 seed, still active) |
+| REPORT_GENERATION | `/reports/generate*` (preview/chart reads are not billed) | (V147 seed, still active) |
+| KYC_VERIFICATION | `/merchants/onboard*` | 2.00 |
+| COMPLIANCE_CASE_CREATION | `/cases*` (create verb only; reads are not billed) | 1.00 |
+| SAR_FILING | `/compliance/sar*` | 3.00 (V216 — previously unseeded, billed $0) |
+| CBK_REPORTING | `/compliance/cbk*` (POST or PUT) | 1.50 (V216 — previously unseeded, billed $0) |
+
+`API_CALL_GENERIC` is seeded in `billing_rates` (V149) but `URL_SERVICE_MAP` never actually
+produces it — any request path that doesn't match one of the patterns above, or matches one on a
+non-billable HTTP method, resolves to `null` and is **not tracked or billed at all**
+(`resolveServiceType` returns `null` rather than falling back to a generic type). That row is
+currently unused dead seed data, not a working catch-all.
+
+Source of truth going forward: `UsageTrackingFilter.URL_SERVICE_MAP`/`resolveServiceType` (code)
+and the `billing_rates` table (seeded across V147, V149, V216) — re-check both before trusting this
+table again if either changes.
 
 ## Page Features
 

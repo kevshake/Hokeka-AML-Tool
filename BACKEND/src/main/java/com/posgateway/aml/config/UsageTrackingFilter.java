@@ -57,10 +57,16 @@ public class UsageTrackingFilter extends OncePerRequestFilter {
      * before the generic {@code /sanctions/screen}). A {@link LinkedHashMap}
      * guarantees deterministic first-match iteration.
      *
-     * <p>Every service type here corresponds to a rate seeded in
-     * {@code billing_rates} (V149 + V167), so {@code calculateUsageCost} resolves
-     * a non-zero cost for each metered request — keeping the usage→cost→invoice
-     * pipeline live end-to-end.
+     * <p>Every service type here corresponds to a rate seeded in {@code billing_rates}
+     * (W36-6 fix: the comment previously said "V149 + V167", which was wrong on both counts —
+     * V167 seeds nothing billing-related, and two of these types come from V147, not V149.
+     * Accurate breakdown: {@code TRANSACTION_MONITORING}, {@code AML_SCREENING},
+     * {@code SANCTIONS_SCREENING_PERSON}/{@code _ORGANIZATION}, {@code KYC_VERIFICATION},
+     * {@code COMPLIANCE_CASE_CREATION} — V149; {@code RISK_ASSESSMENT}, {@code REPORT_GENERATION}
+     * — V147; {@code SAR_FILING}, {@code CBK_REPORTING} — V216, previously unseeded entirely,
+     * meaning every SAR filing and CBK submission billed at $0 until that migration), so
+     * {@code calculateUsageCost} resolves a non-zero cost for each metered request — keeping the
+     * usage→cost→invoice pipeline live end-to-end.
      */
     private static final Map<Pattern, ServiceMapping> URL_SERVICE_MAP = new LinkedHashMap<>();
 
