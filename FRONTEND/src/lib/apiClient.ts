@@ -138,6 +138,17 @@ class ApiClient {
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: "DELETE" });
   }
+
+  // W14-10 fix: apiClient had no PATCH method, which is part of why UsersTab.tsx's
+  // toggle-status call used raw fetch() instead of routing through this client (and so missed
+  // credentials/X-PSP-ID header/error normalization that every other call gets for free).
+  async patch<T>(endpoint: string, body?: any, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

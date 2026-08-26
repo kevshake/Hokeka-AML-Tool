@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "../../types/userManagement";
 import { useUsers, useRoles, useAllPsps } from "../../features/api/queries";
-import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, Loader2, Eye, ShieldAlert } from "lucide-react";
+import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, Loader2, Eye, ShieldAlert, KeyRound } from "lucide-react";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../lib/apiClient";
 
 const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
 
@@ -34,42 +35,42 @@ export default function UsersTab() {
     const { data: roles } = useRoles();
     const { data: psps } = useAllPsps();
 
+    // W14-10 fix: these three mutations used raw fetch() instead of apiClient, missing the
+    // credentials/X-PSP-ID header/error normalization every other call in the app gets via
+    // apiClient. The backend independently enforces tenant isolation on these endpoints
+    // (UserController.requireSamePsp, fixed earlier this session) regardless, but the frontend
+    // side of this gap is now closed too.
     const saveUserMutation = useMutation({
         mutationFn: async (userData: any) => {
-            const url = editingUser ? `/api/v1/users/${editingUser.id}` : "/api/v1/users";
-            const method = editingUser ? "PUT" : "POST";
-            const response = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(userData),
-            });
-            if (!response.ok) throw new Error("Failed to save user");
-            return response.json();
+            return editingUser
+                ? apiClient.put(`users/${editingUser.id}`, userData)
+                : apiClient.post("users", userData);
         },
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); handleCloseDialog(); },
     });
 
     const deleteUserMutation = useMutation({
-        mutationFn: async (userId: number) => {
-            const response = await fetch(`/api/v1/users/${userId}`, { method: "DELETE" });
-            if (!response.ok) throw new Error("Failed to delete user");
-        },
+        mutationFn: async (userId: number) => apiClient.delete(`users/${userId}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
         onError: () => { setSnackbar({ open: true, message: "Failed to delete user. Please try again.", severity: "error" }); },
     });
 
     const toggleUserMutation = useMutation({
-        mutationFn: async ({ userId, enabled }: { userId: number; enabled: boolean }) => {
-            const response = await fetch(`/api/v1/users/${userId}/toggle`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabled }),
-            });
-            if (!response.ok) throw new Error("Failed to toggle user status");
-            return response.json();
-        },
+        mutationFn: async ({ userId, enabled }: { userId: number; enabled: boolean }) =>
+            apiClient.patch(`users/${userId}/toggle`, { enabled }),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
         onError: () => { setSnackbar({ open: true, message: "Failed to update user status.", severity: "error" }); },
+    });
+
+    // W27-7 fix: no admin-triggered way to reset a PSP user's access from the console. Reuses
+    // the existing self-service password-reset request flow (POST /auth/password-reset/request,
+    // identifier = username or email) rather than building a new admin-set-password endpoint --
+    // the user still confirms via the emailed link, same security posture as self-service.
+    const resetPasswordMutation = useMutation({
+        mutationFn: async (identifier: string) =>
+            apiClient.post("auth/password-reset/request", { identifier }),
+        onSuccess: () => { setSnackbar({ open: true, message: "Password reset link sent.", severity: "success" }); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to send password reset link.", severity: "error" }); },
     });
 
     const handleOpenDialog = (user?: User) => {
@@ -157,6 +158,14 @@ export default function UsersTab() {
                                             <div className="flex items-center gap-1">
                                                 <Link to={`/records/USER/${user.id}`} title="Trace record" className="rounded p-1 text-sky-400 transition-colors hover:bg-white/10"><Eye size={16} /></Link>
                                                 <button onClick={() => handleOpenDialog(user)} className="rounded p-1 text-burgundy-400 transition-colors hover:bg-white/10"><Edit size={16} /></button>
+                                                <button
+                                                    onClick={() => resetPasswordMutation.mutate(user.email || user.username)}
+                                                    disabled={resetPasswordMutation.isPending}
+                                                    title="Send password reset link"
+                                                    className="rounded p-1 text-indigo-400 transition-colors hover:bg-white/10 disabled:opacity-50"
+                                                >
+                                                    <KeyRound size={16} />
+                                                </button>
                                                 <button onClick={() => handleToggleEnabled(user.id, user.enabled)} className={`rounded p-1 transition-colors hover:bg-white/10 ${user.enabled ? "text-amber-400" : "text-emerald-400"}`}>
                                                     {user.enabled ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
                                                 </button>
