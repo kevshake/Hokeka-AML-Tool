@@ -11,6 +11,11 @@ public class PspRegistrationRequest {
     private String contactPhone;
     private String contactAddress;
     private String billingPlan;
+    // W27-8 fix: PspsListPage's register form has always sent billingCycle, but this DTO had no
+    // such field -- Spring silently ignored the unknown JSON property, so every PSP registered
+    // through the UI got whatever default PspService.registerPsp fell back to, regardless of what
+    // the operator actually selected in the form.
+    private String billingCycle;
     private String currency;
     private Integer paymentTerms;
     private String brandingTheme;
@@ -21,7 +26,8 @@ public class PspRegistrationRequest {
 
     public PspRegistrationRequest(String pspCode, String legalName, String tradingName, String country,
             String registrationNumber, String taxId, String contactEmail, String contactPhone, String contactAddress,
-            String billingPlan, String currency, Integer paymentTerms, String brandingTheme, String logoUrl) {
+            String billingPlan, String billingCycle, String currency, Integer paymentTerms, String brandingTheme,
+            String logoUrl) {
         this.pspCode = pspCode;
         this.legalName = legalName;
         this.tradingName = tradingName;
@@ -32,6 +38,7 @@ public class PspRegistrationRequest {
         this.contactPhone = contactPhone;
         this.contactAddress = contactAddress;
         this.billingPlan = billingPlan;
+        this.billingCycle = billingCycle;
         this.currency = currency;
         this.paymentTerms = paymentTerms;
         this.brandingTheme = brandingTheme;
@@ -118,6 +125,14 @@ public class PspRegistrationRequest {
         this.billingPlan = billingPlan;
     }
 
+    public String getBillingCycle() {
+        return billingCycle;
+    }
+
+    public void setBillingCycle(String billingCycle) {
+        this.billingCycle = billingCycle;
+    }
+
     public String getCurrency() {
         return currency;
     }
@@ -165,6 +180,7 @@ public class PspRegistrationRequest {
         private String contactPhone;
         private String contactAddress;
         private String billingPlan;
+        private String billingCycle;
         private String currency;
         private Integer paymentTerms;
         private String brandingTheme;
@@ -223,6 +239,11 @@ public class PspRegistrationRequest {
             return this;
         }
 
+        public PspRegistrationRequestBuilder billingCycle(String billingCycle) {
+            this.billingCycle = billingCycle;
+            return this;
+        }
+
         public PspRegistrationRequestBuilder currency(String currency) {
             this.currency = currency;
             return this;
@@ -245,7 +266,8 @@ public class PspRegistrationRequest {
 
         public PspRegistrationRequest build() {
             return new PspRegistrationRequest(pspCode, legalName, tradingName, country, registrationNumber, taxId,
-                    contactEmail, contactPhone, contactAddress, billingPlan, currency, paymentTerms, brandingTheme, logoUrl);
+                    contactEmail, contactPhone, contactAddress, billingPlan, billingCycle, currency, paymentTerms,
+                    brandingTheme, logoUrl);
         }
 
         public String toString() {
@@ -253,8 +275,8 @@ public class PspRegistrationRequest {
                     + this.legalName + ", tradingName=" + this.tradingName + ", country=" + this.country
                     + ", registrationNumber=" + this.registrationNumber + ", taxId=" + this.taxId + ", contactEmail="
                     + this.contactEmail + ", contactPhone=" + this.contactPhone + ", contactAddress="
-                    + this.contactAddress + ", billingPlan=" + this.billingPlan + ", currency=" + this.currency
-                    + ", paymentTerms=" + this.paymentTerms + ")";
+                    + this.contactAddress + ", billingPlan=" + this.billingPlan + ", billingCycle=" + this.billingCycle
+                    + ", currency=" + this.currency + ", paymentTerms=" + this.paymentTerms + ")";
         }
     }
 }
