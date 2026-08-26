@@ -15,6 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -59,9 +62,15 @@ public class AmlCheckService {
     public AmlResult check(TransactionRequest request) {
         long startTime = System.currentTimeMillis();
         Long pspId = request.getPspId();
+        // W22-4 fix: this used to synthesize "TXN-" + System.currentTimeMillis() whenever the
+        // caller omitted a transaction id, producing a different cacheKey on every single call
+        // for what could be an identical repeated request -- readCached() below could never hit,
+        // defeating the cache entirely for any caller that doesn't supply an id. Derive a stable,
+        // deterministic id from the request's own content instead, so the same request always
+        // maps to the same cache key.
         String txnId = request.getTransactionId() != null
                 ? request.getTransactionId()
-                : "TXN-" + System.currentTimeMillis();
+                : deriveStableRequestId(request);
         String cacheKey = (pspId != null ? pspId : 0L) + ":" + txnId;
 
         AmlResult cached = readCached(cacheKey, txnId, pspId, startTime);
@@ -199,5 +208,39 @@ public class AmlCheckService {
         if (score >= 0.7) return "HIGH";
         if (score >= 0.4) return "MEDIUM";
         return "LOW";
+    }
+
+    /**
+     * Deterministic fallback id for requests that omit transactionId, so identical repeated
+     * requests hash to the same cache key instead of a fresh wall-clock value every time (W22-4).
+     * Deliberately excludes nothing time-based -- two calls with the same salient fields collide
+     * on purpose, which is the entire point: it's a cache key, not a globally unique id.
+     */
+    private String deriveStableRequestId(TransactionRequest request) {
+        String salient = String.join("|",
+                String.valueOf(request.getPspId()),
+                String.valueOf(request.getMerchantId()),
+                String.valueOf(request.getAmount()),
+                String.valueOf(request.getAmountCents()),
+                String.valueOf(request.getCurrency()),
+                String.valueOf(request.getTransactionType()),
+                String.valueOf(request.getCountry()),
+                String.valueOf(request.getCustomerId()),
+                String.valueOf(request.getPanHash()),
+                String.valueOf(request.getSenderName()));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(salient.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder("TXN-");
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed available on every JDK; this branch is unreachable in
+            // practice, but fall back to something deterministic (not time-based) rather than
+            // letting the whole request fail on a hashing algorithm lookup.
+            return "TXN-" + Integer.toHexString(salient.hashCode());
+        }
     }
 }
