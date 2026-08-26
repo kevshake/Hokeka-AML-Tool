@@ -165,6 +165,11 @@ public class UserController {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
         }
+        // PSP scoping: PSP users can only manage users from their own PSP. Without this, a
+        // PSP_ADMIN with MANAGE_USERS could edit any user platform-wide by iterating {id} — the
+        // permission check above is necessary but not sufficient, since it says nothing about
+        // WHICH user is being touched. Same pattern already enforced by toggleUserStatusPatch below.
+        requireSamePsp(currentUser, id);
 
         User updates = new User();
         updates.setFirstName(req.getFirstName());
@@ -179,20 +184,51 @@ public class UserController {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
         }
+        // Same cross-tenant gap as updateUser above: deleting by {id} alone let a PSP admin delete
+        // another PSP's user.
+        requireSamePsp(currentUser, id);
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Legacy alias for {@link #toggleUserStatusPatch}; not called by the current frontend (which
+     * uses {@code PATCH /{id}/toggle}), but left reachable directly via the API, so it must enforce
+     * the same tenant isolation rather than relying on the frontend never calling it.
+     */
     @PostMapping("/{id}/{action}")
     public ResponseEntity<Void> toggleUserStatus(@PathVariable Long id, @PathVariable String action,
             @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
         }
+        requireSamePsp(currentUser, id);
 
         boolean enable = "enable".equalsIgnoreCase(action);
         userService.toggleUserStatus(id, enable);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Tenant isolation for write operations addressed by user id alone. A platform admin
+     * ({@code currentUser.getPsp() == null}) may act on any user; a PSP-scoped admin may only act
+     * on a user belonging to their own PSP. Mirrors the check already present in
+     * {@link #toggleUserStatusPatch} — extracted here so update/delete/toggle-legacy enforce it
+     * identically instead of three near-copies drifting apart.
+     *
+     * @throws SecurityException if a PSP-scoped caller targets a user outside their own PSP, or the
+     *                            target user does not exist (do not leak existence via a different
+     *                            error shape than "not authorized")
+     */
+    private void requireSamePsp(User currentUser, Long targetUserId) {
+        if (currentUser == null || currentUser.getPsp() == null) {
+            return; // platform admin (or security disabled / dev fallback) — unrestricted
+        }
+        User targetUser = userService.getUserById(targetUserId);
+        if (targetUser == null || targetUser.getPsp() == null
+                || !targetUser.getPsp().getPspId().equals(currentUser.getPsp().getPspId())) {
+            throw new SecurityException("Cannot manage user from another PSP");
+        }
     }
 
     /**

@@ -121,7 +121,37 @@ public class GlobalExceptionHandler {
                 .traceId(traceId)
                 .build();
 
-        logger.warn("[TraceId: {}] Access denied on {} {}: {}", traceId, 
+        logger.warn("[TraceId: {}] Access denied on {} {}: {}", traceId,
+                request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
+    /**
+     * Handle java.lang.SecurityException — the codebase's controller layer throws this directly
+     * (not Spring Security's AccessDeniedException) for authorization failures such as
+     * cross-tenant access, e.g. UserController's PSP-isolation checks, PspController.canAccessPsp.
+     * Without this handler, SecurityException falls through to handleRuntimeException below and
+     * returns 500 Internal Server Error for what is actually a 403 Forbidden — the request is
+     * still correctly blocked either way, but the wrong status code misleads monitoring/alerting
+     * (authz denials counted as internal errors) and any client retry logic keyed off 5xx vs 4xx.
+     * More specific than RuntimeException, so Spring's @ExceptionHandler resolution picks this one.
+     */
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ErrorResponse> handleSecurityException(
+            SecurityException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString();
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status("FORBIDDEN")
+                .message(ex.getMessage() != null ? ex.getMessage() : "You do not have permission to access this resource")
+                .errorCode("ERR_ACCESS_DENIED_002")
+                .httpStatus(HttpStatus.FORBIDDEN.value())
+                .path(request.getRequestURI())
+                .method(request.getMethod())
+                .traceId(traceId)
+                .build();
+
+        logger.warn("[TraceId: {}] Security exception on {} {}: {}", traceId,
                 request.getMethod(), request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
     }
