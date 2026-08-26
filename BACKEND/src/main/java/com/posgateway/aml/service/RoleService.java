@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.model.Permission;
 import com.posgateway.aml.repository.RoleRepository;
 import jakarta.annotation.PostConstruct;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +54,18 @@ public class RoleService {
         return roleRepository.save(role);
     }
 
+    /**
+     * W20-14 fix: RoleService had zero cache eviction anywhere, unlike UserService (which evicts
+     * "users" — the CustomUserDetailsService.loadUserByUsername cache — from every one of its own
+     * mutations). Editing a role's own permission set here left every already-cached user holding
+     * that role authorizing against their OLD permissions for up to the cache's 5-minute TTL — a
+     * genuine security-relevant staleness window (e.g. revoking MANAGE_USERS from a compromised
+     * role took up to 5 minutes to actually take effect for logged-in holders of that role).
+     * allEntries=true rather than a per-user key: the cache is keyed by username/email, not role
+     * id, and a role can be held by many users, so there's no single key to evict precisely.
+     */
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public Role updatePermissions(Long roleId, Set<Permission> permissions) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
@@ -63,6 +75,7 @@ public class RoleService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public Role updateRole(Long roleId, String name, String description) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
@@ -94,6 +107,7 @@ public class RoleService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "users", allEntries = true)
     public void deleteRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
