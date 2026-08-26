@@ -29,7 +29,10 @@ import java.util.concurrent.TimeUnit;
 public class SanctionsCountClient {
 
     private static final Logger log = LoggerFactory.getLogger(SanctionsCountClient.class);
-    private static final String CB_NAME = "amlMicroservice";
+    // W14-5 fix: moved onto the dedicated "sanctionsScreening" breaker alongside
+    // SanctionsScreenClient (same downstream dependency, same failure domain) so sanctions-service
+    // outages no longer share breaker state with the unrelated AML risk-scoring path.
+    private static final String CB_NAME = "sanctionsScreening";
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
 
     private final AmlMicroserviceProperties properties;

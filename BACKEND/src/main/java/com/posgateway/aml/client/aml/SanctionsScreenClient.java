@@ -39,7 +39,12 @@ import java.util.concurrent.TimeUnit;
 public class SanctionsScreenClient {
 
     private static final Logger log = LoggerFactory.getLogger(SanctionsScreenClient.class);
-    private static final String CB_NAME = "amlMicroservice";
+    // W14-5 fix: was "amlMicroservice", shared with the unrelated AML risk-scoring path
+    // (ScoringService). SanctionsController legitimately 503s for its own UNAVAILABLE status, and
+    // Resilience4j breaker instances are shared by name application-wide -- a burst of sanctions
+    // 503s opened the shared breaker and degraded AML risk scoring too. Dedicated breaker, same
+    // settings, configured in application.properties alongside the original.
+    private static final String CB_NAME = "sanctionsScreening";
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
 
     private final AmlMicroserviceProperties properties;
