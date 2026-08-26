@@ -659,6 +659,32 @@ export const useUpdateInvoiceStatus = () => {
   });
 };
 
+// W27-2 fix: POST /admin/psp-billing/{pspId}/invoice/generate existed with zero frontend
+// callers -- invoices were only ever created by the scheduled job, so an admin had no way to
+// issue an off-cycle invoice.
+export const useGenerateInvoice = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pspId, month }: { pspId: number; month?: string }) =>
+      apiClient.post(`admin/psp-billing/${pspId}/invoice/generate${month ? `?month=${month}` : ""}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
+    },
+  });
+};
+
+// W27-3 fix: POST /admin/psp-billing/{pspId}/notify existed with zero frontend callers -- admins
+// had no way to resend an invoice email or trigger a dunning reminder from the console.
+export const useSendBillingNotification = () => {
+  return useMutation({
+    mutationFn: ({ pspId, type, invoiceId }: { pspId: number; type: "INVOICE" | "REMINDER"; invoiceId?: number }) =>
+      apiClient.post(`admin/psp-billing/${pspId}/notify`, {
+        type,
+        ...(invoiceId != null ? { invoiceId: String(invoiceId) } : {}),
+      }),
+  });
+};
+
 export const useCreateSubscription = () => {
   const queryClient = useQueryClient();
   return useMutation({

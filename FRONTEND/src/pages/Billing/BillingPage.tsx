@@ -46,6 +46,8 @@ import {
   CheckCircle as CheckIcon,
   Warning as WarningIcon,
   Close as CloseIcon,
+  NoteAdd as GenerateIcon,
+  MarkEmailRead as NotifyIcon,
 } from "@mui/icons-material";
 import {
   BarChart,
@@ -68,6 +70,8 @@ import {
 } from "../../features/api/queries";
 import {
   useUpdateInvoiceStatus,
+  useGenerateInvoice,
+  useSendBillingNotification,
   useCreateSubscription,
   useUpdateSubscription,
   useCancelSubscription,
@@ -654,11 +658,53 @@ function InvoicesTab() {
   const total: number = (invoicesPage as { totalElements?: number })?.totalElements ?? rows.length;
 
   const updateStatus = useUpdateInvoiceStatus();
+  const generateInvoice = useGenerateInvoice();
+  const sendNotification = useSendBillingNotification();
   const [markPaidTarget, setMarkPaidTarget] = useState<Invoice | null>(null);
   const [paidForm, setPaidForm] = useState<MarkPaidForm>({ status: "PAID", paymentReference: "", paymentMethod: "", paymentAmount: "" });
   const [marking, setMarking] = useState(false);
   const [downloading, setDownloading] = useState<number | null>(null);
+  const [notifyingId, setNotifyingId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ open: boolean; severity: "success" | "error"; message: string }>({ open: false, severity: "success", message: "" });
+
+  // W27-2: manual "Generate Invoice" dialog state
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [generateForm, setGenerateForm] = useState<{ pspId: string; month: string }>({
+    pspId: "",
+    month: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+  });
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerateInvoice = async () => {
+    if (!generateForm.pspId) return;
+    setGenerating(true);
+    try {
+      await generateInvoice.mutateAsync({ pspId: Number(generateForm.pspId), month: generateForm.month });
+      setToast({ open: true, severity: "success", message: "Invoice generated." });
+      setGenerateDialogOpen(false);
+    } catch {
+      setToast({ open: true, severity: "error", message: "Failed to generate invoice." });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // W27-3: per-row "Send Reminder" -- resends the invoice email for SENT/OVERDUE invoices.
+  const handleSendReminder = async (inv: Invoice) => {
+    setNotifyingId(inv.invoiceId);
+    try {
+      await sendNotification.mutateAsync({
+        pspId: inv.pspId,
+        type: inv.status === "OVERDUE" ? "REMINDER" : "INVOICE",
+        invoiceId: inv.invoiceId,
+      });
+      setToast({ open: true, severity: "success", message: "Notification sent." });
+    } catch {
+      setToast({ open: true, severity: "error", message: "Failed to send notification." });
+    } finally {
+      setNotifyingId(null);
+    }
+  };
 
   const openMarkPaid = (inv: Invoice) => {
     setMarkPaidTarget(inv);
@@ -719,27 +765,38 @@ function InvoicesTab() {
   return (
     <Box>
       {/* Filters */}
-      <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: "wrap" }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>PSP</InputLabel>
-          <Select value={filterPspId} label="PSP" onChange={(e) => { setFilterPspId(e.target.value); setPage(0); }}>
-            <MenuItem value="">All PSPs</MenuItem>
-            {(psps as Psp[]).map((p) => {
-              const id = String(p.id ?? (p as unknown as { pspId?: number }).pspId ?? "");
-              return <MenuItem key={id} value={id}>{p.legalName ?? p.tradingName ?? `PSP ${id}`}</MenuItem>;
-            })}
-          </Select>
-        </FormControl>
+      <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>PSP</InputLabel>
+            <Select value={filterPspId} label="PSP" onChange={(e) => { setFilterPspId(e.target.value); setPage(0); }}>
+              <MenuItem value="">All PSPs</MenuItem>
+              {(psps as Psp[]).map((p) => {
+                const id = String(p.id ?? (p as unknown as { pspId?: number }).pspId ?? "");
+                return <MenuItem key={id} value={id}>{p.legalName ?? p.tradingName ?? `PSP ${id}`}</MenuItem>;
+              })}
+            </Select>
+          </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Status</InputLabel>
-          <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}>
-            <MenuItem value="">All</MenuItem>
-            {["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"].map((s) => (
-              <MenuItem key={s} value={s}>{s}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Status</InputLabel>
+            <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}>
+              <MenuItem value="">All</MenuItem>
+              {["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"].map((s) => (
+                <MenuItem key={s} value={s}>{s}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+
+        <Button
+          variant="contained"
+          startIcon={<GenerateIcon />}
+          onClick={() => setGenerateDialogOpen(true)}
+          sx={{ textTransform: "none", bgcolor: ACCENT, "&:hover": { bgcolor: "var(--surface-3)" } }}
+        >
+          Generate Invoice
+        </Button>
       </Stack>
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load invoices.</Alert>}
@@ -805,6 +862,22 @@ function InvoicesTab() {
                           </IconButton>
                         </span>
                       </Tooltip>
+                      {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                        <Tooltip title={inv.status === "OVERDUE" ? "Send Reminder" : "Resend Invoice"}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleSendReminder(inv)}
+                              disabled={notifyingId === inv.invoiceId}
+                              sx={{ color: "var(--info)" }}
+                            >
+                              {notifyingId === inv.invoiceId
+                                ? <CircularProgress size={14} />
+                                : <NotifyIcon sx={{ fontSize: 16 }} />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -886,6 +959,57 @@ function InvoicesTab() {
             sx={{ textTransform: "none", bgcolor: ACCENT, "&:hover": { bgcolor: "var(--surface-3)" } }}
           >
             {marking ? "Updating…" : "Update Status"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Generate Invoice Dialog (W27-2) */}
+      <Dialog open={generateDialogOpen} onClose={() => setGenerateDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>Generate Invoice</Typography>
+          <IconButton size="small" onClick={() => setGenerateDialogOpen(false)}><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ pt: 1 }}>
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>PSP</InputLabel>
+                <Select
+                  value={generateForm.pspId}
+                  label="PSP"
+                  onChange={(e) => setGenerateForm((f) => ({ ...f, pspId: e.target.value }))}
+                >
+                  {(psps as Psp[]).map((p) => {
+                    const id = String(p.id ?? (p as unknown as { pspId?: number }).pspId ?? "");
+                    return <MenuItem key={id} value={id}>{p.legalName ?? p.tradingName ?? `PSP ${id}`}</MenuItem>;
+                  })}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Billing Period"
+                size="small"
+                fullWidth
+                type="month"
+                InputLabelProps={{ shrink: true }}
+                value={generateForm.month}
+                onChange={(e) => setGenerateForm((f) => ({ ...f, month: e.target.value }))}
+                helperText="Off-cycle invoice — the scheduled job normally handles this automatically."
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setGenerateDialogOpen(false)} sx={{ textTransform: "none" }}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleGenerateInvoice}
+            disabled={generating || !generateForm.pspId}
+            startIcon={generating ? <CircularProgress size={16} /> : undefined}
+            sx={{ textTransform: "none", bgcolor: ACCENT, "&:hover": { bgcolor: "var(--surface-3)" } }}
+          >
+            {generating ? "Generating…" : "Generate"}
           </Button>
         </DialogActions>
       </Dialog>
