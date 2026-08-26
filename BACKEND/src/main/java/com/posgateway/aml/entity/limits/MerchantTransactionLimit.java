@@ -18,7 +18,16 @@ import java.time.LocalDateTime;
        uniqueConstraints = @UniqueConstraint(columnNames = "merchant_id"))
 @lombok.Getter
 @lombok.Setter
-@EqualsAndHashCode(exclude = {"merchant"})
+// W49-P3 fix: was @EqualsAndHashCode(exclude = {"merchant"}), which still hashed on every OTHER
+// field including the mutable limit amounts and timestamps -- a JPA entity's hashCode changing
+// after it's already been placed in a HashSet/HashMap breaks that collection's invariants (the
+// entity becomes unfindable at its own key), and two different persisted rows with coincidentally
+// equal field values become "equal" even though they're different database rows. Removed
+// entirely rather than switching to an id-based override, which has its own well-known pitfall
+// for transient (not-yet-persisted, id == null) entities colliding with each other. Falling back
+// to identity equals/hashCode (Object's default) is the standard, safest choice for a JPA entity
+// per Hibernate's own guidance, and matches every sibling entity in this codebase that already
+// carries no @EqualsAndHashCode at all.
 @ToString(exclude = {"merchant"})
 public class MerchantTransactionLimit {
 
