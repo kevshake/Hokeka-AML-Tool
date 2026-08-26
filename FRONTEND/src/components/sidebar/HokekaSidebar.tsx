@@ -28,6 +28,8 @@ import {
 
   Store,
 
+  Server,
+
   Building2,
 
   Users,
@@ -51,6 +53,8 @@ import {
   LogOut,
 
   UserRound,
+
+  Landmark,
 
   type LucideIcon,
 
@@ -231,6 +235,8 @@ export default function HokekaSidebar({
 
           { label: 'Transaction Limits', icon: Gauge, to: '/limits-aml' },
 
+          { label: 'Regulatory Reports', icon: Landmark, to: '/regulatory-reports' },
+
         ],
 
       },
@@ -261,6 +267,8 @@ export default function HokekaSidebar({
 
           ...(canManagePspUsers ? [{ label: 'Users', icon: Users, to: '/users' }] : []),
 
+          ...(canManagePspUsers ? [{ label: 'Edge Nodes', icon: Server, to: '/edge-nodes' }] : []),
+
           { label: 'Settings', icon: Settings, to: '/settings' },
 
         ] : [
@@ -268,6 +276,8 @@ export default function HokekaSidebar({
           { label: 'Merchants', icon: Store, to: '/merchants' },
 
           { label: 'PSPs', icon: Building2, to: '/psps' },
+
+          { label: 'Edge Nodes', icon: Server, to: '/edge-nodes' },
 
           { label: 'Users', icon: Users, to: '/users' },
 

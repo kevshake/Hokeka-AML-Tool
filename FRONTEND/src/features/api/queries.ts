@@ -377,7 +377,13 @@ export const useOverdueDeadlines = () => {
 // Transaction Monitoring
 export const useMonitoringDashboardStats = () => {
   return useQuery<Record<string, unknown>>({
-    queryKey: ["monitoring", "dashboard-stats"],
+    // W14-11 fix: this used to share ["monitoring", "dashboard-stats"] with useTransactionStats
+    // below, even though both hit the same endpoint with different declared response types
+    // (Record<string, unknown> vs the typed TransactionStats) and different query configs
+    // (this one polls every 30s, that one doesn't) -- React Query treats a shared key as one
+    // cache entry, so whichever hook mounted first silently won and the other's refetchInterval
+    // was ignored. Distinct key so each hook owns its own cache entry and config.
+    queryKey: ["monitoring", "dashboard-stats-raw"],
     queryFn: () => apiClient.get<Record<string, unknown>>("monitoring/dashboard/stats").catch(() => ({})),
     refetchInterval: 30_000,
   });
