@@ -6,6 +6,7 @@ import { useUsers, useRoles, useAllPsps } from "../../features/api/queries";
 import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, Loader2, Eye, ShieldAlert } from "lucide-react";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
+import TwSnackbar from "../../components/Common/TwSnackbar";
 import { useAuth } from "../../contexts/AuthContext";
 
 const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
@@ -23,6 +24,10 @@ export default function UsersTab() {
     });
 
     const [page, setPage] = useState({ index: 0, size: 25 });
+    // W32-1 fix: replaced native alert() calls with the app's own snackbar.
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+        open: false, message: "", severity: "error",
+    });
 
     const { data: usersPage, isLoading } = useUsers({ page: page.index, size: page.size });
     const users = usersPage?.content || [];
@@ -50,7 +55,7 @@ export default function UsersTab() {
             if (!response.ok) throw new Error("Failed to delete user");
         },
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
-        onError: () => { alert("Failed to delete user. Please try again."); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to delete user. Please try again.", severity: "error" }); },
     });
 
     const toggleUserMutation = useMutation({
@@ -64,7 +69,7 @@ export default function UsersTab() {
             return response.json();
         },
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
-        onError: () => { alert("Failed to update user status."); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to update user status.", severity: "error" }); },
     });
 
     const handleOpenDialog = (user?: User) => {
@@ -264,6 +269,13 @@ export default function UsersTab() {
                     </div>
                 </>
             )}
+
+            <TwSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            />
         </div>
     );
 }

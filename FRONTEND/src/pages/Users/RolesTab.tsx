@@ -5,6 +5,7 @@ import TwBadge from "../../components/Common/TwBadge";
 import { Loader2, Plus, Edit, Trash2, X, ChevronDown, ChevronRight, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import TwSnackbar from "../../components/Common/TwSnackbar";
 
 const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
 
@@ -18,6 +19,10 @@ export default function RolesTab() {
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
     const [formData, setFormData] = useState({
         name: "", description: "", pspId: "", permissions: [] as Permission[],
+    });
+    // W32-1 fix: replaced the native alert() on delete failure with the app's own snackbar.
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+        open: false, message: "", severity: "error",
     });
 
     const apiFetch = async (input: string, init: RequestInit = {}) => {
@@ -55,7 +60,7 @@ export default function RolesTab() {
     const deleteRoleMutation = useMutation({
         mutationFn: async (roleId: number) => { await apiFetch(`/api/v1/roles/${roleId}`, { method: "DELETE" }); },
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles"] }); },
-        onError: () => { alert("Failed to delete role. Please try again."); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to delete role. Please try again.", severity: "error" }); },
     });
 
     const handleOpenDialog = (role?: Role) => {
@@ -272,6 +277,13 @@ export default function RolesTab() {
                     </div>
                 </>
             )}
+
+            <TwSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            />
         </div>
     );
 }
