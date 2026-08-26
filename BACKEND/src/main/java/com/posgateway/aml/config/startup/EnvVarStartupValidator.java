@@ -199,6 +199,15 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.requiredWhen("SCORING_SERVICE_URL", scoringEnabled,
                         "URL of the XGBoost scoring sidecar. Required if scoring.service.enabled=true."),
 
+                // --- M-Pesa callback hardening ---
+                EnvVarSpec.recommended("MPESA_CALLBACK_ALLOWED_IPS",
+                        "Comma-separated IP/CIDR allowlist for the M-Pesa (Safaricom Daraja) payment "
+                                + "callback endpoint, enforced by MpesaCallbackIpAllowlistFilter. Unset means "
+                                + "the endpoint accepts callbacks from any IP (pre-existing behaviour) guarded "
+                                + "only by the generic per-IP rate limiter. Set to Safaricom's published Daraja "
+                                + "callback IP ranges (differs between sandbox and production) before relying "
+                                + "on this endpoint in production."),
+
                 // --- Notifications (email/SMTP) ---
                 EnvVarSpec.recommended("MAIL_HOST",
                         "SMTP host for outbound notifications (password reset, alerts). " +
