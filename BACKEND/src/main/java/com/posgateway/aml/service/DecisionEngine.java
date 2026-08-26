@@ -294,6 +294,17 @@ public class DecisionEngine {
     @Autowired(required = false)
     private com.posgateway.aml.service.fraud.CrossPspFraudIntelligenceService crossPspFraudService;
 
+    /**
+     * W36-2 fix: the PSP-facing webhook feature (entity, repository, WebhookService.sendWebhook,
+     * and the newly-added subscribe controller) existed end to end except for the one thing that
+     * actually makes it useful — nothing anywhere in the codebase ever called sendWebhook, so a
+     * PSP that subscribed would never receive a single delivery. This is the RISK_ALERT trigger:
+     * every alert this engine creates now also fans out to that PSP's active RISK_ALERT webhook
+     * subscriptions, reusing the exact event payload already built for the Kafka outbox below.
+     */
+    @Autowired(required = false)
+    private com.posgateway.aml.service.psp.WebhookService webhookService;
+
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
             return new DecisionResult("HOLD", 1.0,
@@ -509,6 +520,20 @@ public class DecisionEngine {
                     partitionKey,
                     payload);
             logger.debug("Queued alert-generated event: alertId={}", alert.getAlertId());
+
+            // W36-2: fan this same event out to the PSP's active RISK_ALERT webhook
+            // subscriptions. Best-effort and isolated from the outbox enqueue above -- a webhook
+            // delivery failure (unreachable callback URL, DNS failure, etc.) must never roll back
+            // or fail the alert/Kafka path, which is why this has its own try/catch rather than
+            // sharing the outer one.
+            if (webhookService != null && transaction.getPspId() != null) {
+                try {
+                    webhookService.sendWebhook(transaction.getPspId(), "RISK_ALERT", event);
+                } catch (Exception webhookEx) {
+                    logger.warn("RISK_ALERT webhook dispatch failed for alertId={}: {}",
+                            alert.getAlertId(), webhookEx.getMessage());
+                }
+            }
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Failed to serialize or enqueue alert event for alertId=" + alert.getAlertId(), e);

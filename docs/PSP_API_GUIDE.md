@@ -653,7 +653,10 @@ POST /api/v1/compliance/cbk/submissions/{endpointType}/run
 
 ## 10. Webhooks & Event Subscriptions
 
-Subscribe to real-time events instead of polling:
+**Corrected (W36-2):** this section previously documented a richer feature than exists — a single
+`POST /webhooks/subscribe` call accepting multiple `events` and a client-supplied `secret`, with
+eight event types spanning transactions/alerts/cases/invoices. The real, working endpoint (it
+returned 404 before this fix; there was no controller at all) is simpler:
 
 ```http
 POST /api/v1/webhooks/subscribe
@@ -661,41 +664,54 @@ Authorization: Bearer eyJ...
 Content-Type: application/json
 
 {
-  "url": "https://mypsp.com/webhooks/hokeka",
-  "events": ["alert.created", "case.updated", "transaction.flagged"],
-  "secret": "my-webhook-secret"
+  "callbackUrl": "https://mypsp.com/webhooks/hokeka",
+  "eventType": "RISK_ALERT"
 }
+```
+
+Each call creates **one subscription for one event type** — call it again with a different
+`eventType` to subscribe to more than one. The signing secret is **server-generated**, not
+client-supplied; it's returned in the response body's `secretKey` field (store it — it isn't shown
+again). `callbackUrl` must be HTTPS. Subscriptions are automatically scoped to your own PSP; you
+cannot subscribe on another tenant's behalf.
+
+```http
+GET /api/v1/webhooks/subscriptions        # list your own PSP's subscriptions
+DELETE /api/v1/webhooks/subscriptions/{id}  # unsubscribe
 ```
 
 ### Available Events
 
+Only these three actually fire — the delivery pipeline previously existed but was called from
+nowhere in the codebase, so even a successful subscribe would never have produced a delivery:
+
 | Event | Triggered When |
 |---|---|
-| `transaction.flagged` | Transaction receives HOLD or BLOCK decision |
-| `alert.created` | New fraud/AML alert generated |
-| `alert.resolved` | Alert disposition recorded |
-| `case.created` | Compliance case opened |
-| `case.updated` | Case status changed, decision made |
-| `invoice.generated` | Monthly invoice created |
-| `invoice.overdue` | Invoice becomes overdue |
-| `invoice.paid` | Payment received |
+| `RISK_ALERT` | New fraud/AML alert generated (wired as of this fix — see payload below) |
+| `CASE_UPDATE` | *Entity/repository support this value; no code path emits it yet.* |
+| `MERCHANT_STATUS_CHANGE` | *Entity/repository support this value; no code path emits it yet.* |
 
-### Webhook Payload
+If your integration needs `CASE_UPDATE` or `MERCHANT_STATUS_CHANGE` delivery, treat that as a
+currently-unimplemented gap, not a documentation gap — subscribing to either accepts the
+subscription but nothing will ever be delivered until those two triggers are wired the same way
+`RISK_ALERT` now is.
+
+### Webhook Payload (RISK_ALERT)
 
 ```json
 {
-  "event": "alert.created",
-  "timestamp": "2026-06-29T14:32:15Z",
+  "alertId": 445566,
+  "txnId": 1048576,
+  "action": "HOLD",
+  "score": 0.75,
+  "status": "open",
+  "severity": "HIGH",
+  "sarRequired": true,
+  "ctrRequired": false,
+  "triggeredRules": ["R-2", "R-7", "R-30"],
   "pspId": 7,
-  "data": {
-    "alertId": 445566,
-    "txnId": 1048576,
-    "score": 87.3,
-    "riskLevel": "HIGH",
-    "action": "HOLD",
-    "reason": "Velocity: 15 transactions in 1 hour",
-    "triggeredRules": ["R-2", "R-7", "R-30"]
-  }
+  "merchantId": "4",
+  "timestamp": "2026-06-29T14:32:15"
 }
 ```
 
