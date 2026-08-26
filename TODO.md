@@ -1,6 +1,30 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 63 — Closed 2 more; W36-2 revealed the webhook delivery pipeline was entirely dead (2026-08-27)
+
+- **`W49-P3`** — last of the original 9 Lombok-`@EqualsAndHashCode`-over-mutable-fields entities
+  (`MerchantTransactionLimit`), the other 8 already fixed. Removed the annotation entirely (falls
+  back to identity equals/hashCode — matches every sibling entity in the codebase, none of which
+  carry one); nothing depended on the old value-based semantics.
+- **`W36-2`** — built the missing `POST /webhooks/subscribe` (and `GET`/`DELETE`
+  `/webhooks/subscriptions`), every operation tenant-scoped. **Found something bigger while
+  building it**: `WebhookService.sendWebhook` was called from nowhere in the entire codebase — the
+  full subscribe→deliver pipeline existed except for the one thing that makes it useful. Shipping
+  only the controller would have been its own stub. Wired the `RISK_ALERT` trigger into
+  `DecisionEngine.createAlert` (the one canonical alert-creation path every decision branch uses),
+  best-effort so a webhook failure can never affect the alert/Kafka path. `CASE_UPDATE` and
+  `MERCHANT_STATUS_CHANGE` remain genuinely unwired — stated plainly in the corrected
+  `PSP_API_GUIDE.md` rather than left implied-working. Also corrected the doc's request/response
+  shape, which had documented a richer aspirational feature (multi-event arrays, client-supplied
+  secret, 8 event types) than what the real entity ever supported. 9 tests.
+
+27 items closed total this session. Remaining SMALL queue: `W14-5`, `W21-3`, `W21-7`, `W18-2`,
+`W18-4`, `W18-5`, `W19-2..W19-6`, `W27-2`, `W27-3`, `W27-6..W27-8`. LARGE and NEEDS-DECISION buckets
+unchanged from Wave 62/59.
+
+---
+
 ## Wave 62 — Closed 9 more items; 2 reclassified LARGE on closer inspection (2026-08-26)
 
 - **`W31-2`/`W27-5`** (same finding, logged twice) — deleted dead `PspAdminController`
