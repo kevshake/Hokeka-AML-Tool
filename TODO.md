@@ -1,6 +1,50 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 61 — Closed 10 more items from the SMALL queue (2026-08-26, same day continuation)
+
+Continued working the priority-ordered SMALL queue. All ten below are fixed, tested (or, for
+doc-only items, verified against real source), compiled, and committed.
+
+- **`W14-4`** — sanctionType was the literal "Sanctions match" for every match regardless of list;
+  now derived per-match (PEP-level vs specific list name). 1 test.
+- **`W14-7`** — no-op ternary in `AlertToCaseService` simplified; `AlertController.resolveAlert`'s
+  `disposingUser` resolution was instanceof-only (silently dropped attribution for any non-`User`
+  principal shape) — added a username-lookup fallback. 1 new test, existing test updated for the
+  new constructor param.
+- **`W14-11`** — `useMonitoringDashboardStats`/`useTransactionStats` shared a React Query key
+  despite different types and configs; gave the former its own key.
+- **`W14-12`** — `/regulatory-reports` was routed but had no sidebar entry; added under COMPLIANCE.
+- **`W22-4`** — `AmlCheckService`'s fallback transaction id was `"TXN-" + currentTimeMillis()`,
+  defeating the Aerospike score cache for any caller omitting `transactionId` (a fresh key every
+  call). Replaced with a deterministic SHA-256 hash of the request's own content. 2 tests.
+- **`W22-2`** — Aerospike `NAMESPACE = "aml_cache"` was hardcoded identically in three separate
+  files (`AerospikeCacheService`, `AmlCheckService`, `SanctionsService`); externalized via
+  `aerospike.namespace` in all three, same default. Full aml-microservice suite passes.
+- **`W20-8`** — **more serious than logged.** `PSP_USER` *and* `USER` were both missing from
+  `UserRole` — both are real fallback role names in `AuthenticationController.register()`, and any
+  account actually registered under either fallback crashed with an uncaught
+  `IllegalArgumentException` at ~20 `UserRole.valueOf(...)` call sites (case management, every PSP
+  CBK-filing controller, case permissions/escalation). Added both; every consumer is a positive
+  allow-list so no other branch needed touching. 1 test.
+- **`W21-1`** — dead `edges` capture in `MobileMoneyService` removed.
+- **`W18-1`** — `RegulatoryDeadlinePolicy.createdAt` was `NOT NULL` with nothing stamping it; added
+  `@PrePersist`, same pattern already used by sibling compliance entities. 2 tests.
+- **`W32-1`** — `RolesTab`/`UsersTab` used native `alert()` on failure instead of `TwSnackbar`
+  (unlike the rest of the app). Fixed all 3 call sites. `typecheck`/`lint` clean.
+- **`W36-1`, `W36-3`** — doc fixes: `/auth/refresh` → `/auth/session/refresh`; the documented
+  `/transactions/batch-score` (with a `{transactions:[...]}` body) doesn't exist at all — pointed
+  the doc at the real endpoint offering that capability, `POST /transactions/ingest/batch` (bare
+  array body), and separately documented the unrelated admin-only `/batch/score/yesterday` trigger
+  so the two aren't confused.
+
+Remaining SMALL queue: `W14-5`, `W22-5` (reclassified, see Wave 60), `W20-13`, `W20-14`, `W20-17`,
+`W21-3`, `W21-7`, `W18-2`, `W18-4`, `W18-5`, `W18-7`, `W18-8`, `W19-2..W19-6`, `W27-2`, `W27-3`,
+`W27-5..W27-8`, `W31-1`, `W31-2`, `W36-2`, `W36-5`, `W36-6`, `W42-1`, `W49-P3`. LARGE and
+NEEDS-DECISION buckets unchanged — see Wave 59.
+
+---
+
 ## Wave 60 — Closed 6 more items from Wave 59's SMALL queue (2026-08-26, same day continuation)
 
 Worked the priority-ordered SMALL queue from Wave 59 directly (security/correctness first). All six
