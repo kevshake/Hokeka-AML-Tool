@@ -1,6 +1,45 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 65 — 9 more closed (2026-08-27, continued): W14-5, W27-2/3/6/7/8, W14-10 frontend half, W18-2 investigated
+
+- **`W14-5`** — sanctions screening (`SanctionsScreenClient`, `SanctionsCountClient`) shared the
+  `amlMicroservice` circuit breaker with the unrelated AML risk-scoring path; a burst of legitimate
+  sanctions-service 503s opened the shared breaker and degraded scoring too. Gave sanctions its own
+  dedicated breaker. 3 tests.
+- **`W27-2`/`W27-3`** — manual invoice generation and billing notifications (`POST .../invoice/
+  generate`, `POST .../notify`) both existed with zero frontend callers. Wired a "Generate Invoice"
+  dialog and a per-row "Send Reminder"/"Resend Invoice" action into BillingPage's Invoices tab.
+- **`W27-6`** — the consolidated cross-PSP billing roster (`GET /admin/psp-billing/summary`) had
+  zero callers; BillingPage had no single "at a glance, is this PSP current" view. Added as a new
+  "PSP Roster" tab.
+- **`W27-7`** — narrower than logged once traced: PSP user creation/management is already fully
+  covered by the existing `/users` page (PSP_ADMIN already has it in their sidebar, correctly
+  tenant-scoped per this session's earlier `UserController` fix). The real remaining gap was an
+  admin-triggered password-reset action — added, reusing the existing self-service reset-request
+  flow rather than building a new admin-set-password endpoint.
+- **`W27-8`** — register form's `billingCycle` was silently dropped by `PspRegistrationRequest` (no
+  such field existed). Added end to end: DTO + builder + `PspService.registerPsp`. 2 tests.
+- **`W14-10` (frontend half)** — while touching `UsersTab.tsx` for W27-7, also converted its save/
+  delete/toggle mutations from raw `fetch()` to `apiClient` (added `apiClient.patch`, which didn't
+  exist). The backend already independently enforces tenant isolation on these endpoints regardless
+  of this fix (this session's earlier `UserController.requireSamePsp`), but the frontend side of the
+  original gap is now closed too.
+- **`W18-2`** — investigated in depth, **not fixed — the literal suggested fix would have been a
+  regression.** Traced `RuleGovernanceService`'s full state machine: `RuleDefinition.enabled` is
+  already correctly managed through every lifecycle transition (`false` during DRAFT/PENDING_APPROVAL,
+  only flips per the proposer's own snapshot on activation). Filtering the rule loader by
+  `lifecycle_status='ACTIVE'` as literally suggested would break the legitimate case where an
+  *approved-but-not-yet-effective* future-dated rule update must keep the OLD rule content running
+  until its `effectiveFrom` arrives — during that window `RuleDefinition.lifecycleStatus` is
+  `APPROVED`, not `ACTIVE`, even though the rule correctly should still evaluate. No code change made.
+
+34 items closed total this session (27 previously + 7 this wave: W14-5, W27-2, W27-3, W27-6, W27-7,
+W27-8, W14-10-frontend-half). `typecheck`/`lint` clean on every frontend change; BACKEND compiles
+clean throughout.
+
+---
+
 ## Wave 64 — Investigated 3 more; reclassified rather than force partial fixes (2026-08-27)
 
 - **`W19-6`** — investigated, **merged into `W49-8` (NEEDS-DECISION)**, not fixed. Confirmed
