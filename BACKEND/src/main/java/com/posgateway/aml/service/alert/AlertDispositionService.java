@@ -4,10 +4,13 @@ import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.model.AlertDisposition;
 import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +30,29 @@ public class AlertDispositionService {
 
     private final AlertRepository alertRepository;
     private final RuleEffectivenessService ruleEffectivenessService;
+    private final UserRepository userRepository;
 
     @Autowired
     public AlertDispositionService(AlertRepository alertRepository,
-                                   RuleEffectivenessService ruleEffectivenessService) {
+                                   RuleEffectivenessService ruleEffectivenessService,
+                                   UserRepository userRepository) {
         this.alertRepository = alertRepository;
         this.ruleEffectivenessService = ruleEffectivenessService;
+        this.userRepository = userRepository;
+    }
+
+    /**
+     * Current caller's PSP id, or null for a platform admin (sees everything). Mirrors the
+     * identical helper in TransactionMonitoringService so both services scope alerts the same way.
+     */
+    private Long getCurrentPspId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
+        }
+        return userRepository.findByUsername(auth.getName())
+                .map(u -> u.getPsp() != null ? u.getPsp().getPspId() : null)
+                .orElse(null);
     }
 
     /**
@@ -82,7 +102,10 @@ public class AlertDispositionService {
      * Get alert disposition statistics
      */
     public AlertDispositionStats getDispositionStatistics(LocalDateTime startDate, LocalDateTime endDate) {
-        List<Alert> alerts = alertRepository.findAlertsInTimeRange(startDate, endDate);
+        Long pspId = getCurrentPspId();
+        List<Alert> alerts = (pspId != null)
+                ? alertRepository.findAlertsInTimeRangeForPsp(pspId, startDate, endDate)
+                : alertRepository.findAlertsInTimeRange(startDate, endDate);
 
         long total = alerts.size();
         long falsePositives = alerts.stream()
@@ -114,7 +137,10 @@ public class AlertDispositionService {
      * Get disposition distribution
      */
     public Map<AlertDisposition, Long> getDispositionDistribution(LocalDateTime startDate, LocalDateTime endDate) {
-        List<Alert> alerts = alertRepository.findAlertsInTimeRange(startDate, endDate);
+        Long pspId = getCurrentPspId();
+        List<Alert> alerts = (pspId != null)
+                ? alertRepository.findAlertsInTimeRangeForPsp(pspId, startDate, endDate)
+                : alertRepository.findAlertsInTimeRange(startDate, endDate);
         return alerts.stream()
                 .filter(a -> a.getDisposition() != null)
                 .collect(Collectors.groupingBy(Alert::getDisposition, Collectors.counting()));

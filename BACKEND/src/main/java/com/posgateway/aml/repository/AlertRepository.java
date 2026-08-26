@@ -51,8 +51,18 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
      * Find alerts created in time range
      */
     @Query("SELECT a FROM Alert a WHERE a.createdAt >= :startTime AND a.createdAt <= :endTime")
-    List<Alert> findAlertsInTimeRange(@Param("startTime") LocalDateTime startTime, 
+    List<Alert> findAlertsInTimeRange(@Param("startTime") LocalDateTime startTime,
                                        @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * PSP-scoped counterpart to {@link #findAlertsInTimeRange}, used by
+     * {@code AlertDispositionService} so its stats/distribution endpoints don't leak every PSP's
+     * alerts to a tenant-scoped caller (W20-9).
+     */
+    @Query("SELECT a FROM Alert a WHERE a.pspId = :pspId AND a.createdAt >= :startTime AND a.createdAt <= :endTime")
+    List<Alert> findAlertsInTimeRangeForPsp(@Param("pspId") Long pspId,
+                                             @Param("startTime") LocalDateTime startTime,
+                                             @Param("endTime") LocalDateTime endTime);
 
     /**
      * Find unassigned alerts

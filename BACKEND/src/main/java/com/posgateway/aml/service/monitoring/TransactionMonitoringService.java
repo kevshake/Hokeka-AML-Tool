@@ -367,10 +367,19 @@ public class TransactionMonitoringService {
     }
 
     /**
-     * Get SARs for monitoring
+     * Get SARs for monitoring.
+     *
+     * Fixed W20-9: this used to call sarRepository.findAll() unconditionally, leaking every PSP's
+     * suspicious activity reports to any authenticated caller regardless of tenant. Scoped the same
+     * way every other query in this class already is (getCurrentPspId(): a platform admin with no
+     * PSP sees everything, a PSP user sees only their own PSP's SARs).
      */
     public List<Map<String, Object>> getMonitoringSARs() {
-        return sarRepository.findAll().stream()
+        Long pspId = getCurrentPspId();
+        List<SuspiciousActivityReport> sars = (pspId != null)
+                ? sarRepository.findByPspId(pspId)
+                : sarRepository.findAll();
+        return sars.stream()
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .map(this::toSARDTO)
                 .collect(Collectors.toList());
