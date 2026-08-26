@@ -48,6 +48,7 @@ import {
   Close as CloseIcon,
   NoteAdd as GenerateIcon,
   MarkEmailRead as NotifyIcon,
+  ViewList as RosterIcon,
 } from "@mui/icons-material";
 import {
   BarChart,
@@ -67,6 +68,8 @@ import {
   useUsageSummary,
   useCurrentUsage,
   useAllPsps,
+  usePspBillingSummary,
+  type PspBillingSummaryRow,
 } from "../../features/api/queries";
 import {
   useUpdateInvoiceStatus,
@@ -1021,6 +1024,75 @@ function InvoicesTab() {
   );
 }
 
+// ─── Tab 5: PSP Roster (W27-6) ────────────────────────────────────────────────
+
+function RosterTab() {
+  const { data: rows = [], isLoading, isError } = usePspBillingSummary();
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress size={28} sx={{ color: ACCENT }} />
+      </Box>
+    );
+  }
+
+  if (isError) {
+    return <Alert severity="error" sx={{ mt: 2 }}>Failed to load PSP billing roster.</Alert>;
+  }
+
+  return (
+    <TableContainer component={Paper} sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
+            {["PSP", "Subscription", "Tier", "This Month's Usage", "This Month's Cost", "Latest Invoice", "Overdue"].map((h) => (
+              <TableCell key={h} sx={{ color: "text.secondary", fontWeight: 600 }}>{h}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.length > 0 ? (
+            rows.map((row: PspBillingSummaryRow) => (
+              <TableRow key={row.pspId} hover sx={{ "&:hover": { bgcolor: "var(--surface-2)" } }}>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    <Link to={`/records/PSP/${row.pspId}`}>{row.legalName ?? row.tradingName ?? row.pspCode}</Link>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">{row.pspCode}</Typography>
+                </TableCell>
+                <TableCell><StatusChip status={row.subscriptionStatus} colorMap={SUBSCRIPTION_STATUS_COLORS} /></TableCell>
+                <TableCell><Typography variant="body2" color="text.secondary">{row.pricingTier ?? "—"}</Typography></TableCell>
+                <TableCell>
+                  <Typography variant="body2">{row.billableRequests.toLocaleString()} billable</Typography>
+                  <Typography variant="caption" color="text.secondary">{row.totalRequests.toLocaleString()} total</Typography>
+                </TableCell>
+                <TableCell><Typography variant="body2" sx={{ fontWeight: 600 }}>{fmt(row.currentMonthCost, "USD")}</Typography></TableCell>
+                <TableCell>
+                  {row.latestInvoiceStatus
+                    ? <StatusChip status={row.latestInvoiceStatus} colorMap={INVOICE_STATUS_COLORS} />
+                    : <Typography variant="body2" color="text.disabled">None</Typography>}
+                </TableCell>
+                <TableCell>
+                  {row.overdueInvoiceCount > 0
+                    ? <Chip label={row.overdueInvoiceCount} size="small" sx={{ bgcolor: "var(--surface-3)", color: "var(--danger)", fontWeight: 600, height: 22, borderRadius: 1 }} />
+                    : <Typography variant="body2" color="text.secondary">0</Typography>}
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={7} align="center" sx={{ py: 8, color: "text.disabled" }}>
+                <Typography variant="body1">No PSPs found</Typography>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
 // ─── Tab 4: Usage ────────────────────────────────────────────────────────────
 
 function UsageTab() {
@@ -1182,6 +1254,7 @@ export default function BillingPage() {
           <Tab label="Subscriptions" icon={<CreditCardIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label="Invoices" icon={<ReceiptIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label="Usage" icon={<BarChartIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
+          <Tab label="PSP Roster" icon={<RosterIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
@@ -1189,6 +1262,7 @@ export default function BillingPage() {
           {tab === 1 && <SubscriptionsTab />}
           {tab === 2 && <InvoicesTab />}
           {tab === 3 && <UsageTab />}
+          {tab === 4 && <RosterTab />}
         </Box>
       </Paper>
     </Box>

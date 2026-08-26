@@ -737,6 +737,33 @@ export function useRevenueSummary() {
   });
 }
 
+// W27-6 fix: this consolidated cross-PSP roster (subscription status, current-month usage,
+// latest invoice status/amount, overdue count -- one call per PSP, not per-tab) had zero
+// frontend callers; BillingPage had no single "at a glance, is this PSP current" view at all.
+export interface PspBillingSummaryRow {
+  pspId: number;
+  pspCode: string;
+  legalName: string;
+  tradingName?: string;
+  contactEmail?: string;
+  subscriptionStatus: string;
+  pricingTier?: string;
+  totalRequests: number;
+  billableRequests: number;
+  currentMonthCost: number;
+  latestInvoiceStatus?: string;
+  latestInvoiceAmount: number;
+  overdueInvoiceCount: number;
+  createdAt?: string;
+}
+
+export function usePspBillingSummary() {
+  return useQuery<PspBillingSummaryRow[]>({
+    queryKey: ['billing', 'psp-summary'],
+    queryFn: () => apiClient.get<PspBillingSummaryRow[]>('admin/psp-billing/summary'),
+  });
+}
+
 export interface InvoiceQueryParams {
   pspId?: number;
   page?: number;
