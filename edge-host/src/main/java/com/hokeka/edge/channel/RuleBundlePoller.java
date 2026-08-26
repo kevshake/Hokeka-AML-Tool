@@ -49,13 +49,38 @@ public class RuleBundlePoller {
     private volatile Instant lastSuccess;
     private volatile String lastError = "";
 
+    private final com.hokeka.edge.store.EdgeFeatureStore featureStore;
+
     public RuleBundlePoller(ControlPlaneProperties properties, SecureChannel channel, SealedEnvelopeCodec codec,
-                            ActivationService activation, EdgeEngine engine) {
+                            ActivationService activation, EdgeEngine engine,
+                            com.hokeka.edge.store.EdgeFeatureStore featureStore) {
         this.properties = properties;
         this.channel = channel;
         this.codec = codec;
         this.activation = activation;
         this.engine = engine;
+        this.featureStore = featureStore;
+    }
+
+    /**
+     * Rehydrate the last verified rule bundle from the on-prem store at start-up.
+     *
+     * <p>Without this a restart left the node with no bundle, so it HELD all traffic until the next
+     * successful poll — an outage for the client every time the process bounced, and an indefinite one
+     * if the control plane was unreachable. The bundle was already cryptographically verified before
+     * it was persisted, so republishing it locally is safe; the next poll still refreshes it.
+     */
+    @jakarta.annotation.PostConstruct
+    public void restorePersistedBundle() {
+        try {
+            featureStore.loadRuleBundle().ifPresent(ir -> {
+                long version = engine.loadVerifiedBundle(ir);
+                log.info("Restored persisted rule bundle v{} at start-up — enforcing immediately "
+                        + "instead of holding until the first poll", version);
+            });
+        } catch (Exception e) {
+            log.warn("Could not restore a persisted rule bundle: {}", e.getMessage());
+        }
     }
 
     public Instant lastSuccess() {
@@ -130,6 +155,8 @@ public class RuleBundlePoller {
             currentVersionTag = etag != null ? etag : String.valueOf(version);
             lastSuccess = now;
             lastError = "";
+            // Durability: keep the verified IR locally so a restart resumes enforcing at once.
+            featureStore.saveRuleBundle(version, bundleIr);
             log.info("Rule bundle v{} verified and hot-swapped into the {} evaluator (was v{})",
                     version, engine.activeEvaluator(), previous);
             return true;

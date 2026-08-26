@@ -194,6 +194,14 @@ public class EdgeEngine {
      *                               arena nor standby — so a bad publish can never disarm a running edge.
      */
     public long loadVerifiedBundle(byte[] bundleIr) {
+        // Run the SAME structural check the Java fallback uses BEFORE the native call, on every
+        // node regardless of which evaluator is active. Otherwise a malformed publish on a
+        // native-loaded node (the normal, healthy state) is rejected with the native core's terse
+        // generic error instead of a message naming the specific bad field or rule — an
+        // evaluator-dependent difference in error quality that a fleet operator should never have
+        // to reason about. See EdgeRuleInterpreter.validate()'s javadoc for the full story; this
+        // was found live, by publishing a malformed bundle to a running native-mode node.
+        EdgeRuleInterpreter.validate(bundleIr);
         if (core.available()) {
             long v = core.loadVerifiedIr(bundleIr);
             if (v < 0) {

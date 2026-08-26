@@ -86,8 +86,21 @@ the issued mTLS client certificate at `secrets/edge-client.p12`.
 ## Options
 
 `--pspid` `--edgeid` `--controlplane` `--edge-image` `--bind <ip>` `--allow-subnet <cidr>`
-`--data-dir <path>` `--enrollment-code <code>` `--tls-client-auth none|want|need` `--native` ·
+`--data-dir <path>` `--enrollment-code <code>` `--tls-client-auth none|want|need` `--native`
+`--insecure-skip-signature` ·
 Windows: `-PspId -EdgeId -ControlPlane -EdgeImage -Bind -AllowSubnet -EnrollmentCode -TlsClientAuth`
+
+## Artifact authenticity
+
+`SHA256SUMS` is GPG-signed by the Hokeka release key and published as `SHA256SUMS.asc`. `install.sh`
+verifies that signature against a **public key pinned in the script** before it trusts any digest —
+checksums alone protect against corruption and a bad mirror, not against a compromised origin.
+
+Verification is **fail-closed**: an unset pin, a missing `gpg`, a missing `.asc` or a bad signature
+all abort the install with nothing written. `--insecure-skip-signature` exists only for internal
+mirrors you already trust by other means; never use it against `packages.hokeka.com`.
+
+Releases are produced by `.github/workflows/release.yml` — see `docs/INSTALL.md` §4.
 
 ## Honest advisory — what is and isn't possible
 

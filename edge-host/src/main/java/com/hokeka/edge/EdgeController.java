@@ -1,6 +1,7 @@
 package com.hokeka.edge;
 
 import com.hokeka.edge.channel.EdgeMetricsAggregator;
+import com.hokeka.edge.store.EdgeFeatureStore;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,10 +23,13 @@ public class EdgeController {
 
     private final EdgeEngine engine;
     private final EdgeMetricsAggregator metrics;
+    private final EdgeFeatureStore featureStore;
 
-    public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics) {
+    public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics,
+                          EdgeFeatureStore featureStore) {
         this.engine = engine;
         this.metrics = metrics;
+        this.featureStore = featureStore;
     }
 
     /**
@@ -45,14 +49,37 @@ public class EdgeController {
         status.put("ruleBundleHash", engine.activeBundleHash());
         status.put("authorization", engine.authorizationState());
         status.put("authorizationReason", engine.authorizationReason());
+        // Visible so a node running WITHOUT local history (velocity rules cannot fire) is not
+        // mistaken for a healthy one.
+        status.put("featureStore", featureStore.available() ? "connected" : "unavailable");
         return status;
     }
 
-    /** Evaluate a transaction's features → decision. HOLD until the node is authorized. */
+    /**
+     * Evaluate a transaction's features → decision. HOLD until the node is authorized.
+     *
+     * <p>The caller-supplied features are enriched with locally-derived history (velocity counts and
+     * amount sums for the card) read from the on-prem store, so the Rust core checks the transaction
+     * against what this card did before — not just the single request body. The transaction is then
+     * recorded locally so it counts toward future evaluations. Both steps are fail-soft: if the store
+     * is unavailable the decision is still made, on the caller-supplied features alone.
+     */
     @PostMapping("/evaluate")
     public ResponseEntity<EdgeRuleInterpreter.Decision> evaluate(@RequestBody Map<String, Object> features) {
         long startNanos = System.nanoTime();
-        EdgeRuleInterpreter.Decision decision = engine.evaluate(features);
+
+        String panHash = features.get("pan_hash") == null ? null : String.valueOf(features.get("pan_hash"));
+
+        // Caller-supplied values win over derived ones, so an integrator can override for testing
+        // or supply a richer value than the local store can compute.
+        Map<String, Object> enriched = new java.util.LinkedHashMap<>(featureStore.deriveFeatures(panHash));
+        enriched.putAll(features);
+
+        EdgeRuleInterpreter.Decision decision = engine.evaluate(enriched);
+
+        // Record AFTER evaluating, so a transaction never inflates its own velocity counters.
+        featureStore.recordTransaction(panHash, enriched, decision);
+
         metrics.record(decision, (System.nanoTime() - startNanos) / 1000.0);
         return ResponseEntity.ok(decision);
     }

@@ -199,10 +199,31 @@ function Summary {
     Log "Manage: cd `"$Here`"; docker compose ps | logs | down"
 }
 
+# --- Rust native core -----------------------------------------------------------------------------
+# System.loadLibrary("edge_engine") resolves the platform filename automatically, so on Windows the
+# JVM looks for edge_engine.dll (libedge_engine.so on Linux). In container mode the library already
+# ships inside the image; this staging matters when running the host directly on Windows.
+# Optional: without it the edge runs on its Java interpreter fallback - functionally equivalent,
+# just slower.
+function Stage-NativeCore {
+    $lib = "edge_engine.dll"
+    $libDir = Join-Path $Here "lib"
+    New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+    $src = Join-Path $Here $lib
+    if (Test-Path $src) {
+        Copy-Item $src (Join-Path $libDir $lib) -Force
+        Ok "Staged the native core: $libDir\$lib"
+    } else {
+        Warn "$lib not found next to the installer - the edge will use the Java interpreter fallback."
+        Warn "Download it from the CI artifact 'edge_engine-windows-x86_64' and place it in $libDir."
+    }
+}
+
 # --- run ------------------------------------------------------------------------------------------
 $script:TlsPassword = ""
 Ensure-Docker
 Setup-Dirs
+Stage-NativeCore
 Ensure-TlsCert
 Write-Env
 Compose-Up

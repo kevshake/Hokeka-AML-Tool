@@ -60,7 +60,7 @@ class RuleBundlePollerTest {
 
         core = new FakeNativeCore(true, 41);
         engine = new EdgeEngine(activation, core);
-        poller = new RuleBundlePoller(properties, new SecureChannel(properties), codec, activation, engine);
+        poller = new RuleBundlePoller(properties, new SecureChannel(properties), codec, activation, engine, new com.hokeka.edge.store.NoOpFeatureStore());
     }
 
     /** Seal a bundle the way the control plane does: for this edge's X25519 key, signed by the CP. */

@@ -47,6 +47,10 @@ services:
       FEATURESTORE_HOST: aerospike
       FEATURESTORE_PORT: "3000"
       FEATURESTORE_NAMESPACE: hokeka
+      # Retention for raw transactions. MUST match `default-ttl` in aerospike/aerospike.conf —
+      # install.sh writes both from --retention-days. Records are written with an explicit TTL, so
+      # THIS value is what actually takes effect; the namespace default only governs sizing.
+      EDGE_RETENTION_DAYS: ${EDGE_RETENTION_DAYS:-90}
       EDGE_PSPID: ${EDGE_PSPID:-acme}
       EDGE_EDGEID: ${EDGE_EDGEID:-acme-1}
       # ── TLS on the transaction API (fail-closed: the app refuses to start without it) ──────────

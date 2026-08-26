@@ -50,13 +50,45 @@ class EdgeEngineNativeRoutingTest {
         String hashBefore = engine.activeBundleHash();
 
         core.rejectNextPublish();
+        // Structurally valid (passes the pre-native-call schema check the same way IR does) but a
+        // different version, so this exercises the FakeNativeCore's forced -1 rejection path
+        // specifically — not the JSON/schema pre-check, which now runs before native is ever
+        // reached and would otherwise short-circuit before this scenario is exercised at all.
+        byte[] structurallyValidButRejectedByNative = """
+            { "version": 42, "psp_id": 7, "rules": [
+              { "id": 8, "name": "another-rule",
+                "condition": { "type": "cmp", "field": "amount", "op": "GT", "value": 200 },
+                "action": "ALERT", "score": 10 } ] }""".getBytes(StandardCharsets.UTF_8);
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> engine.loadVerifiedBundle("{ not json".getBytes(StandardCharsets.UTF_8)));
+                () -> engine.loadVerifiedBundle(structurallyValidButRejectedByNative));
 
         assertTrue(e.getMessage().contains("still serving the previous bundle"), e.getMessage());
         assertEquals(41, engine.activeVersion(), "a -1 must never advance the active version");
         assertEquals(hashBefore, engine.activeBundleHash());
         assertEquals(EdgeEngine.EVALUATOR_NATIVE, engine.activeEvaluator());
+    }
+
+    @Test
+    void aMalformedBundleIsRejectedBeforeEverReachingTheNativeCore() {
+        // The pre-native structural check exists specifically so error quality does not depend on
+        // which evaluator is active (found live: the native core's own rejection message named no
+        // field or rule, only "malformed"). Proven here at the EdgeEngine level, not just inside
+        // EdgeRuleInterpreter's own unit tests: native must never even be called.
+        FakeNativeCore core = new FakeNativeCore(true, 41);
+        EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized(), core);
+
+        byte[] missingPspId = """
+            { "version": 1, "rules": [
+              { "id": 1, "name": "r",
+                "condition": { "type": "cmp", "field": "amount", "op": "GT", "value": 1 },
+                "action": "BLOCK" } ] }""".getBytes(StandardCharsets.UTF_8);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> engine.loadVerifiedBundle(missingPspId));
+
+        assertTrue(e.getMessage().contains("psp_id"), e.getMessage());
+        assertEquals(0, core.publishedIr().size(),
+                "native must never be called for a bundle that fails the pre-check");
     }
 
     @Test
