@@ -1,5 +1,6 @@
 package com.posgateway.aml.service.aml;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.entity.compliance.AuditTrail;
 import com.posgateway.aml.entity.merchant.BeneficialOwner;
@@ -161,8 +162,17 @@ public class AmlScreeningOrchestrator {
      */
     private MerchantScreeningResult saveScreeningResult(Merchant merchant, ScreeningResult result, String provider) {
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> matchDetails = objectMapper.convertValue(result.getMatches(), Map.class);
+            // W14-6 fix: objectMapper.convertValue(List, Map.class) throws whenever the list is
+            // non-empty (Jackson can't convert a List to a Map), which meant this method threw --
+            // caught below and rethrown -- for every merchant that actually had a sanctions match,
+            // failing the save exactly when there was something worth persisting. getMatches() is a
+            // List<Match>; convert it to a List<Map<String,Object>> first, then wrap it under a key
+            // so the result is an actual Map, matching what matchDetails (Map<String,Object>) needs.
+            List<Map<String, Object>> matchesAsMaps = objectMapper.convertValue(
+                    result.getMatches(), new TypeReference<List<Map<String, Object>>>() {});
+            Map<String, Object> matchDetails = new HashMap<>();
+            matchDetails.put("matches", matchesAsMaps);
+            matchDetails.put("matchCount", result.getMatchCount());
 
             MerchantScreeningResult record = MerchantScreeningResult.builder()
                     .merchant(merchant)
