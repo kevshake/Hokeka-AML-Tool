@@ -1,6 +1,45 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 60 — Closed 6 more items from Wave 59's SMALL queue (2026-08-26, same day continuation)
+
+Worked the priority-ordered SMALL queue from Wave 59 directly (security/correctness first). All six
+below are fixed, tested, compiled, and committed — not just triaged.
+
+- **`W20-9`** (both halves) — `TransactionMonitoringService.getMonitoringSARs()` and
+  `AlertDispositionService`'s stats/distribution methods now scope by the caller's PSP (reusing
+  `SuspiciousActivityReportRepository.findByPspId`, and a new `AlertRepository.
+  findAlertsInTimeRangeForPsp`), falling back to the unscoped query only for platform admins.
+  4 tests.
+- **`W20-12`** — email-based login always failed post-authentication because the login handler
+  re-queried `findByUsername()` with the raw (possibly-email) request field instead of the already-
+  resolved `authentication.getName()`. Fixed; 1 test.
+- **`W37-3`** — new `MpesaCallbackIpAllowlistFilter` (Spring's `IpAddressMatcher`, real CIDR
+  support) gates the M-Pesa callback endpoint. Deliberately not hardcoding Safaricom's IP ranges —
+  those are operator infra data, not source; configure via `MPESA_CALLBACK_ALLOWED_IPS`,
+  `EnvVarStartupValidator` WARNs when unset. No-op (matches prior behavior) until configured. 4
+  tests.
+- **`W14-6`** — `AmlScreeningOrchestrator.saveScreeningResult` threw for every merchant with an
+  actual sanctions match (`convertValue(List, Map.class)` can't convert a non-empty list). Fixed by
+  converting matches to `List<Map>` first, then wrapping. 1 test.
+- **`W37-4`** — `BillingService.computeTieredCost`'s `up_to` field crashed with
+  `ClassCastException` if it arrived as a JSON string instead of a number. Now parses defensively
+  like the adjacent `rate` field already did. 3 tests.
+- **`W22-5` reclassified, not fixed** — re-checked and found less serious than logged: all three
+  current consumers of the (possibly-null) `AerospikeClient` bean (`AerospikeCacheService`,
+  `AmlCheckService`, `SanctionsService`) already null-check via `isConnected()`/`aerospikeClient !=
+  null` before every use, so the NPE risk the item described doesn't currently exist. Building a
+  proper no-op sentinel for a third-party client class is disproportionate for a risk that isn't
+  live. Left as a defensive-hardening nice-to-have, not a bug.
+
+Remaining SMALL queue (from Wave 59, unchanged): `W14-4`, `W14-5`, `W14-7`, `W14-11`, `W14-12`,
+`W20-8`, `W20-13`, `W20-14`, `W20-17`, `W21-1`, `W21-3`, `W21-7`, `W22-2`, `W22-4`, `W18-1`, `W18-2`,
+`W18-4`, `W18-5`, `W18-7`, `W18-8`, `W19-2..W19-6`, `W27-2`, `W27-3`, `W27-5..W27-8`, `W31-1`,
+`W31-2`, `W32-1`, `W36-1..W36-3`, `W36-5`, `W36-6`, `W42-1`, `W49-P3`. LARGE and NEEDS-DECISION
+buckets unchanged — see Wave 59.
+
+---
+
 ## Wave 59 — Full backlog re-triage of all 186 open items; IDOR fix; HTTP-status fix (2026-08-26)
 
 Every `- [ ]` item across Waves 6–58 (186 total) was re-verified against current source by three
