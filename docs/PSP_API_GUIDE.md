@@ -149,7 +149,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 #### Token Refreshing
 
 ```http
-POST /api/v1/auth/refresh
+POST /api/v1/auth/session/refresh
 Authorization: Bearer <current-token>
 ```
 
@@ -401,18 +401,32 @@ for CBK failed/rejected-transaction reporting; email is encrypted at rest.
 
 #### Batch Scoring
 
-For high-throughput PSPs, batch scoring is available:
+**Correction (W36-3):** this section previously documented `POST /api/v1/transactions/batch-score`
+— that exact path doesn't exist. The real endpoint offering this capability (submit an array of
+transactions, get a fraud result back per transaction) is:
 
 ```http
-POST /api/v1/transactions/batch-score
+POST /api/v1/transactions/ingest/batch
+Authorization: Bearer eyJ...
 Content-Type: application/json
 
-{
-  "transactions": [
-    { "amountCents": 1250000, "currency": "KES", "merchantId": "101", ... },
-    { "amountCents": 50000, "currency": "KES", "merchantId": "102", ... }
-  ]
-}
+[
+  { "amountCents": 1250000, "currency": "KES", "merchantId": "101", ... },
+  { "amountCents": 50000, "currency": "KES", "merchantId": "102", ... }
+]
+```
+
+Note the body is a bare JSON array of transaction objects, not `{"transactions": [...]}`. The
+response is a JSON array of fraud detection results, one per submitted transaction, in the same
+order.
+
+Separately, there is an **admin-only, no-request-body** trigger for the standing "score
+yesterday's transactions" background job — this is an ops/maintenance action, not something a PSP
+integration calls as part of normal transaction flow:
+
+```http
+POST /api/v1/batch/score/yesterday
+Authorization: Bearer eyJ...    # SUPER_ADMIN or ADMIN role only
 ```
 
 ---
@@ -775,7 +789,7 @@ class HokekaAMLClient:
 
     def _ensure_token(self):
         if time.time() >= self._expires_at:
-            resp = requests.post(f"{self.base_url}/auth/refresh",
+            resp = requests.post(f"{self.base_url}/auth/session/refresh",
                 headers={"Authorization": f"Bearer {self.token}"})
             resp.raise_for_status()
             self.token = resp.json()["token"]
