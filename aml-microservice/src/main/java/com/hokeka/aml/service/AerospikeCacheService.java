@@ -31,7 +31,12 @@ public class AerospikeCacheService {
 
     private static final Logger log = LoggerFactory.getLogger(AerospikeCacheService.class);
 
-    private static final String NAMESPACE = "aml_cache";
+    // W22-2 fix: was a hardcoded static final constant, duplicated (with the same literal value)
+    // in AmlCheckService and SanctionsService -- three separate hardcoded copies with no single
+    // source of truth, and no way to point at a different keyspace without a rebuild. Externalized
+    // via aerospike.namespace, defaulting to the same value so existing deployments are unaffected.
+    @Value("${aerospike.namespace:aml_cache}")
+    private String namespace;
 
     // Set names
     private static final String SET_RISK_PROFILE  = "risk_profile";
@@ -60,7 +65,7 @@ public class AerospikeCacheService {
     public void putRiskProfile(Long customerId, Map<String, Object> profile) {
         if (!isConnected() || customerId == null) return;
         try {
-            Key key = new Key(NAMESPACE, SET_RISK_PROFILE, customerId.toString());
+            Key key = new Key(namespace, SET_RISK_PROFILE, customerId.toString());
             WritePolicy wp = new WritePolicy();
             wp.expiration = TTL_RISK_PROFILE;
             Bin[] bins = toBins(profile);
@@ -74,7 +79,7 @@ public class AerospikeCacheService {
     public Map<String, Object> getRiskProfile(Long customerId) {
         if (!isConnected() || customerId == null) return null;
         try {
-            Key key = new Key(NAMESPACE, SET_RISK_PROFILE, customerId.toString());
+            Key key = new Key(namespace, SET_RISK_PROFILE, customerId.toString());
             Record rec = aerospikeClient.get(null, key);
             if (rec == null) return null;
             return toMap(rec);
@@ -91,7 +96,7 @@ public class AerospikeCacheService {
     public void recordVelocity(String customerId, Map<String, Object> event) {
         if (!isConnected() || customerId == null || customerId.isBlank()) return;
         try {
-            Key key = new Key(NAMESPACE, SET_VELOCITY, customerId);
+            Key key = new Key(namespace, SET_VELOCITY, customerId);
             WritePolicy wp = new WritePolicy();
             wp.expiration = TTL_VELOCITY;
             // Extract last timestamp safely (avoid ternary type resolution in Bin arg)
@@ -120,7 +125,7 @@ public class AerospikeCacheService {
     public Map<String, Object> getVelocity(String customerId) {
         if (!isConnected() || customerId == null || customerId.isBlank()) return null;
         try {
-            Key key = new Key(NAMESPACE, SET_VELOCITY, customerId);
+            Key key = new Key(namespace, SET_VELOCITY, customerId);
             Record rec = aerospikeClient.get(null, key);
             if (rec == null) return null;
             return toMap(rec);
@@ -137,7 +142,7 @@ public class AerospikeCacheService {
     public void putDevice(String fingerprint, Map<String, Object> obs) {
         if (!isConnected() || fingerprint == null || fingerprint.isBlank()) return;
         try {
-            Key key = new Key(NAMESPACE, SET_DEVICE, fingerprint);
+            Key key = new Key(namespace, SET_DEVICE, fingerprint);
             WritePolicy wp = new WritePolicy();
             wp.expiration = isFlaggedDevice(obs) ? TTL_DEVICE_FLAGGED : TTL_DEVICE_CLEAN;
             aerospikeClient.put(wp, key, toBins(obs));
@@ -150,7 +155,7 @@ public class AerospikeCacheService {
     public Map<String, Object> getDevice(String fingerprint) {
         if (!isConnected() || fingerprint == null || fingerprint.isBlank()) return null;
         try {
-            Key key = new Key(NAMESPACE, SET_DEVICE, fingerprint);
+            Key key = new Key(namespace, SET_DEVICE, fingerprint);
             Record rec = aerospikeClient.get(null, key);
             return rec != null ? toMap(rec) : null;
         } catch (Exception e) {
@@ -166,7 +171,7 @@ public class AerospikeCacheService {
     public void putIpReputation(String ip, Map<String, Object> obs) {
         if (!isConnected() || ip == null || ip.isBlank()) return;
         try {
-            Key key = new Key(NAMESPACE, SET_IP_REPUTATION, ip);
+            Key key = new Key(namespace, SET_IP_REPUTATION, ip);
             WritePolicy wp = new WritePolicy();
             wp.expiration = TTL_IP_REPUTATION;
             aerospikeClient.put(wp, key, toBins(obs));
@@ -179,7 +184,7 @@ public class AerospikeCacheService {
     public Map<String, Object> getIpReputation(String ip) {
         if (!isConnected() || ip == null || ip.isBlank()) return null;
         try {
-            Key key = new Key(NAMESPACE, SET_IP_REPUTATION, ip);
+            Key key = new Key(namespace, SET_IP_REPUTATION, ip);
             Record rec = aerospikeClient.get(null, key);
             return rec != null ? toMap(rec) : null;
         } catch (Exception e) {

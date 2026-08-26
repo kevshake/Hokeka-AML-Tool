@@ -25,7 +25,10 @@ import java.util.Set;
 @Service
 public class AmlCheckService {
     private static final Logger log = LoggerFactory.getLogger(AmlCheckService.class);
-    private static final String NAMESPACE = "aml_cache";
+    // W22-2 fix: externalized (was hardcoded, duplicated identically in AerospikeCacheService and
+    // SanctionsService); defaults to the same value so existing deployments are unaffected.
+    @Value("${aerospike.namespace:aml_cache}")
+    private String namespace = "aml_cache";
     private static final String SET_NAME = "risk_profile";
 
     public static final String CACHE_LAYER_AEROSPIKE = "L1_AEROSPIKE";
@@ -114,7 +117,7 @@ public class AmlCheckService {
     private AmlResult readCached(String cacheKey, String txnId, Long pspId, long startTime) {
         if (!isAerospikeConnected()) return null;
         try {
-            Record record = aerospikeClient.get(null, new Key(NAMESPACE, SET_NAME, cacheKey));
+            Record record = aerospikeClient.get(null, new Key(namespace, SET_NAME, cacheKey));
             if (record == null) return null;
 
             Number scoreBin = (Number) record.getValue("risk_score");
@@ -146,7 +149,7 @@ public class AmlCheckService {
         try {
             WritePolicy policy = new WritePolicy();
             policy.expiration = 3600;
-            aerospikeClient.put(policy, new Key(NAMESPACE, SET_NAME, cacheKey),
+            aerospikeClient.put(policy, new Key(namespace, SET_NAME, cacheKey),
                     new Bin("risk_score", result.getRiskScore()),
                     new Bin("decision", result.getDecision()),
                     new Bin("indicators", result.getIndicators()),

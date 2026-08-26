@@ -55,7 +55,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SanctionsService {
 
     private static final Logger log = LoggerFactory.getLogger(SanctionsService.class);
-    private static final String NAMESPACE = "aml_cache";
+    // W22-2 fix: externalized (was hardcoded, duplicated identically in AmlCheckService and
+    // AerospikeCacheService); defaults to the same value so existing deployments are unaffected.
+    // Field default (not just the @Value default) matters here since this class is directly
+    // instantiated with `new SanctionsService()` in SanctionsAvailabilityTest, bypassing Spring.
+    @Value("${aerospike.namespace:aml_cache}")
+    private String namespace = "aml_cache";
     private static final String SET_NAME = "sanctions";
     private static final String IDX_SEARCH_KEYS = "idx_sanctions_search_keys_v2";
     private static final String BIN_SEARCH_KEYS = "searchKeys";
@@ -82,18 +87,18 @@ public class SanctionsService {
     public void ensureIndex() {
         if (aerospikeClient == null || !aerospikeClient.isConnected()) return;
         try {
-            aerospikeClient.createIndex(null, NAMESPACE, SET_NAME, IDX_SEARCH_KEYS, BIN_SEARCH_KEYS,
+            aerospikeClient.createIndex(null, namespace, SET_NAME, IDX_SEARCH_KEYS, BIN_SEARCH_KEYS,
                     com.aerospike.client.query.IndexType.STRING, IndexCollectionType.LIST)
                     .waitTillComplete(2000);
             log.info("Aerospike sanctions search index '{}' ready on {}.{}",
-                    IDX_SEARCH_KEYS, NAMESPACE, SET_NAME);
+                    IDX_SEARCH_KEYS, namespace, SET_NAME);
             useSearchIndex = true;
         } catch (Exception e) {
             // Index may already exist → try to signal the client to use index anyway
             if (e.getMessage() != null && e.getMessage().contains("already exists")) {
                 useSearchIndex = true;
                 log.info("Aerospike secondary index '{}' already exists on {}.{} — using it",
-                        IDX_SEARCH_KEYS, NAMESPACE, SET_NAME);
+                        IDX_SEARCH_KEYS, namespace, SET_NAME);
             } else {
                 useSearchIndex = false;
                 log.warn("Cannot create Aerospike secondary index '{}' — falling back to scan. Reason: {}",
@@ -195,7 +200,7 @@ public class SanctionsService {
         try {
             for (String searchKey : buildSearchKeys(normalizedQuery, List.of())) {
                 Statement stmt = new Statement();
-                stmt.setNamespace(NAMESPACE);
+                stmt.setNamespace(namespace);
                 stmt.setSetName(SET_NAME);
                 stmt.setBinNames("name", "aliases", "type", "listName", "entityId");
                 stmt.setFilter(Filter.contains(BIN_SEARCH_KEYS, IndexCollectionType.LIST, searchKey));
@@ -225,7 +230,7 @@ public class SanctionsService {
         policy.includeBinData = true;
         policy.concurrentNodes = true;
         try {
-            aerospikeClient.scanAll(policy, NAMESPACE, SET_NAME, (key, record) -> {
+            aerospikeClient.scanAll(policy, namespace, SET_NAME, (key, record) -> {
                 if (record == null) return;
                 evaluateRecord(normalizedQuery, type, key, record, matches);
             });
@@ -303,7 +308,7 @@ public class SanctionsService {
         for (SanctionsEntity e : entities) {
             if (e == null || e.getEntityId() == null || e.getEntityId().isBlank()) continue;
             try {
-                Key key = new Key(NAMESPACE, SET_NAME, e.getEntityId());
+                Key key = new Key(namespace, SET_NAME, e.getEntityId());
                 String aliasesCsv = e.getAliases() == null ? "" : String.join("|", e.getAliases());
                 List<String> searchKeys = buildSearchKeys(e.getName(), e.getAliases());
 
@@ -339,7 +344,7 @@ public class SanctionsService {
         if (useSearchIndex) {
             try {
                 Statement stmt = new Statement();
-                stmt.setNamespace(NAMESPACE);
+                stmt.setNamespace(namespace);
                 stmt.setSetName(SET_NAME);
                 stmt.setBinNames(BIN_SEARCH_KEYS);
                 AtomicInteger c = new AtomicInteger();
@@ -356,7 +361,7 @@ public class SanctionsService {
         policy.concurrentNodes = true;
         AtomicInteger c = new AtomicInteger();
         try {
-            aerospikeClient.scanAll(policy, NAMESPACE, SET_NAME, (key, record) -> c.incrementAndGet());
+            aerospikeClient.scanAll(policy, namespace, SET_NAME, (key, record) -> c.incrementAndGet());
         } catch (Exception e) {
             log.warn("Sanctions count scan failed: {}", e.getMessage());
             return -1L;
@@ -429,7 +434,7 @@ public class SanctionsService {
         policy.concurrentNodes = true;
         WritePolicy writePolicy = new WritePolicy();
         try {
-            aerospikeClient.scanAll(policy, NAMESPACE, SET_NAME, (key, record) -> {
+            aerospikeClient.scanAll(policy, namespace, SET_NAME, (key, record) -> {
                 if (record == null) return;
                 String aliasesCsv = record.getString("aliases");
                 List<String> aliases = aliasesCsv == null || aliasesCsv.isBlank()
