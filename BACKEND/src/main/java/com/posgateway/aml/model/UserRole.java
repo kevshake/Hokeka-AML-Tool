@@ -19,5 +19,18 @@ public enum UserRole {
     PSP_ANALYST, // New: Analyze cases for specific PSP
     BANK_OFFICER, // New: Bank-wide oversight
     BANK_AUDITOR, // New: Bank-wide read-only
-    SENIOR_ANALYST // New: Escalate/Approve capabilities
+    SENIOR_ANALYST, // New: Escalate/Approve capabilities
+    // W20-8 fix: "PSP_USER" is a real, registerable role name -- AuthenticationController.
+    // register()'s default-role fallback chain tries VIEWER, then PSP_USER, then USER. Before
+    // this constant existed, any account actually registered under that fallback (VIEWER
+    // unseeded) hit UserRole.valueOf(user.getRole().getName()) at ~20 call sites (case
+    // management, PSP CBK-filing controllers, case permissions/escalation) and got an uncaught
+    // IllegalArgumentException. Tenant-scoped, least-privilege by default: every permission
+    // check in CasePermissionService/CaseEscalationService/WorkflowAutomationService is a
+    // positive allow-list (`role == X || role == Y`), so PSP_USER simply falls through to
+    // "not permitted" wherever it isn't explicitly granted -- no other branch needed adjusting.
+    PSP_USER,
+    // Same fix, same reasoning: "USER" is the third and final fallback in that same chain and
+    // was equally missing from this enum.
+    USER
 }
