@@ -1,6 +1,36 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 64 — Investigated 3 more; reclassified rather than force partial fixes (2026-08-27)
+
+- **`W19-6`** — investigated, **merged into `W49-8` (NEEDS-DECISION)**, not fixed. Confirmed
+  `RiskScoringService.calculateOverallRisk` is dead code with zero callers, and the "latent bug" is
+  that `mlScore` is computed and returned in the result map but never actually blended into
+  `finalScore` — this is the exact same open question `W49-8` already flags as needing a business
+  decision (should ML score be blended in, or is the separation deliberate?). Deleting or "fixing"
+  this method would unilaterally answer that question rather than actually getting a decision.
+- **`W21-7`** — investigated, **reclassified to LARGE**. Wiring a real per-jurisdiction travel-rule
+  threshold into `MultiAssetRiskEngine` (matching `VirtualAssetComplianceService`'s
+  `TravelRuleJurisdictionPolicy` lookup) needs a jurisdiction field added to the ingest request DTO
+  (a wire-contract change) plus new repository wiring — a real multi-file feature, not a
+  single-value swap.
+- **`W21-3`** — investigated, **still open, correctly scoped as SMALL-ish but not closed this
+  session**. Confirmed the mechanism: `RecordTrailService.addMobileMoneyProfileLink` is a curated
+  helper doing a targeted indexed query for `MobileMoneyRiskProfile` (needed because it isn't
+  reachable via a direct JPA association from the calling context); `MOBILE_MONEY_TRANSACTION_CONTEXT`
+  and `MOBILE_MONEY_NETWORK_EDGE` have no equivalent helper, so if either has the same
+  no-direct-association situation, their related-record links go silently missing rather than
+  falling back to something visibly broken. Real fix: find where each would need to be looked up,
+  confirm whether a JPA association actually exists (if it does, `genericLinks` already covers it
+  and there's no bug), and add matching curated helpers only where one's genuinely missing — not
+  yet traced far enough to say definitively which of the two (if either) needs one.
+
+27 items closed, 3 more investigated-and-accurately-reclassified/deferred this wave (not silently
+dropped). Remaining SMALL queue: `W14-5`, `W21-3` (see above), `W18-2`, `W18-4`, `W18-5`,
+`W19-2..W19-5`, `W27-2`, `W27-3`, `W27-6..W27-8`.
+
+---
+
 ## Wave 63 — Closed 2 more; W36-2 revealed the webhook delivery pipeline was entirely dead (2026-08-27)
 
 - **`W49-P3`** — last of the original 9 Lombok-`@EqualsAndHashCode`-over-mutable-fields entities
