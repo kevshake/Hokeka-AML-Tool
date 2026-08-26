@@ -68,7 +68,7 @@ public class AerospikeSanctionsScreeningService {
                         .listName(match.listName())
                         .entityType(resolvedType)
                         .matchType(MatchType.NAME_MATCH)
-                        .sanctionType("Sanctions match")
+                        .sanctionType(deriveSanctionType(match))
                         .pepLevel(match.pepLevel())
                         .build());
             }
@@ -86,6 +86,23 @@ public class AerospikeSanctionsScreeningService {
                         : LocalDateTime.now())
                 .screeningProvider(PROVIDER)
                 .build();
+    }
+
+    /**
+     * W14-4 fix: sanctionType used to be the literal string "Sanctions match" for every single
+     * match regardless of which list it came from, so two matches on completely different lists
+     * (OFAC vs a PEP register) were indistinguishable by sanctionType alone. Derive it from what
+     * the wire DTO actually carries: a PEP-level match is labelled as such, otherwise the specific
+     * list name is used, falling back to the old generic text only when neither is available.
+     */
+    private String deriveSanctionType(BackendSanctionsScreenResponse.MatchDto match) {
+        if (match.pepLevel() != null && !match.pepLevel().isBlank()) {
+            return "PEP match (" + match.pepLevel() + ")";
+        }
+        if (match.listName() != null && !match.listName().isBlank()) {
+            return "Sanctions list match: " + match.listName();
+        }
+        return "Sanctions match";
     }
 
     public ScreeningResult screenMerchant(String legalName, String tradingName) {

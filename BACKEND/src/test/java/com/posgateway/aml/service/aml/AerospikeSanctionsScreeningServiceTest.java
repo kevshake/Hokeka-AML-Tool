@@ -59,6 +59,28 @@ class AerospikeSanctionsScreeningServiceTest {
     }
 
     @Test
+    void sanctionTypeIsDerivedPerMatchInsteadOfAlwaysTheSameGenericLiteral() {
+        // W14-4 fix: sanctionType used to be the hardcoded literal "Sanctions match" for every
+        // match. A PEP-level match and an OFAC list match must now produce distinguishable text.
+        BackendSanctionsScreenResponse flagged = new BackendSanctionsScreenResponse(
+                "Multi Hit",
+                "FLAGGED",
+                List.of(
+                        new BackendSanctionsScreenResponse.MatchDto(
+                                "Multi Hit", 0.95, "OFAC_SDN", "entity-1", null),
+                        new BackendSanctionsScreenResponse.MatchDto(
+                                "Multi Hit", 0.9, "peps", "entity-2", "CURRENT")),
+                Instant.now());
+        when(client.screen(any())).thenReturn(flagged);
+
+        ScreeningResult result = service.screenName("Multi Hit", ScreeningResult.EntityType.PERSON);
+
+        assertEquals(2, result.getMatchCount());
+        assertEquals("Sanctions list match: OFAC_SDN", result.getMatches().get(0).getSanctionType());
+        assertEquals("PEP match (CURRENT)", result.getMatches().get(1).getSanctionType());
+    }
+
+    @Test
     void merchantTradingNameHitIsCombinedWithLegalNameResult() {
         BackendSanctionsScreenResponse clear = new BackendSanctionsScreenResponse(
                 "Acme Holdings", "CLEAR", List.of(), Instant.now());
