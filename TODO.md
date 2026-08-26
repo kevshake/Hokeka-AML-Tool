@@ -1,6 +1,57 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 62 — Closed 9 more items; 2 reclassified LARGE on closer inspection (2026-08-26)
+
+- **`W31-2`/`W27-5`** (same finding, logged twice) — deleted dead `PspAdminController`
+  (`/admin/psp/*`): zero frontend callers, zero other backend references, fully superseded by
+  `PspController`'s tenant-scoped equivalents. Compiles clean with it removed.
+- **`W31-1`** — built the missing admin viewer for `GET /admin/runtime-errors`: new
+  `RuntimeErrorsPage` (paginated, expandable stack-trace rows), routed and added to the
+  ADMINISTRATION sidebar section (platform-admin only, matching the endpoint's role restriction).
+- **`W20-17`** (partial) — deleted the two confirmed-dead frontend files (`Reports/ReportsPage.tsx`,
+  `Psps/tabs/CrudTab.tsx`, zero importers). The other half (unwired header search) is **reclassified
+  to LARGE**: there is no backend search endpoint at all — building real cross-entity search is a
+  new feature, not a small fix.
+- **`W36-6`/`W36-5`** — V147 (already applied) seeded `billing_rates` in a vocabulary
+  `URL_SERVICE_MAP` no longer produces (`TRANSACTION_PROCESSING`, `SANCTIONS_SCREENING`,
+  `AML_CHECK`, `SCREENING`, `MERCHANT_ONBOARDING`); new migration `V216` deactivates those five
+  (never edits V147 itself). **Found a real revenue-leak while verifying**: `SAR_FILING` and
+  `CBK_REPORTING` were never seeded at all — every SAR filing and CBK submission has billed $0
+  since those routes existed; V216 seeds both. Also fixed `UsageTrackingFilter`'s javadoc (wrongly
+  claimed "V149 + V167") and regenerated `docs/features/BILLING_PRICING.md`'s service-type table
+  from the actual current code — caught and corrected a wrong claim of my own about
+  `API_CALL_GENERIC` mid-edit (seeded but never actually produced; unmatched paths are untracked,
+  not billed at a generic fallback rate). 4 tests. **Honest limitation:** no live Postgres this
+  session to execute V216 against — hand-verified against V149's already-applied pattern only.
+- **`W42-1`** — added missing startup WARN specs for `DOCUMENT_ANTIVIRUS_ENABLED` and
+  `BLOCKCHAIN_ANALYTICS_ENABLED`, matching the existing pattern for other off-by-default controls.
+- **`W20-13`** — `CompanyTab` was missing `billingPlan`/`currency`/`paymentTerms`/`isTestMode` —
+  confirmed all four are genuinely accepted by the backend `PUT /psps/{id}`, just absent from the
+  form. Added as editable fields; `status` shown read-only (it's managed via a separate lifecycle
+  endpoint, not general profile edit). Caught myself asserting an unverified behavioral claim about
+  `isTestMode` mid-edit and corrected it to only state what `grep` actually confirmed.
+- **`W20-14`** — **more precisely scoped than logged.** Role/PSP *assignment* changes on a user
+  already evict correctly (`UserService`). The real gap was `RoleService`: editing a role's own
+  permission set had zero cache eviction anywhere, leaving every cached user holding that role
+  authorizing against stale (over-)permissions for up to the 5-minute TTL. Added
+  `@CacheEvict(cacheNames="users", allEntries=true)` to all three mutating methods, matching
+  `UserService`'s existing pattern. 3 tests.
+- **`W18-8`** — `Customer360Page` risk-signal cards never rendered `signalType`, despite it existing
+  on both the API response and the frontend type. Added.
+- **`W18-7`** — investigated, **reclassified to LARGE**: `SANCTIONS` and `CYBER` signal types have
+  no producer anywhere because there is no code path that turns a sanctions match or a cyber
+  incident into a `MultiAssetRiskSignal` at all (sanctions screening runs through a wholly separate
+  `Alert`-based mechanism). Wiring either in is a new integration, not a small fix.
+
+`typecheck`/`lint` clean on every frontend change; BACKEND compiles clean throughout.
+
+Remaining SMALL queue: `W14-5`, `W21-3`, `W21-7`, `W18-2`, `W18-4`, `W18-5`, `W19-2..W19-6`, `W27-2`,
+`W27-3`, `W27-6..W27-8`, `W36-2`, `W49-P3`. LARGE bucket grows by two (`W20-17` search half,
+`W18-7`); NEEDS-DECISION unchanged — see Wave 59.
+
+---
+
 ## Wave 61 — Closed 10 more items from the SMALL queue (2026-08-26, same day continuation)
 
 Continued working the priority-ordered SMALL queue. All ten below are fixed, tested (or, for
