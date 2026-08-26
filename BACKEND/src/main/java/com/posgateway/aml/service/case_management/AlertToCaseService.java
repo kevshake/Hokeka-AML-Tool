@@ -152,8 +152,10 @@ public class AlertToCaseService {
 
         // Log activity via case activity service (system action, no user)
         try {
-            // find a system user for the activity log, or skip if none available
-            User systemUser = disposedBy != null ? disposedBy : null;
+            // find a system user for the activity log, or skip if none available.
+            // W14-7 fix: this used to be `disposedBy != null ? disposedBy : null` -- a no-op
+            // ternary that always just evaluated to disposedBy itself.
+            User systemUser = disposedBy;
             if (systemUser != null) {
                 caseActivityService.logActivity(
                         savedCase.getId(),

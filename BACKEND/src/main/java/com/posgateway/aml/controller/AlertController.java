@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.model.AlertDisposition;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.alert.AlertDispositionService;
 import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import com.posgateway.aml.service.security.PspIsolationService;
@@ -39,13 +40,15 @@ public class AlertController {
     private final RuleEffectivenessService ruleEffectivenessService;
         private final com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService;
     private final com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge;
+    private final UserRepository userRepository;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
                                PspIsolationService pspIsolationService, MerchantRepository merchantRepository,
                                RuleEffectivenessService ruleEffectivenessService,
                                                               com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService,
-                                                              com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge) {
+                                                              com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge,
+                                                              UserRepository userRepository) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -53,6 +56,7 @@ public class AlertController {
         this.ruleEffectivenessService = ruleEffectivenessService;
                 this.alertToCaseService = alertToCaseService;
                                 this.alertFraudBridge = alertFraudBridge;
+                                this.userRepository = userRepository;
                             }
 
     /**
@@ -254,9 +258,20 @@ public class AlertController {
                             try {
                                 org.springframework.security.core.Authentication auth2 =
                                     org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                                // W14-7 fix: this used to only resolve disposingUser when the
+                                // Security principal happened to literally be a `User` instance,
+                                // silently dropping attribution for any other principal shape
+                                // (e.g. session deserialization edge cases). Fall back to a
+                                // username lookup via auth2.getName(), which Authentication
+                                // always provides regardless of principal type.
                                 User disposingUser = null;
-                                if (auth2 != null && auth2.getPrincipal() instanceof User u) {
-                                    disposingUser = u;
+                                if (auth2 != null) {
+                                    if (auth2.getPrincipal() instanceof User u) {
+                                        disposingUser = u;
+                                    } else if (auth2.getName() != null) {
+                                        disposingUser = userRepository.findByUsername(auth2.getName())
+                                                .orElse(null);
+                                    }
                                                                 }
                                                                 alertToCaseService.resolveAlertToCase(
                                                                         alert.getAlertId(), request.getDisposition(),
