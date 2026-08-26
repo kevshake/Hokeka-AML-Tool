@@ -50,6 +50,20 @@ public class RegulatoryDeadlinePolicy {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * W18-1 fix: createdAt is NOT NULL but nothing stamped it -- any programmatic
+     * save (as opposed to the Flyway-seeded rows this entity currently only ever gets)
+     * would have thrown a NOT NULL constraint violation at insert time. Same
+     * @PrePersist pattern already used by the sibling compliance entities (CaseNote,
+     * CaseEvidence, CaseActivity).
+     */
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
+
     public Long getId() { return id; }
     public String getPolicyCode() { return policyCode; }
     public String getJurisdiction() { return jurisdiction; }

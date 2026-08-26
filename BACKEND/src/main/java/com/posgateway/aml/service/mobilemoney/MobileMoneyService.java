@@ -87,7 +87,9 @@ public class MobileMoneyService {
         transactionRepository.save(transaction);
         createAlert(transaction, mobileSignals, assessment.riskScore());
 
-        List<MobileMoneyNetworkEdge> edges = updateNetwork(pspId, transaction, context);
+        // W21-1 fix: the returned list was never used (updateNetwork persists the edges as its
+        // side effect); dropped the dead capture.
+        updateNetwork(pspId, transaction, context);
         updateProfiles(pspId, transaction, context, assessment.signals());
         return response(transaction, context);
     }
