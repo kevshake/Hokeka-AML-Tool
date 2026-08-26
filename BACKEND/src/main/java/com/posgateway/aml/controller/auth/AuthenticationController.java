@@ -150,8 +150,16 @@ public class AuthenticationController {
                 new UsernamePasswordAuthenticationToken(username, password)
             );
 
-            // Get user details BEFORE creating session
-            User user = userRepository.findByUsername(username)
+            // Get user details BEFORE creating session.
+            // W20-12 fix: look up by authentication.getName(), not the raw `username` request
+            // field. CustomUserDetailsService.loadUserByUsername already accepts either the DB
+            // username or the email (findByUsername().or(() -> findByEmail())), so a login by
+            // email succeeds at authenticationManager.authenticate() above -- but the resolved
+            // UserDetails' real username is what authentication.getName() returns, not the raw
+            // input. Re-querying findByUsername(username) with the original email input threw
+            // "User not found after authentication" for every email-based login, even though
+            // authentication had just succeeded.
+            User user = userRepository.findByUsername(authentication.getName())
                 .orElseThrow(() -> new RuntimeException("User not found after authentication"));
 
             // Validate user is enabled
