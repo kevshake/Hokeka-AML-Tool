@@ -185,6 +185,19 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.requiredWhen("FIX_SETTINGS_PATH", fixEnabled,
                         "Path to the credentialed QuickFIX/J session file. Required when fix.enabled=true."),
 
+                // --- W42-1 fix: these two toggles had no startup WARN, unlike every other
+                // off-by-default control (ADVERSE_MEDIA_ENABLED, SANCTIONS_DOWNLOAD_ENABLED)
+                // that ops needs to consciously flip on for production. ---
+                EnvVarSpec.recommended("DOCUMENT_ANTIVIRUS_ENABLED",
+                        "Enables ClamAV malware scanning on uploaded KYC/case documents. Left unset (default "
+                                + "false), uploaded documents are never scanned for malware unless "
+                                + "app.document.antivirus.required is also true, in which case every upload "
+                                + "fails outright instead of silently skipping the scan."),
+                EnvVarSpec.recommended("BLOCKCHAIN_ANALYTICS_ENABLED",
+                        "Enables the blockchain analytics provider used by virtual-asset/VASP wallet "
+                                + "screening. Left unset (default false), wallet screening runs without "
+                                + "on-chain analytics coverage."),
+
                 // --- Sanctions / OpenSanctions ---
                 EnvVarSpec.recommended("SANCTIONS_DOWNLOAD_ENABLED",
                         "Toggles the daily OpenSanctions downloader. When TRUE, BACKEND POSTs ingested "
