@@ -263,6 +263,25 @@ export const useAuditLogs = (params?: number | AuditLogQueryParams) => {
   });
 };
 
+// Runtime Errors (W31-1: this hook plus RuntimeErrorsPage are the previously-missing admin
+// viewer for GET /admin/runtime-errors -- the endpoint existed with no frontend caller at all)
+export interface RuntimeError {
+  id: number;
+  errorCode?: string;
+  message?: string;
+  stackTrace?: string;
+  userId?: number;
+  pspId?: number;
+  occurredAt?: string;
+}
+
+export const useRuntimeErrors = (page: number, size: number) => {
+  return useQuery<PageResponse<RuntimeError>>({
+    queryKey: ["admin", "runtime-errors", page, size],
+    queryFn: () => apiClient.get<PageResponse<RuntimeError>>(`admin/runtime-errors?page=${page}&size=${size}`),
+  });
+};
+
 // Current User
 export const useCurrentUser = () => {
   return useQuery<User>({

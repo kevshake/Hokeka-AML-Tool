@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CssBaseline } from "@mui/material";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { isPlatformAdmin } from "./pages/EdgeNodes/edgeMeta";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import HokekaLayout from "./layouts/HokekaLayout";
@@ -25,6 +26,7 @@ const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const UsersPage = lazy(() => import("./pages/Users/UsersPage"));
 const ReportsCenterPage = lazy(() => import("./pages/ReportsCenter/ReportsCenterPage"));
 const AuditLogsPage = lazy(() => import("./pages/AuditLogs/AuditLogsPage"));
+const RuntimeErrorsPage = lazy(() => import("./pages/RuntimeErrors/RuntimeErrorsPage"));
 const RulesGenerationPage = lazy(() => import("./pages/RulesGeneration/RulesGenerationPage"));
 const KycDocumentsPage = lazy(() => import("./pages/KycDocuments/KycDocumentsPage"));
 const KycMerchantDetailPage = lazy(() => import("./pages/KycDocuments/KycMerchantDetailPage"));
@@ -32,6 +34,7 @@ const AnalyticsPage = lazy(() => import("./pages/Analytics/AnalyticsPage"));
 const RegulatoryReportsPage = lazy(() => import("./pages/RegulatoryReports/RegulatoryReportsPage"));
 const PspsListPage = lazy(() => import("./pages/Psps/PspsListPage"));
 const PspConfigPage = lazy(() => import("./pages/Psps/PspConfigPage"));
+const EdgeNodesPage = lazy(() => import("./pages/EdgeNodes/EdgeNodesPage"));
 const LimitsAmlPage = lazy(() => import("./pages/LimitsAml/LimitsAmlPage"));
 const BillingPage = lazy(() => import("./pages/Billing/BillingPage"));
 const ChargebacksPage = lazy(() => import("./pages/Chargebacks/ChargebacksPage"));
@@ -40,6 +43,20 @@ const MarketSurveillancePage = lazy(() => import("./pages/MarketSurveillance/Mar
 const MobileMoneyPage = lazy(() => import("./pages/MobileMoney/MobileMoneyPage"));
 const WalletIntelligencePage = lazy(() => import("./pages/WalletIntelligence/WalletIntelligencePage"));
 const RecordDetailPage = lazy(() => import("./pages/RecordDetail/RecordDetailPage"));
+
+/**
+ * `/billing` is the PLATFORM revenue console (cross-tenant totals, admin-only endpoints). A PSP user
+ * landing here previously got a wall of 403s and silently-empty widgets. Route them to their own
+ * self-service billing instead, where the plan/usage/invoice surface is scoped to their tenant.
+ */
+function BillingRoute() {
+  const { user } = useAuth();
+  if (!isPlatformAdmin(user?.role?.name)) {
+    // Settings renders Billing as the PSP user's only (and default) tab.
+    return <Navigate to="/settings" replace />;
+  }
+  return <BillingPage />;
+}
 
 function PageLoader() {
   return (
@@ -101,16 +118,18 @@ function App() {
                             <Route path="chargebacks" element={<ChargebacksPage />} />
                             <Route path="reports-center" element={<Navigate to="/reports" replace />} />
                             <Route path="audit" element={<AuditLogsPage />} />
+                            <Route path="runtime-errors" element={<RuntimeErrorsPage />} />
                             <Route path="rules-generation" element={<RulesGenerationPage />} />
                             <Route path="kyc-documents" element={<KycDocumentsPage />} />
                             <Route path="kyc-documents/:merchantId" element={<KycMerchantDetailPage />} />
                             <Route path="analytics" element={<AnalyticsPage />} />
                             <Route path="regulatory-reports" element={<RegulatoryReportsPage />} />
                             <Route path="psps" element={<PspsListPage />} />
+                            <Route path="edge-nodes" element={<EdgeNodesPage />} />
                             <Route path="organization" element={<PspConfigPage />} />
                             <Route path="psps/:pspId/configure" element={<PspConfigPage />} />
                             <Route path="limits-aml" element={<LimitsAmlPage />} />
-                            <Route path="billing" element={<BillingPage />} />
+                            <Route path="billing" element={<BillingRoute />} />
                           </Routes>
                         </Suspense>
                       </RouteErrorBoundary>

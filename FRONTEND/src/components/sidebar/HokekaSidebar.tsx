@@ -281,6 +281,8 @@ export default function HokekaSidebar({
 
           { label: 'Users', icon: Users, to: '/users' },
 
+          { label: 'Runtime Errors', icon: ClipboardList, to: '/runtime-errors' },
+
           { label: 'Settings', icon: Settings, to: '/settings' },
 
         ],
