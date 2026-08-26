@@ -1,3 +1,16 @@
+> ## ⚠️ SUPERSEDED — do not follow this as an install guide
+>
+> The canonical install document is **[`docs/INSTALL.md`](../docs/INSTALL.md)**. The control plane is
+> deployed with `docker-compose.prod.yml`, not the bare-metal systemd + jar procedure below.
+>
+> This file predates the current architecture and disagrees with it in ways that will break a
+> deployment: it uses database `fraud_detector_prod` (compose uses `fraud_detector`), env vars the
+> compose stack does not read (`DB_MAX_POOL_SIZE`, `RATE_LIMIT_RPM`), and it predates Aerospike
+> moving out of the backend into `aml-ms-prod`.
+>
+> **Retained for reference only:** the nginx config, security headers, HikariCP tuning, monitoring
+> and troubleshooting sections below are still useful.
+
 # =============================================================================
 # FRAUD DETECTOR - PRODUCTION DEPLOYMENT GUIDE
 # For External Access via hokeka.com

@@ -1,5 +1,315 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-07-20_
+_Last updated: 2026-08-26_
+
+## Wave 59 — Full backlog re-triage of all 186 open items; IDOR fix; HTTP-status fix (2026-08-26)
+
+Every `- [ ]` item across Waves 6–58 (186 total) was re-verified against current source by three
+parallel read-only audits, one per third of the log. **This wave is the authoritative status for
+every item it lists below** — the original checkbox further down in the file was left unticked
+(retroactively editing ~90 scattered lines across 39 waves was not a good use of a single session),
+but its true status is whatever is recorded here, not what its own checkbox still shows.
+
+### Fixed this session, with tests
+
+- **Cross-tenant IDOR in `UserController`** (this is `W14-10`, and it was worse than that item's
+  own description: not just "bypasses the PSP header", but `updateUser`/`deleteUser` had **no PSP-
+  ownership check at all** — any PSP admin with `MANAGE_USERS` could edit or delete another PSP's
+  users by guessing a numeric id. `createUser` and the `PATCH .../toggle` endpoint already did this
+  correctly; `updateUser`, `deleteUser`, and the legacy unused `POST /{id}/{action}` toggle did not.
+  Fixed by extracting the check both already used into `requireSamePsp()` and calling it from all
+  three. `BACKEND/src/test/java/.../controller/UserControllerTenantIsolationTest.java` (5 tests,
+  passing) proves: cross-tenant update/delete/toggle now throw, same-tenant and platform-admin
+  callers are unaffected, and the mutation never runs before the check (not just that an exception
+  surfaces after).
+- **`SecurityException` → 500, not 403, platform-wide.** Found while writing the above test: no
+  `@ExceptionHandler` existed for `java.lang.SecurityException` (as opposed to Spring Security's
+  `AccessDeniedException`), so it fell through to the generic `RuntimeException` handler and
+  returned 500 Internal Server Error for what is actually an authorization denial. Every controller
+  that does `throw new SecurityException(...)` (UserController, PspController, and others) was
+  affected — requests were still correctly blocked, but misclassified as internal errors rather than
+  403s, which misleads monitoring/alerting keyed off status code. Fixed with a dedicated handler in
+  `GlobalExceptionHandler` (more specific than the `RuntimeException` one, so Spring prefers it
+  automatically). Covered by the same `UserControllerTenantIsolationTest` run.
+- **Edge `psp_id` schema-drift** (carried over from Wave 58, now committed alongside this wave):
+  `EdgeRuleInterpreter`/`EdgeEngine` — see Wave 58 below for detail.
+
+### VERIFIED FIXED (confirmed already resolved; superseded checkbox left as-is further down)
+
+Everything the three audits confirmed already fixed — sanctions fail-open, PEP pipeline, batch→
+DecisionEngine wiring, BLOCK→blacklist, M-Pesa idempotency/underpayment, CBK idempotency key,
+constant-time auth compare, per-key locking, CTR/SAR auto-detection, rule-eval exception fail-
+closed, sanctions phonetic/n-gram recall, PSP cross-tenant IDOR on `PspController` (already correct
+— only `UserController` had the gap), actuator lockdown, edge PSP enrollment + authorization UI
+(both fully built, Wave 56 checkboxes just never ticked), Kafka/Drools/Neo4j async pipeline (Wave 28
+resolution), and ~15 more. Full list with file:line evidence is in this wave's originating audit
+transcripts; not reproduced here to keep this file scannable — spot-check any specific item against
+current source rather than trusting either the old checkbox or this summary blindly.
+
+### GENUINELY OPEN — SMALL (real gaps, small fixes; not yet done — next session's queue)
+
+Priority order: security/correctness first, then silent-failure/data-loss, then cheap perf, then the
+rest. Each still needs the file:line fix and a test before being ticked — do not check these off
+without doing that work.
+
+- `W20-9` — `TransactionMonitoringService.getMonitoringSARs` and `AlertDispositionService`'s
+  disposition-stats path still call unscoped `findAll`/`findAlertsInTimeRange`: a cross-tenant read
+  leak (PSP A can see PSP B's SARs/disposition stats). **Highest priority of this batch** — same
+  class of bug as the IDOR just fixed, but a read leak instead of a write one.
+- `W20-12` — email-login broken: `AuthenticationController` only tries `findByUsername`, never
+  `findByEmail`, even though `CustomUserDetailsService` accepts either.
+- `W37-3` — M-Pesa callback endpoint has no Daraja IP allowlist; only the generic rate limiter
+  guards it.
+- `W14-6` — `AmlScreeningOrchestrator.convertValue(matches, Map.class)` throws whenever any
+  sanctions match exists, which is caught and rethrown, failing the save. Wrap in `Map.of("matches",
+  ...)` instead.
+- `W22-5` — `AerospikeConfig` returns a bare `null` client on connection failure instead of an
+  explicit disabled-client sentinel — silent NPE risk downstream.
+- `W37-4` — `BillingService.computeTieredCost`'s `up_to` cast throws `ClassCastException` if the
+  JSON value is a string instead of a number; parse defensively like the adjacent `rate` field does.
+- `W14-4`, `W14-5`, `W14-7`, `W14-11`, `W14-12`, `W20-8`, `W20-13`, `W20-14`, `W20-17`, `W21-1`,
+  `W21-3`, `W21-7`, `W22-2`, `W22-4`, `W18-1`, `W18-2`, `W18-4`, `W18-5`, `W18-7`, `W18-8`,
+  `W19-2..W19-6`, `W27-2`, `W27-3`, `W27-5..W27-8`, `W31-1`, `W31-2`, `W32-1`, `W36-1..W36-3`,
+  `W36-5`, `W36-6`, `W42-1`, `W49-P3` — full descriptions and exact fixes in this wave's audit
+  transcripts; smaller/cosmetic than the ones called out above.
+
+### GENUINELY OPEN — LARGE (real gaps, multi-file efforts; scope noted, not started)
+
+- `W47` — flip a live `aml-microservice` cache path onto AeroORM; deliberately deferred pending
+  `mvn verify` + live-cluster certification of the ORM scaffold before touching a compliance-
+  critical path.
+- `W45` — settlement-account-change deterministic-hash linkage in the KYB/KYC framework (needs a
+  new column + migration; current encryption uses random IV so can't hash-compare as-is).
+- `W29-2` — no automated OCR/IDV document verification; still a pure manual approve/reject toggle.
+- `W26-8` — no webhook/notification settings on `Psp` at all (no fields, no endpoints).
+- `W35-1` — tenant isolation is application-code-enforced only; no DB/ORM backstop (Hibernate
+  `@Filter` or Postgres RLS) across Alert/Merchant/Case/Transaction/etc. Cross-cutting, multi-entity.
+- `W36-4` — full doc↔code reconciliation of the remaining ~22 documented PSP API endpoints.
+
+### NEEDS A PRODUCT/HUMAN DECISION (not code gaps — pick before any fix is written)
+
+- `W19-1`/`W20-5` — `UserController`'s class-level `@PreAuthorize` locks PSP admins out of `/users/
+  me` and user management entirely; the existing TODO text explicitly says this needs a human RBAC
+  call, not an auto-fix.
+- `W49-8` — should ML score blend into `calculateOverallRisk`, or is the separation deliberate?
+- `W49-11` — should `InternalAuthFilter` fail closed (not open) specifically under the `production`
+  profile?
+- `W18-6` — should signal taxonomy (`signalType`/`productDomain`) affect decisioning, or stay
+  reporting-only as it is today?
+- `W20-2` — real production M-Pesa callback domain + a KES-vs-USD currency decision.
+- `W20-10`/`W33-2` — `/psps/register` and `/merchants/onboard` are public+unauthenticated with only
+  generic rate-limiting; is that the intended posture, or does it need vetted onboarding/captcha?
+- `W27-4` — scope of a per-PSP billing-rate override feature before building CRUD for it.
+- `W26-7` — does SaaS self-service need per-PSP API keys?
+- `W34-1` — new AML services (wallet/VASP/EDD/travel-rule screening) bill $0; pricing model for them
+  is undecided.
+- Plus the five infra-only items already logged in Wave 57 (signing key generation, CDN bucket
+  provisioning, capacity-assumption validation against real pilot volume) — unchanged, still
+  someone-on-a-trusted-host actions, not code.
+
+### Doc drift found and fixed
+
+- `install.sh --edge-image` existed but wasn't documented in `docs/edge-client-install-guide.md` —
+  added.
+
+---
+
+## Wave 58 — Real installation test of the edge + rules loop; TODO audit (2026-08-21)
+
+Goal per the standing directive: verify the platform actually works end to end — both the control
+plane (rules management, transaction monitoring) and the client-side edge installation — by testing
+against a REAL running installation, not by re-reading code; audit the accumulated TODO backlog for
+what's genuinely still open vs. already shipped; write the client-facing operational documentation
+that was still missing.
+
+### Real end-to-end installation test performed
+
+Built and ran the ACTUAL release artifacts locally against real infrastructure — this is not a code
+read, every result below was observed from a live running process:
+
+- Built `edge_engine.dll` from source (`cargo build --release -p edge-jni`) and `edge-host-0.1.0.jar`
+  (`mvn package`), the same artifacts the release pipeline (Wave 57) publishes.
+- Started a real Aerospike 6.4 container with the project's actual `hokeka` namespace (via env-var
+  templating, since the image's entrypoint clobbers a mounted `aerospike.conf` — noted as a
+  local-dev-only friction point, not a product bug).
+- Generated a real EC P-384 TLS keystore with `keytool`, matching what `install.sh` generates.
+- Launched the real jar with the real native core loaded via JNI, pointed at the real Aerospike.
+- [x] **Proved live:** native core loads via JNI (`evaluator: native` once a bundle is loaded),
+  Aerospike feature store connects to the real `hokeka` namespace, `/edge/status` and
+  `/actuator/health` report correctly.
+- [x] **Proved live:** ALLOW/BLOCK/HOLD all resolve correctly against the real native evaluator;
+  combined-trigger severity-max (BLOCK out-ranks HOLD, both rule ids listed) confirmed; additive
+  score confirmed (90+50=140).
+- [x] **Proved live:** velocity feature derivation round-trips through real Aerospike — 3 sequential
+  transactions on the same `pan_hash` showed derived `pan_txn_count_1h` of 0, 1, 2, correctly
+  triggering an ALERT rule only on the 3rd; caller-supplied `pan_txn_count_1h` override confirmed to
+  take precedence over the derived value, exactly as documented in
+  `docs/edge-transaction-evaluation.md` §2.3.
+
+### Real bug found live, fixed, and re-verified live
+
+- [x] **Bundle-validator schema drift between the Java fallback and the Rust native core, closed.**
+  Publishing a hand-built rule bundle (missing the required `psp_id` field) to the live node — with
+  the native core loaded, the normal healthy state — was rejected with a terse, generic error
+  (`"native core rejected the verified rule IR as malformed"`) naming no field or rule. Root cause:
+  the Rust `RuleBundle` struct (`edge-engine/crates/rule-core/src/lib.rs`) requires `psp_id`, but
+  `EdgeRuleInterpreter.validateBundle()` never checked for it — and worse, on any node with the
+  native core loaded, `EdgeEngine.loadVerifiedBundle()` calls native FIRST, so the Java-side
+  validator (even after tightening it) was never reached until after the fact, meaning error quality
+  silently depended on which evaluator happened to be active. Fixed in two parts:
+  1. `EdgeRuleInterpreter.validateBundle()` tightened to match the Rust IR schema exactly: requires
+     `psp_id`, requires `id`+`name` on every rule, and recursively validates the `all`/`any`/`not`/
+     `cmp` condition tree (unknown types, missing `field`/`op`/`value`, unknown operators, missing
+     children arrays) — matching every `#[serde]`-required field in the Rust structs.
+  2. `EdgeEngine.loadVerifiedBundle()` now calls this validator **before** the native call, on every
+     node regardless of which evaluator is active, so a bad publish gets the specific message
+     (`"rule bundle IR has no integer 'psp_id' (required by the Rust RuleBundle struct)"`) always,
+     not only on fallback-mode nodes.
+  - Re-verified live after the fix: the same missing-`psp_id` bundle now gets the specific message;
+    a valid bundle still loads (`evaluator: native`); the full ALLOW/BLOCK/HOLD regression from
+    above still passes identically. No behavior change on the happy path.
+  - Test suite: 60/60 passing, 0 failures, 0 errors — includes 7 new tests in
+    `EdgeRuleInterpreterValidationTest` and 2 new/fixed tests in `EdgeEngineNativeRoutingTest` (one
+    existing test's fixture was updated because the fix correctly changed which exception type a
+    malformed-JSON publish throws; the test's actual intent — "a native rejection preserves the
+    previous bundle" — was preserved by giving it a structurally-valid-but-native-rejected payload
+    instead, rather than weakening the new validation to keep the old test passing unchanged).
+  - `docs/edge-transaction-evaluation.md` §6 updated with the bundle's required top-level/rule/
+    condition fields, calling out `psp_id` specifically as easy to miss.
+
+### TODO backlog audit — stale items found and corrected
+
+The pre-existing backlog (186 open items going in) is an append-only log across many "waves" and
+does not self-correct when later work fixes an earlier-logged gap. Spot-checked against actual
+current source (not the log's own description) rather than assumed current:
+
+- [x] **P0-1 (sanctions fail-open on empty data) — VERIFIED FIXED.**
+- [x] **W14-2/W14-3 (sanctions/PEP degrade on the microservice path) — VERIFIED FIXED.**
+- [x] **P0-2 (PEP classification dead) — VERIFIED FIXED.** `SanctionsListDownloadService` derives
+  `pepLevel` (PEP/RCA) from OpenSanctions `role.pep*`/`role.rca` topics during ingest; consumed
+  downstream by `RiskScoringService`, `CustomerRiskProfilingService`, `RuleFeatureEnrichmentService`,
+  `AmlScreeningOrchestrator`, `MerchantOnboardingService` and others — a live, wired pipeline, not
+  dead code.
+- [x] **P0-3 (BatchScoringService bypasses DecisionEngine, no alerts from settled monitoring) —
+  VERIFIED FIXED.** `batchScoreYesterdayTransactions()` routes every scored transaction through
+  `decisionEngine.evaluate(...)`, with an inline comment documenting the exact fix.
+- [x] **P1-8 (DecisionEngine BLOCK never calls PaymentBlacklistService) — VERIFIED FIXED.**
+  `DecisionEngine` registers a Do-Not-Honour blacklist entry on every BLOCK, via
+  `PaymentBlacklistService` (`takeBlockAction`/`createAlert` region, DecisionEngine.java).
+- [x] **PSP edge enrollment + authorization backend — VERIFIED ALREADY BUILT**, not missing as the
+  log claimed. `EdgeEnrollmentService` (498 lines) implements the full PENDING→APPROVED→ACTIVE→
+  SUSPENDED/REVOKED/REJECTED state machine with key pinning and tenant isolation;
+  `EdgeAdminController` exposes it at `/edge/nodes/*` with platform-only approve/reject.
+- [x] **PSP Edge Nodes authorization UI — VERIFIED ALREADY BUILT AND ROUTED.**
+  `FRONTEND/src/pages/EdgeNodes/` (EdgeNodesPage, SetupWizard, NodeDetailDrawer, etc.), routed at
+  `/edge-nodes` in `App.tsx`. My own earlier install-guide documentation describing "approve the
+  node in the portal" was already correct — no doc fix was needed there.
+- [x] **F6 (RuleEditorModal edit never hydrates selectedParameters, Save wipes rule parameters) —
+  VERIFIED FIXED.** The `useEffect` on `[editingRule, open]` rebuilds `selectedParameters` from
+  `editingRule.parameters`, with an inline comment documenting the exact same bug and fix.
+
+**Pattern observed:** every P0/P1 item spot-checked this session was already fixed, several with a
+code comment explicitly documenting the prior bug. This strongly suggests the bulk of the remaining
+~180 unchecked items in this file are similarly stale rather than genuinely open — but that was not
+exhaustively re-verified this session (no agent budget remained after the weekly limit was hit
+mid-session; see below). **Recommend a dedicated future pass to re-verify and check off the rest of
+the backlog rather than treating the current checkbox state as ground truth.**
+
+### New client-facing documentation
+
+- [x] **`docs/client-fraud-monitoring-guide.md`** — the operational guide for a PSP's fraud/
+  compliance team: the full detection loop (edge real-time decision → control-plane monitoring →
+  alert → case → resolution → regulatory filing) across BOTH the edge node and the control plane.
+  Covers: `/transaction-monitoring`, `/alerts` (severity, disposition codes), `/cases` (lifecycle,
+  priority, SLA, the five ways a case can open), `/rules-generation` (AML/velocity/threshold rules,
+  AI-assisted drafting, severity-design guidance), `/edge-nodes` (fleet health signals),
+  `/screening`, `/regulatory-reports`, a worked end-to-end example, and a practical triage playbook.
+  Grounded in real entity fields/enum values read from source (`Alert`, `AlertDisposition`,
+  `ComplianceCase`, `CaseStatus`, `CasePriority`) and real routes from `App.tsx`, not invented.
+
+### Known limitation hit during this session
+
+- Background verification agents (the `Explore` subagent type) hit the account's weekly API limit
+  mid-session and failed to complete; the fork-type agent used for the code fix above ran on the
+  same account and succeeded, so forks and plain agents may draw from different pools or the limit
+  reset between attempts — not confirmed either way. Net effect: broader TODO-backlog verification
+  beyond the items above was not attempted this session past that point; the live installation test
+  and the fix that came out of it were done directly rather than via subagent.
+
+**Superseded by verification above (was previously listed as open in this file under earlier
+waves):**
+- P0-1, P0-2, P0-3, P1-8, W14-2, W14-3, F6 — see verified-fixed list above.
+- "Build PSP edge enrollment + authorization backend", "Build the PSP Edge Nodes authorization UI" —
+  see verified-already-built list above.
+
+## Wave 57 — Edge release pipeline + canonical install docs (2026-08-14)
+
+Goal: close the two gaps that block any external client from installing — there is no package
+server behind `packages.hokeka.com`, and `SHA256SUMS` is unsigned (checksums protect against
+corruption and a bad mirror, not a compromised origin).
+
+- [x] Canonical `docs/INSTALL.md`; `BACKEND/DEPLOYMENT.md` marked superseded
+  — resolved the control-plane conflict in favour of `docker-compose.prod.yml` (it already reflects
+  Aerospike moving out of the backend into `aml-ms-prod`, which `DEPLOYMENT.md` predates).
+- [x] Tag-triggered release workflow (`.github/workflows/release.yml`)
+  — `plan → verify → {native, jar} → publish`. Re-runs the HSE-1 interop suite (a tag can point at a
+  commit that never saw a PR). Builds linux x86_64 + aarch64 (cross) + windows dll. Artifacts upload
+  first, channel manifest flips last; existing version prefixes are never overwritten.
+- [x] GPG signature verification in `install.sh` (pinned key, fail-closed)
+  — `verify_signature()` runs before any digest is trusted; throwaway keyring, fingerprint asserted.
+  Tested against a real GPG key: 6/6 (valid, tampered, missing .asc, unset pin, wrong fingerprint,
+  explicit bypass). CI guard added asserting the call ordering can't regress.
+- [x] Docs updated to reflect the release pipeline
+
+- [x] Client-facing documentation set
+  — `docs/edge-client-install-guide.md` (requirements per distro, sizing formula + tiers, network
+  matrix, pre-flight, install/verify/harden/upgrade), `docs/edge-transaction-evaluation.md` (request
+  schema, derived features, rule resolution semantics, fail-closed vs fail-soft),
+  `docs/edge-install-troubleshooting.md` (failure modes by root cause).
+
+**Wave 57b — implementation of the open findings (2026-08-14):**
+- [x] **Retention unified at 90 days, single source of truth.** `--retention-days` writes BOTH the
+  Aerospike namespace `default-ttl` and the edge's `EDGE_RETENTION_DAYS`; all five places
+  (aerospike.conf, compose, .env.example, installer, FeatureStoreConfig) now agree. The effective
+  retention was always 90 — records carry explicit TTLs that override the namespace default — so
+  only capacity planning was wrong, by 3×. Effective value is now logged at startup.
+- [x] **Capacity sizing computed, not guessed.** `--peak-tps` derives the data file size from
+  throughput × retention (+30% headroom) and reports the index RAM, warning above 4 GB;
+  `--data-file-size` overrides. Validation rejects malformed input. Templating is idempotent.
+  Tested: 6 cases incl. 50 TPS×90d → 240G/23 GB index, matching hand calculation.
+- [x] **musl core published; Alpine native now works.** New `x86_64-unknown-linux-musl` release leg
+  whose JNI crossing runs inside an Alpine container. Installer selects the core by detected libc;
+  refuses only musl/aarch64 (nothing published). `apk` case added to the JRE installer.
+  Tested: 4 gate cases + 3 artifact-selection cases.
+- [x] **aarch64 JNI now actually executes** — the leg moved from cross-compilation to a native
+  `ubuntu-24.04-arm` runner. Every published core is exercised on its own platform.
+- [x] **Release signing key tooling** — `scripts/generate-release-key.sh [--pin]`. Proven end to
+  end: generate → pin into install.sh → sign a manifest → pinned installer accepts genuine and
+  rejects tampered. `.release-key/` and `*.asc` added to .gitignore.
+
+**Remaining — requires infrastructure or a human decision, not code:**
+- [ ] Generate the production signing key on an offline/dedicated host and set the three repo
+  secrets. Do NOT generate it on a developer laptop — that key signs artifacts every PSP edge node
+  executes as root.
+- [ ] Provision the `packages.hokeka.com` bucket + CDN; set the AWS/OIDC secrets.
+- [ ] Validate the ~512 B/record disk assumption against real pilot volumes.
+
+**Superseded findings (now implemented above):**
+- [x] **Alpine/musl native installs no longer fail silently.** `detect_libc()` probes for
+  `ld-musl-*.so.1`, a musl `ldd`, and `ID=alpine`; `detect_platform()` refuses `--native` on musl
+  with a message naming container mode as the fix. Container mode is unaffected. Tested against the
+  real function: 4/4 (glibc+native, glibc+container, musl+native refused, musl+container). CI guard
+  added. *Still open:* publishing an actual musl build target, if Alpine native is ever required.
+- [ ] **Retention is contradictory.** `aerospike.conf` sets `default-ttl 30d`; the architecture doc
+  says 90d default. 3× swing in RAM and disk sizing. Settle it and make the docs agree.
+- [ ] **Shipped `filesize 16G` only covers ~13 TPS at 30d retention.** Anything above the Evaluation
+  tier silently begins evicting velocity history. Consider failing the installer when filesize is
+  obviously undersized for the declared tier.
+
+**Still blocked on infrastructure, not code:**
+- [ ] Provision the `packages.hokeka.com` bucket + CDN; set the six release secrets (INSTALL.md §4.2)
+- [ ] Generate the release signing key; pin its public half into `install.sh` (INSTALL.md §4.3).
+  Until then the installer is fail-closed and will refuse to install — deliberately.
+- [ ] ARM runner so the aarch64 JNI boundary is actually executed before promising ARM support
 
 ## Wave 56 — Encrypted PSP channel, edge authorization, unified design system (2026-07-20)
 
