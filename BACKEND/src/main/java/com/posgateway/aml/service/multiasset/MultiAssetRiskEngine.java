@@ -2,7 +2,10 @@ package com.posgateway.aml.service.multiasset;
 
 import com.posgateway.aml.client.blockchain.BlockchainAnalyticsClient;
 import com.posgateway.aml.dto.multiasset.MultiAssetDtos.IngestTransactionRequest;
+import com.posgateway.aml.entity.crypto.TravelRuleJurisdictionPolicy;
 import com.posgateway.aml.entity.multiasset.*;
+import com.posgateway.aml.repository.crypto.TravelRulePolicyRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -42,6 +45,31 @@ public class MultiAssetRiskEngine {
         this.tokenizedFiatDailyThresholdUsd = tokenizedFiatDailyThresholdUsd;
     }
 
+    /**
+     * W21-7 fix: the travel-rule threshold used to be a single global @Value constant, gating
+     * every jurisdiction identically -- unlike VirtualAssetComplianceService, which already looks
+     * up a per-jurisdiction TravelRuleJurisdictionPolicy. Field-injected (optional) rather than a
+     * constructor param so the existing MultiAssetRiskEngineTest, which constructs this class
+     * directly with the original 8-arg constructor, keeps compiling unchanged.
+     */
+    @Autowired(required = false)
+    private TravelRulePolicyRepository travelRulePolicyRepository;
+
+    /**
+     * Resolves the USD travel-rule threshold for this PSP+jurisdiction, falling back to the
+     * global default when no repository is wired (e.g. this unit-constructed test instance), no
+     * pspId/countryCode is available, or no active per-jurisdiction policy exists for that pair.
+     */
+    private BigDecimal resolveTravelRuleThresholdUsd(Long pspId, String countryCode) {
+        if (travelRulePolicyRepository == null || pspId == null || countryCode == null || countryCode.isBlank()) {
+            return travelRuleThresholdUsd;
+        }
+        String jurisdiction = countryCode.trim().toUpperCase(Locale.ROOT);
+        List<TravelRuleJurisdictionPolicy> active =
+                travelRulePolicyRepository.findActive(pspId, jurisdiction, LocalDateTime.now());
+        return active.isEmpty() ? travelRuleThresholdUsd : active.get(0).getThresholdUsd();
+    }
+
     public Assessment assess(MultiAssetCustomer customer,
             AssetAccount sourceAccount,
             AssetAccount destinationAccount,
@@ -64,7 +92,8 @@ public class MultiAssetRiskEngine {
             }
             case TOKENIZED_FIAT -> assessTokenizedFiat(
                     customer, sourceAccount, destinationAccount, request, recentTransactions, signals);
-            case CRYPTO -> cryptoScreening = assessCrypto(sourceAccount, destinationAccount, request, signals);
+            case CRYPTO -> cryptoScreening =
+                    assessCrypto(sourceAccount, destinationAccount, request, signals, customer.getPspId());
             case BANKING -> { }
         }
 
@@ -73,7 +102,7 @@ public class MultiAssetRiskEngine {
                 : score >= 40 ? RiskDecision.REVIEW
                 : score >= 20 ? RiskDecision.ALERT
                 : RiskDecision.ALLOW;
-        TravelRuleStatus travelRuleStatus = resolveTravelRuleStatus(request);
+        TravelRuleStatus travelRuleStatus = resolveTravelRuleStatus(request, customer.getPspId());
         return new Assessment(score, decision, travelRuleStatus, List.copyOf(signals), cryptoScreening);
     }
 
@@ -287,7 +316,7 @@ public class MultiAssetRiskEngine {
     }
 
     private CryptoScreeningAssessment assessCrypto(AssetAccount sourceAccount, AssetAccount destinationAccount,
-            IngestTransactionRequest request, List<SignalDraft> signals) {
+            IngestTransactionRequest request, List<SignalDraft> signals, Long pspId) {
         String address = request.counterpartyReference();
         if (address == null || address.isBlank()) {
             if (destinationAccount != null && destinationAccount.getPublicAddress() != null) {
@@ -323,10 +352,13 @@ public class MultiAssetRiskEngine {
         if (usd == null) {
             add(signals, "CRYPTO_FIAT_VALUE_MISSING", 10,
                     "Fiat-equivalent value is required to evaluate jurisdictional thresholds.", Map.of());
-        } else if (usd.compareTo(travelRuleThresholdUsd) >= 0 && !hasTravelRuleData(request)) {
-            add(signals, "CRYPTO_TRAVEL_RULE_INCOMPLETE", 40,
-                    "Required originator or beneficiary data is incomplete for this transfer.",
-                    Map.of("fiatEquivalentUsd", usd, "configuredThresholdUsd", travelRuleThresholdUsd));
+        } else {
+            BigDecimal threshold = resolveTravelRuleThresholdUsd(pspId, request.countryCode());
+            if (usd.compareTo(threshold) >= 0 && !hasTravelRuleData(request)) {
+                add(signals, "CRYPTO_TRAVEL_RULE_INCOMPLETE", 40,
+                        "Required originator or beneficiary data is incomplete for this transfer.",
+                        Map.of("fiatEquivalentUsd", usd, "configuredThresholdUsd", threshold));
+            }
         }
         return new CryptoScreeningAssessment(address, network, walletRisk);
     }
@@ -356,11 +388,12 @@ public class MultiAssetRiskEngine {
         }
     }
 
-    private TravelRuleStatus resolveTravelRuleStatus(IngestTransactionRequest request) {
+    private TravelRuleStatus resolveTravelRuleStatus(IngestTransactionRequest request, Long pspId) {
         if (request.assetClass() != AssetClass.CRYPTO) return TravelRuleStatus.NOT_REQUIRED;
         BigDecimal usd = usdValue(request);
         if (usd == null) return TravelRuleStatus.PENDING_VERIFICATION;
-        if (usd.compareTo(travelRuleThresholdUsd) < 0) return TravelRuleStatus.NOT_REQUIRED;
+        BigDecimal threshold = resolveTravelRuleThresholdUsd(pspId, request.countryCode());
+        if (usd.compareTo(threshold) < 0) return TravelRuleStatus.NOT_REQUIRED;
         return hasTravelRuleData(request) ? TravelRuleStatus.PENDING_VERIFICATION : TravelRuleStatus.INCOMPLETE;
     }
 
