@@ -4,6 +4,12 @@
 > **For:** Payment Service Providers, Banks, and Fintech Institutions  
 > **Base URL:** `https://api.hokeka.com/api/v1` (Production)  
 > **Swagger UI:** `https://api.hokeka.com/api/v1/swagger-ui.html`
+>
+> **W36-4 reconciliation (2026-08-27):** every documented `METHOD /path` in this guide has been
+> checked against an actual `@RequestMapping`/`@GetMapping`/etc. in the current codebase. All
+> match except the one fixed here (`/reports/download/{id}`, was documented as `{executionId}` —
+> cosmetic path-variable naming only, not a functional break). W36-1 and W36-3 (session-prior)
+> already corrected the two genuinely wrong paths this guide had.
 
 ---
 
@@ -590,7 +596,7 @@ Content-Type: application/json
 ### Download Report
 
 ```http
-GET /api/v1/reports/download/{executionId}?format=pdf
+GET /api/v1/reports/download/{id}?format=pdf
 ```
 
 Supported formats: `pdf`, `csv`, `xml`
