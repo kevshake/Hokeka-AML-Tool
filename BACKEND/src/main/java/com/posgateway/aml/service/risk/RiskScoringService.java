@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,27 +45,47 @@ public class RiskScoringService {
 
     private static final Logger log = LoggerFactory.getLogger(RiskScoringService.class);
 
+    // W19-3 fix: all weights below were hardcoded static final constants -- externalized via
+    // @Value so compliance can tune the risk model without a redeploy, same pattern already used
+    // elsewhere in the codebase (e.g. AmlCheckService's risk-country lists, MultiAssetRiskEngine's
+    // travel-rule threshold). Defaults are the exact prior hardcoded values, so behavior is
+    // unchanged unless the properties are explicitly set.
+
     // ── Composite KRS weights ────────────────────────────────────────────────
-    private static final double W_COUNTRY_RESIDENCE = 0.5;
-    private static final double W_NATIONALITY       = 0.3;
-    private static final double W_AGE               = 0.2;
+    @Value("${risk.weights.krs.country-residence:0.5}")
+    private double wCountryResidence;
+    @Value("${risk.weights.krs.nationality:0.3}")
+    private double wNationality;
+    @Value("${risk.weights.krs.age:0.2}")
+    private double wAge;
 
     // ── Composite TRS weights ────────────────────────────────────────────────
-    private static final double W_ORIGIN_COUNTRY = 0.3;
-    private static final double W_DEST_COUNTRY   = 0.3;
-    private static final double W_AMOUNT         = 0.4;
+    @Value("${risk.weights.trs.origin-country:0.3}")
+    private double wOriginCountry;
+    @Value("${risk.weights.trs.dest-country:0.3}")
+    private double wDestCountry;
+    @Value("${risk.weights.trs.amount:0.4}")
+    private double wAmount;
 
     // ── CRA component weights (sum = 1.0) ────────────────────────────────────
-    private static final double CRA_W_COUNTRY    = 0.25;
-    private static final double CRA_W_PEP_SANC   = 0.30;
-    private static final double CRA_W_INDUSTRY   = 0.15;
-    private static final double CRA_W_VOLUME     = 0.15;
-    private static final double CRA_W_ALERTS     = 0.10;
-    private static final double CRA_W_AGE        = 0.05;
+    @Value("${risk.weights.cra.country:0.25}")
+    private double craWCountry;
+    @Value("${risk.weights.cra.pep-sanctions:0.30}")
+    private double craWPepSanc;
+    @Value("${risk.weights.cra.industry:0.15}")
+    private double craWIndustry;
+    @Value("${risk.weights.cra.volume:0.15}")
+    private double craWVolume;
+    @Value("${risk.weights.cra.alerts:0.10}")
+    private double craWAlerts;
+    @Value("${risk.weights.cra.age:0.05}")
+    private double craWAge;
 
     // ── CRA history windows ──────────────────────────────────────────────────
-    private static final int VOLUME_LOOKBACK_DAYS = 30;
-    private static final int ALERT_LOOKBACK_DAYS  = 90;
+    @Value("${risk.weights.cra.volume-lookback-days:30}")
+    private int volumeLookbackDays;
+    @Value("${risk.weights.cra.alert-lookback-days:90}")
+    private int alertLookbackDays;
 
     // ── Industry risk fallback (until mcc_risk table exists) ─────────────────
         private final com.posgateway.aml.service.risk.MccRiskConfig mccRiskConfig;
@@ -118,10 +139,10 @@ public class RiskScoringService {
         double scoreMcc     = scoreMccRisk(merchant.getMcc());
         double scoreAge     = merchant.isNew() ? 60.0 : 20.0;
 
-        double weightedSum = scoreCountry * W_COUNTRY_RESIDENCE
-                           + scoreMcc     * W_NATIONALITY
-                           + scoreAge     * W_AGE;
-        double sumWeights  = W_COUNTRY_RESIDENCE + W_NATIONALITY + W_AGE;
+        double weightedSum = scoreCountry * wCountryResidence
+                           + scoreMcc     * wNationality
+                           + scoreAge     * wAge;
+        double sumWeights  = wCountryResidence + wNationality + wAge;
         double krs = weightedSum / sumWeights;
 
         meterRegistry.gauge("aml.risk.krs",
@@ -138,10 +159,10 @@ public class RiskScoringService {
         double scoreDest   = getCountryRisk(destCountry);
         double scoreAmount = calculateAmountRisk(amount);
 
-        double weightedSum = scoreOrigin * W_ORIGIN_COUNTRY
-                           + scoreDest   * W_DEST_COUNTRY
-                           + scoreAmount * W_AMOUNT;
-        double sumWeights  = W_ORIGIN_COUNTRY + W_DEST_COUNTRY + W_AMOUNT;
+        double weightedSum = scoreOrigin * wOriginCountry
+                           + scoreDest   * wDestCountry
+                           + scoreAmount * wAmount;
+        double sumWeights  = wOriginCountry + wDestCountry + wAmount;
         double trs = weightedSum / sumWeights;
 
         meterRegistry.gauge("aml.risk.trs",
@@ -241,12 +262,12 @@ public class RiskScoringService {
         int alertScore    = (int) Math.round(scoreAlertHistory(merchantId));
         int ageScore      = (int) Math.round(scoreBusinessAge(merchant.getRegistrationDate()));
 
-        double cra = countryScore  * CRA_W_COUNTRY
-                   + pepSancScore  * CRA_W_PEP_SANC
-                   + industryScore * CRA_W_INDUSTRY
-                   + volumeScore   * CRA_W_VOLUME
-                   + alertScore    * CRA_W_ALERTS
-                   + ageScore      * CRA_W_AGE;
+        double cra = countryScore  * craWCountry
+                   + pepSancScore  * craWPepSanc
+                   + industryScore * craWIndustry
+                   + volumeScore   * craWVolume
+                   + alertScore    * craWAlerts
+                   + ageScore      * craWAge;
 
         cra = Math.max(0.0, Math.min(100.0, cra));
 
@@ -367,7 +388,7 @@ public class RiskScoringService {
         Long expectedCents = merchant.getExpectedMonthlyVolume();
         Long actualCents = transactionRepository.sumAmountByMerchantInTimeWindow(
                 String.valueOf(merchant.getMerchantId()),
-                LocalDateTime.now().minusDays(VOLUME_LOOKBACK_DAYS),
+                LocalDateTime.now().minusDays(volumeLookbackDays),
                 LocalDateTime.now());
 
         if (actualCents == null) actualCents = 0L;
@@ -391,7 +412,7 @@ public class RiskScoringService {
     /** Recent alert volume tier — 90-day window. */
     private double scoreAlertHistory(Long merchantId) {
         long alerts = alertRepository.countByMerchantIdSince(
-                merchantId, LocalDateTime.now().minusDays(ALERT_LOOKBACK_DAYS));
+                merchantId, LocalDateTime.now().minusDays(alertLookbackDays));
         if (alerts >= 10) return 100.0;
         if (alerts >= 5)  return 75.0;
         if (alerts >= 3)  return 50.0;
