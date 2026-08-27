@@ -757,6 +757,28 @@ export interface PspBillingSummaryRow {
   createdAt?: string;
 }
 
+// W26-8 fix: the Psp entity had no webhook/notification settings at all -- this session's
+// earlier W36-2 fix built the actual mechanism (WebhookSubscriptionController, tenant-scoped),
+// which supersedes the flat-field-on-Psp design the item originally envisioned with a proper
+// normalized model. This hook is the self-service read side of that.
+export interface WebhookSubscriptionRow {
+  id: number;
+  pspId: string;
+  callbackUrl: string;
+  eventType: string;
+  secretKey?: string;
+  active: boolean;
+  createdAt?: string;
+  failureCount: number;
+}
+
+export function useWebhookSubscriptions() {
+  return useQuery<WebhookSubscriptionRow[]>({
+    queryKey: ["webhooks", "subscriptions"],
+    queryFn: () => apiClient.get<WebhookSubscriptionRow[]>("webhooks/subscriptions"),
+  });
+}
+
 export function usePspBillingSummary() {
   return useQuery<PspBillingSummaryRow[]>({
     queryKey: ['billing', 'psp-summary'],

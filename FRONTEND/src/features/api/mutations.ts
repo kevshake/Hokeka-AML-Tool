@@ -685,6 +685,28 @@ export const useSendBillingNotification = () => {
   });
 };
 
+// W26-8 fix: PSP self-service webhook management, built over W36-2's WebhookSubscriptionController.
+export const useCreateWebhookSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { callbackUrl: string; eventType: string }) =>
+      apiClient.post("webhooks/subscribe", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["webhooks", "subscriptions"] });
+    },
+  });
+};
+
+export const useDeleteWebhookSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`webhooks/subscriptions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["webhooks", "subscriptions"] });
+    },
+  });
+};
+
 export const useCreateSubscription = () => {
   const queryClient = useQueryClient();
   return useMutation({

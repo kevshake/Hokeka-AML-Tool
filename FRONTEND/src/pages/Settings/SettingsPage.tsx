@@ -24,6 +24,7 @@ import { BRAND_THEMES } from "../../config/themes";
 import { readableTextOn, withAlpha } from "../../theme/tokens";
 import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
+import WebhooksTab from "./tabs/WebhooksTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 
@@ -246,6 +247,7 @@ export default function SettingsPage() {
         {!isPspUser && <Tab label="PSP Theme Management" />}
         {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
         {isPspUser && <Tab label="Billing" />}
+        {isPspUser && <Tab label="Webhooks" />}
       </Tabs>
 
       {!isPspUser && <TabPanel value={tabValue} index={0}>
@@ -575,6 +577,12 @@ export default function SettingsPage() {
       {isPspUser && (
         <TabPanel value={tabValue} index={billingTabIndex}>
           <BillingTab pspId={String(user!.pspId)} />
+        </TabPanel>
+      )}
+
+      {isPspUser && (
+        <TabPanel value={tabValue} index={billingTabIndex + 1}>
+          <WebhooksTab />
         </TabPanel>
       )}
     </Box>
