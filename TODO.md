@@ -1,6 +1,32 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 67 — 2 LARGE-bucket items turned out tractable once traced (2026-08-27, continued)
+
+- **`W26-8`** — "no webhook/notification settings on `Psp` at all" turned out already
+  substantially solved by this session's own earlier `W36-2` fix (real, tenant-scoped
+  `WebhookSubscriptionController`), just missing a frontend. Added a "Webhooks" tab to Settings
+  (PSP self-service): create/list/remove subscriptions, shows the signing secret once, honest
+  about only `RISK_ALERT` actually being delivered today.
+- **`W36-4`** — "reconcile the remaining ~22 documented PSP API endpoints" was an audit task, not
+  a feature build. Checked every one against an actual controller mapping; all matched except one
+  cosmetic path-variable name (fixed). Recorded the completed reconciliation directly in the doc.
+
+**Genuinely remaining** (LARGE bucket, real multi-file/multi-day builds, not attempted this
+session): `W47` (AeroORM — deliberately deferred pending live-cluster certification before
+touching a compliance-critical cache path), `W45` (settlement-account deterministic-hash linkage —
+needs a schema/crypto design decision), `W29-2` (OCR/IDV — needs a vendor choice), `W35-1`
+(DB-level tenant isolation backstop via Hibernate filters or Postgres RLS — cross-cutting across
+every tenant-scoped entity), `W20-17` search half (no backend search endpoint exists at all),
+`W18-7` (wiring SANCTIONS/CYBER signal types needs new integrations across two unrelated domains),
+`W21-7` (per-jurisdiction travel-rule threshold needs a wire-contract change). **NEEDS-DECISION
+bucket** (13 items, Wave 59/62) is unchanged — these need the user's business/product judgment, not
+code.
+
+**47 items closed total this session.**
+
+---
+
 ## Wave 66 — SMALL queue exhausted (2026-08-27, continued)
 
 - **`W19-3`** — all 14 KRS/TRS/CRA weight/lookback-window constants were hardcoded; externalized
