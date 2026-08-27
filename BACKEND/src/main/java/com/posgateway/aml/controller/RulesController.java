@@ -364,25 +364,37 @@ public class RulesController {
 
     @PostMapping("/governance/versions/{versionId}/approve")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('MANAGE_RULES')")
-    public RuleGovernanceService.RuleVersionView approveVersion(@PathVariable Long versionId,
+    public ResponseEntity<RuleGovernanceService.RuleVersionView> approveVersion(@PathVariable Long versionId,
             @RequestBody ReviewRuleVersionRequest request) {
-        return governanceService.approve(versionId, getCurrentUser(), request.effectiveFrom(), request.reason());
+        // W18-4 fix: getCurrentUser() returning null (authenticated principal whose username
+        // doesn't resolve via userRepository -- an edge case, but a real one) used to flow
+        // straight into governanceService.approve() unguarded, NPEing to a 500 instead of a
+        // proper 401. createRule already null-checks the same way; matched here.
+        User currentUser = getCurrentUser();
+        if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(
+                governanceService.approve(versionId, currentUser, request.effectiveFrom(), request.reason()));
     }
 
     @PostMapping("/governance/versions/{versionId}/reject")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('MANAGE_RULES')")
-    public RuleGovernanceService.RuleVersionView rejectVersion(@PathVariable Long versionId,
+    public ResponseEntity<RuleGovernanceService.RuleVersionView> rejectVersion(@PathVariable Long versionId,
             @RequestBody ReviewRuleVersionRequest request) {
-        return governanceService.reject(versionId, getCurrentUser(), request.reason());
+        User currentUser = getCurrentUser();
+        if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(governanceService.reject(versionId, currentUser, request.reason()));
     }
 
     @PostMapping("/{id}/rollback")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('MANAGE_RULES')")
-    public RuleDefinition proposeRollback(@PathVariable Long id, @RequestBody RollbackRuleRequest request) {
+    public ResponseEntity<RuleDefinition> proposeRollback(@PathVariable Long id, @RequestBody RollbackRuleRequest request) {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         RuleDefinition rule = ruleRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Rule not found"));
-        if (!canAccess(rule, getCurrentUser())) throw new SecurityException("Rule belongs to a different PSP");
-        return governanceService.proposeRollback(rule, request.targetVersionId(), getCurrentUser(), request.reason());
+        if (!canAccess(rule, currentUser)) throw new SecurityException("Rule belongs to a different PSP");
+        return ResponseEntity.ok(
+                governanceService.proposeRollback(rule, request.targetVersionId(), currentUser, request.reason()));
     }
 
     private boolean canAccess(RuleDefinition rule, User user) {
