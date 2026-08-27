@@ -42,6 +42,14 @@ public enum Permission {
     VIEW_AUDIT_LOGS,
     CONFIGURE_SYSTEM,
 
+    // User Skills (W19-4 fix: UserSkillController referenced these via hasAuthority(...) in
+    // every @PreAuthorize on the class, but neither was ever registered here -- the authority
+    // check could never match, so the endpoints were reachable ONLY via the hardcoded role list
+    // (SUPER_ADMIN/ADMIN/COMPLIANCE_OFFICER) alongside it, defeating the point of having a
+    // fine-grained permission as an alternative grant path for a role without full admin rights)
+    MANAGE_SKILLS,
+    CERTIFY_SKILLS,
+
     // PSP Administration
     MANAGE_PSP,
     MANAGE_PSP_THEME,

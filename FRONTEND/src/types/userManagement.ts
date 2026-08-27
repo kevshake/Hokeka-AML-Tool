@@ -69,6 +69,10 @@ export enum Permission {
     VIEW_AUDIT_LOGS = "VIEW_AUDIT_LOGS",
     CONFIGURE_SYSTEM = "CONFIGURE_SYSTEM",
 
+    // User Skills (W19-4 fix)
+    MANAGE_SKILLS = "MANAGE_SKILLS",
+    CERTIFY_SKILLS = "CERTIFY_SKILLS",
+
     // PSP Administration
     MANAGE_PSP = "MANAGE_PSP",
     MANAGE_PSP_THEME = "MANAGE_PSP_THEME",
@@ -112,6 +116,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
     [Permission.MANAGE_RULES]: "Manage Rules",
     [Permission.VIEW_AUDIT_LOGS]: "View Audit Logs",
     [Permission.CONFIGURE_SYSTEM]: "Configure System",
+    [Permission.MANAGE_SKILLS]: "Manage Skills",
+    [Permission.CERTIFY_SKILLS]: "Certify Skills",
     [Permission.MANAGE_PSP]: "Manage PSP",
     [Permission.MANAGE_PSP_THEME]: "Manage PSP Theme",
     [Permission.PSP_SETTINGS_VIEW]: "PSP Settings View",
@@ -160,6 +166,7 @@ export const PERMISSION_CATEGORIES = {
         Permission.VIEW_AUDIT_LOGS,
         Permission.CONFIGURE_SYSTEM,
     ],
+    "User Skills": [Permission.MANAGE_SKILLS, Permission.CERTIFY_SKILLS],
     "PSP Administration": [
         Permission.MANAGE_PSP,
         Permission.MANAGE_PSP_THEME,
