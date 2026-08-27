@@ -161,6 +161,30 @@ public class RoleService {
         initializeSystemRole("VIEWER",            "Read Only",
                 Set.of(Permission.VIEW_CASES, Permission.VIEW_SAR,
                        Permission.VIEW_TRANSACTION_DETAILS));
+
+        // W19-2 fix: SCREENING_ANALYST and PSP_ANALYST are documented, real values in the
+        // UserRole enum and are referenced across 17+ @PreAuthorize annotations and permission
+        // checks throughout the codebase (KycDueDiligenceController, DocumentController,
+        // MerchantController, CasePermissionService, PspIsolationService, ...), but no Role row
+        // with either name was ever seeded -- every one of those branches was permanently dead,
+        // since role assignment only offers roles that actually exist in the roles table.
+        initializeSystemRole("SCREENING_ANALYST", "Sanctions Screening Specialist",
+                Set.of(Permission.VIEW_CASES, Permission.VIEW_SAR, Permission.VIEW_SCREENING_RESULTS,
+                       Permission.MANAGE_WATCHLISTS, Permission.WHITELIST_ENTITY,
+                       Permission.OVERRIDE_SCREENING_MATCH, Permission.VIEW_TRANSACTION_DETAILS,
+                       Permission.MERCHANT_VIEW));
+        initializeSystemRole("PSP_ANALYST",       "PSP Case Analyst",
+                Set.of(Permission.VIEW_CASES, Permission.ASSIGN_CASES, Permission.ADD_CASE_NOTES,
+                       Permission.ADD_CASE_EVIDENCE, Permission.VIEW_SAR,
+                       Permission.VIEW_TRANSACTION_DETAILS, Permission.VIEW_SCREENING_RESULTS,
+                       Permission.MERCHANT_VIEW, Permission.REPORT_VIEW));
+
+        // APP_CONTROLLER is a machine/service-account role (Grafana dashboards, reporting-config
+        // service-to-service calls -- GrafanaUserContextController, PspReportingConfigService,
+        // PspIsolationService all check for it by raw role-name string, not via a Permission
+        // grant), so it deliberately gets no Permission set of its own -- it exists purely so a
+        // service-account User can be assigned this role name at all, which was impossible before.
+        initializeSystemRole("APP_CONTROLLER",    "Application Service Account", Set.of());
     }
 
     private void initializeSystemRole(String name, String description, Set<Permission> permissions) {
