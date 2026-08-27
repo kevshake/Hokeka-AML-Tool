@@ -1,6 +1,46 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-08-26_
 
+## Wave 66 — SMALL queue exhausted (2026-08-27, continued)
+
+- **`W19-3`** — all 14 KRS/TRS/CRA weight/lookback-window constants were hardcoded; externalized
+  via `@Value` under `risk.weights.*`, defaults unchanged. 2 tests prove the weights actually flow
+  into the calculation, not just that defaults are preserved.
+- **`W19-4`** — `UserSkillController`'s `@PreAuthorize`s referenced `MANAGE_SKILLS`/
+  `CERTIFY_SKILLS`, neither registered in `Permission`. Registered both, mirrored into the
+  frontend permission picker so they're actually assignable from the Roles UI. 1 test.
+- **`W19-5`** — **more serious than logged.** The global `PSP_ADMIN` template role (what every
+  PSP registered outside the one-time demo seed actually falls back to) granted only view
+  permissions — no `MANAGE_USERS`, no `MANAGE_RULES` — contradicting the role's entire purpose.
+  Widened to match V127's richer definition; Java fix + migration V217 for already-provisioned
+  databases. 1 test.
+- **`W18-5`** — historical `CRYPTO_SCREENING_UNAVAILABLE`/`CRYPTO_FIAT_VALUE_MISSING`/
+  `CRYPTO_TRAVEL_RULE_INCOMPLETE` rows were bucketed as `signal_type='AML'` by V161's one-time
+  backfill, inconsistent with what identical new rows get today (`CRYPTO_EXPOSURE`, per
+  `MultiAssetRiskEngine.signalTypeFor`). Corrective migration V219.
+- **`W19-2`** — `SCREENING_ANALYST` and `PSP_ANALYST` are documented `UserRole` enum values
+  referenced across 17+ `@PreAuthorize` annotations, but neither had a seeded `Role` row —
+  permanently dead branches. `APP_CONTROLLER` (machine/service-account role, checked by raw
+  string comparison) was also never seeded. All three seeded, Java + migration V218. 2 tests.
+- **`W18-4`** — `RulesController.approveVersion/rejectVersion/proposeRollback` passed
+  `getCurrentUser()` unguarded into `RuleGovernanceService`, NPEing to a 500 instead of a proper
+  401 when the principal's username doesn't resolve. Matched the existing `createRule` null-check.
+  Separately, migration V220 retroactively backfills any `rule_definitions` row V160 left "active
+  but versionless" (only possible if `platform_users` was empty when V160 ran). The third V160
+  sub-item (`content_hash` mismatch) confirmed harmless — field is never read — no action. 3 tests.
+- **`W21-3`** — investigated fully, **confirmed already fixed (stale item).** Traced
+  `RecordTrailService`: `MOBILE_MONEY_TRANSACTION_CONTEXT` already has a curated lookup (§multi-
+  asset-transaction detail), and `MOBILE_MONEY_NETWORK_EDGE` already has real bidirectional
+  curated linking via `addMobileMoneyLinks`, wired into every `genericDetail` call. No code change.
+
+**The SMALL queue from Wave 59 is now exhausted** — every item has been fixed, reclassified to
+LARGE, merged into an existing NEEDS-DECISION item, or confirmed stale/already-fixed, with
+evidence for each. Remaining work is the LARGE bucket (6 items needing real new features/backend
+support) and the NEEDS-DECISION bucket (13 items needing a human business call, not code) from
+Wave 59/62, both unchanged. 45 items closed total this session.
+
+---
+
 ## Wave 65 — 9 more closed (2026-08-27, continued): W14-5, W27-2/3/6/7/8, W14-10 frontend half, W18-2 investigated
 
 - **`W14-5`** — sanctions screening (`SanctionsScreenClient`, `SanctionsCountClient`) shared the
