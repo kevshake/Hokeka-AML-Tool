@@ -126,10 +126,27 @@ public class RoleService {
     public void initDefaultRoles() {
         initializeSystemRole("SUPER_ADMIN",       "Super Administrator",    Set.of(Permission.values()));
         initializeSystemRole("ADMIN",             "Platform Administrator", Set.of(Permission.values()));
+        // W19-5 fix: this used to grant only VIEW_CASES/VIEW_TRANSACTION_DETAILS/
+        // VIEW_SCREENING_RESULTS/VIEW_SAR/MANAGE_PSP_THEME -- a PSP_ADMIN role that couldn't
+        // manage its own PSP's users or rules, contradicting the role's entire purpose. V127's
+        // per-PSP seed defines a much richer "full control within their PSP" set, but that
+        // migration only ever ran for the handful of demo PSPs that existed at the time -- every
+        // PSP registered afterward has no per-PSP PSP_ADMIN row, so createPspUser's role lookup
+        // (findByNameAndPsp -> falls back to findByNameAndPspIsNull) resolves to THIS global
+        // template for every real, non-demo PSP. Brought in line with V127's definition so newly
+        // onboarded PSPs' admins can actually administer their PSP.
         initializeSystemRole("PSP_ADMIN",         "PSP Administrator",
-                Set.of(Permission.VIEW_CASES, Permission.VIEW_TRANSACTION_DETAILS,
-                       Permission.VIEW_SCREENING_RESULTS, Permission.VIEW_SAR,
-                       Permission.MANAGE_PSP_THEME));
+                Set.of(Permission.VIEW_CASES, Permission.CREATE_CASES, Permission.ASSIGN_CASES,
+                       Permission.CLOSE_CASES, Permission.ESCALATE_CASES, Permission.REOPEN_CASES,
+                       Permission.ADD_CASE_NOTES, Permission.ADD_CASE_EVIDENCE,
+                       Permission.VIEW_SAR, Permission.CREATE_SAR, Permission.APPROVE_SAR,
+                       Permission.FILE_SAR, Permission.AMEND_SAR,
+                       Permission.VIEW_PII, Permission.EXPORT_DATA,
+                       Permission.VIEW_TRANSACTION_DETAILS, Permission.VIEW_SCREENING_RESULTS,
+                       Permission.MANAGE_WATCHLISTS, Permission.WHITELIST_ENTITY,
+                       Permission.MANAGE_USERS, Permission.MANAGE_RULES, Permission.MANAGE_PSP_THEME,
+                       Permission.PSP_SETTINGS_VIEW, Permission.PSP_SETTINGS_EDIT, Permission.PSP_UI_EDIT,
+                       Permission.MERCHANT_VIEW, Permission.MERCHANT_EDIT, Permission.REPORT_VIEW));
         initializeSystemRole("COMPLIANCE_OFFICER","Compliance Officer",
                 Set.of(Permission.VIEW_CASES, Permission.VIEW_SCREENING_RESULTS,
                        Permission.ASSIGN_CASES, Permission.FILE_SAR, Permission.ADD_CASE_EVIDENCE,
