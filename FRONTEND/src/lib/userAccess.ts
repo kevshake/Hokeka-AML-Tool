@@ -16,18 +16,19 @@ export function normalizeRole(role?: string | null): string {
   return (role ?? "").replaceAll(" ", "_").toUpperCase();
 }
 
-export function isPlatformAdmin(
-  user:
-    | { role?: { name?: string }; pspId?: number; psp?: { pspCode?: string } }
-    | null
-    | undefined,
-): boolean {
+type UserAccessContext = {
+  role?: { name?: string; permissions?: string[] };
+  pspId?: number;
+  psp?: { pspCode?: string; code?: string } | null;
+} | null | undefined;
+
+export function isPlatformAdmin(user: UserAccessContext): boolean {
   if (!user) return false;
   const role = normalizeRole(user.role?.name);
   if (role === "APP_CONTROLLER") return true;
   if (!PLATFORM_ADMIN_ROLES.has(role)) return false;
   const pspId = user.pspId ?? 0;
-  const pspCode = user.psp?.pspCode ?? "";
+  const pspCode = user.psp?.pspCode ?? user.psp?.code ?? "";
   return pspId === 0 || pspCode === "HOKEKA_PLATFORM";
 }
 
@@ -37,9 +38,7 @@ export function isPspAdmin(
   return normalizeRole(user?.role?.name) === "PSP_ADMIN";
 }
 
-export function canManageUsers(
-  user: { role?: { name?: string; permissions?: string[] } } | null | undefined,
-): boolean {
+export function canManageUsers(user: UserAccessContext): boolean {
   if (!user) return false;
   if (user.role?.permissions?.includes("MANAGE_USERS")) return true;
   return USER_MANAGEMENT_ROLES.has(normalizeRole(user.role?.name));
@@ -53,12 +52,7 @@ export function canManageRoles(
 }
 
 /** PSP admins are locked to their tenant; platform admins may pick any PSP. */
-export function lockedPspId(
-  user:
-    | { pspId?: number; psp?: { pspCode?: string }; role?: { name?: string } }
-    | null
-    | undefined,
-): number | null {
+export function lockedPspId(user: UserAccessContext): number | null {
   if (!user || isPlatformAdmin(user)) return null;
   const id = user.pspId ?? 0;
   return id > 0 ? id : null;
