@@ -106,22 +106,7 @@ public class WebhookService {
 
         for (WebhookSubscription sub : subscriptions) {
             try {
-                long timestamp = System.currentTimeMillis();
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.set(EVENT_HEADER, eventType);
-                headers.set(TIMESTAMP_HEADER, String.valueOf(timestamp));
-                String signature = sign(sub.getSecretKey(), timestamp, body);
-                if (signature != null) {
-                    headers.set(SIGNATURE_HEADER, signature);
-                } else {
-                    log.warn("Webhook subscription {} has no secret key — sending UNSIGNED to {}",
-                            sub.getId(), sub.getCallbackUrl());
-                }
-
-                client.exchange(sub.getCallbackUrl(), HttpMethod.POST,
-                        new HttpEntity<>(body, headers), String.class);
-
+                deliverSynchronously(client, sub, eventType, body);
                 if (sub.getFailureCount() > 0) {
                     sub.setFailureCount(0);
                     subscriptionRepository.save(sub);
@@ -137,6 +122,25 @@ public class WebhookService {
                 subscriptionRepository.save(sub);
             }
         }
+    }
+
+    /** Best-effort synchronous delivery for legacy {@code @Async} callers. */
+    static void deliverSynchronously(RestTemplate client, WebhookSubscription sub,
+                                     String eventType, String body) {
+        long timestamp = System.currentTimeMillis();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(EVENT_HEADER, eventType);
+        headers.set(TIMESTAMP_HEADER, String.valueOf(timestamp));
+        String signature = sign(sub.getSecretKey(), timestamp, body);
+        if (signature != null) {
+            headers.set(SIGNATURE_HEADER, signature);
+        } else {
+            log.warn("Webhook subscription {} has no secret key — sending UNSIGNED to {}",
+                    sub.getId(), sub.getCallbackUrl());
+        }
+        client.exchange(sub.getCallbackUrl(), HttpMethod.POST,
+                new HttpEntity<>(body, headers), String.class);
     }
 
     /**

@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Service for handling case decisions.
@@ -33,6 +35,7 @@ public class CaseDecisionService {
     private final CaseDecisionRepository caseDecisionRepository;
     private final AuditLogRepository auditLogRepository;
     private final com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer;
+    private final com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
     // private final UserService userService; // Inject real user service in
     // production
 
@@ -40,11 +43,13 @@ public class CaseDecisionService {
     public CaseDecisionService(ComplianceCaseRepository complianceCaseRepository,
                                CaseDecisionRepository caseDecisionRepository,
                                AuditLogRepository auditLogRepository,
-                               @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer) {
+                               @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer,
+                               @Nullable com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService) {
         this.complianceCaseRepository = complianceCaseRepository;
         this.caseDecisionRepository = caseDecisionRepository;
         this.auditLogRepository = auditLogRepository;
         this.caseEventProducer = caseEventProducer;
+        this.webhookOutboxService = webhookOutboxService;
     }
 
     /**
@@ -132,6 +137,31 @@ public class CaseDecisionService {
                     caseId);
         }
 
+        enqueueCaseUpdateWebhook(cCase, oldStatus, decisionType, user.getUsername());
+
         logger.info("Decision {} recorded for case {} by user {}", decisionType, caseId, user.getUsername());
+    }
+
+    private void enqueueCaseUpdateWebhook(ComplianceCase cCase, String previousStatus,
+                                          String decisionType, String decidedBy) {
+        if (webhookOutboxService == null || cCase.getPspId() == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("caseId", cCase.getId());
+        payload.put("caseReference", cCase.getCaseReference());
+        payload.put("previousStatus", previousStatus);
+        payload.put("status", cCase.getStatus() != null ? cCase.getStatus().name() : null);
+        payload.put("decision", decisionType);
+        payload.put("resolution", cCase.getResolution());
+        payload.put("merchantId", cCase.getMerchantId());
+        payload.put("pspId", cCase.getPspId());
+        payload.put("decidedBy", decidedBy);
+        payload.put("timestamp", LocalDateTime.now().toString());
+        webhookOutboxService.enqueueForPsp(
+                cCase.getPspId(),
+                "CASE_UPDATE",
+                payload,
+                "webhook.case_update:" + cCase.getId() + ":decision:" + cCase.getResolvedAt());
     }
 }

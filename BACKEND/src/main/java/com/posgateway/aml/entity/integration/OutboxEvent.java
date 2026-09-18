@@ -21,7 +21,13 @@ public class OutboxEvent {
 
     public enum Status {
         PENDING,
-        PUBLISHED
+        PUBLISHED,
+        FAILED
+    }
+
+    public enum Channel {
+        KAFKA,
+        WEBHOOK
     }
 
     @Id
@@ -31,8 +37,18 @@ public class OutboxEvent {
     @Column(name = "event_key", nullable = false, unique = true, length = 200)
     private String eventKey;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Channel channel = Channel.KAFKA;
+
     @Column(nullable = false, length = 200)
     private String topic;
+
+    @Column(length = 1000)
+    private String destination;
+
+    @Column(name = "subscription_id")
+    private Long subscriptionId;
 
     @Column(name = "partition_key", length = 200)
     private String partitionKey;
@@ -65,7 +81,13 @@ public class OutboxEvent {
     public Long getId() { return id; }
     public String getEventKey() { return eventKey; }
     public void setEventKey(String eventKey) { this.eventKey = eventKey; }
+    public Channel getChannel() { return channel; }
+    public void setChannel(Channel channel) { this.channel = channel; }
     public String getTopic() { return topic; }
+    public String getDestination() { return destination; }
+    public void setDestination(String destination) { this.destination = destination; }
+    public Long getSubscriptionId() { return subscriptionId; }
+    public void setSubscriptionId(Long subscriptionId) { this.subscriptionId = subscriptionId; }
     public void setTopic(String topic) { this.topic = topic; }
     public String getPartitionKey() { return partitionKey; }
     public void setPartitionKey(String partitionKey) { this.partitionKey = partitionKey; }

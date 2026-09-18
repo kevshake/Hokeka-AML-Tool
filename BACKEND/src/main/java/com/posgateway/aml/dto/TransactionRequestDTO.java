@@ -40,6 +40,9 @@ public class TransactionRequestDTO {
     private String countryCode;
     private String channelType;
     private Boolean cashTransaction = false;
+    @Size(max = 200, message = "Client reference must not exceed 200 characters")
+    private String clientReference;
+
     @Size(max = 255, message = "Customer account reference must not exceed 255 characters")
     private String customerAccountReference;
     @Email(message = "Customer email must be a valid email address")
@@ -139,6 +142,8 @@ public class TransactionRequestDTO {
     public void setChannelType(String channelType) { this.channelType = channelType; }
     public Boolean getCashTransaction() { return cashTransaction; }
     public void setCashTransaction(Boolean cashTransaction) { this.cashTransaction = cashTransaction; }
+    public String getClientReference() { return clientReference; }
+    public void setClientReference(String clientReference) { this.clientReference = clientReference; }
     public String getCustomerAccountReference() { return customerAccountReference; }
     public void setCustomerAccountReference(String customerAccountReference) {
         this.customerAccountReference = customerAccountReference;

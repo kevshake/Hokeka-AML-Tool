@@ -245,19 +245,29 @@ An unapproved or unarmed node therefore **never issues an ALLOW**. This is the i
 property: a node that cannot prove what rules it should be enforcing does not get to approve
 payments.
 
-### 5.2 Fail-SOFT — the node decides on less information
+### 5.2 Feature store unavailable — fail-closed by default
 
-If the local store is unavailable, enrichment is skipped and the decision is made on the
-caller-supplied features alone. **This does not raise an error and does not change the response
-shape.** The request succeeds and looks entirely normal.
+When `featurestore.fail-closed=true` (**default**) and `pan_hash` is present, an unavailable local
+store causes `/edge/evaluate` to return **`HOLD`** immediately (no rules run):
 
-> This is the most dangerous failure mode to operate blind against. With the store down, every
-> velocity feature is absent — and by §4.5 every velocity rule therefore evaluates to false. Velocity
-> enforcement silently disappears while the node continues to return `ALLOW` and report healthy
-> traffic.
->
-> `GET /edge/status` is the only place this surfaces, as `featureStore: unavailable`. **Alert on
-> that field.** Do not infer store health from the evaluate endpoint — it will not tell you.
+```
+feature store unavailable (fail-closed): pre-auth evaluation withheld
+```
+
+This matches the architecture intent: a node that cannot read velocity history must not silently
+approve payments.
+
+Set `featurestore.fail-closed=false` only in dev/test if you explicitly want legacy fail-soft
+behaviour (evaluate on caller-supplied features alone — velocity rules silently stop firing; see
+§4.5).
+
+**Alert on `GET /edge/status` → `featureStore: unavailable`** regardless of fail-closed setting.
+
+### 5.2.1 Cloud compliance requires dual-post
+
+Edge evaluation alone does **not** create cloud alerts, cases, SAR, or webhooks. PSPs that need those
+artifacts must also POST `/api/v1/transactions/ingest` — see
+[`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md).
 
 ### 5.3 Native core degradation
 

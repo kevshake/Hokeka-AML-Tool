@@ -24,6 +24,7 @@ class KafkaOutboxServiceTest {
                 "alert.generated:7".equals(event.getEventKey())
                         && "alerts.generated".equals(event.getTopic())
                         && "4".equals(event.getPartitionKey())
+                        && event.getChannel() == OutboxEvent.Channel.KAFKA
                         && event.getStatus() == OutboxEvent.Status.PENDING));
     }
 

@@ -48,6 +48,7 @@ class PspServiceSubscriptionTest {
     @Mock private SubscriptionRepository subscriptionRepository;
     @Mock private PricingTierRepository pricingTierRepository;
     @Mock private InvoiceRepository invoiceRepository;
+    @Mock private WebhookOutboxService webhookOutboxService;
 
     @InjectMocks private PspService service;
 

@@ -5,6 +5,7 @@ import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Operation;
 import com.aerospike.client.Record;
+import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,18 +82,32 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
 
     @Override
     public Map<String, Object> deriveFeatures(String panHash) {
+        return deriveFeaturesDetailed(panHash).features();
+    }
+
+    @Override
+    public FeatureDerivation deriveFeaturesDetailed(String panHash) {
         Map<String, Object> features = new LinkedHashMap<>();
         if (isBlank(panHash)) {
-            return features;
+            return new FeatureDerivation(features, false);
+        }
+        if (!available()) {
+            return new FeatureDerivation(features, true);
         }
         try {
             Instant now = Instant.now();
+            Key[] keys = new Key[WINDOW_HOURS];
+            for (int hoursBack = 0; hoursBack < WINDOW_HOURS; hoursBack++) {
+                keys[hoursBack] = velocityKey(panHash, now.minusSeconds(hoursBack * 3600L));
+            }
+
+            Record[] records = client.get(new BatchPolicy(), keys);
             long count1h = 0;
             long count24h = 0;
             long amount24h = 0;
 
             for (int hoursBack = 0; hoursBack < WINDOW_HOURS; hoursBack++) {
-                Record record = client.get(null, velocityKey(panHash, now.minusSeconds(hoursBack * 3600L)));
+                Record record = records[hoursBack];
                 if (record == null) {
                     continue;
                 }
@@ -109,10 +124,11 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
             features.put("pan_txn_count_24h", count24h);
             // Cents → major units, matching the control plane's enrichment convention.
             features.put("pan_amount_sum_24h", amount24h / 100.0);
+            return new FeatureDerivation(features, false);
         } catch (Exception e) {
             log.warn("Velocity enrichment unavailable for this evaluation: {}", e.getMessage());
+            return new FeatureDerivation(features, true);
         }
-        return features;
     }
 
     @Override
