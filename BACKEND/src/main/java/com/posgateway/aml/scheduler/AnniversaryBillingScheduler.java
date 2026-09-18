@@ -6,10 +6,13 @@ import com.posgateway.aml.service.billing.CardBillingService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import java.time.LocalDate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Charges payable invoices once each year on the PSP creation anniversary. */
 @Component
 public class AnniversaryBillingScheduler {
+    private static final Logger log = LoggerFactory.getLogger(AnniversaryBillingScheduler.class);
     private final PspRepository psps;
     private final InvoiceRepository invoices;
     private final CardBillingService cardBillingService;
@@ -31,9 +34,18 @@ public class AnniversaryBillingScheduler {
                         && psp.getCreatedAt().getDayOfMonth() == today.getDayOfMonth())
                 .forEach(psp -> {
                     invoices.findByPsp_PspIdAndStatus(psp.getPspId(), "SENT")
-                            .forEach(cardBillingService::charge);
+                            .forEach(this::chargeSafely);
                     invoices.findByPsp_PspIdAndStatus(psp.getPspId(), "OVERDUE")
-                            .forEach(cardBillingService::charge);
+                            .forEach(this::chargeSafely);
                 });
+    }
+
+    private void chargeSafely(com.posgateway.aml.entity.psp.Invoice invoice) {
+        try {
+            cardBillingService.charge(invoice);
+        } catch (Exception failure) {
+            log.warn("Annual card charge could not start for invoice {}: {}",
+                    invoice.getInvoiceId(), failure.getMessage());
+        }
     }
 }
