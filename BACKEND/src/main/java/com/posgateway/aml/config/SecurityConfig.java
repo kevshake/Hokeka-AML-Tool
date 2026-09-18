@@ -64,14 +64,17 @@ public class SecurityConfig {
         // ...
 
         /**
-         * Role hierarchy: SUPER_ADMIN inherits every lower role so all @PreAuthorize
-         * checks that list ADMIN / COMPLIANCE_OFFICER / etc. automatically pass for SUPER_ADMIN.
+         * Role hierarchy: SUPER_ADMIN and PLATFORM_ADMIN inherit ADMIN (and below) so
+         * {@code @PreAuthorize} checks listing ADMIN / COMPLIANCE_OFFICER / etc. pass for
+         * platform operators without duplicating PLATFORM_ADMIN on every controller.
+         * HTTP security already treats ROLE_PLATFORM_ADMIN as an admin peer on /admin/** routes.
          */
         @Bean
         public RoleHierarchy roleHierarchy() {
                 RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
                 hierarchy.setHierarchy(
                         "ROLE_SUPER_ADMIN > ROLE_ADMIN\n" +
+                        "ROLE_PLATFORM_ADMIN > ROLE_ADMIN\n" +
                         "ROLE_ADMIN > ROLE_COMPLIANCE_OFFICER\n" +
                         "ROLE_ADMIN > ROLE_INVESTIGATOR\n" +
                         "ROLE_ADMIN > ROLE_ANALYST\n" +
