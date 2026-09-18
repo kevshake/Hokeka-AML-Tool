@@ -39,7 +39,7 @@ public class KafkaOutboxDispatcher {
     @Scheduled(fixedDelayString = "${kafka.outbox.dispatch-delay-ms:1000}")
     @Transactional
     public void dispatchReadyEvents() {
-        List<OutboxEvent> events = repository.lockReadyBatch(batchSize);
+        List<OutboxEvent> events = repository.lockReadyKafkaBatch(batchSize);
         for (OutboxEvent event : events) {
             try {
                 kafkaTemplate.send(event.getTopic(), event.getPartitionKey(), event.getPayload())

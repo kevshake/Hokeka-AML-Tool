@@ -18,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -34,6 +36,7 @@ public class CaseCreationService {
     private final ComplianceCaseRepository complianceCaseRepository;
     private final ObjectMapper objectMapper;
     private final com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer;
+    private final com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
     private final CaseEnrichmentService enrichmentService;
     private final RuleDefinitionRepository ruleDefinitionRepository;
 
@@ -41,11 +44,13 @@ public class CaseCreationService {
     public CaseCreationService(ComplianceCaseRepository complianceCaseRepository,
                                ObjectMapper objectMapper,
                                @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer,
+                               @Nullable com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService,
                                CaseEnrichmentService enrichmentService,
                                RuleDefinitionRepository ruleDefinitionRepository) {
         this.complianceCaseRepository = complianceCaseRepository;
         this.objectMapper = objectMapper;
         this.caseEventProducer = caseEventProducer;
+        this.webhookOutboxService = webhookOutboxService;
         this.enrichmentService = enrichmentService;
         this.ruleDefinitionRepository = ruleDefinitionRepository;
     }
@@ -289,6 +294,27 @@ public class CaseCreationService {
             logger.debug("Kafka disabled or CaseEventProducer not configured - skipping case lifecycle event for {}",
                     cCase.getCaseReference());
         }
+
+        enqueueCaseUpdateWebhook(cCase);
+    }
+
+    private void enqueueCaseUpdateWebhook(ComplianceCase cCase) {
+        if (webhookOutboxService == null || cCase.getPspId() == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("caseId", cCase.getId());
+        payload.put("caseReference", cCase.getCaseReference());
+        payload.put("status", cCase.getStatus() != null ? cCase.getStatus().name() : null);
+        payload.put("priority", cCase.getPriority() != null ? cCase.getPriority().name() : null);
+        payload.put("merchantId", cCase.getMerchantId());
+        payload.put("pspId", cCase.getPspId());
+        payload.put("timestamp", LocalDateTime.now().toString());
+        webhookOutboxService.enqueueForPsp(
+                cCase.getPspId(),
+                "CASE_UPDATE",
+                payload,
+                "webhook.case_update:" + cCase.getId() + ":" + cCase.getUpdatedAt());
     }
 
     /**

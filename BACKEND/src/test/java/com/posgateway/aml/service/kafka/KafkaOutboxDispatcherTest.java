@@ -23,7 +23,7 @@ class KafkaOutboxDispatcherTest {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
         OutboxEvent event = event();
-        when(repository.lockReadyBatch(10)).thenReturn(List.of(event));
+        when(repository.lockReadyKafkaBatch(10)).thenReturn(List.of(event));
         when(kafkaTemplate.send("alerts.generated", "3", "{}"))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -43,7 +43,7 @@ class KafkaOutboxDispatcherTest {
         CompletableFuture<org.springframework.kafka.support.SendResult<String, String>> failed =
                 new CompletableFuture<>();
         failed.completeExceptionally(new IllegalStateException("broker unavailable"));
-        when(repository.lockReadyBatch(10)).thenReturn(List.of(event));
+        when(repository.lockReadyKafkaBatch(10)).thenReturn(List.of(event));
         when(kafkaTemplate.send("alerts.generated", "3", "{}")).thenReturn(failed);
 
         new KafkaOutboxDispatcher(repository, kafkaTemplate, 10, 1).dispatchReadyEvents();

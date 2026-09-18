@@ -25,6 +25,7 @@ public class KafkaOutboxService {
 
         OutboxEvent event = new OutboxEvent();
         event.setEventKey(eventKey);
+        event.setChannel(OutboxEvent.Channel.KAFKA);
         event.setTopic(topic);
         event.setPartitionKey(partitionKey);
         event.setPayload(payload);

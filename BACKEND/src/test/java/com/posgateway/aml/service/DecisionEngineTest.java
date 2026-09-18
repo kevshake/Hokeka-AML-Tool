@@ -8,7 +8,7 @@ import com.posgateway.aml.repository.TransactionFeaturesRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.kafka.KafkaOutboxService;
 import com.posgateway.aml.service.limits.TransactionLimitEnforcementService;
-import com.posgateway.aml.service.psp.WebhookService;
+import com.posgateway.aml.service.psp.WebhookOutboxService;
 import com.posgateway.aml.service.sanctions.RealTimeTransactionScreeningService;
 import com.posgateway.aml.service.security.PaymentBlacklistService;
 import org.junit.jupiter.api.Test;
@@ -89,13 +89,10 @@ class DecisionEngineTest {
     }
 
     /**
-     * Verifies the fix for W36-2: WebhookService.sendWebhook existed with the whole subscribe/
-     * delivery pipeline built, but nothing anywhere in the codebase ever called it -- a PSP that
-     * subscribed to RISK_ALERT would never receive a single delivery. DecisionEngine now dispatches
-     * on every alert it creates, best-effort, alongside the existing Kafka outbox publish.
+     * Alert creation enqueues durable RISK_ALERT webhook deliveries in the same transaction.
      */
     @Test
-    void createAlertDispatchesARiskAlertWebhookForTheTransactionsPsp() {
+    void createAlertEnqueuesRiskAlertWebhookForTheTransactionsPsp() {
         ConfigService configService = mock(ConfigService.class);
         AlertRepository alertRepository = mock(AlertRepository.class);
         TransactionFeaturesRepository featuresRepository = mock(TransactionFeaturesRepository.class);
@@ -104,7 +101,7 @@ class DecisionEngineTest {
         TransactionLimitEnforcementService limitService = mock(TransactionLimitEnforcementService.class);
         PaymentBlacklistService blacklistService = mock(PaymentBlacklistService.class);
         RealTimeTransactionScreeningService screeningService = mock(RealTimeTransactionScreeningService.class);
-        WebhookService webhookService = mock(WebhookService.class);
+        WebhookOutboxService webhookOutboxService = mock(WebhookOutboxService.class);
 
         when(limitService.checkLimits(any())).thenReturn(Optional.empty());
         when(screeningService.screenTransaction(any()))
@@ -119,7 +116,7 @@ class DecisionEngineTest {
                 configService, alertRepository, featuresRepository, transactionRepository,
                 new ObjectMapper(), outboxService, limitService, blacklistService);
         ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
-        ReflectionTestUtils.setField(engine, "webhookService", webhookService);
+        ReflectionTestUtils.setField(engine, "webhookOutboxService", webhookOutboxService);
 
         TransactionEntity transaction = new TransactionEntity();
         transaction.setTxnId(50L);
@@ -139,10 +136,11 @@ class DecisionEngineTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(webhookService).sendWebhook(
+        verify(webhookOutboxService).enqueueForPsp(
                 org.mockito.ArgumentMatchers.eq(2L),
                 org.mockito.ArgumentMatchers.eq("RISK_ALERT"),
-                payloadCaptor.capture());
+                payloadCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq("webhook.risk_alert:72"));
         assertEquals(72L, payloadCaptor.getValue().get("alertId"));
     }
 

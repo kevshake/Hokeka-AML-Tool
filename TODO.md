@@ -1,5 +1,16 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-08-26_
+_Last updated: 2026-09-18_
+
+## Wave 68 — System communication follow-ups (2026-09-18)
+
+Closed the four engineering actions from `docs/SYSTEM-COMMUNICATION-AND-TX-PATH-ANALYSIS.md`:
+
+- **Dual-post integrator contract** — `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`; cross-links in analysis doc, `edge-transaction-evaluation.md`, `PSP_API_GUIDE.md`.
+- **Webhook durability** — `event_outbox` channel `WEBHOOK` (V221), `WebhookOutboxService` + `WebhookOutboxDispatcher`; `RISK_ALERT` enqueued transactionally with alert write.
+- **Dormant webhook producers wired** — `CASE_UPDATE` (case create/decision), `MERCHANT_STATUS_CHANGE` (`PspService` status paths).
+- **Pre-auth hardening** — batch Aerospike velocity reads; `featurestore.fail-closed` default true; ingest idempotency via `Idempotency-Key` / `clientReference`.
+
+Also updated W36-2 gap note: `CASE_UPDATE` / `MERCHANT_STATUS_CHANGE` no longer unwired.
 
 ## Wave 67 — 2 LARGE-bucket items turned out tractable once traced (2026-08-27, continued)
 
@@ -7,7 +18,7 @@ _Last updated: 2026-08-26_
   substantially solved by this session's own earlier `W36-2` fix (real, tenant-scoped
   `WebhookSubscriptionController`), just missing a frontend. Added a "Webhooks" tab to Settings
   (PSP self-service): create/list/remove subscriptions, shows the signing secret once, honest
-  about only `RISK_ALERT` actually being delivered today.
+  about only `RISK_ALERT` being delivered at the time (all three event types now wired — Wave 68).
 - **`W36-4`** — "reconcile the remaining ~22 documented PSP API endpoints" was an audit task, not
   a feature build. Checked every one against an actual controller mapping; all matched except one
   cosmetic path-variable name (fixed). Recorded the completed reconciliation directly in the doc.
@@ -149,8 +160,8 @@ dropped). Remaining SMALL queue: `W14-5`, `W21-3` (see above), `W18-2`, `W18-4`,
   only the controller would have been its own stub. Wired the `RISK_ALERT` trigger into
   `DecisionEngine.createAlert` (the one canonical alert-creation path every decision branch uses),
   best-effort so a webhook failure can never affect the alert/Kafka path. `CASE_UPDATE` and
-  `MERCHANT_STATUS_CHANGE` remain genuinely unwired — stated plainly in the corrected
-  `PSP_API_GUIDE.md` rather than left implied-working. Also corrected the doc's request/response
+  `MERCHANT_STATUS_CHANGE` were unwired at the time — **now wired (Wave 68)** via durable outbox.
+  Also corrected the doc's request/response
   shape, which had documented a richer aspirational feature (multi-event arrays, client-supplied
   secret, 8 event types) than what the real entity ever supported. 9 tests.
 

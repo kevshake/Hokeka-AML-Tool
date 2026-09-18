@@ -91,6 +91,20 @@ public class TransactionIngestionService {
         if (merchant.getPsp() != null) {
             transaction.setPspId(merchant.getPsp().getPspId());
         }
+
+        String clientReference = normalizeClientReference(transactionRequest.getClientReference());
+        if (clientReference != null && transaction.getPspId() != null) {
+            Optional<TransactionEntity> existing =
+                    transactionRepository.findByPspIdAndClientReference(
+                            transaction.getPspId(), clientReference);
+            if (existing.isPresent()) {
+                logger.info("Idempotent ingest: returning existing txnId={} for pspId={} clientReference={}",
+                        existing.get().getTxnId(), transaction.getPspId(), clientReference);
+                return existing.get();
+            }
+            transaction.setClientReference(clientReference);
+        }
+
         Double krs = riskScoringService.calculateKrs(merchant);
         transaction.setKrs(krs);
 
@@ -201,6 +215,13 @@ public class TransactionIngestionService {
         } catch (NumberFormatException invalid) {
             throw new IllegalArgumentException("merchantId must be a numeric platform merchant ID", invalid);
         }
+    }
+
+    private String normalizeClientReference(String clientReference) {
+        if (clientReference == null || clientReference.isBlank()) {
+            return null;
+        }
+        return clientReference.trim();
     }
 
     private void validateRequest(TransactionRequest request) {
@@ -322,6 +343,7 @@ public class TransactionIngestionService {
         private boolean cashTransaction;
         private String customerAccountReference;
         private String customerEmail;
+        private String clientReference;
 
         public String getIpAddress() { return ipAddress; }
         public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
@@ -445,6 +467,14 @@ public class TransactionIngestionService {
 
         public void setCustomerEmail(String customerEmail) {
             this.customerEmail = customerEmail;
+        }
+
+        public String getClientReference() {
+            return clientReference;
+        }
+
+        public void setClientReference(String clientReference) {
+            this.clientReference = clientReference;
         }
     }
 }

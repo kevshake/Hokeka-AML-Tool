@@ -219,27 +219,37 @@ class HokekaAMLClient {
 
 ## Webhooks
 
-Subscribe to real-time events:
+Subscribe to real-time events (one subscription per event type; secret is server-generated):
 
 ```http
 POST /api/v1/webhooks/subscribe
+Authorization: Bearer eyJ...
+Content-Type: application/json
+
 {
-  "url": "https://mypsp.com/webhooks/hokeka",
-  "events": ["alert.created", "case.updated", "transaction.flagged"],
-  "secret": "my-webhook-secret"
+  "callbackUrl": "https://mypsp.com/webhooks/hokeka",
+  "eventType": "RISK_ALERT"
 }
 ```
 
-### Events
+Repeat for `CASE_UPDATE` and `MERCHANT_STATUS_CHANGE` as needed. Deliveries are HMAC-signed
+(`X-Hokeka-Signature`, `X-Hokeka-Timestamp`) and durable (transactional outbox with retries).
 
-- `transaction.flagged` — HOLD/BLOCK decision
-- `alert.created` — New alert
-- `alert.resolved` — Alert resolved
-- `case.created` — Case opened
-- `case.updated` — Status change
-- `invoice.generated` — Invoice created
-- `invoice.overdue` — Invoice overdue
-- `invoice.paid` — Payment received
+### Events (implemented)
+
+| Event | When |
+|---|---|
+| `RISK_ALERT` | Fraud/AML alert created from transaction monitoring |
+| `CASE_UPDATE` | Case created, updated, or decision recorded |
+| `MERCHANT_STATUS_CHANGE` | PSP status transition |
+
+See [`docs/PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) §10 for payloads and
+[`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](../EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md) for edge vs cloud coverage.
+
+## Transaction ingest idempotency
+
+Pass `Idempotency-Key: <reference>` or `"clientReference"` in the ingest body. Duplicate keys return
+the existing transaction without duplicating alerts or webhooks.
 
 ## Rate Limits
 

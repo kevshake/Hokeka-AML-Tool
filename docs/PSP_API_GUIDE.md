@@ -688,19 +688,20 @@ DELETE /api/v1/webhooks/subscriptions/{id}  # unsubscribe
 
 ### Available Events
 
-Only these three actually fire — the delivery pipeline previously existed but was called from
-nowhere in the codebase, so even a successful subscribe would never have produced a delivery:
+All three event types are delivered through the **durable webhook outbox** (same transactional
+pattern as Kafka internal events). Delivery is retried with exponential backoff; permanently failed
+rows are marked `FAILED` in `event_outbox` for operator visibility. Subscriptions auto-disable after
+five consecutive delivery failures.
 
 | Event | Triggered When |
 |---|---|
-| `RISK_ALERT` | New fraud/AML alert generated (wired as of this fix — see payload below) |
-| `CASE_UPDATE` | *Entity/repository support this value; no code path emits it yet.* |
-| `MERCHANT_STATUS_CHANGE` | *Entity/repository support this value; no code path emits it yet.* |
+| `RISK_ALERT` | New fraud/AML alert from transaction monitoring (`DecisionEngine`) |
+| `CASE_UPDATE` | Compliance case created or updated; case decision recorded |
+| `MERCHANT_STATUS_CHANGE` | PSP status transition (manual admin, dunning suspension, payment reactivation) |
 
-If your integration needs `CASE_UPDATE` or `MERCHANT_STATUS_CHANGE` delivery, treat that as a
-currently-unimplemented gap, not a documentation gap — subscribing to either accepts the
-subscription but nothing will ever be delivered until those two triggers are wired the same way
-`RISK_ALERT` now is.
+> **Edge vs cloud:** `POST /edge/evaluate` does **not** emit webhooks. Subscribe and receive events
+> only from cloud paths (primarily `/api/v1/transactions/ingest`). See
+> [`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md).
 
 ### Webhook Payload (RISK_ALERT)
 
@@ -720,6 +721,47 @@ subscription but nothing will ever be delivered until those two triggers are wir
   "timestamp": "2026-06-29T14:32:15"
 }
 ```
+
+### Webhook Payload (CASE_UPDATE)
+
+```json
+{
+  "caseId": 1234,
+  "caseReference": "CASE-20260918-ABC",
+  "previousStatus": "IN_PROGRESS",
+  "status": "CLOSED_CLEARED",
+  "decision": "APPROVE",
+  "resolution": "CLEARED",
+  "merchantId": 4,
+  "pspId": 7,
+  "decidedBy": "analyst@psp.com",
+  "timestamp": "2026-09-18T14:32:15"
+}
+```
+
+### Webhook Payload (MERCHANT_STATUS_CHANGE)
+
+```json
+{
+  "pspId": 7,
+  "pspCode": "ACME",
+  "previousStatus": "ACTIVE",
+  "status": "SUSPENDED",
+  "reason": "MANUAL_STATUS_UPDATE",
+  "timestamp": "2026-09-18T14:32:15"
+}
+```
+
+### Transaction ingest idempotency
+
+Duplicate POSTs to `/api/v1/transactions/ingest` with the same key do not create duplicate
+transactions or alerts. Supply either:
+
+- Header: `Idempotency-Key: <stable reference>` (preferred), or
+- Body field: `"clientReference": "<stable reference>"`
+
+The key is scoped per PSP (`psp_id` + `client_reference` unique index). Retries return the
+existing transaction without re-running statistics or outbox enqueue.
 
 ---
 

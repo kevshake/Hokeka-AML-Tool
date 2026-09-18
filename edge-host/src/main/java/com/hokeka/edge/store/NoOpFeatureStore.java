@@ -20,7 +20,13 @@ public class NoOpFeatureStore implements EdgeFeatureStore {
 
     @Override
     public Map<String, Object> deriveFeatures(String panHash) {
-        return Map.of();
+        return deriveFeaturesDetailed(panHash).features();
+    }
+
+    @Override
+    public FeatureDerivation deriveFeaturesDetailed(String panHash) {
+        boolean needsHistory = panHash != null && !panHash.isBlank();
+        return new FeatureDerivation(Map.of(), needsHistory);
     }
 
     @Override
