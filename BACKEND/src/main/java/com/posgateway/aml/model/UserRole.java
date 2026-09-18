@@ -35,5 +35,8 @@ public enum UserRole {
     PSP_USER,
     // Same fix, same reasoning: "USER" is the third and final fallback in that same chain and
     // was equally missing from this enum.
-    USER
+    USER,
+    // Machine/service-account role (Grafana, reporting-config). Seeded by V218; referenced by
+    // raw role-name checks in PspIsolationService and GrafanaUserContextController.
+    APP_CONTROLLER
 }

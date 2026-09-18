@@ -32,6 +32,7 @@ export default function UsersTab() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [pspFilter, setPspFilter] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -50,7 +51,12 @@ export default function UsersTab() {
     severity: "error",
   });
 
-  const { data: usersPage, isLoading } = useUsers({ page: page.index, size: page.size });
+  const filterPspId = platformAdmin && pspFilter ? Number(pspFilter) : undefined;
+  const { data: usersPage, isLoading } = useUsers({
+    page: page.index,
+    size: page.size,
+    pspId: filterPspId,
+  });
   const users = usersPage?.content || [];
   const { data: roles } = useRoles();
   const { data: allPsps } = useAllPsps();
@@ -58,6 +64,16 @@ export default function UsersTab() {
   const scopedPsps = useMemo(
     () => filterPspsForUser(currentUser, allPsps),
     [allPsps, currentUser],
+  );
+
+  const tenantPsps = useMemo(
+    () =>
+      (allPsps ?? []).filter((psp) => {
+        const id = pspOptionId(psp);
+        const code = (psp as { pspCode?: string }).pspCode || "";
+        return id > 0 && code !== "HOKEKA_PLATFORM";
+      }),
+    [allPsps],
   );
 
   const assignableRoles = useMemo(() => {
@@ -195,10 +211,18 @@ export default function UsersTab() {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-ink">
         <ShieldAlert size={16} className="text-warning" />
-        User administration requires an administrator role.
+        User administration requires an administrator role or MANAGE_USERS permission.
       </div>
     );
   }
+
+  const pspFilterOptions = [
+    { value: "", label: "All PSPs" },
+    ...tenantPsps.map((psp) => ({
+      value: String(pspOptionId(psp)),
+      label: pspOptionLabel(psp),
+    })),
+  ];
 
   const pspSelectOptions = [
     ...(platformAdmin ? [{ value: "", label: "None (System User)" }] : []),
@@ -217,8 +241,21 @@ export default function UsersTab() {
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
-        <button type="button" onClick={() => handleOpenDialog()} className="hokeka-btn-primary">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {platformAdmin && (
+          <div className="min-w-[200px]">
+            <TwSelect
+              label="Filter by PSP"
+              value={pspFilter}
+              options={pspFilterOptions}
+              onChange={(event) => {
+                setPspFilter(event.target.value);
+                setPage((current) => ({ ...current, index: 0 }));
+              }}
+            />
+          </div>
+        )}
+        <button type="button" onClick={() => handleOpenDialog()} className="ml-auto hokeka-btn-primary">
           <Plus size={14} /> Add User
         </button>
       </div>
@@ -430,9 +467,7 @@ export default function UsersTab() {
             <p className="mt-1 text-sm text-ink">
               {currentUser?.psp?.name || pspOptionLabel(scopedPsps[0] ?? { pspId: tenantPspId })}
             </p>
-            <p className="mt-0.5 text-xs text-ink-muted">
-              Users are scoped to your organization.
-            </p>
+            <p className="mt-0.5 text-xs text-ink-muted">Users are scoped to your organization.</p>
           </div>
         ) : null}
         <label className="flex items-center gap-2 text-sm text-ink">

@@ -7,6 +7,7 @@ import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.PermissionService;
 import com.posgateway.aml.service.UserService;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,8 @@ class UserControllerTenantIsolationTest {
     private PspRepository pspRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private PspIsolationService pspIsolationService;
 
     private UserController controller;
 
@@ -52,7 +55,8 @@ class UserControllerTenantIsolationTest {
 
     @BeforeEach
     void setUp() {
-        controller = new UserController(userService, permissionService, pspRepository, userRepository);
+        controller = new UserController(userService, permissionService, pspRepository, userRepository,
+                pspIsolationService);
 
         psp1 = new Psp();
         psp1.setPspId(1L);
@@ -73,6 +77,8 @@ class UserControllerTenantIsolationTest {
         targetUser2.setPsp(psp2);
 
         lenient().when(permissionService.hasPermission(any(), any())).thenReturn(true);
+        lenient().when(pspIsolationService.isPlatformAdministrator(any())).thenReturn(false);
+        lenient().when(pspIsolationService.getCurrentUserPspId()).thenReturn(1L);
     }
 
     @Test
@@ -133,6 +139,7 @@ class UserControllerTenantIsolationTest {
         superAdmin.setId(1L);
         superAdmin.setUsername("super_admin");
         superAdmin.setPsp(null); // platform admin: no PSP restriction
+        when(pspIsolationService.isPlatformAdministrator(superAdmin)).thenReturn(true);
 
         when(userService.updateUser(org.mockito.ArgumentMatchers.eq(200L), any(), any()))
                 .thenReturn(targetUser2);

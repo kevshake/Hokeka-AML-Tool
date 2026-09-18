@@ -129,8 +129,10 @@ public class RoleService {
         initializeSystemRole("PLATFORM_ADMIN",    "Platform Administrator",
                 Set.of(Permission.MANAGE_USERS, Permission.MANAGE_ROLES, Permission.MANAGE_PSP,
                         Permission.MANAGE_RULES, Permission.CONFIGURE_SYSTEM,
-                        Permission.VIEW_AUDIT_LOGS, Permission.MERCHANT_VIEW,
-                        Permission.MERCHANT_EDIT, Permission.REPORT_VIEW));
+                        Permission.VIEW_AUDIT_LOGS, Permission.VIEW_CASES, Permission.VIEW_SAR,
+                        Permission.VIEW_TRANSACTION_DETAILS, Permission.VIEW_SCREENING_RESULTS,
+                        Permission.PSP_SETTINGS_VIEW, Permission.PSP_UI_EDIT,
+                        Permission.MERCHANT_VIEW, Permission.MERCHANT_EDIT, Permission.REPORT_VIEW));
         // W19-5 fix: this used to grant only VIEW_CASES/VIEW_TRANSACTION_DETAILS/
         // VIEW_SCREENING_RESULTS/VIEW_SAR/MANAGE_PSP_THEME -- a PSP_ADMIN role that couldn't
         // manage its own PSP's users or rules, contradicting the role's entire purpose. V127's

@@ -2,26 +2,46 @@ package com.posgateway.aml.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Verifies the fix for W20-8: AuthenticationController.register()'s default-role fallback chain
- * tries "VIEWER", then "PSP_USER", then "USER" (in that order) when no explicit role is provided.
- * PSP_USER and USER were both missing from the UserRole enum, so any account actually registered
- * under either fallback crashed with an uncaught IllegalArgumentException at every one of the ~20
- * call sites across the codebase that do UserRole.valueOf(user.getRole().getName()) -- case
- * management, PSP CBK-filing controllers, case permissions/escalation.
+ * Every role name seeded in Flyway (roles.name) or initialized by RoleService must resolve via
+ * {@link UserRole#valueOf(String)} so controllers using UserRole.valueOf(user.getRole().getName())
+ * never throw on legitimate accounts.
  */
 class UserRoleTest {
 
-    @Test
-    void everyRegistrationFallbackRoleNameResolvesWithoutThrowing() {
-        assertDoesNotThrow(() -> UserRole.valueOf("VIEWER"));
-        assertDoesNotThrow(() -> UserRole.valueOf("PSP_USER"));
-        assertDoesNotThrow(() -> UserRole.valueOf("USER"));
+    private static final String[] SEEDED_ROLE_NAMES = {
+            "SUPER_ADMIN", "PLATFORM_ADMIN", "ADMIN", "MLRO", "COMPLIANCE_OFFICER",
+            "INVESTIGATOR", "ANALYST", "SCREENING_ANALYST", "CASE_MANAGER", "AUDITOR",
+            "VIEWER", "PSP_ADMIN", "PSP_ANALYST", "PSP_USER", "USER", "APP_CONTROLLER",
+            "BANK_OFFICER", "BANK_AUDITOR", "SENIOR_ANALYST"
+    };
 
+    @Test
+    void everySeededRoleNameResolvesInEnum() {
+        for (String roleName : SEEDED_ROLE_NAMES) {
+            assertDoesNotThrow(() -> UserRole.valueOf(roleName), "Missing UserRole constant: " + roleName);
+        }
+    }
+
+    @Test
+    void registrationFallbackRolesResolve() {
         assertEquals(UserRole.PSP_USER, UserRole.valueOf("PSP_USER"));
         assertEquals(UserRole.USER, UserRole.valueOf("USER"));
+        assertEquals(UserRole.PLATFORM_ADMIN, UserRole.valueOf("PLATFORM_ADMIN"));
+        assertEquals(UserRole.APP_CONTROLLER, UserRole.valueOf("APP_CONTROLLER"));
+    }
+
+    @Test
+    void enumCoversAllSeededNames() {
+        for (String roleName : SEEDED_ROLE_NAMES) {
+            assertDoesNotThrow(() -> UserRole.valueOf(roleName));
+        }
+        long distinct = Arrays.stream(SEEDED_ROLE_NAMES).distinct().count();
+        assertEquals(SEEDED_ROLE_NAMES.length, distinct, "Test fixture contains duplicate role names");
     }
 }
