@@ -4,6 +4,7 @@ import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.PermissionService;
 import com.posgateway.aml.service.UserService;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -31,6 +32,7 @@ class UserControllerAuthorizationTest {
     @MockBean PermissionService permissionService;
     @MockBean PspRepository pspRepository;
     @MockBean UserRepository userRepository;
+    @MockBean PspIsolationService pspIsolationService;
 
     @Test
     @WithMockUser(authorities = "ROLE_PSP_ADMIN")
