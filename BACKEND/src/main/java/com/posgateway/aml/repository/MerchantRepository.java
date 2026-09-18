@@ -251,4 +251,20 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSp
     List<Merchant> findPeersByMcc(@Param("mcc") String mcc,
                                   @Param("excludeId") Long excludeId,
                                   Pageable pageable);
+
+    @Query("SELECT m FROM Merchant m WHERE " +
+           "LOWER(COALESCE(m.legalName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(m.tradingName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(m.registrationNumber, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(m.merchantId AS string) LIKE CONCAT('%', :q, '%') " +
+           "ORDER BY m.createdAt DESC")
+    List<Merchant> searchGlobal(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT m FROM Merchant m WHERE m.psp.pspId = :pspId AND (" +
+           "LOWER(COALESCE(m.legalName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(m.tradingName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(m.registrationNumber, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(m.merchantId AS string) LIKE CONCAT('%', :q, '%')) " +
+           "ORDER BY m.createdAt DESC")
+    List<Merchant> searchGlobalForPsp(@Param("pspId") Long pspId, @Param("q") String q, Pageable pageable);
 }

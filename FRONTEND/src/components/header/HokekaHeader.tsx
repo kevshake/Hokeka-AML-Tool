@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bell, ChevronDown, LogOut, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import GlassInput from '../Common/GlassInput'
+import GlobalSearchDialog from '../search/GlobalSearchDialog'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface HokekaHeaderProps {
@@ -22,12 +23,24 @@ export default function HokekaHeader({
 }: HokekaHeaderProps) {
   const [now, setNow] = useState(() => formatTime(new Date()))
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const navigate = useNavigate()
   const { logout } = useAuth()
 
   useEffect(() => {
     const id = setInterval(() => setNow(formatTime(new Date())), 1000)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   return (
@@ -47,7 +60,11 @@ export default function HokekaHeader({
           shortcut="⌘K"
           showSearchIcon
           className="w-72 hidden lg:block"
+          readOnly
+          onFocus={() => setSearchOpen(true)}
+          onClick={() => setSearchOpen(true)}
         />
+        <GlobalSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
 
         <div className="hidden h-10 flex-col justify-center rounded-full border border-glass-border bg-glass-panel px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex">
           <div className="flex items-center gap-2">

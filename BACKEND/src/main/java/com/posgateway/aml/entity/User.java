@@ -1,6 +1,8 @@
 package com.posgateway.aml.entity;
 
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 @Entity
+@Filter(name = PspTenantFilter.NAME)
 @Table(name = "platform_users")
 public class User implements UserDetails {
 

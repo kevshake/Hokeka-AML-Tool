@@ -436,7 +436,7 @@ Cloud path has **strong outbox atomicity** but **weak ingest idempotency** and *
 2. **Webhook lossiness** — Sole PSP async txn notification; no outbox/retry; auto-disable after 5 failures (`WebhookService:129-138`).
 3. **Control-plane latency & pool exhaustion** — ~100 serial Postgres queries + `@Transactional` remote I/O (`RuleFeatureEnrichmentService`, `DecisionEngine.java:96`).
 4. **Ingest idempotency & write isolation** — Duplicate POSTs duplicate alerts; `psp_id` from merchant in body, not caller auth (`TransactionIngestionService.java:87-93`).
-5. **Sanctions empty-data fail-open** — Gap register P0; microservice returns CLEAR on empty Aerospike set (**COULD-NOT-VERIFY** live default in this pass).
+5. ~~**Sanctions empty-data fail-open**~~ ✅ **FIXED** — `SanctionsService.hasSanctionsData()` gates the CLEAR path; connected-but-empty Aerospike returns UNAVAILABLE (test: `SanctionsAvailabilityTest.connectedButEmptyDatasetReturnsUnavailableNotClear`).
 6. **Edge Aerospike fail-soft** — Doc promises fail-closed; code continues without velocity (`EdgeController.java:64-66`).
 7. **Human notification channels off by default** — Email/Slack disabled; in-app bell dead.
 
