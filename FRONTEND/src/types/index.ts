@@ -124,6 +124,8 @@ export interface Transaction {
 
 export interface Merchant {
   merchantId: number;
+  pspId?: number;
+  pspCode?: string;
   legalName: string;
   tradingName?: string;
   contactEmail?: string;

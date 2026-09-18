@@ -33,7 +33,7 @@ import java.util.List;
 // @Slf4j removed
 @RestController
 @RequestMapping("/merchants")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN') or hasAuthority('ONBOARDING_INVITE')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN') or hasAuthority('ONBOARDING_INVITE')")
 public class MerchantController {
 
     private static final Logger log = LoggerFactory.getLogger(MerchantController.class);
@@ -186,11 +186,12 @@ public class MerchantController {
      * @return Paginated list of merchants
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'VIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'VIEWER')")
     public ResponseEntity<org.springframework.data.domain.Page<MerchantOnboardingResponse>> getAllMerchants(
             @RequestParam(required = false, defaultValue = "0") int page,
-            @RequestParam(required = false, defaultValue = "25") int size) {
-        log.info("Get all merchants request (page: {}, size: {})", page, size);
+            @RequestParam(required = false, defaultValue = "25") int size,
+            @RequestParam(required = false) Long pspId) {
+        log.info("Get all merchants request (page: {}, size: {}, pspId: {})", page, size, pspId);
         try {
             int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
             int safePage = Math.max(0, page);
@@ -206,6 +207,11 @@ public class MerchantController {
             if (userPspId != null && userPspId != 0L) {
                 // PSP user - only their PSP's merchants
                 spec = spec.and((root, query, cb) -> cb.equal(root.get("psp").get("pspId"), userPspId));
+            } else {
+                Long filterPspId = pspIsolationService.sanitizePspId(pspId);
+                if (filterPspId != null && filterPspId > 0L) {
+                    spec = spec.and((root, query, cb) -> cb.equal(root.get("psp").get("pspId"), filterPspId));
+                }
             }
             
             // Create Pageable with sorting
@@ -282,7 +288,7 @@ public class MerchantController {
      * GET /merchants/{id}
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER')")
     public ResponseEntity<MerchantOnboardingResponse> getMerchant(@PathVariable Long id,
             org.springframework.security.core.Authentication authentication) {
         String username = (authentication != null ? authentication.getName() : "anonymous");
@@ -332,7 +338,7 @@ public class MerchantController {
      * DELETE /merchants/{id}
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN')")
     public ResponseEntity<Void> deleteMerchant(@PathVariable Long id) {
         log.info("Delete merchant request for ID: {}", id);
         try {

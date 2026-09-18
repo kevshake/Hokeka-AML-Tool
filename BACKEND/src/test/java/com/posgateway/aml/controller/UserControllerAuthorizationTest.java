@@ -38,8 +38,9 @@ class UserControllerAuthorizationTest {
 
     @Test
     @WithMockUser(authorities = "ROLE_PSP_ADMIN")
-    void pspAdminCannotUsePlatformUserCrud() throws Exception {
-        mvc.perform(get("/users")).andExpect(status().isForbidden());
+    void pspAdminPassesUserCrudRoleGate() throws Exception {
+        // PSP_ADMIN is explicitly allowed; downstream permission/tenant checks require a User principal.
+        mvc.perform(get("/users")).andExpect(status().isNotFound());
     }
 
     @Test

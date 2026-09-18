@@ -6,6 +6,9 @@ package com.posgateway.aml.model;
  */
 public enum UserRole {
     SUPER_ADMIN, // Full system access - manages PSPs and global settings
+    // Platform operator: cross-PSP visibility without full super-admin powers.
+    // Seeded as roles.name = 'PLATFORM_ADMIN' (e.g. platform.admin demo account).
+    PLATFORM_ADMIN,
     ADMIN,
     MLRO, // Money Laundering Reporting Officer
     COMPLIANCE_OFFICER,
@@ -32,5 +35,8 @@ public enum UserRole {
     PSP_USER,
     // Same fix, same reasoning: "USER" is the third and final fallback in that same chain and
     // was equally missing from this enum.
-    USER
+    USER,
+    // Machine/service-account role (Grafana, reporting-config). Seeded by V218; referenced by
+    // raw role-name checks in PspIsolationService and GrafanaUserContextController.
+    APP_CONTROLLER
 }

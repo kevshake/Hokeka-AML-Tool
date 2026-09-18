@@ -23,7 +23,7 @@ import java.util.Map;
 // @RequiredArgsConstructor removed
 @RestController
 @RequestMapping("/compliance/cases")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'CASE_MANAGER', 'AUDITOR')")
 public class ComplianceCaseController {
 
     private static final Logger log = LoggerFactory.getLogger(ComplianceCaseController.class);

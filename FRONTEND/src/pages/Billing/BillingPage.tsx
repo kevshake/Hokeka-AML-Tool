@@ -143,7 +143,7 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, icon, color, subtitle }: KpiCardProps) {
   return (
-    <Card sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, flex: 1 }}>
+    <Card sx={{ border: "1px solid var(--line-control)", borderRadius: 2, flex: 1 }}>
       <CardContent sx={{ pb: "16px !important" }}>
         <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box>
@@ -227,13 +227,13 @@ function RevenueTab() {
       </Box>
 
       {/* Revenue Chart */}
-      <Paper sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, p: 2, mb: 3 }}>
+      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, p: 2, mb: 3 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
           Current Month Revenue Breakdown
         </Typography>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--line-control)" />
             <XAxis dataKey="name" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
             <RechartsTooltip formatter={(v) => typeof v === "number" ? fmt(v, currency) : "—"} />
@@ -405,7 +405,7 @@ function SubscriptionsTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load subscriptions.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -804,7 +804,7 @@ function InvoicesTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load invoices.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1042,7 +1042,7 @@ function RosterTab() {
   }
 
   return (
-    <TableContainer component={Paper} sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
+    <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
       <Table size="small">
         <TableHead>
           <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1195,7 +1195,7 @@ function UsageTab() {
 
           {/* Breakdown Table */}
           {usage.breakdown && usage.breakdown.length > 0 && (
-            <TableContainer component={Paper} sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2 }}>
+            <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1238,12 +1238,12 @@ export default function BillingPage() {
   return (
     <HokekaPageShell title="Billing" subtitle="Revenue, subscriptions, invoices, and usage management" noCard>
     <Box>
-      <Paper sx={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 2, mb: 0 }}>
+      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, mb: 0 }}>
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
           sx={{
-            borderBottom: "1px solid rgba(0,0,0,0.08)",
+            borderBottom: "1px solid var(--line-control)",
             px: 2,
             "& .MuiTab-root": { textTransform: "none", fontWeight: 500, minHeight: 48 },
             "& .Mui-selected": { color: ACCENT, fontWeight: 600 },

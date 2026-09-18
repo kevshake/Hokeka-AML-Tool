@@ -7,6 +7,7 @@ import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.PermissionService;
 import com.posgateway.aml.service.UserService;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,19 +20,23 @@ import org.springframework.security.access.prepost.PreAuthorize;
 @RestController
 @RequestMapping("/users")
 public class UserController {
-    private static final String PLATFORM_ADMIN =
-            "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')";
+    private static final String USER_MGMT =
+            "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN','ROLE_PSP_ADMIN')";
 
     private final UserService userService;
     private final PermissionService permissionService;
     private final PspRepository pspRepository;
     private final UserRepository userRepository;
+    private final PspIsolationService pspIsolationService;
 
-    public UserController(UserService userService, PermissionService permissionService, PspRepository pspRepository, UserRepository userRepository) {
+    public UserController(UserService userService, PermissionService permissionService,
+            PspRepository pspRepository, UserRepository userRepository,
+            PspIsolationService pspIsolationService) {
         this.userService = userService;
         this.permissionService = permissionService;
         this.pspRepository = pspRepository;
         this.userRepository = userRepository;
+        this.pspIsolationService = pspIsolationService;
     }
 
     /**
@@ -48,7 +53,7 @@ public class UserController {
      * @return Paginated list of users
      */
     @GetMapping
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<org.springframework.data.domain.Page<User>> listUsers(
             @AuthenticationPrincipal User currentUser,
             @RequestParam(required = false) Long pspId,
@@ -66,15 +71,12 @@ public class UserController {
             org.springframework.data.jpa.domain.Specification.where(null);
 
         // PSP Isolation Logic
-        if (currentUser == null || currentUser.getPsp() == null) {
-            // Global Admin: Can filter by specific PSP or see all
+        if (currentUser != null && pspIsolationService.isPlatformAdministrator(currentUser)) {
             if (pspId != null) {
                 spec = spec.and((root, query, cb) -> cb.equal(root.get("psp").get("pspId"), pspId));
             }
-            // If pspId is null, show all users (no PSP filter)
-        } else {
-            // PSP Admin/User: Can only see own PSP
-            Long userPspId = currentUser.getPsp().getPspId();
+        } else if (currentUser != null) {
+            Long userPspId = pspIsolationService.getCurrentUserPspId();
             if (pspId != null && !pspId.equals(userPspId)) {
                 throw new SecurityException("Cannot access other PSP's users");
             }
@@ -97,7 +99,7 @@ public class UserController {
      * GET /users/{id}
      */
     @GetMapping("/{id}")
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<User> getUserById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
@@ -105,9 +107,9 @@ public class UserController {
 
         User user = userService.getUserById(id);
         
-        // PSP scoping: PSP users can only see users from their PSP
-        if (currentUser != null && currentUser.getPsp() != null) {
-            if (user.getPsp() == null || !user.getPsp().getPspId().equals(currentUser.getPsp().getPspId())) {
+        if (currentUser != null && !pspIsolationService.isPlatformAdministrator(currentUser)) {
+            Long userPspId = pspIsolationService.getCurrentUserPspId();
+            if (user.getPsp() == null || !user.getPsp().getPspId().equals(userPspId)) {
                 throw new SecurityException("Cannot access user from another PSP");
             }
         }
@@ -116,7 +118,7 @@ public class UserController {
     }
 
     @PostMapping
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<User> createUser(@AuthenticationPrincipal User currentUser,
             @RequestBody CreateUserRequest req) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
@@ -125,14 +127,16 @@ public class UserController {
 
         Psp targetPsp = null;
 
-        if (currentUser == null || currentUser.getPsp() == null) {
+        if (currentUser != null && pspIsolationService.isPlatformAdministrator(currentUser)) {
             if (req.getPspId() != null) {
                 targetPsp = pspRepository.findById(req.getPspId())
                         .orElseThrow(() -> new IllegalArgumentException("PSP not found"));
             }
-            // If req.getPspId is null, creating a System Admin (allowed for Global Admin)
-        } else {
+        } else if (currentUser != null) {
             targetPsp = currentUser.getPsp();
+            if (targetPsp == null) {
+                throw new SecurityException("PSP-scoped user has no PSP assigned");
+            }
             if (req.getPspId() != null && !java.util.Objects.equals(req.getPspId(), targetPsp.getPspId())) {
                 throw new SecurityException("Cannot create user for another PSP");
             }
@@ -150,7 +154,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UpdateUserRequest req,
             @AuthenticationPrincipal User currentUser) {
         // Authorization checks...
@@ -172,7 +176,7 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<Void> deleteUser(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
@@ -190,7 +194,7 @@ public class UserController {
      * the same tenant isolation rather than relying on the frontend never calling it.
      */
     @PostMapping("/{id}/{action}")
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<Void> toggleUserStatus(@PathVariable Long id, @PathVariable String action,
             @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
@@ -215,8 +219,8 @@ public class UserController {
      *                            error shape than "not authorized")
      */
     private void requireSamePsp(User currentUser, Long targetUserId) {
-        if (currentUser == null || currentUser.getPsp() == null) {
-            return; // platform admin (or security disabled / dev fallback) — unrestricted
+        if (currentUser == null || pspIsolationService.isPlatformAdministrator(currentUser)) {
+            return;
         }
         User targetUser = userService.getUserById(targetUserId);
         if (targetUser == null || targetUser.getPsp() == null
@@ -324,7 +328,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/toggle")
-    @PreAuthorize(PLATFORM_ADMIN)
+    @PreAuthorize(USER_MGMT)
     public ResponseEntity<Void> toggleUserStatusPatch(@PathVariable Long id, @RequestBody ToggleUserRequest req,
             @AuthenticationPrincipal User currentUser) {
         if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
@@ -334,9 +338,9 @@ public class UserController {
         // Fetch target user to verify PSP isolation
         User targetUser = userService.getUserById(id);
         
-        // PSP scoping: PSP users can only manage users from their own PSP
-        if (currentUser != null && currentUser.getPsp() != null) {
-            if (targetUser.getPsp() == null || !targetUser.getPsp().getPspId().equals(currentUser.getPsp().getPspId())) {
+        if (currentUser != null && !pspIsolationService.isPlatformAdministrator(currentUser)) {
+            Long userPspId = pspIsolationService.getCurrentUserPspId();
+            if (targetUser.getPsp() == null || !targetUser.getPsp().getPspId().equals(userPspId)) {
                 throw new SecurityException("Cannot manage user from another PSP");
             }
         }

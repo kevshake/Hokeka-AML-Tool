@@ -1,5 +1,6 @@
 package com.posgateway.aml.service.security;
 
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.TransactionEntity;
@@ -44,15 +45,16 @@ public class PspIsolationService {
         if (user == null) {
             throw new SecurityException("User not authenticated");
         }
-        
-        if (user.getPsp() == null) {
-            if (isPlatformAdministrator(user)) {
-                return 0L;
-            }
+
+        if (isPlatformAdministrator(user)) {
+            return PspTenantFilter.PLATFORM_ADMIN_PSP_ID;
+        }
+
+        if (user.getPsp() == null || user.getPsp().getPspId() == null) {
             logger.error("Non-platform user {} has no PSP assigned", user.getUsername());
             throw new SecurityException("User has no PSP assigned");
         }
-        
+
         return user.getPsp().getPspId();
     }
 
@@ -95,23 +97,26 @@ public class PspIsolationService {
 
         String roleName = user.getRole().getName();
 
-        // Platform-level roles: no PSP constraint, full cross-PSP access
-        boolean hasAdminRole = roleName.equals("SUPER_ADMIN") ||
-                roleName.equals("ADMIN") ||
-                roleName.equals("MLRO") ||
-                roleName.equals("PLATFORM_ADMIN") ||
-                roleName.equals("APP_CONTROLLER");
-
-        if (!hasAdminRole) {
-            return false;
+        // Cross-PSP operators: role determines platform scope. HOKEKA_PLATFORM on
+        // platform_users.psp_id satisfies User.psp NOT NULL but must not bind tenant filters.
+        if ("SUPER_ADMIN".equals(roleName) || "PLATFORM_ADMIN".equals(roleName)
+                || "APP_CONTROLLER".equals(roleName)) {
+            return true;
         }
 
-        // Platform admins either have no PSP assigned (null) or PSP ID 0
-        if (user.getPsp() == null) {
-            return true; // SUPER_ADMIN/ADMIN users with no PSP are platform-level
+        if ("ADMIN".equals(roleName)) {
+            return isPlatformSentinelPsp(user.getPsp());
         }
 
-        return user.getPsp().getPspId() == null || user.getPsp().getPspId() == 0L;
+        return false;
+    }
+
+    /** True when the user's PSP row is the platform sentinel (null, id 0, or HOKEKA_PLATFORM). */
+    public boolean isPlatformSentinelPsp(com.posgateway.aml.entity.psp.Psp psp) {
+        if (psp == null || psp.getPspId() == null || psp.getPspId() == 0L) {
+            return true;
+        }
+        return "HOKEKA_PLATFORM".equals(psp.getPspCode());
     }
 
     /**
