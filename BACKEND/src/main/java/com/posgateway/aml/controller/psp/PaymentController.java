@@ -71,6 +71,9 @@ public class PaymentController {
     @Value("${mpesa.callback.secret:}")
     private String mpesaCallbackSecret;
 
+    @Value("${billing.mpesa.enabled:true}")
+    private boolean mpesaEnabled;
+
     private final Environment environment;
 
     public PaymentController(InvoiceRepository invoiceRepository,
@@ -139,6 +142,12 @@ public class PaymentController {
 
     private ResponseEntity<PaymentInitiateResponse> handleMpesaPayment(
             PaymentInitiateRequest request, Invoice invoice, Long pspId) {
+
+        if (!mpesaEnabled) {
+            return ResponseEntity.status(503)
+                    .body(new PaymentInitiateResponse(null, null, "DISABLED",
+                            "M-Pesa billing is disabled"));
+        }
 
         if (request.getPhoneNumber() == null || request.getPhoneNumber().isBlank()) {
             return ResponseEntity.badRequest()
@@ -256,6 +265,10 @@ public class PaymentController {
             @RequestBody Map<String, Object> callbackBody,
             @RequestParam(value = "token", required = false) String token) {
         log.info("Received Daraja callback");
+
+        if (!mpesaEnabled) {
+            return ResponseEntity.status(404).body(Map.of("ResultCode", "01", "ResultDesc", "Disabled"));
+        }
 
         if (mpesaCallbackSecret != null && !mpesaCallbackSecret.isBlank()) {
             if (token == null || !constantTimeEquals(mpesaCallbackSecret, token)) {

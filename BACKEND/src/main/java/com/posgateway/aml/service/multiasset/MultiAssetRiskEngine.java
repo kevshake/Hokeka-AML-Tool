@@ -8,6 +8,8 @@ import com.posgateway.aml.model.ScreeningResult;
 import com.posgateway.aml.model.ScreeningResult.EntityType;
 import com.posgateway.aml.model.ScreeningResult.ScreeningStatus;
 import com.posgateway.aml.repository.crypto.TravelRulePolicyRepository;
+import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.entity.psp.SignalTaxonomyMode;
 import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,6 +65,9 @@ public class MultiAssetRiskEngine {
     @Autowired(required = false)
     private AerospikeSanctionsScreeningService sanctionsScreeningService;
 
+    @Autowired(required = false)
+    private PspRepository pspRepository;
+
     /**
      * Resolves the USD travel-rule threshold for this PSP+jurisdiction, falling back to the
      * global default when no repository is wired (e.g. this unit-constructed test instance), no
@@ -108,13 +113,38 @@ public class MultiAssetRiskEngine {
         checkSanctions(customer, request, signals);
         checkCyberIncidentContext(request, signals);
 
-        int score = Math.min(100, signals.stream().mapToInt(SignalDraft::scoreImpact).sum());
-        RiskDecision decision = score >= 70 ? RiskDecision.BLOCK
-                : score >= 40 ? RiskDecision.REVIEW
-                : score >= 20 ? RiskDecision.ALERT
-                : RiskDecision.ALLOW;
+        int rawScore = Math.min(100, signals.stream().mapToInt(SignalDraft::scoreImpact).sum());
+        SignalTaxonomyMode mode = resolveSignalMode(customer.getPspId());
+        int score = mode == SignalTaxonomyMode.REPORTING_ONLY ? 0 : rawScore;
+        RiskDecision decision;
+        if (mode == SignalTaxonomyMode.REPORTING_ONLY) {
+            decision = RiskDecision.ALLOW;
+        } else if (mode == SignalTaxonomyMode.ALERT_ROUTING) {
+            // Preserve the score so downstream alert severity/priority routing still reflects
+            // signal strength, but taxonomy signals cannot block the transaction in this mode.
+            decision = signals.isEmpty() ? RiskDecision.ALLOW : RiskDecision.ALERT;
+        } else {
+            decision = score >= 70 ? RiskDecision.BLOCK
+                    : score >= 40 ? RiskDecision.REVIEW
+                    : score >= 20 ? RiskDecision.ALERT
+                    : RiskDecision.ALLOW;
+        }
+        if (mode == SignalTaxonomyMode.INFLUENCE_DECISION && decision == RiskDecision.REVIEW) {
+            add(signals, "SIGNAL_TAXONOMY_HOLD_HINT", 0,
+                    "Transaction held because this PSP allows taxonomy signals to influence decisions.",
+                    Map.of("signalTaxonomyMode", mode.name(), "decisionHint", "HOLD"));
+        }
         TravelRuleStatus travelRuleStatus = resolveTravelRuleStatus(request, customer.getPspId());
         return new Assessment(score, decision, travelRuleStatus, List.copyOf(signals), cryptoScreening);
+    }
+
+    private SignalTaxonomyMode resolveSignalMode(Long pspId) {
+        if (pspRepository == null || pspId == null) {
+            return SignalTaxonomyMode.INFLUENCE_DECISION;
+        }
+        return pspRepository.findById(pspId)
+                .map(psp -> psp.getSignalTaxonomyMode())
+                .orElse(SignalTaxonomyMode.INFLUENCE_DECISION);
     }
 
     private void assessSecurities(IngestTransactionRequest request,

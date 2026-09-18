@@ -23,8 +23,8 @@ import java.util.TreeSet;
  * identifier. This is one of the strongest organized-merchant-fraud controls: a fraud ring
  * often reuses a registration number, phone or website across entities.
  *
- * <p>Phase 2 matches on plaintext identifiers (registration number, contact phone, website).
- * Encrypted identifiers (settlement account) and hashed UBO identity are future extensions.
+ * <p>Settlement accounts and UBO identities are linked only through keyed hashes. The
+ * encrypted settlement-account plaintext is never decrypted or compared for linkage.
  * Produces {@link VerificationSignal}s consumed by {@link MerchantVerificationOrchestrator}.
  */
 @Service
@@ -56,6 +56,9 @@ public class MerchantLinkageService {
                 merchantRepository::findByContactEmail, "contactEmail", linkedAttributes, linkedMerchants);
         collect(merchant, merchant.getWebsite(),
                 merchantRepository::findByWebsite, "website", linkedAttributes, linkedMerchants);
+        collect(merchant, merchant.getCbkSettlementAccountHash(),
+                merchantRepository::findByCbkSettlementAccountHash, "settlementAccountHash",
+                linkedAttributes, linkedMerchants);
 
         // Shared UBO: a beneficial owner (by keyed national-ID / passport hash) appearing on
         // another merchant is a strong organized-fraud / reincarnation signal.

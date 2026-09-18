@@ -98,6 +98,7 @@ public class PspController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<PspResponse> publicRegisterPsp(@RequestBody PspRegistrationRequest request) {
         log.info("Received public PSP registration request");
         Psp psp = pspService.registerPsp(request);
@@ -147,13 +148,45 @@ public class PspController {
     }
 
     @PostMapping("/users")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<PspUserResponse> createPspUser(@RequestBody PspUserCreationRequest request,
                                                          @AuthenticationPrincipal User currentUser) {
         if (!canAccessPsp(currentUser, request.getPspId())) return ResponseEntity.status(403).build();
         log.info("Received PSP user creation request");
         User user = pspService.createPspUser(request);
         return ResponseEntity.ok(pspMapper.toResponse(user));
+    }
+
+    @GetMapping("/{id}/signal-settings")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN','ROLE_PSP_ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> getSignalSettings(
+            @PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (!canAccessPsp(currentUser, id)) return ResponseEntity.status(403).build();
+        return pspRepository.findById(id)
+                .map(psp -> ResponseEntity.ok(java.util.Map.<String, Object>of(
+                        "pspId", id, "mode", psp.getSignalTaxonomyMode().name())))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/signal-settings")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> updateSignalSettings(
+            @PathVariable Long id, @RequestBody java.util.Map<String, String> request) {
+        Optional<Psp> optionalPsp = pspRepository.findById(id);
+        if (optionalPsp.isEmpty() || request.get("mode") == null) {
+            return optionalPsp.isEmpty() ? ResponseEntity.notFound().build()
+                    : ResponseEntity.badRequest().build();
+        }
+        try {
+            Psp psp = optionalPsp.get();
+            psp.setSignalTaxonomyMode(com.posgateway.aml.entity.psp.SignalTaxonomyMode.valueOf(
+                    request.get("mode").trim().toUpperCase(java.util.Locale.ROOT)));
+            pspRepository.save(psp);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "pspId", id, "mode", psp.getSignalTaxonomyMode().name()));
+        } catch (IllegalArgumentException invalidMode) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @PostMapping("/auth/login")

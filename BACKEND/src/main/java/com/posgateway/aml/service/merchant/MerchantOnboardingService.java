@@ -439,6 +439,8 @@ public class MerchantOnboardingService {
                 .build();
         merchant.setContactEmail(request.getContactEmail());
         merchant.setCbkSettlementAccountNumber(request.getCbkSettlementAccountNumber());
+        merchant.setCbkSettlementAccountHash(
+                piiLookupHasher.hashIdentifier(request.getCbkSettlementAccountNumber()));
         merchant.setCbkEconomicSectorCode(request.getCbkEconomicSectorCode());
 
         // Add beneficial owners

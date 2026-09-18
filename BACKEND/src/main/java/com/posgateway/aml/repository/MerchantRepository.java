@@ -96,6 +96,8 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSp
 
     List<Merchant> findByWebsite(String website);
 
+    List<Merchant> findByCbkSettlementAccountHash(String cbkSettlementAccountHash);
+
     /**
      * Batch status counts for a PSP — returns [{status, count}] rows.
      * Replaces N separate countByPspPspIdAndStatus calls with one GROUP BY query.

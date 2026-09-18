@@ -79,6 +79,11 @@ public class Merchant {
     @Column(name = "cbk_settlement_account_number", columnDefinition = "TEXT")
     private String cbkSettlementAccountNumber;
 
+    @com.fasterxml.jackson.annotation.JsonProperty(
+            access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "cbk_settlement_account_hash", length = 64)
+    private String cbkSettlementAccountHash;
+
     @Column(name = "cbk_economic_sector_code", length = 100)
     private String cbkEconomicSectorCode;
 
@@ -352,6 +357,14 @@ public class Merchant {
 
     public void setCbkSettlementAccountNumber(String cbkSettlementAccountNumber) {
         this.cbkSettlementAccountNumber = normalizeNullable(cbkSettlementAccountNumber);
+    }
+
+    public String getCbkSettlementAccountHash() {
+        return cbkSettlementAccountHash;
+    }
+
+    public void setCbkSettlementAccountHash(String cbkSettlementAccountHash) {
+        this.cbkSettlementAccountHash = normalizeNullable(cbkSettlementAccountHash);
     }
 
     public String getCbkEconomicSectorCode() {
