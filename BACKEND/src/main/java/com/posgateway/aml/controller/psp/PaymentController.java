@@ -10,6 +10,7 @@ import com.posgateway.aml.integration.mpesa.MpesaService;
 import com.posgateway.aml.integration.mpesa.MpesaStkResponse;
 import com.posgateway.aml.repository.InvoiceRepository;
 import com.posgateway.aml.repository.PaymentAttemptRepository;
+import com.posgateway.aml.service.billing.CardBillingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,7 @@ public class PaymentController {
     private final InvoiceRepository invoiceRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final MpesaService mpesaService;
+    private final CardBillingService cardBillingService;
 
     @Value("${billing.bank.name:Equity Bank Kenya}")
     private String bankName;
@@ -71,15 +73,20 @@ public class PaymentController {
     @Value("${mpesa.callback.secret:}")
     private String mpesaCallbackSecret;
 
+    @Value("${billing.mpesa.enabled:true}")
+    private boolean mpesaEnabled;
+
     private final Environment environment;
 
     public PaymentController(InvoiceRepository invoiceRepository,
                              PaymentAttemptRepository paymentAttemptRepository,
                              MpesaService mpesaService,
+                             CardBillingService cardBillingService,
                              Environment environment) {
         this.invoiceRepository = invoiceRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.mpesaService = mpesaService;
+        this.cardBillingService = cardBillingService;
         this.environment = environment;
     }
 
@@ -131,6 +138,7 @@ public class PaymentController {
         return switch (method) {
             case "MPESA" -> handleMpesaPayment(request, invoice, pspId);
             case "BANK_TRANSFER" -> handleBankTransferPayment(request, invoice, pspId);
+            case "CARD" -> handleCardPayment(invoice);
             default -> ResponseEntity.badRequest()
                     .body(new PaymentInitiateResponse(null, null, "REJECTED",
                             "Unsupported paymentMethod: " + method));
@@ -139,6 +147,12 @@ public class PaymentController {
 
     private ResponseEntity<PaymentInitiateResponse> handleMpesaPayment(
             PaymentInitiateRequest request, Invoice invoice, Long pspId) {
+
+        if (!mpesaEnabled) {
+            return ResponseEntity.status(503)
+                    .body(new PaymentInitiateResponse(null, null, "DISABLED",
+                            "M-Pesa billing is disabled"));
+        }
 
         if (request.getPhoneNumber() == null || request.getPhoneNumber().isBlank()) {
             return ResponseEntity.badRequest()
@@ -242,6 +256,31 @@ public class PaymentController {
                 "Bank transfer reference submitted. We'll verify and update your invoice status within 1-2 business days."));
     }
 
+    private ResponseEntity<PaymentInitiateResponse> handleCardPayment(Invoice invoice) {
+        try {
+            PaymentAttempt attempt = cardBillingService.charge(invoice);
+            String status = attempt.getStatus();
+            if ("COMPLETED".equals(status)) {
+                return ResponseEntity.ok(new PaymentInitiateResponse(
+                        attempt.getId(), null, "COMPLETED",
+                        "Card charged successfully."));
+            }
+            return ResponseEntity.badRequest().body(new PaymentInitiateResponse(
+                    attempt.getId(), null, "FAILED",
+                    attempt.getResultDescription() != null
+                            ? attempt.getResultDescription()
+                            : "Card charge declined."));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.badRequest().body(new PaymentInitiateResponse(
+                    null, null, "REJECTED",
+                    ex.getMessage() + " Add a card under Settings → Billing before paying."));
+        } catch (Exception ex) {
+            log.error("Card charge failed for invoice={}", invoice.getInvoiceId(), ex);
+            return ResponseEntity.internalServerError().body(new PaymentInitiateResponse(
+                    null, null, "FAILED", "Card charge failed. Please try again or contact billing."));
+        }
+    }
+
     // ─── POST /billing/payments/mpesa/callback — public Safaricom webhook ────
 
     /**
@@ -256,6 +295,10 @@ public class PaymentController {
             @RequestBody Map<String, Object> callbackBody,
             @RequestParam(value = "token", required = false) String token) {
         log.info("Received Daraja callback");
+
+        if (!mpesaEnabled) {
+            return ResponseEntity.status(404).body(Map.of("ResultCode", "01", "ResultDesc", "Disabled"));
+        }
 
         if (mpesaCallbackSecret != null && !mpesaCallbackSecret.isBlank()) {
             if (token == null || !constantTimeEquals(mpesaCallbackSecret, token)) {

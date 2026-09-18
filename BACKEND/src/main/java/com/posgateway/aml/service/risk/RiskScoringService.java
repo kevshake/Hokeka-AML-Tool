@@ -87,6 +87,15 @@ public class RiskScoringService {
     @Value("${risk.weights.cra.alert-lookback-days:90}")
     private int alertLookbackDays;
 
+    @Value("${risk.weights.krs:0.25}")
+    private double overallKrsWeight;
+    @Value("${risk.weights.trs:0.35}")
+    private double overallTrsWeight;
+    @Value("${risk.weights.cra:0.25}")
+    private double overallCraWeight;
+    @Value("${risk.weights.ml:0.15}")
+    private double overallMlWeight;
+
     // ── Industry risk fallback (until mcc_risk table exists) ─────────────────
         private final com.posgateway.aml.service.risk.MccRiskConfig mccRiskConfig;
 
@@ -197,7 +206,14 @@ public class RiskScoringService {
         double craScore = calculateCra(features);
         double mlScore  = ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue();
 
-        double finalScore = krsScore * 0.3 + trsScore * 0.4 + craScore * 0.3;
+        double totalWeight = overallKrsWeight + overallTrsWeight + overallCraWeight + overallMlWeight;
+        if (totalWeight <= 0) {
+            throw new IllegalStateException("Overall risk weights must have a positive sum");
+        }
+        double finalScore = (krsScore * overallKrsWeight
+                + trsScore * overallTrsWeight
+                + craScore * overallCraWeight
+                + mlScore * overallMlWeight) / totalWeight;
         if ("BLOCK".equals(ruleResult.getDecision())) finalScore = 100.0;
 
         Map<String, Object> result = new HashMap<>();

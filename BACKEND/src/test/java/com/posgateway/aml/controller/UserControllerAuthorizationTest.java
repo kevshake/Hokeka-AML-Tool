@@ -1,0 +1,56 @@
+package com.posgateway.aml.controller;
+
+import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.PermissionService;
+import com.posgateway.aml.service.UserService;
+import com.posgateway.aml.service.security.PspIsolationService;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.beans.factory.annotation.Autowired;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(properties = {
+        "spring.security.enabled=false",
+        "spring.data.jpa.repositories.enabled=false"
+}, useDefaultFilters = false)
+@ContextConfiguration(classes = {UserController.class, UserControllerAuthorizationTest.MethodSecurity.class})
+class UserControllerAuthorizationTest {
+    @TestConfiguration
+    @EnableMethodSecurity
+    static class MethodSecurity {}
+
+    @Autowired MockMvc mvc;
+    @MockBean UserService userService;
+    @MockBean PermissionService permissionService;
+    @MockBean PspRepository pspRepository;
+    @MockBean UserRepository userRepository;
+    @MockBean PspIsolationService pspIsolationService;
+
+    @Test
+    @WithMockUser(authorities = "ROLE_PSP_ADMIN")
+    void pspAdminCannotUsePlatformUserCrud() throws Exception {
+        mvc.perform(get("/users")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_PLATFORM_ADMIN")
+    void platformAdminCanUseUserCrud() throws Exception {
+        mvc.perform(delete("/users/2").with(csrf())).andExpect(status().isNoContent());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_PSP_USER")
+    void authenticatedUserCanReachMeWithoutSuperAdminFallback() throws Exception {
+        mvc.perform(get("/users/me")).andExpect(status().isNotFound());
+    }
+}

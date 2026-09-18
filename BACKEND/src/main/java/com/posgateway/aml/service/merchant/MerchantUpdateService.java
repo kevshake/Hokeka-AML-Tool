@@ -9,6 +9,7 @@ import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.underwriting.MerchantVerificationSignalRepository;
 import com.posgateway.aml.service.aml.AmlScreeningOrchestrator;
 import com.posgateway.aml.service.security.PspIsolationService;
+import com.posgateway.aml.service.security.PiiLookupHasher;
 import com.posgateway.aml.service.underwriting.MerchantVerificationOrchestrator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,17 +32,20 @@ public class MerchantUpdateService {
     private final PspIsolationService pspIsolationService;
     private final MerchantVerificationOrchestrator verificationOrchestrator;
     private final MerchantVerificationSignalRepository verificationSignalRepository;
+    private final PiiLookupHasher piiLookupHasher;
 
     public MerchantUpdateService(MerchantRepository merchantRepository, AmlScreeningOrchestrator screeningOrchestrator,
             AuditTrailRepository auditTrailRepository, PspIsolationService pspIsolationService,
             MerchantVerificationOrchestrator verificationOrchestrator,
-            MerchantVerificationSignalRepository verificationSignalRepository) {
+            MerchantVerificationSignalRepository verificationSignalRepository,
+            PiiLookupHasher piiLookupHasher) {
         this.merchantRepository = merchantRepository;
         this.screeningOrchestrator = screeningOrchestrator;
         this.auditTrailRepository = auditTrailRepository;
         this.pspIsolationService = pspIsolationService;
         this.verificationOrchestrator = verificationOrchestrator;
         this.verificationSignalRepository = verificationSignalRepository;
+        this.piiLookupHasher = piiLookupHasher;
     }
 
     @Transactional
@@ -83,11 +87,14 @@ public class MerchantUpdateService {
             changes.put("contactEmail", "UPDATED");
             merchant.setContactEmail(request.getContactEmail());
         }
+        String requestedSettlementHash =
+                piiLookupHasher.hashIdentifier(request.getCbkSettlementAccountNumber());
         if (request.getCbkSettlementAccountNumber() != null
                 && !java.util.Objects.equals(
-                        request.getCbkSettlementAccountNumber(), merchant.getCbkSettlementAccountNumber())) {
+                        requestedSettlementHash, merchant.getCbkSettlementAccountHash())) {
             changes.put("cbkSettlementAccountConfigured", true);
             merchant.setCbkSettlementAccountNumber(request.getCbkSettlementAccountNumber());
+            merchant.setCbkSettlementAccountHash(requestedSettlementHash);
             settlementChanged = true;
         }
         if (request.getCbkEconomicSectorCode() != null

@@ -37,6 +37,7 @@ public class ProductionRateLimitFilter implements Filter {
 
     @Value("${rate.limit.requests-per-minute:100}")
     private int requestsPerMinute;
+    private final AtomicInteger dynamicRequestsPerMinute = new AtomicInteger(100);
 
     @Value("${rate.limit.burst-size:20}")
     private int burstSize;
@@ -52,6 +53,7 @@ public class ProductionRateLimitFilter implements Filter {
 
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
+        dynamicRequestsPerMinute.set(requestsPerMinute);
         // Initialize caches with 1-minute expiration
         requestCountsPerIp = Caffeine.newBuilder()
                 .expireAfterWrite(1, TimeUnit.MINUTES)
@@ -94,7 +96,7 @@ public class ProductionRateLimitFilter implements Filter {
         // Add rate limit headers
         int remaining = getRemainingRequests(clientIp, isAuthEndpoint);
         httpResponse.setHeader("X-RateLimit-Limit", 
-            String.valueOf(isAuthEndpoint ? authRequestsPerMinute : requestsPerMinute));
+            String.valueOf(isAuthEndpoint ? authRequestsPerMinute : dynamicRequestsPerMinute.get()));
         httpResponse.setHeader("X-RateLimit-Remaining", String.valueOf(remaining));
 
         chain.doFilter(request, response);
@@ -109,7 +111,7 @@ public class ProductionRateLimitFilter implements Filter {
             return count.incrementAndGet() > authRequestsPerMinute;
         } else {
             AtomicInteger count = requestCountsPerIp.get(clientIp);
-            return count.incrementAndGet() > (requestsPerMinute + burstSize);
+            return count.incrementAndGet() > (dynamicRequestsPerMinute.get() + burstSize);
         }
     }
 
@@ -122,8 +124,16 @@ public class ProductionRateLimitFilter implements Filter {
             return Math.max(0, authRequestsPerMinute - used);
         } else {
             int used = requestCountsPerIp.get(clientIp).get();
-            return Math.max(0, (requestsPerMinute + burstSize) - used);
+            return Math.max(0, (dynamicRequestsPerMinute.get() + burstSize) - used);
         }
+    }
+
+    public void updateGeneralRequestsPerMinute(int value) {
+        dynamicRequestsPerMinute.set(Math.max(1, value));
+    }
+
+    public int getGeneralRequestsPerMinute() {
+        return dynamicRequestsPerMinute.get();
     }
 
     /**

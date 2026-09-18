@@ -31,8 +31,8 @@ import java.util.function.Predicate;
  *   - MISSING    : required for the active profile and resolved to blank — logged loudly, written to .env.missing
  *   - SKIP       : the feature toggle associated with the variable is disabled
  *
- * The validator never fails the boot — the user explicitly asked for log-based prompts so they can
- * fill in missing values without the JVM crashing on a cryptic SQLException downstream.
+ * Most missing values are reported in the manifest. Security boundaries that cannot safely
+ * degrade (including the internal service authentication key) fail closed in production.
  */
 @Component
 public class EnvVarStartupValidator implements ApplicationListener<ApplicationReadyEvent> {
@@ -57,6 +57,17 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
 
         printBanner(profileLabel, results);
         writeEnvMissingFile(results);
+        failClosedInternalAuthKey(env);
+    }
+
+    static void failClosedInternalAuthKey(Environment env) {
+        boolean production = Arrays.asList(env.getActiveProfiles()).contains("production")
+                || Arrays.asList(env.getActiveProfiles()).contains("prod");
+        String key = env.getProperty("aml.internal-auth-key", "");
+        if (production && key.isBlank()) {
+            throw new IllegalStateException(
+                    "AML_MS_INTERNAL_KEY is required in production (aml.internal-auth-key)");
+        }
     }
 
     /**
@@ -145,6 +156,8 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.requiredIf("PII_LOOKUP_HMAC_KEY", isProduction,
                         "Stable keyed lookup secret for UBO passport and national-ID hashes. " +
                                 "Use at least 32 random characters."),
+                EnvVarSpec.requiredIf("AML_MS_INTERNAL_KEY", isProduction,
+                        "Shared authentication key for BACKEND and aml-microservice internal endpoints."),
 
                 // --- Password reset token pepper ---
                 EnvVarSpec.requiredIf("AUTH_PASSWORD_RESET_PEPPER", isProduction,

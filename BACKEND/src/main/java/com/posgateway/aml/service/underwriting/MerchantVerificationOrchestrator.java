@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -61,6 +62,9 @@ public class MerchantVerificationOrchestrator {
     private final MerchantLinkageService linkageService;
     private final TransactionLaunderingCheckService launderingCheckService;
     private final com.posgateway.aml.service.edd.EnhancedDueDiligenceService eddService;
+
+    @Autowired(required = false)
+    private InternalIdvAutoApproveService internalIdvAutoApproveService;
 
     public MerchantVerificationOrchestrator(List<ExternalVerificationProvider> providers,
                                             HardStopEvaluator hardStopEvaluator,
@@ -120,7 +124,19 @@ public class MerchantVerificationOrchestrator {
         int score = computeScore(signals, outcome);
         outcome.setScore(score);
 
-        outcome.setDecision(decide(hardStops, manualReviewForced, score));
+        UnderwritingDecision decision = decide(hardStops, manualReviewForced, score);
+        if (decision == UnderwritingDecision.MANUAL_REVIEW
+                && hardStops.isEmpty() && internalIdvAutoApproveService != null) {
+            InternalIdvAutoApproveService.Evaluation idv =
+                    internalIdvAutoApproveService.evaluate(merchant, signals);
+            if (idv.approved()) {
+                decision = UnderwritingDecision.APPROVE;
+                outcome.addComponent("INTERNAL_IDV_AUTO_APPROVE", 0);
+                log.info("Internal IDV auto-approved merchant {} using hash-only intelligence",
+                        merchant.getMerchantId());
+            }
+        }
+        outcome.setDecision(decision);
         outcome.getRequiredControls().addAll(defaultControls(outcome.getDecision()));
 
         // Auto-initiate EDD when the outcome calls for it (idempotent).

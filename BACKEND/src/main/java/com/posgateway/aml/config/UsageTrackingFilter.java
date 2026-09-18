@@ -75,6 +75,10 @@ public class UsageTrackingFilter extends OncePerRequestFilter {
     }
 
     static {
+        map("^/api/v1/virtual-assets/wallets/[^/]+/screen.*", "WALLET_SCREENING", "POST");
+        map("^/api/v1/virtual-assets/vasps/[^/]+/screen.*", "VASP_SCREENING", "POST");
+        map("^/api/v1/virtual-assets/travel-rule/transfers.*", "TRAVEL_RULE_TRANSFER", "POST");
+        map("^/api/v1/compliance/kyc/merchants/[^/]+/edd.*", "EDD_SCREENING", "POST", "PUT");
         // Sanctions screening — most specific first (person/organization before the generic screen).
         map("^/api/v1/sanctions/screen/person.*",       "SANCTIONS_SCREENING_PERSON",       "POST");
         map("^/api/v1/sanctions/screen/organization.*", "SANCTIONS_SCREENING_ORGANIZATION", "POST");

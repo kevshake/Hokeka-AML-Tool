@@ -39,4 +39,16 @@ class UsageTrackingFilterServiceTypeTest {
         // it -- an unmatched path resolves to null (not tracked), not a generic fallback type.
         assertNull(UsageTrackingFilter.resolveServiceType("/api/v1/some/unrelated/endpoint", "GET"));
     }
+
+    @Test
+    void virtualAssetAndEddEndpointsResolveToSeededSkus() {
+        assertEquals("WALLET_SCREENING", UsageTrackingFilter.resolveServiceType(
+                "/api/v1/virtual-assets/wallets/4/screen", "POST"));
+        assertEquals("VASP_SCREENING", UsageTrackingFilter.resolveServiceType(
+                "/api/v1/virtual-assets/vasps/9/screen", "POST"));
+        assertEquals("TRAVEL_RULE_TRANSFER", UsageTrackingFilter.resolveServiceType(
+                "/api/v1/virtual-assets/travel-rule/transfers", "POST"));
+        assertEquals("EDD_SCREENING", UsageTrackingFilter.resolveServiceType(
+                "/api/v1/compliance/kyc/merchants/3/edd/items/SOURCE_OF_FUNDS", "PUT"));
+    }
 }

@@ -70,3 +70,11 @@ EDD, document evidence, and a corporate relationship trail.
   plaintext, keyed hashes, and physical file paths are excluded from generic record views.
 - Merchant updates validate PSP ownership before mutation and store the authenticated actor in audit evidence.
   Settlement account values remain write-only; read APIs expose only a configured flag.
+
+## Internal IDV Auto-Approval
+
+`InternalIdvAutoApproveService` may resolve an otherwise manual-review outcome only when rigorous internal checks are
+clear: a keyed settlement-account hash exists, every UBO has a keyed identity hash, verification produced no
+high/critical or manual-review signal, and cross-PSP hash intelligence contains no adverse merchant link. The service
+never queries, compares, logs, or returns settlement-account or identity-document plaintext. Hard stops and adverse
+signals cannot be overridden.

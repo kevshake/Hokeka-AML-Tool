@@ -26,6 +26,7 @@ public class SecurityConfig {
 
         private final CustomUserDetailsService userDetailsService;
         private final CustomAuthenticationFailureHandler failureHandler;
+        private final com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter onboardingInviteFilter;
 
         /**
          * Refuse plaintext HTTP at the application layer. nginx terminates TLS in the deployed
@@ -42,9 +43,11 @@ public class SecurityConfig {
         private boolean requireSsl;
 
         public SecurityConfig(CustomUserDetailsService userDetailsService,
-                        CustomAuthenticationFailureHandler failureHandler) {
+                        CustomAuthenticationFailureHandler failureHandler,
+                        com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter onboardingInviteFilter) {
                 this.userDetailsService = userDetailsService;
                 this.failureHandler = failureHandler;
+                this.onboardingInviteFilter = onboardingInviteFilter;
         }
 
         /**
@@ -109,11 +112,12 @@ public class SecurityConfig {
                         throws Exception {
                 http
                                 .csrf(csrf -> csrf.disable())
+                                .addFilterBefore(onboardingInviteFilter,
+                                                org.springframework.security.web.authentication.AnonymousAuthenticationFilter.class)
                                 .authenticationProvider(authenticationProvider)
                                 .authorizeHttpRequests(auth -> auth
                                                 // Password reset endpoints must be accessible even when not authenticated
                                                 .requestMatchers("/auth/password-reset/**", "/api/v1/auth/password-reset/**").permitAll()
-                                                .requestMatchers("/api/v1/merchants/onboard").permitAll()
                                                 .requestMatchers("/api/v1/merchants/health").permitAll()
                                                 .requestMatchers("/api/v1/pricing/**").permitAll()
                                                 // Safaricom Daraja M-Pesa callback — must be publicly accessible
@@ -188,23 +192,29 @@ public class SecurityConfig {
                                                 // Role-based access control examples
                                                 // Role-based access control
                                                 .requestMatchers("/api/v1/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
-                                                .requestMatchers("/api/v1/users/**").hasAnyAuthority(
-                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN", "ROLE_PSP_ADMIN", "MANAGE_USERS")
+                                                .requestMatchers("/users/me", "/users/me/**",
+                                                                "/api/v1/users/me", "/api/v1/users/me/**")
+                                                .authenticated()
+                                                .requestMatchers("/users/**", "/api/v1/users/**").hasAnyAuthority(
+                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
                                                 .requestMatchers("/api/v1/roles/**").hasAnyAuthority(
                                                                 "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN", "ROLE_PSP_ADMIN", "MANAGE_ROLES")
                                                 // Login endpoints - permit all (REST API, not form-based)
                                                 .requestMatchers("/auth/login", "/api/v1/auth/login", "/api/v1/psps/auth/login")
                                                 .permitAll()
                                                 .requestMatchers("/auth/csrf", "/api/v1/auth/csrf").permitAll()
+                                                .requestMatchers("/auth/register-with-invite",
+                                                                "/api/v1/auth/register-with-invite").permitAll()
+                                                .requestMatchers("/auth/register", "/api/v1/auth/register")
+                                                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
                                                 .requestMatchers("/api/v1/auth/session/check",
                                                                 "/api/v1/auth/session/refresh")
                                                 .authenticated()
                                                 .requestMatchers("/api/v1/auth/**").permitAll()
-                                                .requestMatchers("/api/v1/users/me").authenticated()
                                                 .requestMatchers("/api/v1/auth/me").authenticated()
-                                                .requestMatchers("/api/v1/psps/register").permitAll() // Allow initial
-                                                                                                      // registration if
-                                                                                                      // public
+                                                .requestMatchers("/psps/register", "/api/v1/psps/register",
+                                                                "/psps/users", "/api/v1/psps/users")
+                                                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
                                                 .requestMatchers("/api/v1/cases/**")
                                                 .hasAnyRole("SUPER_ADMIN", "COMPLIANCE_OFFICER", "ADMIN", "PSP_ADMIN", "PSP_USER", "INVESTIGATOR")
                                                 .requestMatchers("/api/v1/psps/**")

@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,13 +29,20 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     private static final String HEADER = "X-Internal-Auth";
 
     private final String expectedKey;
+    private final Environment environment;
 
-    public InternalAuthFilter(@Value("${aml.internal-auth-key:}") String expectedKey) {
+    public InternalAuthFilter(@Value("${aml.internal-auth-key:}") String expectedKey,
+                              Environment environment) {
         this.expectedKey = expectedKey == null ? "" : expectedKey.trim();
-        if (this.expectedKey.isEmpty()) {
-            log.warn("aml.internal-auth-key is NOT configured — InternalAuthFilter is DISABLED. "
-                    + "Set AML_MS_INTERNAL_KEY before exposing this service.");
+        this.environment = environment;
+        if (this.expectedKey.isEmpty() && !isProduction()) {
+            log.warn("aml.internal-auth-key is NOT configured — InternalAuthFilter is DISABLED for dev. "
+                    + "Set AML_MS_INTERNAL_KEY before exposing this service in production.");
         }
+    }
+
+    private boolean isProduction() {
+        return environment.acceptsProfiles(Profiles.of("production", "prod"));
     }
 
     @Override
@@ -49,8 +58,14 @@ public class InternalAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Filter disabled when no key is set
+        // Production fail-closed; dev may run without a key.
         if (expectedKey.isEmpty()) {
+            if (isProduction()) {
+                response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"internal auth key not configured\"}");
+                return;
+            }
             chain.doFilter(request, response);
             return;
         }
