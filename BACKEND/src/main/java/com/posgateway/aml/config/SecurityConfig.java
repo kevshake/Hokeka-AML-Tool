@@ -199,7 +199,8 @@ public class SecurityConfig {
                                                                 "/api/v1/users/me", "/api/v1/users/me/**")
                                                 .authenticated()
                                                 .requestMatchers("/users/**", "/api/v1/users/**").hasAnyAuthority(
-                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
+                                                                "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN",
+                                                                "ROLE_PSP_ADMIN", "MANAGE_USERS")
                                                 .requestMatchers("/api/v1/roles/**").hasAnyAuthority(
                                                                 "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN", "ROLE_PSP_ADMIN", "MANAGE_ROLES")
                                                 // Login endpoints - permit all (REST API, not form-based)
