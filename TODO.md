@@ -1,6 +1,28 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-09-18_
 
+## Wave 70 — Locked product decisions (2026-09-18)
+
+Shipped on `cursor/locked-product-decisions-36cb` (single PR from main + Wave 69 tenant/search):
+
+- **W47 AeroORM** — Vendored `aeroorm-java/0.3.0` in-repo; `risk_profile` cache path in `aml-microservice` cut to AeroORM (`AerospikeCacheService`, `AmlCheckService`); raw-client dual path removed for that set; CI builds aeroorm then microservice tests.
+- **W45 Settlement hash** — V223 `merchants.cbk_settlement_account_hash`; HMAC via `PiiLookupHasher`; linkage in `MerchantLinkageService`; change detection compares hash only.
+- **W29-2 Internal auto-approve** — `InternalIdvAutoApproveService` + orchestrator hook; manual default v1 IDV; documented in `docs/features/KYC_DOCUMENT_EVIDENCE.md`.
+- **W19-1 / W20-5 RBAC** — Platform admins only manage users; PSP users `/users/me` only; V224 permissions; SecurityConfig ordering; `POST /psps/users` platform-only.
+- **W49-8 ML blend** — Configurable `risk.weights.krs|trs|cra|ml` (defaults 0.25/0.35/0.25/0.15) in `RiskScoringService.calculateOverallRisk`.
+- **W49-11 Internal auth fail-closed** — Production requires `AML_MS_INTERNAL_KEY` / `aml.internal-auth-key`; startup validator + filter 503; documented in `BACKEND/DEPLOYMENT.md`.
+- **W18-6 Signal taxonomy modes** — V226 `psps.signal_taxonomy_mode`; `MultiAssetRiskEngine` respects PSP mode; API + Settings Platform Admin UI.
+- **W20-2 Card annual billing** — M-Pesa disabled in production (`billing.mpesa.enabled=false`); `CardBillingService` + gateway client; `AnniversaryBillingScheduler`; card payment methods API + Billing UI.
+- **W20-10 / W33-2 Invite-only** — V227 `onboarding_invites`; admin API; `/psps/register` platform-only; merchant onboard requires invite filter.
+- **W27-4 Billing overrides** — `BillingRateAdminController` CRUD; Platform Admin UI tab.
+- **W26-7 Platform API keys** — V228 `psp_api_keys`; `/admin/psp-api-keys` platform-only; hashed storage.
+- **W34-1 SKUs** — V225 seeds WALLET_SCREENING $0.08, VASP $2.50, EDD $15, TRAVEL_RULE $0.12; usage filter mappings.
+- **Release signing (13)** — `scripts/generate-release-key.sh --pin`; `docs/INSTALL.md` Hostinger key ceremony.
+- **packages.hokeka.com Hostinger (14)** — `scripts/publish-packages-hostinger.sh`; release workflow SSH/rsync path (AWS optional).
+- **Capacity (15)** — `DynamicCapacityService` adapts rate-limit RPM from observed TPS.
+
+**OPS-REQUIRED (Hostinger):** DNS `packages.hokeka.com` → VPS; run `generate-release-key.sh --pin` on offline host; set repo secrets / VPS env files per `docs/INSTALL.md`.
+
 ## Wave 69 — W35-1, W20-17, W18-7, gap register (2026-09-18)
 
 - **W35-1** — Hibernate `@Filter` tenant backstop on `TransactionEntity`, `Alert`, `ComplianceCase`,

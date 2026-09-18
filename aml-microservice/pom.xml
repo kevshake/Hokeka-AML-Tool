@@ -36,20 +36,11 @@
             See AeroOrm/docs/16-java-adapter-hokeka-integration-todo.md — the sanctions
             screening path stays on the raw client until AeroORM is live-cluster certified.
         -->
+        <!-- Vendored in-repo at ../aeroorm-java — install with: mvn -f ../aeroorm-java install -->
         <dependency>
             <groupId>com.aeroorm</groupId>
             <artifactId>aeroorm-java</artifactId>
             <version>0.3.0</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.aerospike</groupId>
-                    <artifactId>aerospike-client-jdk21</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.tinkerpop</groupId>
-                    <artifactId>gremlin-driver</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>commons-codec</groupId>

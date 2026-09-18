@@ -80,6 +80,10 @@ public class Psp {
     @Column(name = "kyc_enabled")
     private Boolean kycEnabled = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "signal_taxonomy_mode", nullable = false, length = 32)
+    private SignalTaxonomyMode signalTaxonomyMode = SignalTaxonomyMode.INFLUENCE_DECISION;
+
     // Theming
     @Column(name = "logo_url", length = 1000)
     private String logoUrl;
@@ -348,6 +352,16 @@ public class Psp {
     /** True unless an admin has explicitly waived KYC for this PSP (null-safe, defaults to required). */
     public boolean isKycRequired() {
         return kycEnabled == null || Boolean.TRUE.equals(kycEnabled);
+    }
+
+    public SignalTaxonomyMode getSignalTaxonomyMode() {
+        return signalTaxonomyMode == null
+                ? SignalTaxonomyMode.INFLUENCE_DECISION : signalTaxonomyMode;
+    }
+
+    public void setSignalTaxonomyMode(SignalTaxonomyMode signalTaxonomyMode) {
+        this.signalTaxonomyMode = signalTaxonomyMode == null
+                ? SignalTaxonomyMode.INFLUENCE_DECISION : signalTaxonomyMode;
     }
 
     public String getLogoUrl() {

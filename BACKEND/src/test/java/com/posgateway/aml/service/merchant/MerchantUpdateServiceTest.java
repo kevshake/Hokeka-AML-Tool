@@ -35,6 +35,7 @@ class MerchantUpdateServiceTest {
     @Mock private PspIsolationService pspIsolationService;
     @Mock private com.posgateway.aml.service.underwriting.MerchantVerificationOrchestrator verificationOrchestrator;
     @Mock private com.posgateway.aml.repository.underwriting.MerchantVerificationSignalRepository verificationSignalRepository;
+    @Mock private com.posgateway.aml.service.security.PiiLookupHasher piiLookupHasher;
 
     private MerchantUpdateService service;
 
@@ -42,7 +43,7 @@ class MerchantUpdateServiceTest {
     void setUp() {
         service = new MerchantUpdateService(
                 merchantRepository, screeningOrchestrator, auditTrailRepository, pspIsolationService,
-                verificationOrchestrator, verificationSignalRepository);
+                verificationOrchestrator, verificationSignalRepository, piiLookupHasher);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("analyst@example.com", "n/a", java.util.List.of()));
     }
@@ -84,5 +85,23 @@ class MerchantUpdateServiceTest {
 
         verify(merchantRepository, never()).save(any());
         verify(auditTrailRepository, never()).save(any());
+    }
+
+    @Test
+    void settlementChangeDetectionUsesHashAndNeverPlaintextEquality() {
+        Merchant merchant = new Merchant();
+        merchant.setMerchantId(44L);
+        merchant.setCbkSettlementAccountNumber("encrypted-old-value");
+        merchant.setCbkSettlementAccountHash("same-normalized-hash");
+        when(merchantRepository.findById(44L)).thenReturn(Optional.of(merchant));
+        when(merchantRepository.save(merchant)).thenReturn(merchant);
+        when(piiLookupHasher.hashIdentifier(" 001-234 ")).thenReturn("same-normalized-hash");
+        MerchantUpdateRequest request = new MerchantUpdateRequest();
+        request.setCbkSettlementAccountNumber(" 001-234 ");
+
+        service.updateMerchant(44L, request);
+
+        verify(verificationSignalRepository, never()).save(any());
+        assertEquals("encrypted-old-value", merchant.getCbkSettlementAccountNumber());
     }
 }

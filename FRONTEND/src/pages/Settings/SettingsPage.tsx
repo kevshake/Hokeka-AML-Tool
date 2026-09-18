@@ -25,6 +25,7 @@ import { readableTextOn, withAlpha } from "../../theme/tokens";
 import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
+import PlatformAdminTab from "./tabs/PlatformAdminTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 
@@ -246,6 +247,7 @@ export default function SettingsPage() {
       <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         {!isPspUser && <Tab label="PSP Theme Management" />}
         {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
+        {!isPspUser && isSuperAdmin && <Tab label="Platform Admin" />}
         {isPspUser && <Tab label="Billing" />}
         {isPspUser && <Tab label="Webhooks" />}
       </Tabs>
@@ -571,6 +573,12 @@ export default function SettingsPage() {
               )}
             </Grid>
           </Paper>
+        </TabPanel>
+      )}
+
+      {!isPspUser && isSuperAdmin && (
+        <TabPanel value={tabValue} index={2}>
+          <PlatformAdminTab />
         </TabPanel>
       )}
 

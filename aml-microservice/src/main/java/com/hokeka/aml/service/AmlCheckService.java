@@ -1,10 +1,8 @@
 package com.hokeka.aml.service;
 
+import com.aeroorm.AeroRepository;
 import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.Bin;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.WritePolicy;
+import com.hokeka.aml.cache.RiskProfileCache;
 import com.hokeka.aml.model.AmlResult;
 import com.hokeka.aml.model.SanctionsScreenResponse;
 import com.hokeka.aml.model.TransactionRequest;
@@ -20,6 +18,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -39,6 +38,9 @@ public class AmlCheckService {
 
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
+
+    @Autowired(required = false)
+    private AeroRepository<RiskProfileCache> riskProfileRepository;
 
     @Autowired(required = false)
     private SanctionsService sanctionsService;
@@ -115,22 +117,22 @@ public class AmlCheckService {
     }
 
     private AmlResult readCached(String cacheKey, String txnId, Long pspId, long startTime) {
-        if (!isAerospikeConnected()) return null;
+        if (!isAerospikeConnected() || riskProfileRepository == null) return null;
         try {
-            Record record = aerospikeClient.get(null, new Key(namespace, SET_NAME, cacheKey));
+            Map<String, Object> record = riskProfileRepository.findMap(cacheKey);
             if (record == null) return null;
 
-            Number scoreBin = (Number) record.getValue("risk_score");
-            String decision = (String) record.getValue("decision");
-            if (scoreBin == null || decision == null) {
+            Object scoreBin = record.get("risk_score");
+            Object decisionObj = record.get("decision");
+            if (!(scoreBin instanceof Number) || !(decisionObj instanceof String decision)) {
                 log.warn("Ignoring incomplete AML cache record for {}", cacheKey);
                 return null;
             }
 
-            double score = scoreBin.doubleValue();
+            double score = ((Number) scoreBin).doubleValue();
             AmlResult result = new AmlResult(txnId, pspId, score, decision, getRiskLevel(score),
                     "aerospike_cache", System.currentTimeMillis() - startTime, CACHE_LAYER_AEROSPIKE);
-            Object indicatorBin = record.getValue("indicators");
+            Object indicatorBin = record.get("indicators");
             if (indicatorBin instanceof List<?> values) {
                 values.stream()
                         .filter(String.class::isInstance)
@@ -139,25 +141,24 @@ public class AmlCheckService {
             }
             return result;
         } catch (Exception e) {
-            log.warn("Aerospike lookup failed for {}: {}", cacheKey, e.getMessage());
+            log.warn("AeroORM lookup failed for {}: {}", cacheKey, e.getMessage());
             return null;
         }
     }
 
     private void writeCached(String cacheKey, TransactionRequest request, AmlResult result) {
-        if (!isAerospikeConnected()) return;
+        if (!isAerospikeConnected() || riskProfileRepository == null) return;
         try {
-            WritePolicy policy = new WritePolicy();
-            policy.expiration = 3600;
-            aerospikeClient.put(policy, new Key(namespace, SET_NAME, cacheKey),
-                    new Bin("risk_score", result.getRiskScore()),
-                    new Bin("decision", result.getDecision()),
-                    new Bin("indicators", result.getIndicators()),
-                    new Bin("psp_id", result.getPspId() != null ? result.getPspId() : 0L),
-                    new Bin("merchant_id", request.getMerchantId()),
-                    new Bin("amount", request.getAmount() != null ? request.getAmount().doubleValue() : 0.0));
+            Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("risk_score", result.getRiskScore());
+            payload.put("decision", result.getDecision());
+            payload.put("indicators", result.getIndicators());
+            payload.put("psp_id", result.getPspId() != null ? result.getPspId() : 0L);
+            payload.put("merchant_id", request.getMerchantId());
+            payload.put("amount", request.getAmount() != null ? request.getAmount().doubleValue() : 0.0);
+            riskProfileRepository.saveMap(cacheKey, payload, 3600);
         } catch (Exception e) {
-            log.warn("Aerospike write failed for {}: {}", cacheKey, e.getMessage());
+            log.warn("AeroORM write failed for {}: {}", cacheKey, e.getMessage());
         }
     }
 

@@ -265,4 +265,51 @@ public class BillingService {
     public List<Invoice> getInvoicesByPsp(Long pspId) {
         return invoiceRepository.findByPsp_PspId(pspId);
     }
+
+    @Transactional(readOnly = true)
+    public List<BillingRate> getRatesForPsp(Long pspId) {
+        return billingRateRepository.findByPsp_PspId(pspId);
+    }
+
+    @Transactional
+    public BillingRate saveRateOverride(Long pspId, BillingRate rate) {
+        Psp psp = pspRepository.findById(pspId)
+                .orElseThrow(() -> new IllegalArgumentException("PSP not found"));
+        rate.setRateId(null);
+        rate.setPsp(psp);
+        if (rate.getEffectiveFrom() == null) rate.setEffectiveFrom(LocalDate.now());
+        rate.setIsActive(true);
+        return billingRateRepository.save(rate);
+    }
+
+    @Transactional
+    public BillingRate updateRateOverride(Long pspId, Long rateId, BillingRate changes) {
+        BillingRate rate = billingRateRepository.findById(rateId)
+                .filter(existing -> existing.getPsp() != null
+                        && pspId.equals(existing.getPsp().getPspId()))
+                .orElseThrow(() -> new IllegalArgumentException("Billing rate not found"));
+        if (changes.getServiceType() != null) rate.setServiceType(changes.getServiceType());
+        if (changes.getPricingModel() != null) rate.setPricingModel(changes.getPricingModel());
+        if (changes.getBaseRate() != null) rate.setBaseRate(changes.getBaseRate());
+        if (changes.getCurrency() != null) rate.setCurrency(changes.getCurrency());
+        if (changes.getEffectiveFrom() != null) rate.setEffectiveFrom(changes.getEffectiveFrom());
+        rate.setEffectiveTo(changes.getEffectiveTo());
+        rate.setTierConfig(changes.getTierConfig());
+        rate.setMonthlyFee(changes.getMonthlyFee());
+        rate.setIncludedRequests(changes.getIncludedRequests());
+        rate.setOverageRate(changes.getOverageRate());
+        rate.setDescription(changes.getDescription());
+        return billingRateRepository.save(rate);
+    }
+
+    @Transactional
+    public BillingRate deactivateRateOverride(Long pspId, Long rateId) {
+        BillingRate rate = billingRateRepository.findById(rateId)
+                .filter(existing -> existing.getPsp() != null
+                        && pspId.equals(existing.getPsp().getPspId()))
+                .orElseThrow(() -> new IllegalArgumentException("Billing rate not found"));
+        rate.setIsActive(false);
+        rate.setEffectiveTo(LocalDate.now());
+        return billingRateRepository.save(rate);
+    }
 }

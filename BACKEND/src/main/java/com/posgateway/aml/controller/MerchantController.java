@@ -33,7 +33,7 @@ import java.util.List;
 // @Slf4j removed
 @RestController
 @RequestMapping("/merchants")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MLRO', 'COMPLIANCE_OFFICER', 'SCREENING_ANALYST', 'PSP_ADMIN') or hasAuthority('ONBOARDING_INVITE')")
 public class MerchantController {
 
     private static final Logger log = LoggerFactory.getLogger(MerchantController.class);
@@ -56,18 +56,36 @@ public class MerchantController {
     @Autowired
     private CorporateIntelligenceService corporateIntelligenceService;
 
+    @Autowired
+    private com.posgateway.aml.service.security.PiiLookupHasher piiLookupHasher;
+
+    @Autowired
+    private com.posgateway.aml.service.auth.OnboardingInviteService onboardingInviteService;
+
     /**
      * Onboard new merchant
      * POST /merchants/onboard
      */
     @PostMapping("/onboard")
-    @PreAuthorize("hasAuthority('MERCHANT_EDIT')")
+    @PreAuthorize("hasAuthority('MERCHANT_EDIT') or hasAuthority('ONBOARDING_INVITE')")
     public ResponseEntity<MerchantOnboardingResponse> onboardMerchant(
-            @Valid @RequestBody MerchantOnboardingRequest request) {
+            @Valid @RequestBody MerchantOnboardingRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
         log.info("Received merchant onboarding request for: {}", request.getLegalName());
 
         try {
+            Object invitePspId = httpRequest.getAttribute(
+                    com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter.INVITE_PSP_ID);
+            if (invitePspId instanceof Long allowedPspId
+                    && !java.util.Objects.equals(allowedPspId, request.getPspId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             MerchantOnboardingResponse response = onboardingService.onboardMerchant(request);
+            String inviteToken = httpRequest.getHeader(
+                    com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter.HEADER);
+            if (inviteToken != null && !inviteToken.isBlank()) {
+                onboardingInviteService.consume(inviteToken);
+            }
 
             HttpStatus status = switch (response.getDecision()) {
                 case "APPROVE" -> HttpStatus.CREATED; // 201
@@ -131,7 +149,9 @@ public class MerchantController {
                     .dailyLimit(java.math.BigDecimal.ZERO)
                     .riskLevel("UNKNOWN")
                     .build();
-            merchant.setCbkSettlementAccountNumber((String) data.get("cbkSettlementAccountNumber"));
+            String settlementAccount = (String) data.get("cbkSettlementAccountNumber");
+            merchant.setCbkSettlementAccountNumber(settlementAccount);
+            merchant.setCbkSettlementAccountHash(piiLookupHasher.hashIdentifier(settlementAccount));
             merchant.setCbkEconomicSectorCode((String) data.get("cbkEconomicSectorCode"));
 
             Merchant saved = merchantRepository.save(merchant);

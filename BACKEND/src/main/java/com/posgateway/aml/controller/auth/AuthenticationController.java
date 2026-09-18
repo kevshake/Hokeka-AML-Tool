@@ -12,6 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
@@ -53,7 +54,11 @@ public class AuthenticationController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private com.posgateway.aml.service.auth.OnboardingInviteService onboardingInviteService;
+
     @PostMapping("/register")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterRequest request) {
         if (request == null
                 || isBlank(request.getUsername())
@@ -94,6 +99,39 @@ public class AuthenticationController {
                 "success", true,
                 "user", buildUserResponse(saved)
         ));
+    }
+
+    @PostMapping("/register-with-invite")
+    public ResponseEntity<Map<String, Object>> registerWithInvite(@RequestBody RegisterWithInviteRequest request) {
+        if (request == null || isBlank(request.getInviteToken()) || isBlank(request.getUsername())
+                || isBlank(request.getEmail()) || isBlank(request.getFirstName())
+                || isBlank(request.getLastName()) || isBlank(request.getPassword())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Invite token and all user fields are required"));
+        }
+        var invite = onboardingInviteService.validate(request.getInviteToken());
+        if (invite.isEmpty()) {
+            return ResponseEntity.status(403).body(Map.of("message", "Invite is invalid, expired, or already used"));
+        }
+        if (userRepository.existsByUsername(request.getUsername().trim())
+                || userRepository.existsByEmail(request.getEmail().trim().toLowerCase())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Username or email already exists"));
+        }
+        var invited = invite.get();
+        var role = (invited.getPsp() == null
+                ? roleRepository.findByNameAndPspIsNull(invited.getRole())
+                : roleRepository.findByNameAndPsp(invited.getRole(), invited.getPsp())
+                        .or(() -> roleRepository.findByNameAndPspIsNull(invited.getRole())))
+                .orElseThrow(() -> new IllegalStateException("Invited role is not configured"));
+        User user = User.builder()
+                .username(request.getUsername().trim())
+                .email(request.getEmail().trim().toLowerCase())
+                .firstName(request.getFirstName().trim())
+                .lastName(request.getLastName().trim())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(role).psp(invited.getPsp()).enabled(true).build();
+        User saved = userRepository.save(user);
+        onboardingInviteService.consume(request.getInviteToken());
+        return ResponseEntity.ok(Map.of("success", true, "user", buildUserResponse(saved)));
     }
 
     private boolean isBlank(String value) {
@@ -440,5 +478,11 @@ public class AuthenticationController {
         public void setLastName(String lastName) { this.lastName = lastName; }
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
+    }
+
+    public static class RegisterWithInviteRequest extends RegisterRequest {
+        private String inviteToken;
+        public String getInviteToken() { return inviteToken; }
+        public void setInviteToken(String inviteToken) { this.inviteToken = inviteToken; }
     }
 }
