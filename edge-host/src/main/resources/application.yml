@@ -1,0 +1,56 @@
+server:
+  # Bind address of the local transaction API. The container publishes it to 127.0.0.1 by default
+  # (see deploy/docker-compose.yml, EDGE_BIND); widen only to a PSP-internal interface.
+  address: ${EDGE_BIND_ADDRESS:0.0.0.0}
+  port: ${EDGE_PORT:8443}
+  ssl:
+    # Real TLS terminates HERE — there is no sidecar and no plaintext fallback. EdgeTlsGuard refuses
+    # to start if the keystore/password is missing (dev profile excepted, loudly).
+    enabled: ${EDGE_TLS_ENABLED:true}
+    key-store: ${EDGE_TLS_KEYSTORE:/opt/hokeka/secrets/edge-tls.p12}
+    key-store-type: PKCS12
+    key-store-password: ${EDGE_TLS_KEYSTORE_PASSWORD:}
+    key-alias: ${EDGE_TLS_KEY_ALIAS:edge}
+    protocol: TLS
+    enabled-protocols: TLSv1.3
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256
+    # none | want | need. For mutual TLS from the PSP API nodes set EDGE_TLS_CLIENT_AUTH=need and
+    # point SERVER_SSL_TRUST_STORE / SERVER_SSL_TRUST_STORE_PASSWORD at the PSP client-CA truststore.
+    client-auth: ${EDGE_TLS_CLIENT_AUTH:none}
+
+spring:
+  application:
+    name: hokeka-edge-host
+  threads:
+    virtual:
+      enabled: true    # serve each transaction on a virtual thread (Java 21+); near-unbounded concurrency
+
+hokeka:
+  controlplane:
+    enabled: ${EDGE_CONTROLPLANE_ENABLED:true}
+    base-url: ${CONTROLPLANE_URL:}          # must be https:// — http is refused at startup
+    edge-id: ${EDGE_EDGEID:}
+    psp-id: ${EDGE_PSPID:}
+    enrollment-code: ${EDGE_ENROLLMENT_CODE:}
+    bundle-poll-interval: ${EDGE_BUNDLE_POLL_INTERVAL:15s}
+    metrics-interval: ${EDGE_METRICS_INTERVAL:60s}
+    request-timeout: ${EDGE_CONTROLPLANE_TIMEOUT:20s}
+    # mTLS identity presented to the control plane (contract §5).
+    keystore: ${EDGE_MTLS_KEYSTORE:/opt/hokeka/secrets/edge-client.p12}
+    keystore-password: ${EDGE_MTLS_KEYSTORE_PASSWORD:}
+    truststore: ${EDGE_MTLS_TRUSTSTORE:}
+    truststore-password: ${EDGE_MTLS_TRUSTSTORE_PASSWORD:}
+    # Pinned control-plane keys (base64 SPKI or raw 32 bytes) — trust anchors for HSE-1.
+    signing-public-key: ${CONTROLPLANE_ED25519_PUBLIC_KEY:}
+    encryption-public-key: ${CONTROLPLANE_X25519_PUBLIC_KEY:}
+    identity-file: ${EDGE_IDENTITY_FILE:/opt/hokeka/secrets/edge-identity.json}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      probes:
+        enabled: true  # /actuator/health/liveness + /readiness for K8s

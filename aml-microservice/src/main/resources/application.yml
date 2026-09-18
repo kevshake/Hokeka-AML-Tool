@@ -1,0 +1,44 @@
+server:
+  port: 8091
+
+spring:
+  application:
+    name: hokeka-aml-microservice
+  # Serve each HTTP request on a virtual thread (Java 21+ runtime). Aerospike lookups are
+  # blocking I/O, so this gives near-unbounded cheap request concurrency. Ignored on Java <21.
+  threads:
+    virtual:
+      enabled: ${VIRTUAL_THREADS_ENABLED:true}
+
+aerospike:
+  host: ${AEROSPIKE_HOST:fd-test-aerospike}
+  port: ${AEROSPIKE_PORT:3000}
+
+# NOTE: a single top-level `aml:` block. YAML/Spring Boot (allowDuplicateKeys=false)
+# rejects duplicate top-level keys, so internal-auth-key and risk MUST be siblings here
+# — two separate `aml:` blocks fail context load and the service won't boot.
+aml:
+  # Shared symmetric key required by InternalAuthFilter on /internal/**.
+  # Empty => filter disabled (dev only). Production MUST set AML_MS_INTERNAL_KEY.
+  internal-auth-key: ${AML_MS_INTERNAL_KEY:}
+  risk:
+    # Comma-separated ISO country codes at each risk tier.
+    # Managed in DB for BACKEND; this configuration drives the microservice's
+    # lightweight rule-based scoring. Empty values = no countries at that tier.
+    high-risk-countries: ${AML_HIGH_RISK_COUNTRIES:IR,KP,SY,CU,SD}
+    medium-risk-countries: ${AML_MEDIUM_RISK_COUNTRIES:NG,RU,CN,VE}
+
+sanctions:
+  match:
+    similarity:
+      # Lower bound for emitting a match. Status FLAGGED at >=0.95, REVIEW in [threshold, 0.95).
+      threshold: ${SANCTIONS_SIMILARITY_THRESHOLD:0.8}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

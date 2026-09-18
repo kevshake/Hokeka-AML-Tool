@@ -1,0 +1,26 @@
+version: '3.8'
+
+# Aerospike removed: Aerospike is now run only by aml-microservice. See the
+# top-level docker-compose.test.yml / docker-compose.prod.yml for the aml-ms +
+# aerospike pair.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fraud-detector-postgres
+    environment:
+      POSTGRES_USER: fraud_detector
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-fraud_detector_dev}
+      POSTGRES_DB: fraud_detector
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraud_detector -d fraud_detector"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

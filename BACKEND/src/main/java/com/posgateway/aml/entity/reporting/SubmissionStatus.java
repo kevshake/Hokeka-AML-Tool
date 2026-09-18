@@ -1,0 +1,39 @@
+package com.posgateway.aml.entity.reporting;
+
+/**
+ * Regulatory Submission Status
+ */
+public enum SubmissionStatus {
+    DRAFT("Draft", "Initial draft state"),
+    PENDING_REVIEW("Pending Review", "Awaiting review"),
+    APPROVED("Approved", "Approved for filing"),
+    FILED("Filed", "Submitted to regulator"),
+    REJECTED("Rejected", "Rejected during internal review or by the regulator"),
+    AMENDED("Amended", "Amended submission"),
+    SUBMISSION_PENDING("Submission Pending",
+            "Approved for filing but the regulator client is not yet enabled — will be re-driven");
+
+    private final String displayName;
+    private final String description;
+
+    SubmissionStatus(String displayName, String description) {
+        this.displayName = displayName;
+        this.description = description;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public boolean canEdit() {
+        return this == DRAFT || this == PENDING_REVIEW || this == REJECTED;
+    }
+
+    public boolean canFile() {
+        return this == APPROVED || this == SUBMISSION_PENDING;
+    }
+}

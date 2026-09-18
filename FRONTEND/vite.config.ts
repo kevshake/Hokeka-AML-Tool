@@ -6,21 +6,37 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5173,
-        allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1'],
+        allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1', 'testaml.hokeka.com', 'aml.hokeka.com', 'testapi.hokeka.com', 'api.hokeka.com'],
         proxy: {
             '/api/v1': {
-                // Use Docker service name when in container, localhost otherwise
                 target: process.env.VITE_PROXY_TARGET || 'http://localhost:2637',
                 changeOrigin: true,
                 secure: false,
                 cookieDomainRewrite: 'localhost',
                 configure: (proxy, _options) => {
                     proxy.on('proxyReq', (proxyReq, req, _res) => {
-                        // Forward cookies from the original request
                         if (req.headers.cookie) {
                             proxyReq.setHeader('Cookie', req.headers.cookie);
                         }
                     });
+                },
+            },
+        },
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    // React core — always loaded
+                    'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+                    // MUI — always loaded (large, shared by all pages)
+                    'vendor-mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+                    // Data fetching — loaded by all pages
+                    'vendor-query': ['@tanstack/react-query'],
+                    // Charts — only loaded by analytics pages
+                    'vendor-charts': ['chart.js', 'react-chartjs-2', 'recharts'],
+                    // Map / geography — dashboard heatmap only
+                    'vendor-maps': ['react-simple-maps'],
                 },
             },
         },

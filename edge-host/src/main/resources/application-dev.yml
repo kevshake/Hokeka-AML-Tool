@@ -1,0 +1,12 @@
+# Local development ONLY. Plaintext HTTP, no control-plane channel, and POST /edge/bundle enabled so
+# a bundle can be loaded by hand. EdgeTlsGuard and the authorization gate both log loudly on this
+# profile. Never deploy it to a PSP site.
+server:
+  address: 127.0.0.1
+  port: 8443
+  ssl:
+    enabled: false
+
+hokeka:
+  controlplane:
+    enabled: false

@@ -1,0 +1,143 @@
+package com.posgateway.aml.controller.psp.cbk;
+
+import com.posgateway.aml.dto.psp.cbk.PspTariffTemplateDto;
+import com.posgateway.aml.entity.User;
+import com.posgateway.aml.entity.psp.cbk.PspTariffTemplate;
+import com.posgateway.aml.model.UserRole;
+import com.posgateway.aml.repository.psp.cbk.PspTariffTemplateRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * CBK GDI – Payment Gateway Tariff Templates (monthly).
+ * Endpoint: /api/v1/psps/{pspId}/cbk/tariffs
+ */
+@RestController
+@RequestMapping("/psps/{pspId}/cbk/tariffs")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN','PSP_ADMIN','COMPLIANCE_OFFICER')")
+public class PspTariffTemplateController {
+
+    private static final Logger log = LoggerFactory.getLogger(PspTariffTemplateController.class);
+
+    private final PspTariffTemplateRepository repository;
+
+    public PspTariffTemplateController(PspTariffTemplateRepository repository) {
+        this.repository = repository;
+    }
+
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return null;
+        }
+        Object principal = auth.getPrincipal();
+        return (principal instanceof User user) ? user : null;
+    }
+
+    private Long getCurrentPspId() {
+        User u = getCurrentUser();
+        return (u != null && u.getPsp() != null) ? u.getPsp().getPspId() : null;
+    }
+
+    private boolean canAccess(User user, Long pspId) {
+        if (user == null || user.getRole() == null || user.getRole().getName() == null) return false;
+        UserRole role;
+        try {
+            role = UserRole.valueOf(user.getRole().getName());
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        if (role == UserRole.PSP_ADMIN) {
+            return user.getPsp() != null && pspId != null && pspId.equals(user.getPsp().getPspId());
+        }
+        return true;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<PspTariffTemplate>> list(@PathVariable Long pspId) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+        return ResponseEntity.ok(repository.findByPspId(pspId));
+    }
+
+    @GetMapping("/active")
+    public ResponseEntity<List<PspTariffTemplate>> listActive(@PathVariable Long pspId) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+        return ResponseEntity.ok(repository.findActiveByPspId(pspId, LocalDate.now()));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PspTariffTemplate> getById(@PathVariable Long pspId, @PathVariable Long id) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+        Optional<PspTariffTemplate> opt = repository.findById(id);
+        if (opt.isEmpty() || !opt.get().getPspId().equals(pspId)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(opt.get());
+    }
+
+    @PostMapping
+    public ResponseEntity<PspTariffTemplate> create(@PathVariable Long pspId,
+                                                    @RequestBody PspTariffTemplateDto dto) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+
+        PspTariffTemplate e = PspTariffTemplate.builder()
+                .pspId(pspId)
+                .channelUsed(dto.getChannelUsed())
+                .channelPartnerName(dto.getChannelPartnerName())
+                .chargeDescription(dto.getChargeDescription())
+                .percentageTransactionCost(dto.getPercentageTransactionCost())
+                .absoluteTransactionCost(dto.getAbsoluteTransactionCost())
+                .effectiveFrom(dto.getEffectiveFrom())
+                .effectiveTo(dto.getEffectiveTo())
+                .build();
+        return ResponseEntity.ok(repository.save(e));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PspTariffTemplate> update(@PathVariable Long pspId,
+                                                    @PathVariable Long id,
+                                                    @RequestBody PspTariffTemplateDto dto) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+
+        Optional<PspTariffTemplate> opt = repository.findById(id);
+        if (opt.isEmpty() || !opt.get().getPspId().equals(pspId)) return ResponseEntity.notFound().build();
+
+        PspTariffTemplate e = opt.get();
+        e.setChannelUsed(dto.getChannelUsed());
+        e.setChannelPartnerName(dto.getChannelPartnerName());
+        e.setChargeDescription(dto.getChargeDescription());
+        e.setPercentageTransactionCost(dto.getPercentageTransactionCost());
+        e.setAbsoluteTransactionCost(dto.getAbsoluteTransactionCost());
+        e.setEffectiveFrom(dto.getEffectiveFrom());
+        e.setEffectiveTo(dto.getEffectiveTo());
+        return ResponseEntity.ok(repository.save(e));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long pspId, @PathVariable Long id) {
+        User user = getCurrentUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        if (!canAccess(user, pspId)) return ResponseEntity.status(403).build();
+        Optional<PspTariffTemplate> opt = repository.findById(id);
+        if (opt.isEmpty() || !opt.get().getPspId().equals(pspId)) return ResponseEntity.notFound().build();
+        repository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+}

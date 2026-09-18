@@ -14,6 +14,7 @@
             --glass-bg: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
             --success-color: #27ae60;
+            --text-primary: #f1f5f9;
         }
 
         * {
@@ -242,10 +243,13 @@
                 </div>
             </div>
 
-         <button class="btn-logout">Log Out</button>   
+        <a href="logout.html" class="btn-login">
+                <i class="fas fa-sign-in-alt"></i>
+                Return to Logout
+            </a> 
 
             <div class="countdown">
-                Redirecting to login in <strong id="countdown">5</strong> seconds...
+                Redirecting to logout in <strong id="countdown">5</strong> seconds...
             </div>
         </div>
     </div>
@@ -276,7 +280,7 @@
             }
             if (countdown <= 0) {
                 clearInterval(countdownInterval);
-                window.location.href = 'login.html';
+                window.location.href = 'logout.html';
             }
         }, 1000);
 
@@ -287,7 +291,7 @@
         document.querySelector('.btn-login').addEventListener('click', (e) => {
             e.preventDefault();
             clearInterval(countdownInterval);
-            window.location.href = 'login.html';
+            window.location.href = 'logout.html';
         });
     </script>
     

@@ -1,0 +1,18 @@
+[package]
+name = "edge-jni"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The native library the Java Spring Boot edge host loads (System.loadLibrary("edge_engine")).
+# Coarse-grained: one JNI call to load a sealed bundle, one per transaction to evaluate.
+[dependencies]
+rule-core = { path = "../rule-core" }
+hse-crypto = { path = "../hse-crypto" }
+jni = "0.21"
+serde_json = "1"
+arc-swap = "1"
+
+[lib]
+name = "edge_engine"
+crate-type = ["cdylib"]

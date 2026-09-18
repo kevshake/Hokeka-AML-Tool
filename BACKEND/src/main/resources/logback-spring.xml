@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Define the log directory -->
+    <property name="LOG_HOME" value="logs" />
+
+    <!-- Sifting Appender for PSP-specific logs -->
+    <appender name="PSP_SIFTING_APPENDER" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <!-- Discriminator to separate logs based on 'pspId' in MDC -->
+        <discriminator>
+            <key>pspId</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+
+        <sift>
+            <appender name="FILE-${pspId}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>${LOG_HOME}/app-${pspId}.log</file>
+                <encoder>
+                    <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{pspId}] %-5level %logger{36} - %msg%n</pattern>
+                </encoder>
+                <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                    <!-- rollover daily -->
+                    <fileNamePattern>${LOG_HOME}/archived/app-${pspId}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                    <!-- each file should be at most 10MB, keep 30 days worth of history, but at most 1GB total size -->
+                    <maxFileSize>10MB</maxFileSize>
+                    <maxHistory>30</maxHistory>
+                    <totalSizeCap>1GB</totalSizeCap>
+                </rollingPolicy>
+            </appender>
+        </sift>
+    </appender>
+
+    <!-- Console Appender with MDC -->
+    <appender name="CONSOLE_MDC" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan([%X{pspId}]) %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Detailed logging for API and Security -->
+    <logger name="org.springframework.web" level="DEBUG"/>
+    <logger name="org.springframework.security" level="DEBUG"/>
+    <logger name="com.posgateway.aml" level="DEBUG"/>
+
+    <!-- Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE_MDC" />
+        <appender-ref ref="PSP_SIFTING_APPENDER" />
+    </root>
+
+</configuration>

@@ -21,7 +21,11 @@ import { apiClient } from "../../lib/apiClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { BRAND_THEMES } from "../../config/themes";
+import { readableTextOn, withAlpha } from "../../theme/tokens";
 import { useAuth } from "../../contexts/AuthContext";
+import BillingTab from "../Psps/tabs/BillingTab";
+import WebhooksTab from "./tabs/WebhooksTab";
+import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 
 
 interface Psp {
@@ -74,7 +78,7 @@ export default function SettingsPage() {
   // Fetch all PSPs
   const { data: psps, isLoading: isLoadingPsps } = useQuery<Psp[]>({
     queryKey: ["settings", "psps"],
-    queryFn: () => apiClient.get<Psp[]>("settings/psps").then(res => res.data),
+    queryFn: () => apiClient.get<Psp[]>("settings/psps"),
   });
 
   // Fetch theme presets
@@ -99,10 +103,8 @@ export default function SettingsPage() {
 
   // Update theme mutation
   const updateThemeMutation = useMutation({
-    mutationFn: async (data: Partial<PspTheme>) => {
-  const res = await apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data);
-  return res.data;
-},
+    mutationFn: (data: Partial<PspTheme>) =>
+      apiClient.put<PspTheme>(`settings/psps/${selectedPspId}/theme`, data),
     onSuccess: () => {
       setSuccessMessage("Theme updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["settings", "psps", selectedPspId, "theme"] });
@@ -150,6 +152,10 @@ export default function SettingsPage() {
         buttonStyle: themeData.buttonStyle,
         navStyle: themeData.navStyle,
       });
+    } catch (e) {
+      // The mutation's onError surfaces the failure to the user; catch here so the
+      // awaited rejection is handled rather than becoming an unhandled promise rejection.
+      console.error('Theme save failed', e);
     } finally {
       setSaving(false);
     }
@@ -157,6 +163,12 @@ export default function SettingsPage() {
 
   const { user } = useAuth();
   const isSuperAdmin = user?.pspId === 0;
+  const isPspUser = !!user && user.pspId > 0; // PSP_ADMIN or PSP_USER
+
+  // Tab index computation:
+  // PSP users:     0 = Billing  (only tab shown)
+  // Platform admins: 0 = PSP Theme Management, 1 = System Settings (super-admin only)
+  const billingTabIndex = 0; // always 0 for PSP users; tab is hidden for admins so index is irrelevant
 
   // System Settings Interface
   interface SystemSettings {
@@ -216,21 +228,29 @@ export default function SettingsPage() {
   });
 
   const handleSaveSystemSettings = async () => {
-    await updateSystemSettingsMutation.mutateAsync(systemSettings);
+    try {
+      await updateSystemSettingsMutation.mutateAsync(systemSettings);
+    } catch (e) {
+      // onError surfaces the failure; catch so the awaited rejection is handled.
+      console.error('System settings save failed', e);
+    }
   };
 
   return (
+    <HokekaPageShell
+      title={isPspUser && user?.psp?.name ? `Settings — ${user.psp.name}` : "Settings"}
+      subtitle="Platform configuration, themes, and preferences"
+      noCard
+    >
     <Box>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 0.5, fontWeight: 600 }}>
-        Settings
-      </Typography>
-
       <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
-        <Tab label="PSP Theme Management" />
-        {isSuperAdmin && <Tab label="System Settings" />}
+        {!isPspUser && <Tab label="PSP Theme Management" />}
+        {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
+        {isPspUser && <Tab label="Billing" />}
+        {isPspUser && <Tab label="Webhooks" />}
       </Tabs>
 
-      <TabPanel value={tabValue} index={0}>
+      {!isPspUser && <TabPanel value={tabValue} index={0}>
         <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
           <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
             PSP Theme Customization
@@ -286,10 +306,13 @@ export default function SettingsPage() {
                           cursor: "pointer",
                           backgroundColor:
                             themeData.brandingTheme === preset.id ? preset.primaryColor : "transparent",
-                          color: themeData.brandingTheme === preset.id ? "#fff" : "text.primary",
+                          color:
+                            themeData.brandingTheme === preset.id
+                              ? readableTextOn(preset.primaryColor)
+                              : "text.primary",
                           border: `2px solid ${preset.primaryColor}`,
                           "&:hover": {
-                            backgroundColor: preset.primaryColor + "20",
+                            backgroundColor: withAlpha(preset.primaryColor, 0.13),
                           },
                         }}
                       />
@@ -306,7 +329,7 @@ export default function SettingsPage() {
                       fullWidth
                       label="Primary Color"
                       type="color"
-                      value={themeData.primaryColor || "#8B4049"}
+                      value={themeData.primaryColor || "var(--gold)"}
                       onChange={(e) => setThemeData({ ...themeData, primaryColor: e.target.value })}
                       InputLabelProps={{ shrink: true }}
                     />
@@ -318,7 +341,7 @@ export default function SettingsPage() {
                       fullWidth
                       label="Secondary Color"
                       type="color"
-                      value={themeData.secondaryColor || "#C9A961"}
+                      value={themeData.secondaryColor || "var(--gold)"}
                       onChange={(e) => setThemeData({ ...themeData, secondaryColor: e.target.value })}
                       InputLabelProps={{ shrink: true }}
                     />
@@ -330,7 +353,7 @@ export default function SettingsPage() {
                       fullWidth
                       label="Accent Color"
                       type="color"
-                      value={themeData.accentColor || "#A0525C"}
+                      value={themeData.accentColor || "var(--gold)"}
                       onChange={(e) => setThemeData({ ...themeData, accentColor: e.target.value })}
                       InputLabelProps={{ shrink: true }}
                     />
@@ -424,7 +447,7 @@ export default function SettingsPage() {
                     variant="contained"
                     onClick={handleSaveTheme}
                     disabled={saving}
-                    sx={{ backgroundColor: "#a93226", "&:hover": { backgroundColor: "#922b21" } }}
+                    sx={{ backgroundColor: "var(--surface-3)", "&:hover": { backgroundColor: "var(--surface-3)" } }}
                   >
                     {saving ? "Saving..." : "Save Theme"}
                   </Button>
@@ -437,9 +460,9 @@ export default function SettingsPage() {
             <Alert severity="info">Please select a PSP to manage its theme.</Alert>
           )}
         </Paper>
-      </TabPanel>
+      </TabPanel>}
 
-      {isSuperAdmin && (
+      {!isPspUser && isSuperAdmin && (
         <TabPanel value={tabValue} index={1}>
           <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
             <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
@@ -495,7 +518,7 @@ export default function SettingsPage() {
                       label="High Risk Score Threshold"
                       type="number"
                       value={systemSettings.riskThresholdHigh}
-                      onChange={(e) => handleSystemSettingChange('riskThresholdHigh', parseInt(e.target.value))}
+                      onChange={(e) => handleSystemSettingChange('riskThresholdHigh', (parseInt(e.target.value, 10) || 0))}
                       fullWidth
                       disabled={updateSystemSettingsMutation.isPending}
                     />
@@ -505,7 +528,7 @@ export default function SettingsPage() {
                       label="Medium Risk Score Threshold"
                       type="number"
                       value={systemSettings.riskThresholdMedium}
-                      onChange={(e) => handleSystemSettingChange('riskThresholdMedium', parseInt(e.target.value))}
+                      onChange={(e) => handleSystemSettingChange('riskThresholdMedium', (parseInt(e.target.value, 10) || 0))}
                       fullWidth
                       disabled={updateSystemSettingsMutation.isPending}
                     />
@@ -521,7 +544,7 @@ export default function SettingsPage() {
                       label="Audit Log Retention (Days)"
                       type="number"
                       value={systemSettings.auditRetentionDays}
-                      onChange={(e) => handleSystemSettingChange('auditRetentionDays', parseInt(e.target.value))}
+                      onChange={(e) => handleSystemSettingChange('auditRetentionDays', (parseInt(e.target.value, 10) || 0))}
                       fullWidth
                       disabled={updateSystemSettingsMutation.isPending}
                     />
@@ -550,6 +573,19 @@ export default function SettingsPage() {
           </Paper>
         </TabPanel>
       )}
+
+      {isPspUser && (
+        <TabPanel value={tabValue} index={billingTabIndex}>
+          <BillingTab pspId={String(user!.pspId)} />
+        </TabPanel>
+      )}
+
+      {isPspUser && (
+        <TabPanel value={tabValue} index={billingTabIndex + 1}>
+          <WebhooksTab />
+        </TabPanel>
+      )}
     </Box>
+    </HokekaPageShell>
   );
 }

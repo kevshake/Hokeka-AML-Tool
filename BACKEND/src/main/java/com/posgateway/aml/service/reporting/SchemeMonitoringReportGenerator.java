@@ -1,0 +1,66 @@
+package com.posgateway.aml.service.reporting;
+
+import com.posgateway.aml.service.risk.SchemeSimulatorService;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Scheme Monitoring Report Generator
+ * Generates VFMP and HECM risk reports for all active merchants belonging to a PSP.
+ * Each merchant is assessed via the scheme simulators; only high-risk merchants
+ * appear in the report output.
+ */
+@Component
+public class SchemeMonitoringReportGenerator implements ReportGenerator {
+
+    private final SchemeSimulatorService schemeSimulatorService;
+    private final com.posgateway.aml.repository.MerchantRepository merchantRepository;
+
+    public SchemeMonitoringReportGenerator(SchemeSimulatorService schemeSimulatorService,
+            com.posgateway.aml.repository.MerchantRepository merchantRepository) {
+        this.schemeSimulatorService = schemeSimulatorService;
+        this.merchantRepository = merchantRepository;
+    }
+
+    @Override
+    public Map<String, Object> generate(Long pspId, LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> report = new HashMap<>();
+        List<Map<String, Object>> merchantRisks = new ArrayList<>();
+
+        // 1. Get all merchants for this PSP
+        List<com.posgateway.aml.entity.merchant.Merchant> merchants = merchantRepository.findByPspPspId(pspId);
+
+        // 2. Evaluate Risk for each
+        for (com.posgateway.aml.entity.merchant.Merchant merchant : merchants) {
+            com.posgateway.aml.service.risk.SchemeSimulatorService.MerchantRiskAssessment assessment = schemeSimulatorService
+                    .assessMerchant(String.valueOf(merchant.getMerchantId()));
+
+            if (assessment.isHighRisk()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("merchant_id", merchant.getMerchantId());
+                row.put("merchant_name", merchant.getLegalName());
+                row.put("vfmp_stage", assessment.getVfmpResult().getStage());
+                row.put("hecm_stage", assessment.getHecmResult().getStage());
+                row.put("fraud_rate", assessment.getVfmpResult().getFraudRate());
+                row.put("cb_ratio", assessment.getHecmResult().getRatio());
+                merchantRisks.add(row);
+            }
+        }
+
+        report.put("high_risk_merchants", merchantRisks);
+        report.put("total_merchants_scanned", merchants.size());
+        report.put("generated_date", LocalDate.now());
+
+        return report;
+    }
+
+    @Override
+    public String getType() {
+        return "SCHEME_MONITORING";
+    }
+}

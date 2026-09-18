@@ -1,0 +1,954 @@
+package com.posgateway.aml.service.reporting;
+
+import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.entity.psp.Psp;
+import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.repository.TransactionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Regulatory Reporting Service
+ * Generates regulatory reports (CTR, LCTR, IFTR)
+ */
+@Service
+public class RegulatoryReportingService {
+
+    private static final Logger logger = LoggerFactory.getLogger(RegulatoryReportingService.class);
+
+    private final TransactionRepository transactionRepository;
+    private final MerchantRepository merchantRepository;
+    private final PspRepository pspRepository;
+    private final com.posgateway.aml.service.security.PspIsolationService pspIsolationService;
+
+    @Value("${compliance.kenya.ctr.threshold-usd:15000}")
+    private BigDecimal ctrThreshold;
+
+    @Value("${regulatory.lctr.threshold:100000}")
+    private BigDecimal lctrThreshold;
+
+    /** Local currency for IFTR classification. Hokeka deploys default to Kenya (KES). */
+    @Value("${regulatory.local.currency:KES}")
+    private String localCurrency;
+
+    /** Local country (ISO-3166-1 alpha-2) for IFTR classification. */
+    @Value("${regulatory.local.country:KE}")
+    private String localCountry;
+
+    @Autowired
+    public RegulatoryReportingService(TransactionRepository transactionRepository,
+            MerchantRepository merchantRepository,
+            PspRepository pspRepository,
+            com.posgateway.aml.service.security.PspIsolationService pspIsolationService) {
+        this.transactionRepository = transactionRepository;
+        this.merchantRepository = merchantRepository;
+        this.pspRepository = pspRepository;
+        this.pspIsolationService = pspIsolationService;
+    }
+
+    /**
+     * Generate Currency Transaction Report (CTR)
+     * Kenya cash report for transactions at or above USD 15,000 equivalent.
+     */
+    public CurrencyTransactionReport generateCtr(LocalDateTime startDate, LocalDateTime endDate) {
+        // Find transactions at or above CTR threshold
+        List<TransactionEntity> transactions = findTransactionsAboveThreshold(
+                ctrThreshold, startDate, endDate, true);
+
+        CurrencyTransactionReport report = new CurrencyTransactionReport();
+        report.setStartDate(startDate);
+        report.setEndDate(endDate);
+        report.setThreshold(ctrThreshold);
+        report.setTransactionCount(transactions.size());
+        report.setTotalAmount(calculateTotalAmount(transactions));
+        report.setTotalAmountByCurrency(calculateTotalAmountByCurrency(transactions));
+        
+        // Enrich transactions with detailed information
+        List<CurrencyTransactionReport.TransactionDetail> transactionDetails = transactions.stream()
+                .map(this::enrichTransactionForCtr)
+                .collect(Collectors.toList());
+        report.setTransactionDetails(transactionDetails);
+        report.setTransactions(transactions); // Keep for backward compatibility
+
+        logger.info("Generated CTR: {} transactions, total amount: {}",
+                transactions.size(), report.getTotalAmount());
+        return report;
+    }
+
+    /**
+     * Generate Large Cash Transaction Report (LCTR)
+     * Internal large-cash report using stored USD-equivalent evidence.
+     */
+    public LargeCashTransactionReport generateLctr(LocalDateTime startDate, LocalDateTime endDate) {
+        List<TransactionEntity> transactions = findTransactionsAboveThreshold(
+                lctrThreshold, startDate, endDate, false);
+
+        LargeCashTransactionReport report = new LargeCashTransactionReport();
+        report.setStartDate(startDate);
+        report.setEndDate(endDate);
+        report.setThreshold(lctrThreshold);
+        report.setTransactionCount(transactions.size());
+        report.setTotalAmount(calculateTotalAmount(transactions));
+        report.setTotalAmountByCurrency(calculateTotalAmountByCurrency(transactions));
+        
+        // Enrich transactions with detailed information
+        List<LargeCashTransactionReport.TransactionDetail> transactionDetails = transactions.stream()
+                .map(this::enrichTransactionForLctr)
+                .collect(Collectors.toList());
+        report.setTransactionDetails(transactionDetails);
+        report.setTransactions(transactions); // Keep for backward compatibility
+
+        logger.info("Generated LCTR: {} transactions, total amount: {}",
+                transactions.size(), report.getTotalAmount());
+        return report;
+    }
+
+    /**
+     * Generate International Funds Transfer Report (IFTR)
+     * IFTRs are required for cross-border transactions and international wire transfers
+     */
+    /**
+     * Generate International Funds Transfer Report (IFTR)
+     * IFTRs are required for cross-border transactions and international wire transfers
+     */
+    public InternationalFundsTransferReport generateIftr(LocalDateTime startDate, LocalDateTime endDate) {
+        // Find all transactions in the date range, respecting PSP isolation.
+        // fetchTransactions uses indexed (psp_id, txn_ts) / (txn_ts) repository methods.
+        Long pspId = pspIsolationService.getCurrentUserPspId();
+        List<TransactionEntity> allTxns = fetchTransactions(startDate, endDate, pspId);
+
+        List<TransactionEntity> iftrTxns = new ArrayList<>();
+
+        for (TransactionEntity tx : allTxns) {
+            // IFTR rule: non-local currency OR non-local merchant country.
+            boolean isInternational = tx.getCurrency() != null
+                    && !localCurrency.equalsIgnoreCase(tx.getCurrency());
+
+            if (!isInternational && tx.getMerchantId() != null) {
+                try {
+                    Long merchantId = Long.parseLong(tx.getMerchantId());
+                    Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+                    if (merchant != null) {
+                        String merchantCountry = merchant.getAddressCountry() != null
+                                ? merchant.getAddressCountry()
+                                : merchant.getCountry();
+                        if (merchantCountry != null && !localCountry.equalsIgnoreCase(merchantCountry)) {
+                            isInternational = true;
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    // non-numeric merchantId — skip enrichment, currency check stands
+                }
+            }
+
+            if (isInternational) {
+                iftrTxns.add(tx);
+            }
+        }
+
+        InternationalFundsTransferReport report = new InternationalFundsTransferReport();
+        report.setStartDate(startDate);
+        report.setEndDate(endDate);
+        report.setTransactionCount(iftrTxns.size());
+        report.setTotalAmount(calculateTotalAmount(iftrTxns));
+        report.setTotalAmountByCurrency(calculateTotalAmountByCurrency(iftrTxns));
+        
+        // Enrich transactions with detailed information
+        List<InternationalFundsTransferReport.TransactionDetail> transactionDetails = iftrTxns.stream()
+                .map(this::enrichTransactionForIftr)
+                .collect(Collectors.toList());
+        report.setTransactionDetails(transactionDetails);
+        report.setTransactions(iftrTxns); // Keep for backward compatibility
+
+        logger.info("Generated IFTR: {} transactions, total amount: {}",
+                iftrTxns.size(), report.getTotalAmount());
+        return report;
+    }
+
+    /**
+     * Find transactions above threshold
+     */
+    /**
+     * Find transactions above threshold
+     */
+    private List<TransactionEntity> findTransactionsAboveThreshold(BigDecimal threshold,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            boolean includeRegulatoryCtrFlag) {
+        Long pspId = pspIsolationService.getCurrentUserPspId();
+        List<TransactionEntity> allTransactions = fetchTransactions(startDate, endDate, pspId);
+
+        return allTransactions.stream()
+                .filter(TransactionEntity::isCashTransaction)
+                .filter(tx -> tx.getCtrUsdEquivalent() != null)
+                .filter(tx -> includeRegulatoryCtrFlag
+                        ? tx.isCtrRequired() && "REPORTABLE".equals(tx.getCtrEvaluationStatus())
+                        : tx.getCtrUsdEquivalent().compareTo(threshold) >= 0)
+                .toList();
+    }
+    
+    /**
+     * Indexed time-window fetch. PSP-scoped when {@code pspId != null}, else
+     * all PSPs (platform-admin view). Both paths use repository methods backed
+     * by Postgres indexes — no in-memory filtering against {@code findAll()}.
+     */
+    private List<TransactionEntity> fetchTransactions(LocalDateTime startDate, LocalDateTime endDate, Long pspId) {
+        return (pspId != null && pspId != 0L)
+                ? transactionRepository.findByPspIdAndTxnTsBetween(pspId, startDate, endDate)
+                : transactionRepository.findByTxnTsBetween(startDate, endDate);
+    }
+
+    /**
+     * Calculate total amount from transactions
+     */
+    private BigDecimal calculateTotalAmount(List<TransactionEntity> transactions) {
+        return transactions.stream()
+                .map(tx -> tx.getAmountCents() != null
+                        ? BigDecimal.valueOf(tx.getAmountCents()).divide(new BigDecimal("100"))
+                        : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Calculate total amounts grouped by currency.
+     * NOTE: This does NOT do FX conversion; it simply clusters totals by currency code.
+     */
+    private Map<String, BigDecimal> calculateTotalAmountByCurrency(List<TransactionEntity> transactions) {
+        Map<String, BigDecimal> totals = new LinkedHashMap<>();
+        for (TransactionEntity tx : transactions) {
+            String currency = normalizeCurrency(tx.getCurrency());
+            BigDecimal amount = tx.getAmountCents() != null
+                    ? BigDecimal.valueOf(tx.getAmountCents()).divide(new BigDecimal("100"))
+                    : BigDecimal.ZERO;
+            totals.merge(currency, amount, BigDecimal::add);
+        }
+        return totals;
+    }
+
+    private String normalizeCurrency(String currency) {
+        if (currency == null) return "USD";
+        String c = currency.trim().toUpperCase();
+        if (c.isEmpty()) return "USD";
+        // Currency column is length=3; keep safe fallback anyway
+        if (c.length() > 3) c = c.substring(0, 3);
+        if (c.length() < 3) return "USD";
+        return c;
+    }
+
+    /**
+     * Enrich transaction with detailed information for CTR
+     */
+    private CurrencyTransactionReport.TransactionDetail enrichTransactionForCtr(TransactionEntity tx) {
+        CurrencyTransactionReport.TransactionDetail detail = new CurrencyTransactionReport.TransactionDetail();
+        detail.setTransactionId(tx.getTxnId() != null ? tx.getTxnId() : 0L);
+        detail.setMerchantId(tx.getMerchantId());
+        detail.setTransactionDate(tx.getTxnTs());
+        detail.setAmount(BigDecimal.valueOf(tx.getAmountCents() != null ? tx.getAmountCents() : 0)
+                .divide(new BigDecimal("100")));
+        detail.setCurrency(tx.getCurrency() != null ? tx.getCurrency() : "USD");
+        detail.setTerminalId(tx.getTerminalId());
+        detail.setPanHash(tx.getPanHash()); // Masked account identifier
+        
+        // Merchant information
+        if (tx.getMerchantId() != null) {
+            try {
+                Long merchantId = Long.parseLong(tx.getMerchantId());
+                Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+                if (merchant != null) {
+                    detail.setMerchantName(merchant.getLegalName());
+                    detail.setMerchantTradingName(merchant.getTradingName());
+                    detail.setMerchantAddress(buildAddress(merchant));
+                    detail.setMerchantCountry(merchant.getAddressCountry() != null 
+                            ? merchant.getAddressCountry() 
+                            : merchant.getCountry());
+                    detail.setMerchantRegistrationNumber(merchant.getRegistrationNumber());
+                    detail.setMerchantTaxId(merchant.getTaxId());
+                    detail.setMerchantMcc(merchant.getMcc());
+                }
+            } catch (NumberFormatException e) {
+                // ignore
+            }
+        }
+        
+        // PSP/Financial Institution information
+        Long pspId = tx.getPspId();
+        if (pspId != null) {
+            Psp psp = pspRepository.findById(pspId).orElse(null);
+            if (psp != null) {
+                detail.setFinancialInstitutionName(psp.getLegalName());
+                detail.setFinancialInstitutionCode(psp.getPspCode());
+                detail.setFinancialInstitutionAddress(psp.getContactAddress());
+                detail.setFinancialInstitutionCountry(psp.getCountry());
+            }
+        }
+        
+        // Transaction type (derived from ISO message or default)
+        detail.setTransactionType(determineTransactionType(tx));
+        
+        // IP Address and Device Fingerprint (for person conducting transaction)
+        detail.setIpAddress(tx.getIpAddress());
+        detail.setDeviceFingerprint(tx.getDeviceFingerprint());
+        detail.setUsdEquivalent(tx.getCtrUsdEquivalent());
+        detail.setReportingThresholdUsd(tx.getCtrThresholdUsd());
+        detail.setRateSource(tx.getCtrRateSource());
+        detail.setRateEffectiveAt(tx.getCtrRateEffectiveAt());
+        
+        return detail;
+    }
+
+    /**
+     * Enrich transaction with detailed information for LCTR
+     */
+    private LargeCashTransactionReport.TransactionDetail enrichTransactionForLctr(TransactionEntity tx) {
+        LargeCashTransactionReport.TransactionDetail detail = new LargeCashTransactionReport.TransactionDetail();
+        detail.setTransactionId(tx.getTxnId() != null ? tx.getTxnId() : 0L);
+        detail.setMerchantId(tx.getMerchantId());
+        detail.setTransactionDate(tx.getTxnTs());
+        detail.setAmount(BigDecimal.valueOf(tx.getAmountCents() != null ? tx.getAmountCents() : 0)
+                .divide(new BigDecimal("100")));
+        detail.setCurrency(tx.getCurrency() != null ? tx.getCurrency() : "USD");
+        detail.setTerminalId(tx.getTerminalId());
+        detail.setPanHash(tx.getPanHash());
+        
+        // Merchant information
+        if (tx.getMerchantId() != null) {
+            try {
+                Long merchantId = Long.parseLong(tx.getMerchantId());
+                Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+                if (merchant != null) {
+                    detail.setMerchantName(merchant.getLegalName());
+                    detail.setMerchantTradingName(merchant.getTradingName());
+                    detail.setMerchantAddress(buildAddress(merchant));
+                    detail.setMerchantCountry(merchant.getAddressCountry() != null 
+                            ? merchant.getAddressCountry() 
+                            : merchant.getCountry());
+                    detail.setMerchantRegistrationNumber(merchant.getRegistrationNumber());
+                    detail.setMerchantTaxId(merchant.getTaxId());
+                }
+            } catch (NumberFormatException e) {
+                // ignore
+            }
+        }
+        
+        // PSP/Financial Institution information
+        Long pspId = tx.getPspId();
+        if (pspId != null) {
+            Psp psp = pspRepository.findById(pspId).orElse(null);
+            if (psp != null) {
+                detail.setFinancialInstitutionName(psp.getLegalName());
+                detail.setFinancialInstitutionCode(psp.getPspCode());
+                detail.setFinancialInstitutionAddress(psp.getContactAddress());
+            }
+        }
+        
+        detail.setTransactionType(determineTransactionType(tx));
+        detail.setIpAddress(tx.getIpAddress());
+        detail.setDeviceFingerprint(tx.getDeviceFingerprint());
+        detail.setUsdEquivalent(tx.getCtrUsdEquivalent());
+        detail.setReportingThresholdUsd(tx.getCtrThresholdUsd());
+        detail.setRateSource(tx.getCtrRateSource());
+        detail.setRateEffectiveAt(tx.getCtrRateEffectiveAt());
+        
+        return detail;
+    }
+
+    /**
+     * Enrich transaction with detailed information for IFTR
+     */
+    private InternationalFundsTransferReport.TransactionDetail enrichTransactionForIftr(TransactionEntity tx) {
+        InternationalFundsTransferReport.TransactionDetail detail = new InternationalFundsTransferReport.TransactionDetail();
+        detail.setTransactionId(tx.getTxnId() != null ? tx.getTxnId() : 0L);
+        detail.setMerchantId(tx.getMerchantId());
+        detail.setTransactionDate(tx.getTxnTs());
+        detail.setAmount(BigDecimal.valueOf(tx.getAmountCents() != null ? tx.getAmountCents() : 0)
+                .divide(new BigDecimal("100")));
+        detail.setCurrency(tx.getCurrency() != null ? tx.getCurrency() : "USD");
+        detail.setTerminalId(tx.getTerminalId());
+        detail.setPanHash(tx.getPanHash());
+        
+        // Merchant information (destination/origin)
+        String originCountry = "US"; // Default
+        String destinationCountry = "US"; // Default
+        
+        if (tx.getMerchantId() != null) {
+            try {
+                Long merchantId = Long.parseLong(tx.getMerchantId());
+                Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+                if (merchant != null) {
+                    detail.setMerchantName(merchant.getLegalName());
+                    detail.setMerchantTradingName(merchant.getTradingName());
+                    detail.setMerchantAddress(buildAddress(merchant));
+                    destinationCountry = merchant.getAddressCountry() != null 
+                            ? merchant.getAddressCountry() 
+                            : merchant.getCountry();
+                    detail.setDestinationCountry(destinationCountry);
+                    detail.setMerchantRegistrationNumber(merchant.getRegistrationNumber());
+                }
+            } catch (NumberFormatException e) {
+                // ignore
+            }
+        }
+        
+        // PSP/Financial Institution information
+        Long pspId = tx.getPspId();
+        if (pspId != null) {
+            Psp psp = pspRepository.findById(pspId).orElse(null);
+            if (psp != null) {
+                originCountry = psp.getCountry();
+                detail.setOriginCountry(originCountry);
+                detail.setFinancialInstitutionName(psp.getLegalName());
+                detail.setFinancialInstitutionCode(psp.getPspCode());
+                detail.setFinancialInstitutionAddress(psp.getContactAddress());
+            }
+        }
+        
+        // Determine if it's incoming or outgoing
+        boolean isNonUsdCurrency = !"USD".equalsIgnoreCase(tx.getCurrency());
+        boolean isCrossBorder = originCountry != null && destinationCountry != null 
+                && !originCountry.equals(destinationCountry);
+        
+        detail.setTransferType(isCrossBorder ? "CROSS_BORDER" : (isNonUsdCurrency ? "FOREIGN_CURRENCY" : "DOMESTIC"));
+        detail.setTransactionType(determineTransactionType(tx));
+        detail.setIpAddress(tx.getIpAddress());
+        
+        return detail;
+    }
+
+    /**
+     * Build full address string from merchant
+     */
+    private String buildAddress(Merchant merchant) {
+        List<String> parts = new ArrayList<>();
+        if (merchant.getAddressStreet() != null) parts.add(merchant.getAddressStreet());
+        if (merchant.getAddressCity() != null) parts.add(merchant.getAddressCity());
+        if (merchant.getAddressState() != null) parts.add(merchant.getAddressState());
+        if (merchant.getAddressPostalCode() != null) parts.add(merchant.getAddressPostalCode());
+        if (merchant.getAddressCountry() != null) parts.add(merchant.getAddressCountry());
+        return String.join(", ", parts);
+    }
+
+    /**
+     * Determine transaction type from ISO message or other indicators
+     */
+    private String determineTransactionType(TransactionEntity tx) {
+        String mti = extractIsoMti(tx.getIsoMsg());
+        if (mti != null) {
+            return switch (mti) {
+                case "0100", "0120" -> "AUTHORIZATION";
+                case "0200", "0220" -> "FINANCIAL_TRANSACTION";
+                case "0400", "0420" -> "REVERSAL";
+                case "0500", "0520" -> "RECONCILIATION";
+                case "0800", "0820" -> "NETWORK_MANAGEMENT";
+                default -> "ISO_" + mti;
+            };
+        }
+        if (tx.getDirection() != null && !tx.getDirection().isBlank()) {
+            String direction = tx.getDirection().trim().toUpperCase();
+            if (direction.startsWith("IN") || "CREDIT".equals(direction)) {
+                return "FUNDS_TRANSFER_INBOUND";
+            }
+            if (direction.startsWith("OUT") || "DEBIT".equals(direction)) {
+                return "FUNDS_TRANSFER_OUTBOUND";
+            }
+        }
+        return "UNCLASSIFIED";
+    }
+
+    private String extractIsoMti(String isoMessage) {
+        if (isoMessage == null || isoMessage.isBlank()) return null;
+        java.util.regex.Matcher matcher =
+                java.util.regex.Pattern.compile("(?<!\\d)(\\d{4})(?!\\d)").matcher(isoMessage);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Currency Transaction Report DTO
+     */
+    public static class CurrencyTransactionReport {
+        private String executionId;
+        private LocalDateTime startDate;
+        private LocalDateTime endDate;
+        private BigDecimal threshold;
+        private int transactionCount;
+        private BigDecimal totalAmount;
+        private Map<String, BigDecimal> totalAmountByCurrency;
+        private List<TransactionEntity> transactions;
+
+        public String getExecutionId() { return executionId; }
+        public void setExecutionId(String executionId) { this.executionId = executionId; }
+
+        // Getters and Setters
+        public LocalDateTime getStartDate() {
+            return startDate;
+        }
+
+        public void setStartDate(LocalDateTime startDate) {
+            this.startDate = startDate;
+        }
+
+        public LocalDateTime getEndDate() {
+            return endDate;
+        }
+
+        public void setEndDate(LocalDateTime endDate) {
+            this.endDate = endDate;
+        }
+
+        public BigDecimal getThreshold() {
+            return threshold;
+        }
+
+        public void setThreshold(BigDecimal threshold) {
+            this.threshold = threshold;
+        }
+
+        public int getTransactionCount() {
+            return transactionCount;
+        }
+
+        public void setTransactionCount(int transactionCount) {
+            this.transactionCount = transactionCount;
+        }
+
+        public BigDecimal getTotalAmount() {
+            return totalAmount;
+        }
+
+        public void setTotalAmount(BigDecimal totalAmount) {
+            this.totalAmount = totalAmount;
+        }
+
+        public Map<String, BigDecimal> getTotalAmountByCurrency() {
+            return totalAmountByCurrency;
+        }
+
+        public void setTotalAmountByCurrency(Map<String, BigDecimal> totalAmountByCurrency) {
+            this.totalAmountByCurrency = totalAmountByCurrency;
+        }
+
+        public List<TransactionEntity> getTransactions() {
+            return transactions;
+        }
+
+        public void setTransactions(List<TransactionEntity> transactions) {
+            this.transactions = transactions;
+        }
+
+        private List<TransactionDetail> transactionDetails;
+
+        public List<TransactionDetail> getTransactionDetails() {
+            return transactionDetails;
+        }
+
+        public void setTransactionDetails(List<TransactionDetail> transactionDetails) {
+            this.transactionDetails = transactionDetails;
+        }
+
+        /**
+         * Detailed transaction information for CTR
+         */
+        public static class TransactionDetail {
+            private Long transactionId;
+            private String merchantId;
+            private LocalDateTime transactionDate;
+            private BigDecimal amount;
+            private String currency;
+            private String transactionType;
+            private String terminalId;
+            private String panHash; // Masked account identifier
+            private BigDecimal usdEquivalent;
+            private BigDecimal reportingThresholdUsd;
+            private String rateSource;
+            private LocalDateTime rateEffectiveAt;
+            
+            // Person conducting transaction
+            private String ipAddress;
+            private String deviceFingerprint;
+            
+            // Merchant information
+            private String merchantName;
+            private String merchantTradingName;
+            private String merchantAddress;
+            private String merchantCountry;
+            private String merchantRegistrationNumber;
+            private String merchantTaxId;
+            private String merchantMcc;
+            
+            // Financial Institution (PSP) information
+            private String financialInstitutionName;
+            private String financialInstitutionCode;
+            private String financialInstitutionAddress;
+            private String financialInstitutionCountry;
+
+            // Getters and Setters
+            public Long getTransactionId() { return transactionId; }
+            public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
+            public String getMerchantId() { return merchantId; }
+            public void setMerchantId(String merchantId) { this.merchantId = merchantId; }
+            public LocalDateTime getTransactionDate() { return transactionDate; }
+            public void setTransactionDate(LocalDateTime transactionDate) { this.transactionDate = transactionDate; }
+            public BigDecimal getAmount() { return amount; }
+            public void setAmount(BigDecimal amount) { this.amount = amount; }
+            public String getCurrency() { return currency; }
+            public void setCurrency(String currency) { this.currency = currency; }
+            public String getTransactionType() { return transactionType; }
+            public void setTransactionType(String transactionType) { this.transactionType = transactionType; }
+            public String getTerminalId() { return terminalId; }
+            public void setTerminalId(String terminalId) { this.terminalId = terminalId; }
+            public String getPanHash() { return panHash; }
+            public void setPanHash(String panHash) { this.panHash = panHash; }
+            public BigDecimal getUsdEquivalent() { return usdEquivalent; }
+            public void setUsdEquivalent(BigDecimal usdEquivalent) { this.usdEquivalent = usdEquivalent; }
+            public BigDecimal getReportingThresholdUsd() { return reportingThresholdUsd; }
+            public void setReportingThresholdUsd(BigDecimal reportingThresholdUsd) { this.reportingThresholdUsd = reportingThresholdUsd; }
+            public String getRateSource() { return rateSource; }
+            public void setRateSource(String rateSource) { this.rateSource = rateSource; }
+            public LocalDateTime getRateEffectiveAt() { return rateEffectiveAt; }
+            public void setRateEffectiveAt(LocalDateTime rateEffectiveAt) { this.rateEffectiveAt = rateEffectiveAt; }
+            public String getIpAddress() { return ipAddress; }
+            public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+            public String getDeviceFingerprint() { return deviceFingerprint; }
+            public void setDeviceFingerprint(String deviceFingerprint) { this.deviceFingerprint = deviceFingerprint; }
+            public String getMerchantName() { return merchantName; }
+            public void setMerchantName(String merchantName) { this.merchantName = merchantName; }
+            public String getMerchantTradingName() { return merchantTradingName; }
+            public void setMerchantTradingName(String merchantTradingName) { this.merchantTradingName = merchantTradingName; }
+            public String getMerchantAddress() { return merchantAddress; }
+            public void setMerchantAddress(String merchantAddress) { this.merchantAddress = merchantAddress; }
+            public String getMerchantCountry() { return merchantCountry; }
+            public void setMerchantCountry(String merchantCountry) { this.merchantCountry = merchantCountry; }
+            public String getMerchantRegistrationNumber() { return merchantRegistrationNumber; }
+            public void setMerchantRegistrationNumber(String merchantRegistrationNumber) { this.merchantRegistrationNumber = merchantRegistrationNumber; }
+            public String getMerchantTaxId() { return merchantTaxId; }
+            public void setMerchantTaxId(String merchantTaxId) { this.merchantTaxId = merchantTaxId; }
+            public String getMerchantMcc() { return merchantMcc; }
+            public void setMerchantMcc(String merchantMcc) { this.merchantMcc = merchantMcc; }
+            public String getFinancialInstitutionName() { return financialInstitutionName; }
+            public void setFinancialInstitutionName(String financialInstitutionName) { this.financialInstitutionName = financialInstitutionName; }
+            public String getFinancialInstitutionCode() { return financialInstitutionCode; }
+            public void setFinancialInstitutionCode(String financialInstitutionCode) { this.financialInstitutionCode = financialInstitutionCode; }
+            public String getFinancialInstitutionAddress() { return financialInstitutionAddress; }
+            public void setFinancialInstitutionAddress(String financialInstitutionAddress) { this.financialInstitutionAddress = financialInstitutionAddress; }
+            public String getFinancialInstitutionCountry() { return financialInstitutionCountry; }
+            public void setFinancialInstitutionCountry(String financialInstitutionCountry) { this.financialInstitutionCountry = financialInstitutionCountry; }
+        }
+    }
+
+    /**
+     * Large Cash Transaction Report DTO
+     */
+    public static class LargeCashTransactionReport {
+        private String executionId;
+        private LocalDateTime startDate;
+        private LocalDateTime endDate;
+        private BigDecimal threshold;
+        private int transactionCount;
+        private BigDecimal totalAmount;
+        private Map<String, BigDecimal> totalAmountByCurrency;
+        private List<TransactionEntity> transactions;
+
+        public String getExecutionId() { return executionId; }
+        public void setExecutionId(String executionId) { this.executionId = executionId; }
+
+        // Getters and Setters
+        public LocalDateTime getStartDate() {
+            return startDate;
+        }
+
+        public void setStartDate(LocalDateTime startDate) {
+            this.startDate = startDate;
+        }
+
+        public LocalDateTime getEndDate() {
+            return endDate;
+        }
+
+        public void setEndDate(LocalDateTime endDate) {
+            this.endDate = endDate;
+        }
+
+        public BigDecimal getThreshold() {
+            return threshold;
+        }
+
+        public void setThreshold(BigDecimal threshold) {
+            this.threshold = threshold;
+        }
+
+        public int getTransactionCount() {
+            return transactionCount;
+        }
+
+        public void setTransactionCount(int transactionCount) {
+            this.transactionCount = transactionCount;
+        }
+
+        public BigDecimal getTotalAmount() {
+            return totalAmount;
+        }
+
+        public void setTotalAmount(BigDecimal totalAmount) {
+            this.totalAmount = totalAmount;
+        }
+
+        public Map<String, BigDecimal> getTotalAmountByCurrency() {
+            return totalAmountByCurrency;
+        }
+
+        public void setTotalAmountByCurrency(Map<String, BigDecimal> totalAmountByCurrency) {
+            this.totalAmountByCurrency = totalAmountByCurrency;
+        }
+
+        public List<TransactionEntity> getTransactions() {
+            return transactions;
+        }
+
+        public void setTransactions(List<TransactionEntity> transactions) {
+            this.transactions = transactions;
+        }
+
+        private List<TransactionDetail> transactionDetails;
+
+        public List<TransactionDetail> getTransactionDetails() {
+            return transactionDetails;
+        }
+
+        public void setTransactionDetails(List<TransactionDetail> transactionDetails) {
+            this.transactionDetails = transactionDetails;
+        }
+
+        /**
+         * Detailed transaction information for LCTR
+         */
+        public static class TransactionDetail {
+            private Long transactionId;
+            private String merchantId;
+            private LocalDateTime transactionDate;
+            private BigDecimal amount;
+            private String currency;
+            private String transactionType;
+            private String terminalId;
+            private String panHash;
+            private BigDecimal usdEquivalent;
+            private BigDecimal reportingThresholdUsd;
+            private String rateSource;
+            private LocalDateTime rateEffectiveAt;
+            private String ipAddress;
+            private String deviceFingerprint;
+            private String merchantName;
+            private String merchantTradingName;
+            private String merchantAddress;
+            private String merchantCountry;
+            private String merchantRegistrationNumber;
+            private String merchantTaxId;
+            private String financialInstitutionName;
+            private String financialInstitutionCode;
+            private String financialInstitutionAddress;
+
+            // Getters and Setters
+            public Long getTransactionId() { return transactionId; }
+            public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
+            public String getMerchantId() { return merchantId; }
+            public void setMerchantId(String merchantId) { this.merchantId = merchantId; }
+            public LocalDateTime getTransactionDate() { return transactionDate; }
+            public void setTransactionDate(LocalDateTime transactionDate) { this.transactionDate = transactionDate; }
+            public BigDecimal getAmount() { return amount; }
+            public void setAmount(BigDecimal amount) { this.amount = amount; }
+            public String getCurrency() { return currency; }
+            public void setCurrency(String currency) { this.currency = currency; }
+            public String getTransactionType() { return transactionType; }
+            public void setTransactionType(String transactionType) { this.transactionType = transactionType; }
+            public String getTerminalId() { return terminalId; }
+            public void setTerminalId(String terminalId) { this.terminalId = terminalId; }
+            public String getPanHash() { return panHash; }
+            public void setPanHash(String panHash) { this.panHash = panHash; }
+            public BigDecimal getUsdEquivalent() { return usdEquivalent; }
+            public void setUsdEquivalent(BigDecimal usdEquivalent) { this.usdEquivalent = usdEquivalent; }
+            public BigDecimal getReportingThresholdUsd() { return reportingThresholdUsd; }
+            public void setReportingThresholdUsd(BigDecimal reportingThresholdUsd) { this.reportingThresholdUsd = reportingThresholdUsd; }
+            public String getRateSource() { return rateSource; }
+            public void setRateSource(String rateSource) { this.rateSource = rateSource; }
+            public LocalDateTime getRateEffectiveAt() { return rateEffectiveAt; }
+            public void setRateEffectiveAt(LocalDateTime rateEffectiveAt) { this.rateEffectiveAt = rateEffectiveAt; }
+            public String getIpAddress() { return ipAddress; }
+            public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+            public String getDeviceFingerprint() { return deviceFingerprint; }
+            public void setDeviceFingerprint(String deviceFingerprint) { this.deviceFingerprint = deviceFingerprint; }
+            public String getMerchantName() { return merchantName; }
+            public void setMerchantName(String merchantName) { this.merchantName = merchantName; }
+            public String getMerchantTradingName() { return merchantTradingName; }
+            public void setMerchantTradingName(String merchantTradingName) { this.merchantTradingName = merchantTradingName; }
+            public String getMerchantAddress() { return merchantAddress; }
+            public void setMerchantAddress(String merchantAddress) { this.merchantAddress = merchantAddress; }
+            public String getMerchantCountry() { return merchantCountry; }
+            public void setMerchantCountry(String merchantCountry) { this.merchantCountry = merchantCountry; }
+            public String getMerchantRegistrationNumber() { return merchantRegistrationNumber; }
+            public void setMerchantRegistrationNumber(String merchantRegistrationNumber) { this.merchantRegistrationNumber = merchantRegistrationNumber; }
+            public String getMerchantTaxId() { return merchantTaxId; }
+            public void setMerchantTaxId(String merchantTaxId) { this.merchantTaxId = merchantTaxId; }
+            public String getFinancialInstitutionName() { return financialInstitutionName; }
+            public void setFinancialInstitutionName(String financialInstitutionName) { this.financialInstitutionName = financialInstitutionName; }
+            public String getFinancialInstitutionCode() { return financialInstitutionCode; }
+            public void setFinancialInstitutionCode(String financialInstitutionCode) { this.financialInstitutionCode = financialInstitutionCode; }
+            public String getFinancialInstitutionAddress() { return financialInstitutionAddress; }
+            public void setFinancialInstitutionAddress(String financialInstitutionAddress) { this.financialInstitutionAddress = financialInstitutionAddress; }
+        }
+    }
+
+    /**
+     * International Funds Transfer Report DTO
+     */
+    public static class InternationalFundsTransferReport {
+        private String executionId;
+        private LocalDateTime startDate;
+        private LocalDateTime endDate;
+        private int transactionCount;
+        private BigDecimal totalAmount;
+        private Map<String, BigDecimal> totalAmountByCurrency;
+        private List<TransactionEntity> transactions;
+
+        public String getExecutionId() { return executionId; }
+        public void setExecutionId(String executionId) { this.executionId = executionId; }
+
+        // Getters and Setters
+        public LocalDateTime getStartDate() {
+            return startDate;
+        }
+
+        public void setStartDate(LocalDateTime startDate) {
+            this.startDate = startDate;
+        }
+
+        public LocalDateTime getEndDate() {
+            return endDate;
+        }
+
+        public void setEndDate(LocalDateTime endDate) {
+            this.endDate = endDate;
+        }
+
+        public int getTransactionCount() {
+            return transactionCount;
+        }
+
+        public void setTransactionCount(int transactionCount) {
+            this.transactionCount = transactionCount;
+        }
+
+        public BigDecimal getTotalAmount() {
+            return totalAmount;
+        }
+
+        public void setTotalAmount(BigDecimal totalAmount) {
+            this.totalAmount = totalAmount;
+        }
+
+        public Map<String, BigDecimal> getTotalAmountByCurrency() {
+            return totalAmountByCurrency;
+        }
+
+        public void setTotalAmountByCurrency(Map<String, BigDecimal> totalAmountByCurrency) {
+            this.totalAmountByCurrency = totalAmountByCurrency;
+        }
+
+        public List<TransactionEntity> getTransactions() {
+            return transactions;
+        }
+
+        public void setTransactions(List<TransactionEntity> transactions) {
+            this.transactions = transactions;
+        }
+
+        private List<TransactionDetail> transactionDetails;
+
+        public List<TransactionDetail> getTransactionDetails() {
+            return transactionDetails;
+        }
+
+        public void setTransactionDetails(List<TransactionDetail> transactionDetails) {
+            this.transactionDetails = transactionDetails;
+        }
+
+        /**
+         * Detailed transaction information for IFTR
+         */
+        public static class TransactionDetail {
+            private Long transactionId;
+            private String merchantId;
+            private LocalDateTime transactionDate;
+            private BigDecimal amount;
+            private String currency;
+            private String transactionType;
+            private String transferType; // CROSS_BORDER, FOREIGN_CURRENCY, DOMESTIC
+            private String terminalId;
+            private String panHash;
+            private String ipAddress;
+            
+            // Origin information
+            private String originCountry;
+            private String financialInstitutionName;
+            private String financialInstitutionCode;
+            private String financialInstitutionAddress;
+            
+            // Destination information
+            private String destinationCountry;
+            private String merchantName;
+            private String merchantTradingName;
+            private String merchantAddress;
+            private String merchantRegistrationNumber;
+
+            // Getters and Setters
+            public Long getTransactionId() { return transactionId; }
+            public void setTransactionId(Long transactionId) { this.transactionId = transactionId; }
+            public String getMerchantId() { return merchantId; }
+            public void setMerchantId(String merchantId) { this.merchantId = merchantId; }
+            public LocalDateTime getTransactionDate() { return transactionDate; }
+            public void setTransactionDate(LocalDateTime transactionDate) { this.transactionDate = transactionDate; }
+            public BigDecimal getAmount() { return amount; }
+            public void setAmount(BigDecimal amount) { this.amount = amount; }
+            public String getCurrency() { return currency; }
+            public void setCurrency(String currency) { this.currency = currency; }
+            public String getTransactionType() { return transactionType; }
+            public void setTransactionType(String transactionType) { this.transactionType = transactionType; }
+            public String getTransferType() { return transferType; }
+            public void setTransferType(String transferType) { this.transferType = transferType; }
+            public String getTerminalId() { return terminalId; }
+            public void setTerminalId(String terminalId) { this.terminalId = terminalId; }
+            public String getPanHash() { return panHash; }
+            public void setPanHash(String panHash) { this.panHash = panHash; }
+            public String getIpAddress() { return ipAddress; }
+            public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+            public String getOriginCountry() { return originCountry; }
+            public void setOriginCountry(String originCountry) { this.originCountry = originCountry; }
+            public String getFinancialInstitutionName() { return financialInstitutionName; }
+            public void setFinancialInstitutionName(String financialInstitutionName) { this.financialInstitutionName = financialInstitutionName; }
+            public String getFinancialInstitutionCode() { return financialInstitutionCode; }
+            public void setFinancialInstitutionCode(String financialInstitutionCode) { this.financialInstitutionCode = financialInstitutionCode; }
+            public String getFinancialInstitutionAddress() { return financialInstitutionAddress; }
+            public void setFinancialInstitutionAddress(String financialInstitutionAddress) { this.financialInstitutionAddress = financialInstitutionAddress; }
+            public String getDestinationCountry() { return destinationCountry; }
+            public void setDestinationCountry(String destinationCountry) { this.destinationCountry = destinationCountry; }
+            public String getMerchantName() { return merchantName; }
+            public void setMerchantName(String merchantName) { this.merchantName = merchantName; }
+            public String getMerchantTradingName() { return merchantTradingName; }
+            public void setMerchantTradingName(String merchantTradingName) { this.merchantTradingName = merchantTradingName; }
+            public String getMerchantAddress() { return merchantAddress; }
+            public void setMerchantAddress(String merchantAddress) { this.merchantAddress = merchantAddress; }
+            public String getMerchantRegistrationNumber() { return merchantRegistrationNumber; }
+            public void setMerchantRegistrationNumber(String merchantRegistrationNumber) { this.merchantRegistrationNumber = merchantRegistrationNumber; }
+        }
+    }
+}

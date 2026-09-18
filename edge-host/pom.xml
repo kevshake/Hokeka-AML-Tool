@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Hokeka Edge Host — the on-prem Spring Boot service deployed to PSP sites. Loads the Rust
+         native core (libedge_engine.so) over JNI; falls back to a Java interpreter when absent.
+         Containerised with Jib for one-command, Dockerfile-free, daemon-free deployment. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.hokeka</groupId>
+    <artifactId>edge-host</artifactId>
+    <version>0.1.0</version>
+    <name>Hokeka Edge Host</name>
+
+    <properties>
+        <java.version>21</java.version>
+        <jib.version>3.4.4</jib.version>
+        <!-- Image coordinates (override on the CLI: -Dimage.registry=... -Dimage.tag=...) -->
+        <image.registry>registry.hokeka.com</image.registry>
+        <image.name>hokeka/edge-engine</image.name>
+        <image.tag>${project.version}</image.tag>
+        <!-- Where a locally built Rust core lives; used only by the `native-core` profile. -->
+        <native.core.dir>${project.basedir}/../edge-engine/target/release</native.core.dir>
+    </properties>
+
+    <profiles>
+        <!-- Opt-in verification against a real libedge_engine: `mvn test -Pnative-core`.
+             The default build deliberately runs WITHOUT the native library, because that is how the
+             container ships until CI stages the .so — the Java interpreter fallback must stay green
+             on its own. *NativeIT classes are outside surefire's default includes, so they run only
+             here, with java.library.path pointed at the built core. -->
+        <profile>
+            <id>native-core</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/*NativeIT.java</include>
+                            </includes>
+                            <!-- Quoted: the path may contain spaces. Deliberately no
+                                 "enable-native-access" flag: that is a JDK 22+ option and the CI
+                                 toolchain is 21, where an unrecognised flag stops the forked JVM
+                                 from starting at all. It only silences a warning anyway. -->
+                            <argLine>"-Djava.library.path=${native.core.dir}"</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <dependencies>
+        <!-- On-prem feature store. Aerospike is the client-premises datastore for transactions,
+             velocity counters and the persisted rule bundle. jdk8 variant matches aml-microservice
+             (the jdk21 variant is not needed and keeps the toolchain requirement lower). -->
+        <dependency>
+            <groupId>com.aerospike</groupId>
+            <artifactId>aerospike-client-jdk8</artifactId>
+            <version>9.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Jib: build the container image directly from Maven.
+                 * mvn -pl edge-host package jib:buildTar   → image tarball (no daemon, offline-friendly)
+                 * mvn -pl edge-host package jib:dockerBuild → load into local Docker daemon
+                 * mvn -pl edge-host package jib:build       → push to the Hokeka registry -->
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <version>${jib.version}</version>
+                <configuration>
+                    <from>
+                        <image>eclipse-temurin:25-jre</image>
+                    </from>
+                    <to>
+                        <image>${image.registry}/${image.name}:${image.tag}</image>
+                    </to>
+                    <container>
+                        <ports>
+                            <port>8443</port>
+                        </ports>
+                        <jvmFlags>
+                            <!-- Find the Rust native core; permit JNI native access on modern JDKs. -->
+                            <jvmFlag>-Djava.library.path=/opt/hokeka/lib</jvmFlag>
+                            <jvmFlag>--enable-native-access=ALL-UNNAMED</jvmFlag>
+                        </jvmFlags>
+                        <environment>
+                            <HOKEKA_EDGE_HOME>/opt/hokeka</HOKEKA_EDGE_HOME>
+                        </environment>
+                        <labels>
+                            <org.opencontainers.image.title>Hokeka Edge Engine</org.opencontainers.image.title>
+                            <org.opencontainers.image.vendor>Hokeka</org.opencontainers.image.vendor>
+                        </labels>
+                        <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+                    </container>
+                    <extraDirectories>
+                        <!-- Ships the native lib + default config into the image. CI drops the Linux
+                             build (libedge_engine.so) into src/main/jib/opt/hokeka/lib before jib runs. -->
+                        <paths>
+                            <path>
+                                <from>src/main/jib</from>
+                                <into>/</into>
+                            </path>
+                        </paths>
+                    </extraDirectories>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

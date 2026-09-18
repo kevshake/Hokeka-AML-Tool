@@ -1,0 +1,96 @@
+# Hokeka Edge Engine — isolated on-prem stack.
+#
+# Security model (database is reachable ONLY by the edge app):
+#   * Aerospike sits on a PRIVATE bridge network and publishes NO host port, so nothing on the host
+#     or the wider network can reach it — only the `edge` service, over the internal network, can.
+#   * Only the edge's transaction API is published, bound by default to 127.0.0.1 (override with
+#     EDGE_BIND to your PSP-internal interface). It speaks TLS 1.3 ONLY — the keystore in
+#     ./secrets terminates TLS inside the app; there is no plaintext listener and no sidecar.
+#   * ./secrets is mounted read-only (TLS + mTLS material); ./data is the only writable mount and
+#     holds the generated edge identity (X25519/Ed25519 private keys).
+#   * Both services run read-only-friendly with dropped Linux capabilities and no-new-privileges.
+#
+# Brought up by install.sh / install.ps1. Works identically on Linux (Docker/Podman) and on
+# Windows/macOS (Docker Desktop / WSL2).
+
+services:
+  aerospike:
+    image: aerospike/aerospike-server:${AEROSPIKE_TAG:-6.4}
+    container_name: hokeka-aerospike
+    # NO `ports:` — deliberately not published to the host. Only reachable in-network by `edge`.
+    volumes:
+      - ./aerospike/aerospike.conf:/etc/aerospike/aerospike.conf:ro
+      - aerospike-data:/opt/aerospike/data
+    networks:
+      - edge-internal
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "asinfo", "-v", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  edge:
+    image: ${EDGE_IMAGE:-registry.hokeka.com/hokeka/edge-engine:0.1.0}
+    container_name: hokeka-edge
+    depends_on:
+      aerospike:
+        condition: service_healthy
+    # Publish ONLY the transaction API, bound to localhost by default (set EDGE_BIND=0.0.0.0 or an
+    # internal IP to accept from your PSP API nodes).
+    ports:
+      - "${EDGE_BIND:-127.0.0.1}:8443:8443"
+    environment:
+      # The edge reaches the DB by service name over the private network — never via a host port.
+      FEATURESTORE_HOST: aerospike
+      FEATURESTORE_PORT: "3000"
+      FEATURESTORE_NAMESPACE: hokeka
+      # Retention for raw transactions. MUST match `default-ttl` in aerospike/aerospike.conf —
+      # install.sh writes both from --retention-days. Records are written with an explicit TTL, so
+      # THIS value is what actually takes effect; the namespace default only governs sizing.
+      EDGE_RETENTION_DAYS: ${EDGE_RETENTION_DAYS:-90}
+      EDGE_PSPID: ${EDGE_PSPID:-acme}
+      EDGE_EDGEID: ${EDGE_EDGEID:-acme-1}
+      # ── TLS on the transaction API (fail-closed: the app refuses to start without it) ──────────
+      EDGE_BIND_ADDRESS: 0.0.0.0
+      EDGE_TLS_KEYSTORE: /opt/hokeka/secrets/edge-tls.p12
+      EDGE_TLS_KEYSTORE_PASSWORD: ${EDGE_TLS_KEYSTORE_PASSWORD:?run install.sh/install.ps1 first — it generates the TLS keystore and writes this to .env}
+      EDGE_TLS_KEY_ALIAS: ${EDGE_TLS_KEY_ALIAS:-edge}
+      # none | want | need — set to `need` plus SERVER_SSL_TRUST_STORE to require PSP client certs.
+      EDGE_TLS_CLIENT_AUTH: ${EDGE_TLS_CLIENT_AUTH:-none}
+      # ── Outbound control-plane channel (mTLS + HSE-1) ─────────────────────────────────────────
+      CONTROLPLANE_URL: ${CONTROLPLANE_URL:-https://edge.hokeka.com}
+      CONTROLPLANE_ED25519_PUBLIC_KEY: ${CONTROLPLANE_ED25519_PUBLIC_KEY:-}
+      CONTROLPLANE_X25519_PUBLIC_KEY: ${CONTROLPLANE_X25519_PUBLIC_KEY:-}
+      EDGE_ENROLLMENT_CODE: ${EDGE_ENROLLMENT_CODE:-}
+      EDGE_MTLS_KEYSTORE: ${EDGE_MTLS_KEYSTORE:-/opt/hokeka/secrets/edge-client.p12}
+      EDGE_MTLS_KEYSTORE_PASSWORD: ${EDGE_MTLS_KEYSTORE_PASSWORD:-}
+      EDGE_MTLS_TRUSTSTORE: ${EDGE_MTLS_TRUSTSTORE:-}
+      EDGE_MTLS_TRUSTSTORE_PASSWORD: ${EDGE_MTLS_TRUSTSTORE_PASSWORD:-}
+      # Generated on first boot, mode 600 — the node's pinned identity. Keep this volume.
+      EDGE_IDENTITY_FILE: /opt/hokeka/data/edge-identity.json
+    volumes:
+      - ./config:/opt/hokeka/config:ro
+      - ./secrets:/opt/hokeka/secrets:ro
+      - ./data:/opt/hokeka/data
+    networks:
+      - edge-internal
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+networks:
+  edge-internal:
+    driver: bridge
+    # `internal: true` would also cut the edge's egress to the control plane; we keep egress for the
+    # edge (rule pull / metrics) but Aerospike still has no published port, so it stays app-only.
+
+volumes:
+  aerospike-data:

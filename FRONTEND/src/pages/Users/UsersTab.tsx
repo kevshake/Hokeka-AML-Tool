@@ -1,429 +1,290 @@
 import { useState } from "react";
-import {
-    Box,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    Button,
-    Chip,
-    IconButton,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Switch,
-    FormControlLabel,
-    Typography,
-    Alert,
-    Tooltip,
-} from "@mui/material";
-import {
-    Add as AddIcon,
-    Edit as EditIcon,
-    Delete as DeleteIcon,
-    PersonOff as DisableIcon,
-    PersonAdd as EnableIcon,
-} from "@mui/icons-material";
+import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { User, Role, Psp } from "../../types/userManagement";
+import { User } from "../../types/userManagement";
 import { useUsers, useRoles, useAllPsps } from "../../features/api/queries";
+import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, Loader2, Eye, ShieldAlert, KeyRound } from "lucide-react";
+import TwBadge from "../../components/Common/TwBadge";
+import TwPagination from "../../components/Common/TwPagination";
+import TwSnackbar from "../../components/Common/TwSnackbar";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../lib/apiClient";
+
+const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
 
 export default function UsersTab() {
     const queryClient = useQueryClient();
+    const { user: currentUser } = useAuth();
+    const isAdmin = !!currentUser?.role?.name && ADMIN_ROLES.has(currentUser.role.name);
     const [openDialog, setOpenDialog] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [formData, setFormData] = useState({
-        username: "",
-        email: "",
-        firstName: "",
-        lastName: "",
-        password: "",
-        roleId: "",
-        pspId: "",
-        enabled: true,
+        username: "", email: "", firstName: "", lastName: "", password: "",
+        roleId: "", pspId: "", enabled: true,
     });
 
     const [page, setPage] = useState({ index: 0, size: 25 });
-
-    // Fetch users with pagination
-    const { data: usersPage, isLoading } = useUsers({
-        page: page.index,
-        size: page.size,
+    // W32-1 fix: replaced native alert() calls with the app's own snackbar.
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+        open: false, message: "", severity: "error",
     });
-    
-    // Extract users from paginated response
-    const users = usersPage?.content || [];
 
-    // Fetch roles and PSPs for dropdowns
+    const { data: usersPage, isLoading } = useUsers({ page: page.index, size: page.size });
+    const users = usersPage?.content || [];
     const { data: roles } = useRoles();
     const { data: psps } = useAllPsps();
 
-    // Create/Update user mutation
+    // W14-10 fix: these three mutations used raw fetch() instead of apiClient, missing the
+    // credentials/X-PSP-ID header/error normalization every other call in the app gets via
+    // apiClient. The backend independently enforces tenant isolation on these endpoints
+    // (UserController.requireSamePsp, fixed earlier this session) regardless, but the frontend
+    // side of this gap is now closed too.
     const saveUserMutation = useMutation({
         mutationFn: async (userData: any) => {
-            const url = editingUser ? `/api/v1/users/${editingUser.id}` : "/api/v1/users";
-            const method = editingUser ? "PUT" : "POST";
-            const response = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(userData),
-            });
-            if (!response.ok) throw new Error("Failed to save user");
-            return response.json();
+            return editingUser
+                ? apiClient.put(`users/${editingUser.id}`, userData)
+                : apiClient.post("users", userData);
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["users"] });
-            handleCloseDialog();
-        },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); handleCloseDialog(); },
     });
 
-    // Delete user mutation
     const deleteUserMutation = useMutation({
-        mutationFn: async (userId: number) => {
-            const response = await fetch(`/api/v1/users/${userId}`, { method: "DELETE" });
-            if (!response.ok) throw new Error("Failed to delete user");
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["users"] });
-        },
+        mutationFn: async (userId: number) => apiClient.delete(`users/${userId}`),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to delete user. Please try again.", severity: "error" }); },
     });
 
-    // Toggle user enabled status
     const toggleUserMutation = useMutation({
-        mutationFn: async ({ userId, enabled }: { userId: number; enabled: boolean }) => {
-            const response = await fetch(`/api/v1/users/${userId}/toggle`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabled }),
-            });
-            if (!response.ok) throw new Error("Failed to toggle user status");
-            return response.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["users"] });
-        },
+        mutationFn: async ({ userId, enabled }: { userId: number; enabled: boolean }) =>
+            apiClient.patch(`users/${userId}/toggle`, { enabled }),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to update user status.", severity: "error" }); },
+    });
+
+    // W27-7 fix: no admin-triggered way to reset a PSP user's access from the console. Reuses
+    // the existing self-service password-reset request flow (POST /auth/password-reset/request,
+    // identifier = username or email) rather than building a new admin-set-password endpoint --
+    // the user still confirms via the emailed link, same security posture as self-service.
+    const resetPasswordMutation = useMutation({
+        mutationFn: async (identifier: string) =>
+            apiClient.post("auth/password-reset/request", { identifier }),
+        onSuccess: () => { setSnackbar({ open: true, message: "Password reset link sent.", severity: "success" }); },
+        onError: () => { setSnackbar({ open: true, message: "Failed to send password reset link.", severity: "error" }); },
     });
 
     const handleOpenDialog = (user?: User) => {
         if (user) {
             setEditingUser(user);
             setFormData({
-                username: user.username,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                password: "",
+                username: user.username, email: user.email,
+                firstName: user.firstName, lastName: user.lastName, password: "",
                 roleId: user.role.id.toString(),
-                pspId: user.psp?.id.toString() || "",
+                pspId: (() => { const id = user.psp?.pspId ?? user.psp?.id; return id != null ? String(id) : ""; })(),
                 enabled: user.enabled,
             });
         } else {
             setEditingUser(null);
-            setFormData({
-                username: "",
-                email: "",
-                firstName: "",
-                lastName: "",
-                password: "",
-                roleId: "",
-                pspId: "",
-                enabled: true,
-            });
+            setFormData({ username: "", email: "", firstName: "", lastName: "", password: "", roleId: "", pspId: "", enabled: true });
         }
         setOpenDialog(true);
     };
 
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setEditingUser(null);
-    };
+    const handleCloseDialog = () => { setOpenDialog(false); setEditingUser(null); };
 
     const handleSave = () => {
-    if (!formData.username || !formData.firstName || !formData.lastName || !formData.email || !formData.roleId) return;
-    const userData: any = {
-            username: formData.username,
-            email: formData.email,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            roleId: parseInt(formData.roleId),
-            pspId: formData.pspId ? parseInt(formData.pspId) : null,
+        if (!formData.username || !formData.firstName || !formData.lastName || !formData.email || !formData.roleId || (!editingUser && !formData.password)) return;
+        const userData: any = {
+            username: formData.username, email: formData.email,
+            firstName: formData.firstName, lastName: formData.lastName,
+            roleId: parseInt(formData.roleId), pspId: formData.pspId ? parseInt(formData.pspId) : null,
             enabled: formData.enabled,
         };
-
-        if (!editingUser || formData.password) {
-            userData.password = formData.password;
-        }
-
+        if (!editingUser || formData.password) userData.password = formData.password;
         saveUserMutation.mutate(userData);
     };
 
-    const handleDelete = (userId: number) => {
-        if (window.confirm("Are you sure you want to delete this user?")) {
-            deleteUserMutation.mutate(userId);
-        }
-    };
+    const handleDelete = (userId: number) => setDeleteConfirmId(userId);
+    const handleConfirmDelete = () => { if (deleteConfirmId !== null) { deleteUserMutation.mutate(deleteConfirmId); setDeleteConfirmId(null); } };
+    const handleToggleEnabled = (userId: number, currentStatus: boolean) => toggleUserMutation.mutate({ userId, enabled: !currentStatus });
 
-    const handleToggleEnabled = (userId: number, currentStatus: boolean) => {
-        toggleUserMutation.mutate({ userId, enabled: !currentStatus });
-    };
+    // Defense-in-depth: user administration is admin-only. The backend enforces this on every
+    // endpoint; this guard stops non-admins from seeing/triggering create/delete/role-change.
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-700/30 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
+                <ShieldAlert size={16} /> User administration requires an administrator role.
+            </div>
+        );
+    }
 
     return (
-        <Box>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-                <Tooltip title="Create a new user account in the system. Opens a form where you can specify the username, email, password, assign a role (which determines permissions), optionally assign to a Payment Service Provider (PSP), and set the account status. The new user will be able to log in immediately if enabled." arrow enterDelay={2000}>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleOpenDialog()}
-                        sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" } }}
-                    >
-                        Add User
-                    </Button>
-                </Tooltip>
-            </Box>
+        <div>
+            <div className="mb-3 flex justify-end">
+                <button onClick={() => handleOpenDialog()} className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800">
+                    <Plus size={14} /> Add User
+                </button>
+            </div>
 
-            <TableContainer component={Paper} sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Username</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Name</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Email</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Role</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>PSP</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Status</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Created</TableCell>
-                            <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
-                                    Loading users...
-                                </TableCell>
-                            </TableRow>
-                        ) : users && users.length > 0 ? (
-                            users.map((user) => (
-                                <TableRow key={user.id} hover>
-                                    <TableCell sx={{ color: "text.primary", fontWeight: 500, py: 2 }}>{user.username}</TableCell>
-                                    <TableCell sx={{ color: "text.primary", py: 2 }}>
-                                        {user.firstName} {user.lastName}
-                                    </TableCell>
-                                    <TableCell sx={{ color: "text.primary", py: 2 }}>{user.email}</TableCell>
-                                    <TableCell sx={{ py: 2 }}>
-                                        <Chip
-                                            label={user.role.name}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: "#8B404920",
-                                                color: "#8B4049",
-                                                border: "1px solid #8B4049",
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell sx={{ color: "text.primary", py: 2 }}>{user.psp?.name || "System"}</TableCell>
-                                    <TableCell sx={{ py: 2 }}>
-                                        <Chip
-                                            label={user.enabled ? "Active" : "Disabled"}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: user.enabled ? "#2ecc7120" : "#95a5a620",
-                                                color: user.enabled ? "#2ecc71" : "#95a5a6",
-                                                border: `1px solid ${user.enabled ? "#2ecc71" : "#95a5a6"}`,
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell sx={{ color: "text.secondary", fontSize: "0.875rem", py: 2 }}>
-                                        {new Date(user.createdAt).toLocaleDateString()}
-                                    </TableCell>
-                                    <TableCell sx={{ py: 2 }}>
-                                        <Box sx={{ display: "flex", gap: 0.5 }}>
-                                            <Tooltip title="Edit this user's account details including name, email, role assignment, PSP assignment, and account status. Opens the user edit dialog with pre-filled information. Note: Username cannot be changed after account creation." arrow enterDelay={2000}>
-                                                <IconButton size="small" onClick={() => handleOpenDialog(user)} sx={{ color: "#8B4049" }}>
-                                                    <EditIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title={user.enabled ? "Disable this user account to prevent login access. The user will not be able to authenticate until the account is re-enabled. Useful for temporary access suspension or security measures." : "Enable this user account to restore login access. The user will be able to authenticate and access the system based on their assigned role and permissions."} arrow enterDelay={2000}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleToggleEnabled(user.id, user.enabled)}
-                                                    sx={{ color: user.enabled ? "#f39c12" : "#2ecc71" }}
+            <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
+                <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 320px)" }}>
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-glass-muted" /></div>
+                    ) : (
+                        <table className="w-full border-collapse">
+                            <thead className="sticky top-0 z-10">
+                                <tr className="border-b border-white/10 bg-[var(--surface-2)]">
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Username</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Name</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Email</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Role</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">PSP</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Status</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Created</th>
+                                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {users.length > 0 ? users.map((user: any) => (
+                                    <tr key={user.id} className="transition-colors hover:bg-white/[0.02]">
+                                        <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-white">{user.username}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{user.firstName} {user.lastName}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">{user.email}</td>
+                                        <td className="whitespace-nowrap px-4 py-3"><TwBadge variant="info">{user.role.name}</TwBadge></td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">{user.psp?.name || "System"}</td>
+                                        <td className="whitespace-nowrap px-4 py-3"><TwBadge variant={user.enabled ? "success" : "default"}>{user.enabled ? "Active" : "Disabled"}</TwBadge></td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">{new Date(user.createdAt).toLocaleDateString()}</td>
+                                        <td className="whitespace-nowrap px-4 py-3">
+                                            <div className="flex items-center gap-1">
+                                                <Link to={`/records/USER/${user.id}`} title="Trace record" className="rounded p-1 text-sky-400 transition-colors hover:bg-white/10"><Eye size={16} /></Link>
+                                                <button onClick={() => handleOpenDialog(user)} className="rounded p-1 text-burgundy-400 transition-colors hover:bg-white/10"><Edit size={16} /></button>
+                                                <button
+                                                    onClick={() => resetPasswordMutation.mutate(user.email || user.username)}
+                                                    disabled={resetPasswordMutation.isPending}
+                                                    title="Send password reset link"
+                                                    className="rounded p-1 text-indigo-400 transition-colors hover:bg-white/10 disabled:opacity-50"
                                                 >
-                                                    {user.enabled ? <DisableIcon fontSize="small" /> : <EnableIcon fontSize="small" />}
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Permanently delete this user account from the system. This action cannot be undone and will remove all user data, access permissions, and account history. Use with caution. Ensure you have proper authorization before deleting user accounts." arrow enterDelay={2000}>
-                                                <IconButton size="small" onClick={() => handleDelete(user.id)} sx={{ color: "#e74c3c" }}>
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 2, color: "text.secondary" }}>
-                                    No users found
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-                <TablePagination
-                  rowsPerPageOptions={[10, 25, 50, 100]}
-                  component="div"
-                  count={usersPage?.totalElements || 0}
-                  rowsPerPage={page.size}
-                  page={page.index}
-                  onPageChange={(_, newPage) => setPage(prev => ({ ...prev, index: newPage }))}
-                  onRowsPerPageChange={(e) => setPage({ index: 0, size: parseInt(e.target.value, 10) })}
+                                                    <KeyRound size={16} />
+                                                </button>
+                                                <button onClick={() => handleToggleEnabled(user.id, user.enabled)} className={`rounded p-1 transition-colors hover:bg-white/10 ${user.enabled ? "text-amber-400" : "text-emerald-400"}`}>
+                                                    {user.enabled ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
+                                                </button>
+                                                <button onClick={() => handleDelete(user.id)} className="rounded p-1 text-red-400 transition-colors hover:bg-white/10"><Trash2 size={16} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-glass-muted">No users found</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                <TwPagination
+                    page={page.index} totalPages={Math.ceil((usersPage?.totalElements || 0) / page.size) || 1}
+                    totalCount={usersPage?.totalElements || 0} rowsPerPage={page.size}
+                    onPageChange={(p) => setPage(prev => ({ ...prev, index: p }))}
+                    onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
                 />
-            </TableContainer>
+            </div>
 
             {/* Create/Edit User Dialog */}
-            <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>{editingUser ? "Edit User" : "Create New User"}</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
-                        {saveUserMutation.isError && (
-                            <Alert severity="error">Failed to save user. Please try again.</Alert>
-                        )}
+            {openDialog && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={handleCloseDialog} />
+                    <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2">
+                        <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-2)] shadow-2xl">
+                            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+                                <h3 className="text-lg font-semibold text-white">{editingUser ? "Edit User" : "Create New User"}</h3>
+                                <button onClick={handleCloseDialog} className="rounded p-1 text-glass-muted hover:bg-white/10">✕</button>
+                            </div>
+                            <div className="max-h-[28rem] space-y-4 overflow-y-auto px-6 py-4">
+                                {saveUserMutation.isError && (
+                                    <div className="rounded-lg border border-red-700/30 bg-red-900/30 px-4 py-3 text-sm text-red-200">Failed to save user. Please try again.</div>
+                                )}
+                                <div>
+                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Username</label>
+                                    <input value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} disabled={!!editingUser}
+                                        className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-burgundy-700" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">First Name</label>
+                                        <input value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                                            className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Last Name</label>
+                                        <input value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                            className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Email</label>
+                                    <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700" />
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">{editingUser ? "New Password (leave blank to keep current)" : "Password"}</label>
+                                    <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700" />
+                                </div>
+                                {[ 
+                                    { label: "Role", value: formData.roleId, onChange: (v: string) => setFormData({ ...formData, roleId: v }), options: [{ value: "", label: "Select..." }, ...(roles || []).map((r: any) => ({ value: r.id.toString(), label: `${r.name}${r.psp ? ` (${r.psp.name})` : " (System)"}` }))] },
+                                    { label: "PSP (Optional)", value: formData.pspId, onChange: (v: string) => setFormData({ ...formData, pspId: v }), options: [{ value: "", label: "None (System User)" }, ...(psps || []).map((p: any) => ({ value: String(p.id), label: p.name }))] },
+                                ].map((field) => (
+                                    <div key={field.label}>
+                                        <label className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">{field.label}</label>
+                                        <select value={field.value} onChange={(e) => field.onChange(e.target.value)}
+                                            className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700">
+                                            {field.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                                <label className="flex items-center gap-2 text-sm text-white">
+                                    <input type="checkbox" checked={formData.enabled} onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                                        className="rounded border-white/20 bg-white/5 accent-gold text-gold focus:ring-gold" />
+                                    Enabled
+                                </label>
+                            </div>
+                            <div className="flex justify-end gap-2 border-t border-white/10 px-6 py-3">
+                                <button onClick={handleCloseDialog} className="rounded-lg border border-white/10 px-4 py-1.5 text-xs text-white transition-colors hover:bg-white/5">Cancel</button>
+                                <button onClick={handleSave} disabled={saveUserMutation.isPending}
+                                    className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800 disabled:opacity-30">
+                                    {saveUserMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                                    {saveUserMutation.isPending ? "Saving..." : "Save"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
-                        <Tooltip title="Enter a unique username that will be used for login authentication. This username must be unique across the system and cannot be changed after the user account is created. Choose a username that follows your organization's naming convention (e.g., firstname.lastname or employee ID)." arrow placement="top" enterDelay={2000}>
-                            <TextField
-                                label="Username"
-                                value={formData.username}
-                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                fullWidth
-                                required
-                                disabled={!!editingUser}
-                            />
-                        </Tooltip>
+            {/* Delete Confirmation Dialog */}
+            {deleteConfirmId !== null && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteConfirmId(null)} />
+                    <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2">
+                        <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-2)] shadow-2xl">
+                            <div className="border-b border-white/10 px-6 py-4">
+                                <h3 className="text-lg font-semibold text-white">Delete User</h3>
+                            </div>
+                            <div className="px-6 py-4 text-sm text-white/80">Are you sure you want to permanently delete this user? This action cannot be undone.</div>
+                            <div className="flex justify-end gap-2 border-t border-white/10 px-6 py-3">
+                                <button onClick={() => setDeleteConfirmId(null)} className="rounded-lg border border-white/10 px-4 py-1.5 text-xs text-white transition-colors hover:bg-white/5">Cancel</button>
+                                <button onClick={handleConfirmDelete} className="rounded-lg bg-red-700 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-800">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
-                        <Box sx={{ display: "flex", gap: 2 }}>
-                            <Tooltip title="Enter the user's legal first name as it should appear in the system. This name will be displayed in user lists, audit logs, and case assignments. Use the person's official first name for consistency." arrow placement="top" enterDelay={2000}>
-                                <TextField
-                                    label="First Name"
-                                    value={formData.firstName}
-                                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                    fullWidth
-                                    required
-                                />
-                            </Tooltip>
-                            <Tooltip title="Enter the user's legal last name (surname) as it should appear in the system. This name will be displayed alongside the first name in user lists, audit logs, and case assignments. Use the person's official last name for consistency." arrow placement="top" enterDelay={2000}>
-                                <TextField
-                                    label="Last Name"
-                                    value={formData.lastName}
-                                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                    fullWidth
-                                    required
-                                />
-                            </Tooltip>
-                        </Box>
-
-                        <Tooltip title="Enter a valid email address for this user. This email will be used for system notifications, password reset requests, account recovery, and important alerts. The email must be unique in the system and follow standard email format (e.g., user@example.com)." arrow placement="top" enterDelay={2000}>
-                            <TextField
-                                label="Email"
-                                type="email"
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                fullWidth
-                                required
-                            />
-                        </Tooltip>
-
-                        <Tooltip title={editingUser ? "Enter a new password to change the user's current password, or leave this field blank to keep the existing password unchanged. The new password should meet security requirements (minimum length, complexity)." : "Enter a secure password for the new user account. The password should be strong (minimum 8 characters, include uppercase, lowercase, numbers, and special characters) to ensure account security. The user will use this password to log in."} arrow placement="top" enterDelay={2000}>
-                            <TextField
-                                label={editingUser ? "New Password (leave blank to keep current)" : "Password"}
-                                type="password"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                fullWidth
-                                required={!editingUser}
-                            />
-                        </Tooltip>
-
-                        <Tooltip title="Select the role that determines this user's permissions and access levels in the system. Roles define what actions the user can perform (e.g., view cases, create alerts, manage users). System roles apply globally, while PSP-specific roles are scoped to a particular Payment Service Provider. Choose the role that matches the user's responsibilities." arrow placement="top" enterDelay={2000}>
-                            <FormControl fullWidth required>
-                                <InputLabel>Role</InputLabel>
-                                <Select
-                                    value={formData.roleId}
-                                    onChange={(e) => setFormData({ ...formData, roleId: e.target.value })}
-                                    label="Role"
-                                >
-                                    {roles?.map((role) => (
-                                        <MenuItem key={role.id} value={role.id.toString()}>
-                                            {role.name} {role.psp ? `(${role.psp.name})` : "(System)"}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Tooltip>
-
-                        <Tooltip title="Optionally assign this user to a specific Payment Service Provider (PSP) to restrict their access to that PSP's data only. Leave empty for system-wide access (Super Admin). PSP users can only view and manage data belonging to their assigned PSP, ensuring data isolation and multi-tenancy compliance. System users (no PSP) have access to all data across all PSPs." arrow placement="top" enterDelay={2000}>
-                            <FormControl fullWidth>
-                                <InputLabel>PSP (Optional)</InputLabel>
-                                <Select
-                                    value={formData.pspId}
-                                    onChange={(e) => setFormData({ ...formData, pspId: e.target.value })}
-                                    label="PSP (Optional)"
-                                >
-                                    <MenuItem value="">None (System User)</MenuItem>
-                                    {psps?.map((psp) => (
-                                        <MenuItem key={psp.id} value={psp.id.toString()}>
-                                            {psp.name}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Tooltip>
-
-                        <Tooltip title="Enable or disable this user account. When enabled, the user can log in and access the system based on their assigned role and permissions. When disabled, the user cannot authenticate or access the system, but their account data is preserved. Useful for temporary access suspension or when an employee leaves the organization." arrow placement="top" enterDelay={2000}>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={formData.enabled}
-                                        onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                                    />
-                                }
-                                label="Enabled"
-                            />
-                        </Tooltip>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Tooltip title="Cancel the user creation or editing process and discard all changes made in this dialog. Returns to the user list without saving any modifications." arrow enterDelay={2000}>
-                        <Button onClick={handleCloseDialog}>Cancel</Button>
-                    </Tooltip>
-                    <Tooltip title="Save the user information and apply all changes. For new users, this creates the account with the specified details. For existing users, this updates their information including name, email, role, PSP assignment, and account status. The user will be able to log in immediately after creation (if enabled)." arrow enterDelay={2000}>
-                        <span>
-                            <Button
-                                onClick={handleSave}
-                                variant="contained"
-                                disabled={saveUserMutation.isPending}
-                                sx={{ backgroundColor: "#8B4049", "&:hover": { backgroundColor: "#6B3037" } }}
-                            >
-                                {saveUserMutation.isPending ? "Saving..." : "Save"}
-                            </Button>
-                        </span>
-                    </Tooltip>
-                </DialogActions>
-            </Dialog>
-        </Box>
+            <TwSnackbar
+                open={snackbar.open}
+                message={snackbar.message}
+                severity={snackbar.severity}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            />
+        </div>
     );
 }
-

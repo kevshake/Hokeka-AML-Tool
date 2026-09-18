@@ -1,0 +1,82 @@
+package com.posgateway.aml.repository;
+
+import com.posgateway.aml.entity.psp.Invoice;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Invoice Repository
+ */
+@Repository
+public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+
+    Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
+
+    List<Invoice> findByPsp_PspId(Long pspId);
+
+    List<Invoice> findByPsp_PspIdOrderByBillingPeriodEndDesc(Long pspId);
+
+    List<Invoice> findByStatus(String status);
+
+    @Query("SELECT i FROM Invoice i WHERE i.status = :status AND i.dueDate < :date")
+    List<Invoice> findOverdueInvoices(@Param("status") String status, @Param("date") LocalDate date);
+
+    @Query("SELECT i FROM Invoice i WHERE i.psp.pspId = :pspId " +
+            "AND i.billingPeriodStart = :periodStart " +
+            "AND i.billingPeriodEnd = :periodEnd")
+    Optional<Invoice> findByPspAndPeriod(
+            @Param("pspId") Long pspId,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE i.psp.pspId = :pspId AND i.status = 'PAID'")
+    BigDecimal sumPaidAmountByPsp(@Param("pspId") Long pspId);
+
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.status = :status")
+    long countByStatus(@Param("status") String status);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE i.status = 'PAID' " +
+            "AND i.billingPeriodStart >= :periodStart AND i.billingPeriodEnd <= :periodEnd")
+    BigDecimal sumPaidAmountForPeriod(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE i.status NOT IN ('CANCELLED', 'VOID') " +
+            "AND i.billingPeriodStart >= :periodStart AND i.billingPeriodEnd <= :periodEnd")
+    BigDecimal sumExpectedAmountForPeriod(
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("SELECT SUM(i.totalAmount) FROM Invoice i WHERE (i.status = 'SENT' OR i.status = 'OVERDUE') " +
+            "AND i.dueDate < :today")
+    BigDecimal sumOverdueAmount(@Param("today") LocalDate today);
+
+    List<Invoice> findByPsp_PspIdAndStatus(Long pspId, String status);
+
+    /**
+     * Count a PSP's still-outstanding invoices: anything marked OVERDUE, or a SENT invoice already
+     * past its due date. Zero means the tenant has cleared its dues and may be reactivated.
+     */
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.psp.pspId = :pspId "
+            + "AND (i.status = 'OVERDUE' OR (i.status = 'SENT' AND i.dueDate < :today))")
+    long countOutstanding(@Param("pspId") Long pspId, @Param("today") LocalDate today);
+
+    /** The owning PSP id for an invoice, without triggering a lazy load of the Psp association. */
+    @Query("SELECT i.psp.pspId FROM Invoice i WHERE i.invoiceId = :invoiceId")
+    Long findPspIdByInvoiceId(@Param("invoiceId") Long invoiceId);
+
+    /**
+     * Load an invoice with its Psp and line items eagerly initialised, so the async email/PDF path
+     * (which runs on a thread with no persistence context) never hits a LazyInitializationException.
+     */
+    @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.psp LEFT JOIN FETCH i.lineItems "
+            + "WHERE i.invoiceId = :invoiceId")
+    Optional<Invoice> findByIdWithDetails(@Param("invoiceId") Long invoiceId);
+}

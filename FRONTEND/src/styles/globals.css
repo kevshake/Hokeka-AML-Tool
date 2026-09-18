@@ -1,0 +1,793 @@
+/* ============================================================================
+   Hokeka dashboard — application chrome.
+
+   All colour comes from the design tokens in `src/theme/globals.css`
+   (defaults) and `src/theme/tokens.ts` (runtime / per-PSP). Nothing in this
+   file should introduce a literal brand colour.
+
+   MUI component styling lives in the theme (`src/contexts/ThemeContext.tsx`),
+   not here — the old `.hokeka-dashboard .MuiX { … !important }` block has been
+   removed so the theme is the single authority.
+   ========================================================================== */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--bg);
+    color: var(--ink);
+    font-synthesis: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  ::selection {
+    background: rgb(var(--brand-accent-rgb) / 0.28);
+    color: var(--ink);
+  }
+
+  /* Editorial scrollbars — hairline, no chrome. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--surface-4-rgb)) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--surface-4-rgb));
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--brand-accent-rgb) / 0.45);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* ============================ Shell ====================================== */
+
+.hokeka-dashboard {
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--ink);
+}
+
+/*
+ * Main content column. The photographic plate is kept but pushed almost fully
+ * under a near-black wash plus a single gold aurora, mirroring the marketing
+ * site's `.command` section treatment.
+ */
+.hokeka-dashboard-main {
+  position: relative;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(70% 50% at 70% 0%, rgb(var(--brand-accent-rgb) / 0.06), transparent 65%),
+    linear-gradient(rgb(var(--surface-0-rgb) / 0.95), rgb(var(--surface-0-rgb) / 0.97)),
+    url('/images/hokeka-dashboard-bg.png');
+  background-size: auto, auto, cover;
+  background-position: center, center, center right;
+  background-repeat: no-repeat;
+  background-attachment: scroll, scroll, fixed;
+}
+
+/* Dashboard route: neutral SaaS field under the glass header (no aurora plate). */
+.hokeka-dashboard-main--saas {
+  background-color: #f4f5f7;
+  background-image: none;
+}
+
+.hokeka-dashboard-main--saas > header {
+  /* Keep chrome dark against the light content field */
+  background-color: rgba(12, 14, 13, 0.96);
+  color: #f5f2eb;
+}
+
+.hokeka-dashboard-main--saas > .hokeka-dashboard-content {
+  color: #101828;
+}
+
+/* ============================ Utilities ================================== */
+
+@layer utilities {
+  .text-glass-muted {
+    color: var(--text-secondary);
+  }
+
+  .text-glass-subtle {
+    color: var(--text-tertiary);
+  }
+
+  .text-gold-label {
+    color: var(--brand-accent);
+  }
+
+  .bg-glass-skeleton {
+    background-color: var(--glass-skeleton);
+  }
+
+  .ease-editorial {
+    transition-timing-function: var(--ease);
+  }
+
+  /* Chart accents — a hairline halo, not neon. */
+  .chart-neon-red {
+    filter: drop-shadow(0 0 5px rgb(var(--danger-rgb) / 0.45));
+  }
+
+  .chart-neon-gold {
+    filter: drop-shadow(0 0 5px rgb(var(--brand-accent-rgb) / 0.45));
+  }
+
+  .chart-neon-green {
+    filter: drop-shadow(0 0 5px rgb(var(--success-rgb) / 0.45));
+  }
+
+  .chart-neon-amber {
+    filter: drop-shadow(0 0 5px rgb(var(--warning-rgb) / 0.45));
+  }
+
+  .chart-neon-burgundy {
+    filter: drop-shadow(0 0 5px rgb(var(--brand-accent-rgb) / 0.35));
+  }
+
+  .live-dot-glow {
+    box-shadow: 0 0 0 3px rgb(var(--success-rgb) / 0.18);
+  }
+}
+
+/* ============================ Components ================================= */
+
+@layer components {
+  /* --- Surfaces --------------------------------------------------------- */
+  .hokeka-glass-card {
+    background: var(--glass-surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition:
+      border-color 0.25s var(--ease),
+      box-shadow 0.25s var(--ease),
+      transform 0.25s var(--ease);
+  }
+
+  .hokeka-glass-card:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* --- Sidebar active item (website `.product-nav .active`) -------------- */
+  .hokeka-nav-active {
+    position: relative;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    box-shadow: none;
+  }
+
+  .hokeka-nav-active::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: var(--brand-accent);
+  }
+
+  .glass-card-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle at var(--glow-at, top left),
+      rgba(var(--glow-rgb), var(--glow-alpha, 0.1)) 0%,
+      transparent 70%
+    );
+  }
+
+  .glass-card-glow > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* --- Page chrome ------------------------------------------------------ */
+  .hokeka-page-title {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.22;
+    color: var(--ink);
+  }
+
+  .hokeka-page-subtitle {
+    margin-top: 0.3rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  /* The marketing site's `.eyebrow`. */
+  .hokeka-section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--brand-accent);
+  }
+
+  .hokeka-section-label::before {
+    content: '';
+    width: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--brand-accent), transparent);
+  }
+
+  /* --- Tables ----------------------------------------------------------- */
+  .hokeka-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .hokeka-table thead tr {
+    background: var(--surface-3);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hokeka-table th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.6563rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .hokeka-table td {
+    padding: 0.6875rem 1rem;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: var(--ink);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hokeka-table tbody tr {
+    transition: background-color 0.2s var(--ease);
+  }
+
+  .hokeka-table tbody tr:hover {
+    background-color: var(--surface-3);
+  }
+
+  .hokeka-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+
+  /* --- Form fields ------------------------------------------------------ */
+  .hokeka-field {
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--line-control);
+    background: var(--surface-1);
+    padding: 0.55rem 0.85rem;
+    font-size: 0.8125rem;
+    color: var(--ink);
+    transition:
+      border-color 0.18s var(--ease),
+      box-shadow 0.18s var(--ease),
+      background 0.18s var(--ease);
+  }
+
+  .hokeka-field::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .hokeka-field:hover {
+    border-color: rgb(var(--brand-accent-rgb) / 0.5);
+  }
+
+  .hokeka-field:focus {
+    outline: none;
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 3px rgb(var(--brand-accent-rgb) / 0.16);
+    background: var(--surface-2);
+  }
+
+  .hokeka-field-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* --- Primary CTA (website `.button`, sheen and all) ------------------- */
+  .hokeka-btn-primary {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--brand-accent);
+    background: var(--brand-accent);
+    padding: 0.5rem 1.1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--brand-on-primary);
+    box-shadow: none;
+    transition:
+      transform 0.25s var(--ease),
+      background 0.2s var(--ease),
+      border-color 0.2s var(--ease),
+      box-shadow 0.3s var(--ease);
+  }
+
+  .hokeka-btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    transform: skewX(-18deg);
+    transition: left 0.7s var(--ease);
+  }
+
+  .hokeka-btn-primary:hover:not(:disabled) {
+    background: var(--gold-bright);
+    border-color: var(--gold-bright);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-gold);
+  }
+
+  .hokeka-btn-primary:hover:not(:disabled)::after {
+    left: 130%;
+  }
+
+  .hokeka-btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* --- Badges ----------------------------------------------------------- */
+  .hokeka-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+  }
+
+  /* --- Empty states ----------------------------------------------------- */
+  .hokeka-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    background:
+      radial-gradient(circle at 50% 0%, rgb(var(--brand-accent-rgb) / 0.07), transparent 55%),
+      var(--surface-1);
+  }
+
+  .hokeka-empty-state__icon {
+    display: flex;
+    height: 3.25rem;
+    width: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    color: var(--brand-accent);
+    margin-bottom: 0.35rem;
+  }
+
+  .hokeka-empty-state__title {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .hokeka-empty-state__body {
+    max-width: 22rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+}
+
+/* ============================ Charts ===================================== */
+
+/*
+ * Recharts writes near-black defaults (#666 ticks, #ccc axes, a white tooltip)
+ * straight onto its SVG as presentation attributes. Those are invisible on the
+ * dark ground, so they are re-pointed at the tokens here — once, centrally —
+ * rather than per chart. Scoped to axis/grid/legend/tooltip only: per-series
+ * fills stay under each chart's control.
+ */
+.recharts-cartesian-axis-tick-value,
+.recharts-cartesian-axis-tick-value tspan {
+  fill: var(--text-secondary);
+  font-size: 11px;
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--line);
+}
+
+.recharts-cartesian-grid line {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+  fill: var(--text-secondary);
+  font-size: 11px;
+}
+
+.recharts-polar-angle-axis-tick-value,
+.recharts-polar-radius-axis-tick-value {
+  fill: var(--text-secondary);
+  font-size: 11px;
+}
+
+.recharts-default-tooltip {
+  background-color: var(--surface-3) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  color: var(--ink) !important;
+  font-size: 12px !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--text-secondary) !important;
+}
+
+.recharts-reference-line line {
+  stroke: var(--line);
+}
+
+/* ============================ Login ====================================== */
+
+/*
+  Login left panel — HTML/CSS hero (crisp type). Scoped wine palette so it
+  matches the classic Hokeka burgundy panel without touching app tokens.
+*/
+.login-hero-panel {
+  --login-wine-950: #14040a;
+  --login-wine-900: #1f0710;
+  --login-wine-800: #3a0c1c;
+  --login-wine-700: #5c142c;
+  --login-wine-glow: rgba(180, 40, 70, 0.35);
+  --login-wine-map: rgba(190, 70, 95, 0.22);
+  --login-text: #f7f1f3;
+  --login-text-muted: rgba(247, 241, 243, 0.72);
+  --login-gold: #d3b371;
+  --login-rose: #e8a0a8;
+
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+  color: var(--login-text);
+  background:
+    radial-gradient(120% 70% at 50% 110%, var(--login-wine-glow), transparent 55%),
+    linear-gradient(165deg, var(--login-wine-800) 0%, var(--login-wine-900) 42%, var(--login-wine-950) 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+.login-hero-panel__glow {
+  pointer-events: none;
+  position: absolute;
+  inset: auto -20% -30% -20%;
+  height: 55%;
+  background: radial-gradient(ellipse at center, rgba(120, 24, 48, 0.55), transparent 70%);
+}
+
+.login-hero-panel__map {
+  pointer-events: none;
+  position: absolute;
+  inset: 18% -10% 8% 20%;
+  opacity: 0.35;
+  background-image: radial-gradient(circle, var(--login-wine-map) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  mask-image: radial-gradient(ellipse at 70% 55%, black 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 70% 55%, black 0%, transparent 72%);
+}
+
+.login-hero-panel__circuits {
+  pointer-events: none;
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42%;
+  opacity: 0.45;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(211, 179, 113, 0.12) 50%, transparent 100%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 46px,
+      rgba(211, 179, 113, 0.08) 46px,
+      rgba(211, 179, 113, 0.08) 47px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 28px,
+      rgba(190, 70, 95, 0.12) 28px,
+      rgba(190, 70, 95, 0.12) 29px
+    );
+  mask-image: linear-gradient(to top, black 10%, transparent 85%);
+  -webkit-mask-image: linear-gradient(to top, black 10%, transparent 85%);
+}
+
+.login-hero-panel__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  padding: clamp(1.75rem, 3.5vh, 2.75rem) clamp(1.5rem, 3.2vw, 2.75rem) 0;
+}
+
+.login-hero-panel__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+.login-hero-panel__brand-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+}
+
+.login-hero-panel__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.login-hero-panel__brand-name {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.login-hero-panel__brand-tag {
+  margin-top: 0.28rem;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--login-gold);
+}
+
+.login-hero-panel__copy {
+  margin-top: clamp(1.5rem, 3.5vh, 2.5rem);
+  flex-shrink: 0;
+}
+
+.login-hero-panel__headline {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2.35vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.login-hero-panel__subtext {
+  margin: 0.9rem 0 0;
+  max-width: 34ch;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--login-text-muted);
+}
+
+.login-hero-panel__divider {
+  margin: clamp(1.1rem, 2.4vh, 1.65rem) 0;
+  height: 1px;
+  width: min(100%, 280px);
+  flex-shrink: 0;
+  background: linear-gradient(90deg, var(--login-gold), rgba(211, 179, 113, 0.15), transparent);
+}
+
+.login-hero-panel__features {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.7rem, 1.6vh, 1rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-shrink: 0;
+}
+
+.login-hero-panel__feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.login-hero-panel__feature-icon {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 18px -12px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.login-hero-panel__feature-icon--gold {
+  color: var(--login-gold);
+}
+
+.login-hero-panel__feature-icon--rose {
+  color: var(--login-rose);
+}
+
+.login-hero-panel__feature-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-top: 0.1rem;
+}
+
+.login-hero-panel__feature-title {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.login-hero-panel__feature-desc {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--login-text-muted);
+}
+
+.login-hero-panel__graphic {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+  margin-top: clamp(0.75rem, 2vh, 1.25rem);
+  padding-bottom: 0;
+}
+
+.login-hero-panel__shield {
+  display: block;
+  width: min(100%, 420px);
+  max-height: min(38vh, 320px);
+  height: auto;
+  object-fit: contain;
+  object-position: bottom center;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.45));
+  user-select: none;
+  pointer-events: none;
+}
+
+.login-hero-panel--mobile {
+  min-height: 168px;
+  height: auto;
+  width: 100%;
+}
+
+.login-hero-panel--mobile .login-hero-panel__inner {
+  padding: 1.35rem 1.35rem 1.5rem;
+}
+
+.login-hero-panel--mobile .login-hero-panel__brand-logo {
+  width: 36px;
+  height: 36px;
+}
+
+.login-hero-panel--mobile .login-hero-panel__headline {
+  max-width: none;
+  font-size: 1.2rem;
+}
+
+.login-hero-panel--mobile .login-hero-panel__copy {
+  margin-top: 1rem;
+}
+
+.login-hero-panel--mobile .login-hero-panel__map,
+.login-hero-panel--mobile .login-hero-panel__circuits {
+  opacity: 0.25;
+}
+
+.login-primary-btn {
+  background: var(--brand-accent);
+  color: var(--brand-on-primary);
+  transition:
+    transform 0.25s var(--ease),
+    background 0.2s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+.login-primary-btn:hover:not(:disabled) {
+  background: var(--gold-bright);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-gold);
+}
+
+.login-card-shadow {
+  box-shadow: var(--shadow-xl);
+}

@@ -1,0 +1,148 @@
+package com.posgateway.aml.entity;
+
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
+/**
+ * Transaction Features Entity
+ * Stores features used for model scoring and historical data
+ */
+@Entity
+@Table(name = "transaction_features", indexes = {
+    @Index(name = "idx_features_label", columnList = "label"),
+    @Index(name = "idx_features_scored_at", columnList = "scored_at")
+})
+public class TransactionFeatures {
+
+    @Id
+    @Column(name = "txn_id")
+    private Long txnId;
+
+    @OneToOne
+    @JoinColumn(name = "txn_id", referencedColumnName = "txn_id")
+    private TransactionEntity transaction;
+
+    @Column(name = "feature_json", columnDefinition = "JSONB")
+    private String featureJson; // JSON string representation of features
+
+    @Column(name = "risk_details", columnDefinition = "JSONB")
+    private String riskDetails;
+
+    @Column(name = "score")
+    private Double score;
+
+    @Column(name = "action_taken")
+    private String actionTaken;
+
+    @Column(name = "label")
+    private Short label; // 1 = fraud, 0 = good, NULL = unknown
+
+    @Column(name = "scored_at")
+    private LocalDateTime scoredAt;
+
+    @Column(name = "latency_ms")
+    private Integer latencyMs;
+
+    @Column(name = "model_version")
+    private String modelVersion;
+
+    @Column(name = "psp_id")
+    private Long pspId;
+
+    @PrePersist
+    protected void onCreate() {
+        if (scoredAt == null) {
+            scoredAt = LocalDateTime.now();
+        }
+    }
+
+    // Getters and Setters
+    public Long getTxnId() {
+        return txnId;
+    }
+
+    public void setTxnId(Long txnId) {
+        this.txnId = txnId;
+    }
+
+    public TransactionEntity getTransaction() {
+        return transaction;
+    }
+
+    public void setTransaction(TransactionEntity transaction) {
+        this.transaction = transaction;
+    }
+
+    public String getFeatureJson() {
+        return featureJson;
+    }
+
+    public void setFeatureJson(String featureJson) {
+        this.featureJson = featureJson;
+    }
+
+    public String getRiskDetails() {
+        return riskDetails;
+    }
+
+    public void setRiskDetails(String riskDetails) {
+        this.riskDetails = riskDetails;
+    }
+
+    public Double getScore() {
+        return score;
+    }
+
+    public void setScore(Double score) {
+        this.score = score;
+    }
+
+    public String getActionTaken() {
+        return actionTaken;
+    }
+
+    public void setActionTaken(String actionTaken) {
+        this.actionTaken = actionTaken;
+    }
+
+    public Short getLabel() {
+        return label;
+    }
+
+    public void setLabel(Short label) {
+        this.label = label;
+    }
+
+    public LocalDateTime getScoredAt() {
+        return scoredAt;
+    }
+
+    public void setScoredAt(LocalDateTime scoredAt) {
+        this.scoredAt = scoredAt;
+    }
+
+    public Integer getLatencyMs() {
+        return latencyMs;
+    }
+
+    public void setLatencyMs(Integer latencyMs) {
+        this.latencyMs = latencyMs;
+    }
+
+    public String getModelVersion() {
+        return modelVersion;
+    }
+
+    public void setModelVersion(String modelVersion) {
+        this.modelVersion = modelVersion;
+    }
+
+    public Long getPspId() {
+        return pspId;
+    }
+
+    public void setPspId(Long pspId) {
+        this.pspId = pspId;
+    }
+}
+

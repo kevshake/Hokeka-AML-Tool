@@ -1,0 +1,151 @@
+/* ============================================================================
+   Hokeka design tokens — CSS custom properties.
+
+   Static defaults for the platform (admin) identity so plain CSS, Tailwind and
+   the first paint all resolve before React mounts. `ThemeContext` re-emits the
+   same variables at runtime from `src/theme/tokens.ts`, applying any per-PSP
+   brand overrides on top.
+
+   KEEP IN SYNC with src/theme/tokens.ts.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* --- website-parity core ------------------------------------------------ */
+  --bg: #080909;
+  --bg-2: #0c0e0d;
+  --ink: #f5f2eb;
+  --muted: #a8aba8;
+  --muted-2: #858986;
+  --gold: #d3b371;
+  --gold-bright: #e1c684;
+  --gold-deep: #74511e;
+  --teal: #75b7ab;
+  --amber: #e2b25d;
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --line-control: rgba(255, 255, 255, 0.34);
+  --radius: 3px;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* --- elevation ramp ----------------------------------------------------- */
+  --surface-0: #080909;
+  --surface-1: #0c0e0d;
+  --surface-2: #121514;
+  --surface-3: #191c1b;
+  --surface-4: #232624;
+  --surface-0-rgb: 8 9 9;
+  --surface-1-rgb: 12 14 13;
+  --surface-2-rgb: 18 21 20;
+  --surface-3-rgb: 25 28 27;
+  --surface-4-rgb: 35 38 36;
+
+  /* --- text --------------------------------------------------------------- */
+  --text-primary: #f5f2eb;
+  --text-secondary: #a8aba8;
+  --text-tertiary: #858986;
+  --ink-rgb: 245 242 235;
+  --muted-rgb: 168 171 168;
+  --muted-2-rgb: 133 137 134;
+
+  /* --- brand -------------------------------------------------------------- */
+  --brand-primary: #d3b371;
+  --brand-accent: #d3b371;
+  --brand-accent-rgb: 211 179 113;
+  --brand-primary-rgb: 211 179 113;
+  --brand-secondary: #75b7ab;
+  --brand-secondary-rgb: 117 183 171;
+  --brand-on-primary: #080909;
+  --brand-on-secondary: #080909;
+  --brand-soft: #393527;
+  --secondary-soft: #263532;
+
+  /* --- semantic ----------------------------------------------------------- */
+  --success: #75b7ab;
+  --success-soft: #263532;
+  --warning: #e2b25d;
+  --warning-soft: #3c3423;
+  --danger: #e8776b;
+  --danger-soft: #3d2925;
+  --info: #84a9c4;
+  --info-soft: #293337;
+  --neutral-soft: #303332;
+  --success-rgb: 117 183 171;
+  --warning-rgb: 226 178 93;
+  --danger-rgb: 232 119 107;
+  --info-rgb: 132 169 196;
+
+  /* --- risk --------------------------------------------------------------- */
+  --risk-critical: #e8776b;
+  --risk-high: #e08a4f;
+  --risk-medium: #e2b25d;
+  --risk-low: #75b7ab;
+  --risk-unknown: #a0a4a1;
+  --risk-critical-soft: #3d2925;
+  --risk-high-soft: #3b2c20;
+  --risk-medium-soft: #3c3423;
+  --risk-low-soft: #263532;
+  --risk-unknown-soft: #2e3230;
+  --risk-critical-rgb: 232 119 107;
+  --risk-high-rgb: 224 138 79;
+  --risk-medium-rgb: 226 178 93;
+  --risk-low-rgb: 117 183 171;
+
+  /* --- decisions ---------------------------------------------------------- */
+  --decision-allow: #75b7ab;
+  --decision-alert: #e2b25d;
+  --decision-review: #d3b371;
+  --decision-hold: #e08a4f;
+  --decision-block: #e8776b;
+
+  /* --- panels ------------------------------------------------------------- */
+  --panel: #0c0e0d;
+  --panel-raised: #121514;
+  --panel-hover: #191c1b;
+  --glass: rgb(12 14 13 / 0.86);
+  --glass-surface: rgb(18 21 20 / 0.9);
+  --glass-panel: rgb(12 14 13 / 0.94);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgb(211 179 113 / 0.42);
+  --glass-skeleton: rgb(35 38 36 / 0.7);
+  --glass-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.9);
+  --glass-glow: 0 0 0 1px rgb(211 179 113 / 0.18), 0 26px 50px -30px rgba(0, 0, 0, 0.75);
+
+  /* --- elevation ---------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 10px 30px -18px rgba(0, 0, 0, 0.9);
+  --shadow-md: 0 26px 50px -30px rgba(0, 0, 0, 0.75);
+  --shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.85);
+  --shadow-xl: 0 40px 100px -30px rgba(0, 0, 0, 0.72);
+  --shadow-gold: 0 14px 34px -12px rgb(211 179 113 / 0.55);
+
+  /* --- type --------------------------------------------------------------- */
+  --font-body: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  /* --- legacy aliases (older markup still references these) ---------------- */
+  --burgundy-950: #080909;
+  --burgundy-900: #0c0e0d;
+  --burgundy-850: #121514;
+  --burgundy-800: #191c1b;
+  --burgundy-700: #232624;
+  --brand-primary-950-rgb: 8 9 9;
+  --brand-primary-900-rgb: 12 14 13;
+  --brand-primary-850-rgb: 18 21 20;
+  --brand-primary-800-rgb: 25 28 27;
+  --charcoal: #080909;
+  --charcoal-alt: #0c0e0d;
+}
+
+/* ---- Motion, honoured app-wide ------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,22 @@
+# Hokeka Edge Engine — Rust workspace.
+#
+# The on-prem, per-PSP evaluation core. All transaction data stays local; rules are pulled
+# (HSE-1 sealed) from the Hokeka control plane and executed here. Exposed to the Java Spring Boot
+# host over JNI (crate `edge-jni`).
+[workspace]
+resolver = "2"
+members = [
+    "crates/rule-core",
+    "crates/hse-crypto",
+    "crates/edge-jni",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

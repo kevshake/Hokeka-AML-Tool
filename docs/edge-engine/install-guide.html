@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hokeka Edge Engine — On-Premise Installation Guide</title>
+<style>
+  :root{
+    --ink:#1b2330; --muted:#5a6577; --line:#e2e7ef; --accent:#0e8f8a; --accent2:#0b5cad;
+    --warn:#b7791f; --warnbg:#fff8ec; --note:#0b5cad; --notebg:#eef5fd; --tip:#0e8f8a; --tipbg:#e9f7f5;
+    --term-bg:#0d1117; --term-fg:#c9d1d9; --term-green:#3fb950; --term-blue:#58a6ff; --term-gray:#8b949e; --term-yellow:#d29922;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); font-size:11pt; line-height:1.5; margin:0;}
+  @page{ size:A4; margin:16mm 14mm 18mm 14mm; }
+  h1,h2,h3,h4{ line-height:1.2; color:var(--ink); }
+  h2{ font-size:18pt; border-bottom:3px solid var(--accent); padding-bottom:5px; margin-top:26px; }
+  h3{ font-size:13.5pt; color:var(--accent2); margin-top:20px; }
+  h4{ font-size:11.5pt; margin:14px 0 4px; }
+  p{ margin:7px 0; }
+  code{ font-family:"Consolas","SF Mono",Menlo,monospace; background:#f2f4f8; padding:1px 5px; border-radius:4px; font-size:9.6pt; }
+  a{ color:var(--accent2); text-decoration:none; }
+  section{ page-break-inside:auto; }
+  .avoid-break{ page-break-inside:avoid; }
+  .page-break{ page-break-before:always; }
+
+  /* Cover */
+  .cover{ height:262mm; display:flex; flex-direction:column; justify-content:center; page-break-after:always;
+          background:linear-gradient(160deg,#0b3b4a 0%,#0e8f8a 55%,#12a5a0 100%); color:#fff; padding:0 20mm; margin:-16mm -14mm 0; border-radius:0;}
+  .cover .logo{ font-size:15pt; letter-spacing:3px; font-weight:700; opacity:.9; }
+  .cover h1{ color:#fff; font-size:34pt; margin:10px 0 4px; line-height:1.1; }
+  .cover .sub{ font-size:15pt; opacity:.92; font-weight:300; }
+  .cover .meta{ margin-top:40px; font-size:10.5pt; opacity:.9; line-height:1.9; }
+  .cover .pill{ display:inline-block; border:1px solid rgba(255,255,255,.5); border-radius:20px; padding:3px 12px; font-size:9pt; letter-spacing:1px; }
+
+  /* Callouts */
+  .box{ border-left:4px solid var(--note); background:var(--notebg); padding:9px 13px; border-radius:0 6px 6px 0; margin:12px 0; font-size:10pt; }
+  .box.warn{ border-color:var(--warn); background:var(--warnbg); }
+  .box.tip{ border-color:var(--tip); background:var(--tipbg); }
+  .box b{ display:block; margin-bottom:2px; }
+
+  /* Tables */
+  table{ border-collapse:collapse; width:100%; margin:10px 0; font-size:9.6pt; }
+  th,td{ border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top; }
+  th{ background:#eef2f7; font-weight:600; }
+  tr:nth-child(even) td{ background:#fafbfd; }
+  .center{ text-align:center; }
+
+  /* Terminal mockup */
+  .term{ background:var(--term-bg); border-radius:8px; margin:12px 0; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.15); page-break-inside:avoid;}
+  .term .bar{ background:#161b22; padding:6px 10px; display:flex; align-items:center; gap:6px; border-bottom:1px solid #21262d;}
+  .term .bar i{ width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .term .bar .r{ background:#ff5f56;} .term .bar .y{ background:#ffbd2e;} .term .bar .g{ background:#27c93f;}
+  .term .bar span{ color:#8b949e; font-size:8.5pt; margin-left:8px; font-family:monospace;}
+  .term pre{ margin:0; padding:11px 13px; color:var(--term-fg); font-family:"Consolas",monospace; font-size:9pt; line-height:1.55; white-space:pre-wrap; word-break:break-word;}
+  .term .c{ color:var(--term-blue); } .term .ok{ color:var(--term-green); } .term .g{ color:var(--term-gray); } .term .yl{ color:var(--term-yellow); }
+  .cmd{ color:#fff; }
+  .cmd::before{ content:"$ "; color:var(--term-green); font-weight:700; }
+  .root::before{ content:"# "; color:#ff7b72; font-weight:700; }
+
+  /* Diagram */
+  .diagram{ border:1px solid var(--line); border-radius:8px; padding:14px; margin:12px 0; background:#fbfcfe; font-family:"Consolas",monospace; font-size:8.6pt; white-space:pre; line-height:1.35; overflow-x:auto; color:#28324a;}
+
+  ul,ol{ margin:6px 0 6px 18px; } li{ margin:3px 0; }
+  .toc a{ color:var(--ink); } .toc li{ margin:4px 0; }
+  .tag{ display:inline-block; background:var(--accent); color:#fff; border-radius:4px; padding:1px 7px; font-size:8pt; font-weight:600; letter-spacing:.4px; }
+  .tag.alt{ background:var(--accent2); } .tag.gray{ background:#64748b; }
+  .foot{ font-size:8pt; color:var(--muted); text-align:center; margin-top:6px; }
+  .small{ font-size:9pt; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="logo">◆ HOKEKA</div>
+  <h1>Edge Engine</h1>
+  <div class="sub">On-Premise Installation &amp; Prerequisites Guide</div>
+  <div class="meta">
+    <span class="pill">DEPLOYMENT GUIDE</span> &nbsp; <span class="pill">v0.1</span> &nbsp; <span class="pill">CONFIDENTIAL</span><br><br>
+    Document: Hokeka Edge Engine — Installation Guide<br>
+    Audience: PSP infrastructure / DevOps / security teams<br>
+    Scope: installing the on-premise transaction-validation engine on any Linux distribution,
+    Windows Server, or container platform.
+  </div>
+</div>
+
+<!-- ============ TOC ============ -->
+<section>
+<h2>Contents</h2>
+<ol class="toc">
+  <li>What you are installing</li>
+  <li>Architecture at a glance</li>
+  <li>Prerequisites — hardware, OS, software, network, security</li>
+  <li>Choosing an installation method</li>
+  <li>Method A — Container (Docker / Podman) &nbsp;<span class="tag">RECOMMENDED</span></li>
+  <li>Method B — Native package (Debian/Ubuntu, RHEL/Rocky/Alma, SUSE)</li>
+  <li>Method C — Generic tarball (any distribution)</li>
+  <li>Method D — Windows Server</li>
+  <li>Method E — Kubernetes / Helm (horizontal scale)</li>
+  <li>Local Aerospike feature store</li>
+  <li>Configuration reference</li>
+  <li>Provisioning the edge (keys, credentials, first rule bundle)</li>
+  <li>Starting, verifying &amp; health checks</li>
+  <li>Upgrades &amp; rollback</li>
+  <li>Troubleshooting</li>
+  <li>Prerequisite recommendations — summary</li>
+</ol>
+<div class="box"><b>About the illustrations in this guide</b>
+The Edge Engine installs and runs as a headless service (CLI / container / systemd) — there is no graphical
+installer. The panels styled as terminal windows below are faithful command-and-output walkthroughs of each
+step, not screenshots of a GUI. Copy the commands as shown.</div>
+</section>
+
+<!-- ============ 1 ============ -->
+<section class="page-break">
+<h2>1 &nbsp;What you are installing</h2>
+<p>The <b>Hokeka Edge Engine</b> is the on-premise component of the Hokeka platform. It runs inside the PSP's
+own network and validates transactions <b>locally</b>, so <b>customer and transaction data never leave the PSP's
+premises</b>. It consists of three co-located pieces delivered as one package:</p>
+<table class="avoid-break">
+  <tr><th>Component</th><th>Role</th><th>Technology</th></tr>
+  <tr><td><b>Edge host</b></td><td>Transaction API for your PSP nodes, offline auth, rule polling, metrics shipping</td><td>Java 25 (Spring Boot, virtual threads)</td></tr>
+  <tr><td><b>Native core</b></td><td>The rule-evaluation kernel (fast, CPU-bound)</td><td>Rust (loaded by the host via JNI: <code>libedge_engine.so</code>)</td></tr>
+  <tr><td><b>Feature store</b></td><td>Velocity counters, profiles, device/IP reputation</td><td>Aerospike (local)</td></tr>
+</table>
+<p>The engine talks to the <b>Hokeka control plane</b> over the public internet using <b>outbound-only</b>
+connections for two purposes only:</p>
+<ul>
+  <li><b>Pull rule bundles</b> — encrypted and signed (HSE-1 under TLS); rules are authored centrally, never at the edge.</li>
+  <li><b>Push aggregate metrics</b> — counts, decisions and latencies only. <b>No PAN, customer, amount or transaction data is ever sent.</b></li>
+</ul>
+<div class="box tip"><b>Key principle</b>Rules flow down, aggregate metrics flow up, raw data stays put. No inbound
+connection from Hokeka to your network is ever required.</div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section>
+<h2>2 &nbsp;Architecture at a glance</h2>
+<div class="diagram">
+  HOKEKA CONTROL PLANE  (hokeka.com)                 PSP PREMISES (your data centre / VPC)
+ ┌───────────────────────────────┐                 ┌──────────────────────────────────────────────┐
+ │  Rule authoring & signing      │  outbound 443   │   ┌────────────────────────────────────────┐  │
+ │  Distribution API (mTLS)       │◀───pull rules───│   │        HOKEKA EDGE ENGINE (this app)     │  │
+ │  Metrics ingest & analytics    │◀──push metrics──│   │  ┌──────────────┐   ┌────────────────┐   │  │
+ │  Identity / credential issuing │                 │   │  │  Edge host   │──▶│  Native core   │   │  │
+ └───────────────────────────────┘                 │   │  │  (Java 25)   │   │  (Rust, JNI)   │   │  │
+        ▲ signs rules / issues tokens               │   │  └──────┬───────┘   └───────┬────────┘   │  │
+        │                                           │   │         │ reads features    │           │  │
+        │ (no inbound to PSP — ever)                │   │         ▼                    ▼           │  │
+        │                                           │   │     ┌───────────────────────────────┐   │  │
+        │                                           │   │     │   Aerospike (local feature    │   │  │
+        │                                           │   │     │   store) — velocity, profiles │   │  │
+        │                                           │   │     └───────────────────────────────┘   │  │
+        │                                           │   └───────────▲──────────────────────────────┘ │
+        │                                           │   local 8443  │ transactions in / decisions out │
+        │                                           │   ┌───────────┴──────────┐                       │
+        │                                           │   │  Your PSP API nodes  │                       │
+        │                                           │   └──────────────────────┘                       │
+        │                                           └──────────────────────────────────────────────┘
+</div>
+<div class="box"><b>Trust boundary</b>Everything inside the PSP box is yours and stays yours. The only bytes that
+cross the boundary are signed/encrypted rule bundles (down) and PII-free aggregate metrics (up).</div>
+</section>
+
+<!-- ============ 3 PREREQUISITES ============ -->
+<section class="page-break">
+<h2>3 &nbsp;Prerequisites</h2>
+
+<h3>3.1 &nbsp;Hardware sizing</h3>
+<p>Sizing is driven by sustained transactions-per-second (TPS). The figures below are <b>per edge instance</b>;
+scale horizontally by adding instances behind your load balancer. Aerospike memory holds the primary index and
+hot feature data — provision RAM accordingly.</p>
+<table>
+  <tr><th>Tier</th><th>Sustained TPS</th><th>vCPU</th><th>RAM</th><th>Storage</th><th>Notes</th></tr>
+  <tr><td><b>Pilot / Small</b></td><td>&le; 200</td><td>4</td><td>16 GB</td><td>100 GB SSD</td><td>Aerospike co-located; single node</td></tr>
+  <tr><td><b>Medium</b></td><td>200 – 1,000</td><td>8</td><td>32 GB</td><td>250 GB NVMe</td><td>Co-located or 1 dedicated Aerospike node</td></tr>
+  <tr><td><b>Large</b></td><td>1,000 – 5,000</td><td>16</td><td>64 GB</td><td>500 GB NVMe</td><td>Dedicated Aerospike node recommended</td></tr>
+  <tr><td><b>X-Large</b></td><td>5,000+</td><td>32</td><td>128 GB</td><td>1 TB NVMe</td><td>Aerospike cluster; 2+ edge instances</td></tr>
+</table>
+<div class="box tip"><b>Recommendation</b>Prefer NVMe/SSD over spinning disk for Aerospike, enable at least 2 edge
+instances in production for high availability, and reserve ~25% CPU headroom for burst traffic.</div>
+
+<h3>3.2 &nbsp;Operating system support</h3>
+<p>The engine is 64-bit only and runs on <b>any modern OS</b>. Linux is recommended for production.</p>
+<table>
+  <tr><th>Platform</th><th>Supported versions</th><th>Status</th></tr>
+  <tr><td>Ubuntu / Debian</td><td>Ubuntu 22.04 &amp; 24.04 LTS · Debian 12</td><td><span class="tag">RECOMMENDED</span></td></tr>
+  <tr><td>RHEL / Rocky / AlmaLinux</td><td>9.x (and 8.x)</td><td><span class="tag">RECOMMENDED</span></td></tr>
+  <tr><td>SUSE Linux Enterprise / openSUSE</td><td>15 SP5+</td><td><span class="tag alt">SUPPORTED</span></td></tr>
+  <tr><td>Amazon Linux / Oracle Linux</td><td>2023 / 9</td><td><span class="tag alt">SUPPORTED</span></td></tr>
+  <tr><td>Any other glibc Linux distro</td><td>glibc &ge; 2.31, kernel &ge; 5.10</td><td><span class="tag alt">SUPPORTED</span> (tarball)</td></tr>
+  <tr><td>Windows Server</td><td>2019 / 2022</td><td><span class="tag alt">SUPPORTED</span></td></tr>
+  <tr><td>Containers</td><td>Docker 24+ / Podman 4+ on any host</td><td><span class="tag">RECOMMENDED</span> (distro-agnostic)</td></tr>
+  <tr><td>Kubernetes</td><td>1.27+</td><td><span class="tag alt">SUPPORTED</span> (Helm chart)</td></tr>
+</table>
+<div class="box"><b>Distro-agnostic path</b>If your distribution is not listed, use <b>Method A (container)</b> or
+<b>Method C (tarball)</b> — both run on any 64-bit glibc Linux without a native package.</div>
+
+<h3>3.3 &nbsp;Software prerequisites</h3>
+<table>
+  <tr><th>Requirement</th><th>Version</th><th>Why</th></tr>
+  <tr><td><b>Java runtime</b></td><td>JDK / JRE <b>25</b> (LTS)</td><td>Virtual threads for concurrency; JDK 25 removes <code>synchronized</code> carrier-pinning. Eclipse Temurin recommended. Bundled in the container image.</td></tr>
+  <tr><td><b>Aerospike</b></td><td>Community or Enterprise 6.4+</td><td>Local low-latency feature store. Bundled/orchestrated by container &amp; package installs.</td></tr>
+  <tr><td><b>glibc</b></td><td>&ge; 2.31</td><td>Runtime for the Rust native core (<code>libedge_engine.so</code>).</td></tr>
+  <tr><td><b>System libs</b></td><td>ca-certificates, tzdata</td><td>TLS trust store, time zones.</td></tr>
+  <tr><td><b>Time sync</b></td><td>chrony / systemd-timesyncd</td><td>Token expiry &amp; signature validity depend on accurate clocks.</td></tr>
+</table>
+<div class="box warn"><b>Note on Java</b>You do <i>not</i> need to hand-compile anything. The Rust core ships pre-built
+as <code>libedge_engine.so</code> inside the package/image; the host loads it at startup. No compiler or
+build tools are required on the target machine.</div>
+
+<h3>3.4 &nbsp;Network prerequisites</h3>
+<table>
+  <tr><th>Direction</th><th>Port / Protocol</th><th>Endpoint</th><th>Purpose</th></tr>
+  <tr><td><b>Outbound</b></td><td>TCP 443 (HTTPS + mTLS)</td><td><code>edge.hokeka.com</code></td><td>Pull rule bundles &amp; push aggregate metrics</td></tr>
+  <tr><td><b>Inbound (local)</b></td><td>TCP 8443 (HTTPS)</td><td>Your PSP API nodes only</td><td>Submit transactions, receive decisions</td></tr>
+  <tr><td>Local</td><td>TCP 3000</td><td>Aerospike (localhost / private)</td><td>Feature store access</td></tr>
+</table>
+<div class="box tip"><b>Firewall-friendly</b>Only <b>one outbound</b> destination on 443 is required. No inbound
+internet access to the edge is needed — the edge polls Hokeka, Hokeka never connects in.</div>
+
+<h3>3.5 &nbsp;Security prerequisites (provided during onboarding)</h3>
+<ul>
+  <li><b>Edge X25519 key pair</b> — generated on first run; the public key is registered with Hokeka so rule bundles can be sealed for this edge.</li>
+  <li><b>Pinned control-plane keys</b> — Hokeka's Ed25519 signing public key (verifies rule bundles &amp; auth tokens) shipped in the config.</li>
+  <li><b>mTLS client certificate</b> — issued per edge at provisioning; identifies this edge to the control plane.</li>
+  <li><b>PSP / edge identifiers</b> — <code>pspId</code> and <code>edgeId</code> assigned by Hokeka.</li>
+</ul>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="page-break">
+<h2>4 &nbsp;Choosing an installation method</h2>
+<table>
+  <tr><th>If you…</th><th>Use</th></tr>
+  <tr><td>Want the fastest, most portable, distro-independent install</td><td><b>Method A — Container</b> <span class="tag">RECOMMENDED</span></td></tr>
+  <tr><td>Run a managed fleet on Debian/Ubuntu or RHEL-family hosts</td><td><b>Method B — Native package</b></td></tr>
+  <tr><td>Run an unlisted/hardened distro or an air-gapped host</td><td><b>Method C — Tarball</b></td></tr>
+  <tr><td>Must deploy on Windows Server</td><td><b>Method D — Windows</b></td></tr>
+  <tr><td>Need horizontal scale / self-healing</td><td><b>Method E — Kubernetes / Helm</b></td></tr>
+</table>
+<div class="box"><b>Artifacts</b>All images and packages are served from your Hokeka onboarding portal
+(<code>registry.hokeka.com</code>, <code>packages.hokeka.com</code>) with credentials issued to your team.
+Every artifact is signed; verify signatures before install (shown per method).</div>
+</section>
+
+<!-- ============ 5 METHOD A ============ -->
+<section>
+<h2>5 &nbsp;Method A — Container (Docker / Podman) <span class="tag">RECOMMENDED</span></h2>
+<p>Runs on any 64-bit host with a container runtime. Java, the native core, and Aerospike wiring are bundled.</p>
+<h4>Step 1 — Authenticate to the Hokeka registry</h4>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~/hokeka-edge</span></div>
+<pre><span class="cmd">docker login registry.hokeka.com -u psp-acme</span>
+Password: <span class="g">••••••••••••</span>
+<span class="ok">Login Succeeded</span></pre></div>
+<h4>Step 2 — Pull &amp; verify the image</h4>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~/hokeka-edge</span></div>
+<pre><span class="cmd">docker pull registry.hokeka.com/hokeka/edge-engine:0.1.0</span>
+0.1.0: Pulling from hokeka/edge-engine
+<span class="g">a1b2c3…  Pull complete</span>
+<span class="ok">Digest: sha256:9f4e…c2   Status: Downloaded newer image</span>
+<span class="cmd">cosign verify --key hokeka.pub registry.hokeka.com/hokeka/edge-engine:0.1.0</span>
+<span class="ok">Verified OK</span> <span class="g"># signature matches Hokeka's release key</span></pre></div>
+<h4>Step 3 — Create the config &amp; secrets directory</h4>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~/hokeka-edge</span></div>
+<pre><span class="cmd">mkdir -p ./config ./secrets ./data</span>
+<span class="cmd">cp edge.yaml ./config/           </span><span class="g"># from onboarding pack (see §11)</span>
+<span class="cmd">cp hokeka-cp.pub client.crt client.key ./secrets/</span></pre></div>
+<h4>Step 4 — Run (Compose brings up the edge + local Aerospike)</h4>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~/hokeka-edge</span></div>
+<pre><span class="cmd">docker compose up -d</span>
+<span class="g">[+] Running 2/2</span>
+ <span class="ok">✔ Container hokeka-aerospike   Started</span>
+ <span class="ok">✔ Container hokeka-edge        Started</span>
+<span class="cmd">docker compose logs -f edge | head</span>
+<span class="g">edge |</span> INFO  EdgeEngine  loaded native core libedge_engine.so <span class="ok">(rust 1.97)</span>
+<span class="g">edge |</span> INFO  RulePoller  pulled bundle <span class="yl">v37</span> (sealed HSE-1) — signature <span class="ok">OK</span>, activated
+<span class="g">edge |</span> INFO  EdgeHost    listening on https://0.0.0.0:8443  <span class="ok">virtual-threads=on</span>
+<span class="g">edge |</span> INFO  Health      status=<span class="ok">HEALTHY</span>  aerospike=UP  controlPlane=REACHABLE</pre></div>
+<div class="box tip"><b>Podman</b>Every command above works with <code>podman</code> / <code>podman compose</code> unchanged —
+handy for rootless RHEL/Fedora hosts.</div>
+</section>
+
+<!-- ============ 6 METHOD B ============ -->
+<section class="page-break">
+<h2>6 &nbsp;Method B — Native package</h2>
+
+<h3>6.1 &nbsp;Debian / Ubuntu (<code>apt</code>)</h3>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@psp-host: ~</span></div>
+<pre><span class="root">curl -fsSL https://packages.hokeka.com/gpg | gpg --dearmor -o /usr/share/keyrings/hokeka.gpg</span>
+<span class="root">echo "deb [signed-by=/usr/share/keyrings/hokeka.gpg] https://packages.hokeka.com/apt stable main" \
+      > /etc/apt/sources.list.d/hokeka.list</span>
+<span class="root">apt update &amp;&amp; apt install -y hokeka-edge-engine</span>
+<span class="g">Setting up hokeka-edge-engine (0.1.0) ...</span>
+<span class="g">Installing bundled Temurin JRE 25, libedge_engine.so, systemd unit hokeka-edge.service</span>
+<span class="ok">✔ hokeka-edge-engine installed. Configure /etc/hokeka/edge.yaml, then: systemctl start hokeka-edge</span></pre></div>
+
+<h3>6.2 &nbsp;RHEL / Rocky / AlmaLinux / Fedora (<code>dnf</code>)</h3>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@psp-host: ~</span></div>
+<pre><span class="root">dnf config-manager --add-repo https://packages.hokeka.com/rpm/hokeka.repo</span>
+<span class="root">dnf install -y hokeka-edge-engine</span>
+<span class="g">Importing GPG key 0x9F4E…  Fingerprint: 9F4E 22C1 … (Hokeka Packaging)</span>
+<span class="ok">Complete!  ✔ hokeka-edge-engine-0.1.0 installed</span></pre></div>
+
+<h3>6.3 &nbsp;SUSE / openSUSE (<code>zypper</code>)</h3>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@psp-host: ~</span></div>
+<pre><span class="root">zypper addrepo https://packages.hokeka.com/rpm/hokeka.repo</span>
+<span class="root">zypper --gpg-auto-import-keys install hokeka-edge-engine</span>
+<span class="ok">✔ hokeka-edge-engine installed</span></pre></div>
+<div class="box"><b>What the package installs</b><code>/opt/hokeka/edge</code> (binaries + <code>libedge_engine.so</code> + bundled JRE 25),
+config at <code>/etc/hokeka/edge.yaml</code>, data under <code>/var/lib/hokeka</code>, and a
+<code>hokeka-edge.service</code> systemd unit. Aerospike is installed as a dependency or pointed at an existing node.</div>
+</section>
+
+<!-- ============ 7 METHOD C ============ -->
+<section>
+<h2>7 &nbsp;Method C — Generic tarball (any distribution)</h2>
+<p>For unlisted, minimal, hardened, or air-gapped distributions. Self-contained (bundled JRE + native core);
+no root package manager required.</p>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: /opt</span></div>
+<pre><span class="cmd">curl -fsSLO https://packages.hokeka.com/tarball/hokeka-edge-0.1.0-linux-x86_64.tar.gz</span>
+<span class="cmd">curl -fsSLO https://packages.hokeka.com/tarball/hokeka-edge-0.1.0-linux-x86_64.tar.gz.sig</span>
+<span class="cmd">cosign verify-blob --key hokeka.pub --signature hokeka-edge-0.1.0-linux-x86_64.tar.gz.sig \
+       hokeka-edge-0.1.0-linux-x86_64.tar.gz</span>
+<span class="ok">Verified OK</span>
+<span class="cmd">sudo tar -xzf hokeka-edge-0.1.0-linux-x86_64.tar.gz -C /opt</span>
+<span class="cmd">/opt/hokeka-edge/bin/edge --config /opt/hokeka-edge/config/edge.yaml --check</span>
+<span class="ok">✔ config valid · native core loadable · aerospike reachable · control-plane reachable</span>
+<span class="cmd">/opt/hokeka-edge/bin/edge --config /opt/hokeka-edge/config/edge.yaml &amp;</span></pre></div>
+<div class="box tip"><b>Air-gapped installs</b>Download the tarball + a signed rule-bundle seed on a connected host,
+transfer via approved media, and set <code>controlPlane.mode: offline-seed</code> in the config. The edge runs on
+the seeded bundle and buffers metrics until connectivity is restored.</div>
+</section>
+
+<!-- ============ 8 METHOD D ============ -->
+<section class="page-break">
+<h2>8 &nbsp;Method D — Windows Server</h2>
+<p>Supported on Windows Server 2019 / 2022. Ships as an MSI that registers a Windows Service and bundles the
+JRE and <code>edge_engine.dll</code>.</p>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>PS C:\hokeka&gt;</span></div>
+<pre><span class="cmd">Get-AuthenticodeSignature .\hokeka-edge-0.1.0.msi | Select Status</span>
+<span class="g">Status : Valid</span>
+<span class="cmd">msiexec /i hokeka-edge-0.1.0.msi /qn CONFIG="C:\hokeka\edge.yaml"</span>
+<span class="cmd">Start-Service HokekaEdge</span>
+<span class="cmd">Get-Service HokekaEdge</span>
+<span class="g">Status   Name        DisplayName</span>
+<span class="ok">Running  HokekaEdge  Hokeka Edge Engine</span></pre></div>
+<div class="box warn"><b>Aerospike on Windows</b>Aerospike has no native Windows server build — on Windows hosts run the
+feature store as a container (Docker Desktop / WSL2) or point the edge at a nearby Linux Aerospike node via
+<code>featureStore.host</code>.</div>
+</section>
+
+<!-- ============ 9 METHOD E ============ -->
+<section>
+<h2>9 &nbsp;Method E — Kubernetes / Helm (horizontal scale)</h2>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~</span></div>
+<pre><span class="cmd">helm repo add hokeka https://charts.hokeka.com &amp;&amp; helm repo update</span>
+<span class="cmd">kubectl create secret generic hokeka-edge-secrets \
+     --from-file=hokeka-cp.pub --from-file=client.crt --from-file=client.key</span>
+<span class="cmd">helm install edge hokeka/edge-engine -n hokeka --create-namespace \
+     --set pspId=acme --set edgeId=acme-eu-1 --set replicas=3 \
+     --set controlPlane.url=https://edge.hokeka.com</span>
+<span class="ok">NAME: edge   STATUS: deployed   REVISION: 1</span>
+<span class="cmd">kubectl -n hokeka get pods</span>
+<span class="g">NAME                     READY   STATUS    RESTARTS</span>
+<span class="ok">edge-engine-0            1/1     Running   0</span>
+<span class="ok">edge-engine-1            1/1     Running   0</span>
+<span class="ok">edge-engine-2            1/1     Running   0</span>
+<span class="ok">aerospike-0              1/1     Running   0</span></pre></div>
+<div class="box tip"><b>Scale</b>Increase <code>--set replicas</code> and, for Large/X-Large, run Aerospike as a StatefulSet
+cluster. All edge pods pull the same signed rule bundle and hot-swap it atomically on change.</div>
+</section>
+
+<!-- ============ 10 AEROSPIKE ============ -->
+<section class="page-break">
+<h2>10 &nbsp;Local Aerospike feature store</h2>
+<p>Container and Helm installs provision Aerospike automatically. For native/tarball installs on a dedicated
+node, install Aerospike and create the <code>hokeka</code> namespace:</p>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@aerospike-node: ~</span></div>
+<pre><span class="g"># Debian/Ubuntu example — see Aerospike docs for your distro</span>
+<span class="root">curl -fsSL https://download.aerospike.com/…/aerospike.deb -o aero.deb &amp;&amp; apt install -y ./aero.deb</span>
+<span class="root">nano /etc/aerospike/aerospike.conf   </span><span class="g"># add: namespace hokeka { memory-size 8G  storage-engine device { file /var/lib/aerospike/hokeka.dat  filesize 200G } }</span>
+<span class="root">systemctl enable --now aerospike</span>
+<span class="cmd">asadm -e "info"</span>
+<span class="ok">Node ●  Namespace hokeka  Objects 0  ●  Cluster size 1  ●  Migrations 0</span></pre></div>
+<div class="box"><b>Sizing</b><code>memory-size</code> ≈ 25–40% of node RAM (holds index + hot data); <code>filesize</code>
+per the storage tier in §3.1. Feature TTLs keep the store bounded automatically.</div>
+</section>
+
+<!-- ============ 11 CONFIG ============ -->
+<section>
+<h2>11 &nbsp;Configuration reference (<code>edge.yaml</code>)</h2>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>/etc/hokeka/edge.yaml</span></div>
+<pre><span class="c">edge:</span>
+  <span class="c">pspId:</span> acme                       <span class="g"># assigned by Hokeka</span>
+  <span class="c">edgeId:</span> acme-eu-1                  <span class="g"># unique per instance</span>
+  <span class="c">listen:</span> "0.0.0.0:8443"            <span class="g"># local transaction API (TLS)</span>
+
+<span class="c">controlPlane:</span>
+  <span class="c">url:</span> https://edge.hokeka.com
+  <span class="c">pollIntervalSeconds:</span> 15            <span class="g"># how often to check for a new rule bundle</span>
+  <span class="c">signingKeyFile:</span> /etc/hokeka/secrets/hokeka-cp.pub   <span class="g"># pinned Ed25519 (verify bundles+tokens)</span>
+  <span class="c">mtls:</span> { certFile: …/client.crt, keyFile: …/client.key }
+
+<span class="c">featureStore:</span>
+  <span class="c">host:</span> 127.0.0.1
+  <span class="c">port:</span> 3000
+  <span class="c">namespace:</span> hokeka
+
+<span class="c">runtime:</span>
+  <span class="c">virtualThreads:</span> true              <span class="g"># concurrency (Java 25)</span>
+  <span class="c">maxInFlight:</span> 30000               <span class="g"># admission control / backpressure</span>
+  <span class="c">failClosed:</span> true                 <span class="g"># feature store down ⇒ HOLD, never silent ALLOW</span>
+
+<span class="c">metrics:</span>
+  <span class="c">shipIntervalSeconds:</span> 60           <span class="g"># aggregate-only; store-and-forward if offline</span></pre></div>
+</section>
+
+<!-- ============ 12 PROVISION ============ -->
+<section class="page-break">
+<h2>12 &nbsp;Provisioning the edge</h2>
+<p>On first start the edge generates its X25519 key pair and prints its public key. Register it with Hokeka to
+begin receiving sealed rule bundles for your PSP.</p>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>psp-host: ~</span></div>
+<pre><span class="cmd">hokeka-edge provision --config /etc/hokeka/edge.yaml</span>
+<span class="g">Generated edge X25519 key pair (stored: /var/lib/hokeka/edge_x25519.key, 0600)</span>
+Edge public key (register at portal.hokeka.com):
+  <span class="yl">x25519:pub  9d4c8a…e2f1</span>
+<span class="cmd"># after registering in the portal, the edge pulls its first bundle automatically:</span>
+<span class="g">INFO RulePoller  pulled bundle v37 · HSE-1 signature OK · decrypted · 55 rules · activated</span></pre></div>
+<div class="box"><b>What just happened</b>The edge's public key lets Hokeka <b>seal</b> (encrypt) rule bundles that only this
+edge can open, and pin Hokeka's key lets the edge <b>verify</b> every bundle and auth token — all offline, no
+per-transaction call to Hokeka.</div>
+</section>
+
+<!-- ============ 13 VERIFY ============ -->
+<section>
+<h2>13 &nbsp;Starting, verifying &amp; health checks</h2>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@psp-host: ~</span></div>
+<pre><span class="root">systemctl enable --now hokeka-edge</span>
+<span class="root">systemctl status hokeka-edge --no-pager</span>
+<span class="ok">● hokeka-edge.service - Hokeka Edge Engine   active (running)</span>
+<span class="cmd">curl -sk https://localhost:8443/health | jq</span>
+{
+  "status": <span class="ok">"HEALTHY"</span>,
+  "ruleBundleVersion": <span class="yl">37</span>,
+  "nativeCore": "loaded",
+  "aerospike": "UP",
+  "controlPlane": "REACHABLE",
+  "virtualThreads": true
+}
+<span class="cmd"># smoke-test a transaction (synthetic; no real card data)</span>
+<span class="cmd">curl -sk https://localhost:8443/evaluate -H "Authorization: Bearer $TOKEN" \
+     -d '{"amount":25000,"mcc":"5411","ip_vpn_or_proxy":true}' | jq</span>
+{ "action": <span class="ok">"HOLD"</span>, "score": 25, "triggeredRuleIds":[100], "reasons":["VPN hold"] }</pre></div>
+<div class="box tip"><b>Green means go</b><code>status: HEALTHY</code> with a non-zero <code>ruleBundleVersion</code>, native
+core loaded, and Aerospike UP confirms a fully wired install. Point one PSP API node at it in shadow mode first.</div>
+</section>
+
+<!-- ============ 14 UPGRADE ============ -->
+<section>
+<h2>14 &nbsp;Upgrades &amp; rollback</h2>
+<table class="avoid-break">
+  <tr><th>Method</th><th>Upgrade</th><th>Rollback</th></tr>
+  <tr><td>Container</td><td><code>docker compose pull &amp;&amp; docker compose up -d</code></td><td>Re-pin previous image tag &amp; <code>up -d</code></td></tr>
+  <tr><td>apt</td><td><code>apt update &amp;&amp; apt install --only-upgrade hokeka-edge-engine</code></td><td><code>apt install hokeka-edge-engine=&lt;old&gt;</code></td></tr>
+  <tr><td>dnf</td><td><code>dnf upgrade hokeka-edge-engine</code></td><td><code>dnf downgrade hokeka-edge-engine</code></td></tr>
+  <tr><td>Helm</td><td><code>helm upgrade edge hokeka/edge-engine</code></td><td><code>helm rollback edge</code></td></tr>
+</table>
+<div class="box"><b>Rules vs. software</b>Rule changes are <i>not</i> upgrades — they are pulled automatically and
+hot-swapped with zero downtime. Software upgrades follow the table above and are safe to do one instance at a time
+behind your load balancer.</div>
+</section>
+
+<!-- ============ 15 TROUBLESHOOT ============ -->
+<section class="page-break">
+<h2>15 &nbsp;Troubleshooting</h2>
+<table>
+  <tr><th>Symptom</th><th>Likely cause</th><th>Action</th></tr>
+  <tr><td><code>nativeCore: "not loaded"</code></td><td>glibc too old / lib missing</td><td>Confirm glibc ≥ 2.31; use the container image which bundles everything.</td></tr>
+  <tr><td><code>controlPlane: UNREACHABLE</code></td><td>Outbound 443 blocked / mTLS cert</td><td>Allow egress to <code>edge.hokeka.com</code>; check client cert paths. Edge keeps running on the cached bundle.</td></tr>
+  <tr><td>Bundle <code>signature FAILED</code></td><td>Wrong pinned key / tampered artifact</td><td>Re-copy <code>hokeka-cp.pub</code> from onboarding; never disable verification.</td></tr>
+  <tr><td>All decisions <code>HOLD</code></td><td>Fail-closed: Aerospike down or no bundle</td><td>Check Aerospike (<code>asadm -e info</code>) and that a bundle version is active. This is safe-by-design, not a silent failure.</td></tr>
+  <tr><td>High p99 latency</td><td>Under-provisioned / cold Aerospike</td><td>Move up a hardware tier (§3.1); put Aerospike on NVMe / a dedicated node.</td></tr>
+</table>
+<div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>root@psp-host: ~</span></div>
+<pre><span class="root">journalctl -u hokeka-edge -n 50 --no-pager     </span><span class="g"># service logs</span>
+<span class="root">docker compose logs --tail=50 edge            </span><span class="g"># container logs</span></pre></div>
+</section>
+
+<!-- ============ 16 SUMMARY ============ -->
+<section>
+<h2>16 &nbsp;Prerequisite recommendations — summary</h2>
+<table>
+  <tr><th>Category</th><th>Minimum</th><th>Recommended (production)</th></tr>
+  <tr><td>CPU</td><td>4 vCPU</td><td>8–16 vCPU, ~25% burst headroom</td></tr>
+  <tr><td>Memory</td><td>16 GB</td><td>32–64 GB (RAM tracks Aerospike feature volume)</td></tr>
+  <tr><td>Storage</td><td>100 GB SSD</td><td>250 GB–1 TB NVMe</td></tr>
+  <tr><td>OS</td><td>64-bit glibc ≥ 2.31 Linux, or Windows Server 2019+</td><td>Ubuntu 24.04 LTS / RHEL 9, or the container image</td></tr>
+  <tr><td>Java</td><td>JRE 25 (bundled)</td><td>Bundled Temurin JRE 25 — leave as shipped</td></tr>
+  <tr><td>Feature store</td><td>Aerospike 6.4+ co-located</td><td>Dedicated Aerospike node/cluster on NVMe</td></tr>
+  <tr><td>Network</td><td>Outbound 443 to Hokeka</td><td>Outbound 443 + local 8443; no inbound internet</td></tr>
+  <tr><td>Availability</td><td>1 instance</td><td>≥ 2 edge instances behind a load balancer</td></tr>
+  <tr><td>Clock</td><td>NTP enabled</td><td>chrony, &lt; 1 s skew (token/signature validity)</td></tr>
+</table>
+<div class="box tip"><b>One-line recommendation</b>For most PSPs, deploy <b>Method A (container)</b> with <b>2 instances</b>
+of the <b>Medium tier</b> (8 vCPU / 32 GB / NVMe) behind your load balancer, Aerospike on NVMe, outbound-443 egress
+to Hokeka — and scale tier/replicas as sustained TPS grows.</div>
+<p class="foot">© Hokeka — Confidential. Edge Engine On-Premise Installation Guide v0.1. Artifact names and endpoints
+(<code>registry.hokeka.com</code>, <code>packages.hokeka.com</code>) are provisioned per PSP during onboarding.</p>
+</section>
+
+</body>
+</html>

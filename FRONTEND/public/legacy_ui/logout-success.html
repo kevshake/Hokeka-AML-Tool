@@ -14,6 +14,7 @@
             --glass-bg: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
             --success-color: #27ae60;
+            --text-primary: #f1f5f9;
         }
 
         * {
@@ -242,19 +243,27 @@
                 </div>
             </div>
 
-            <a href="login.html" class="btn-login">
+            <a href="logout.html" class="btn-login">
                 <i class="fas fa-sign-in-alt"></i>
-                Return to Login
+                 Return to Log out
             </a>
 
             <div class="countdown">
-                Redirecting to login in <strong id="countdown">5</strong> seconds...
+                Redirecting to logout in <strong id="countdown">5</strong> seconds...
             </div>
         </div>
     </div>
-
-    <script>
-        // Create animated particles
+<script>
+        function clearSession() {
+            document.cookie.split(";").forEach(cookie => {
+                const name = cookie.split("=")[0].trim();
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            });
+            localStorage.clear();
+            sessionStorage.clear();
+        }
+        clearSession();
+    
         function createParticles() {
             const particlesContainer = document.getElementById('particles');
             const particleCount = 20;
@@ -279,7 +288,7 @@
             }
             if (countdown <= 0) {
                 clearInterval(countdownInterval);
-                window.location.href = 'login.html';
+                window.location.href = 'logout.html';
             }
         }, 1000);
 
@@ -287,11 +296,9 @@
         createParticles();
 
         // Allow manual navigation
-        document.querySelector('.btn-login').addEventListener('click', (e) => {
-            e.preventDefault();
-            clearInterval(countdownInterval);
-            window.location.href = 'login.html';
-        });
+        document.querySelector('.btn-login').addEventListener('click', () => {
+    clearInterval(countdownInterval);
+});
     </script>
     
     <!-- Footer -->

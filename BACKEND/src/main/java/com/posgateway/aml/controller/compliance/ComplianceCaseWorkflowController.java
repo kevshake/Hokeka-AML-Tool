@@ -4,11 +4,14 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
+import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.CaseWorkflowService;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * REST Controller for Compliance Case Workflow
@@ -16,23 +19,39 @@ import org.springframework.web.bind.annotation.*;
 // @RequiredArgsConstructor removed
 @RestController
 @RequestMapping("/compliance/cases/workflow")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'INVESTIGATOR', 'PSP_ADMIN', 'MLRO')")
 public class ComplianceCaseWorkflowController {
 
     private final CaseWorkflowService caseWorkflowService;
     private final UserRepository userRepository;
+    private final ComplianceCaseRepository complianceCaseRepository;
+    private final PspIsolationService pspIsolationService;
 
-    public ComplianceCaseWorkflowController(CaseWorkflowService caseWorkflowService, UserRepository userRepository) {
+    public ComplianceCaseWorkflowController(CaseWorkflowService caseWorkflowService, UserRepository userRepository,
+            ComplianceCaseRepository complianceCaseRepository, PspIsolationService pspIsolationService) {
         this.caseWorkflowService = caseWorkflowService;
         this.userRepository = userRepository;
+        this.complianceCaseRepository = complianceCaseRepository;
+        this.pspIsolationService = pspIsolationService;
+    }
+
+    /**
+     * Load the case and validate tenant access BEFORE any mutation. Previously the PSP check
+     * ran after the @Transactional service call had already committed, so a cross-tenant
+     * mutation persisted even though the caller got a 403.
+     */
+    private void guardCaseAccess(Long caseId) {
+        ComplianceCase c = complianceCaseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        pspIsolationService.validateCaseAccess(c);
     }
 
     @PostMapping("/create")
     public ResponseEntity<ComplianceCase> createCase(@RequestBody CreateCaseRequest request) {
-        User creator = request.getCreatorUserId() != null
-                ? fetchUser(request.getCreatorUserId())
-                : getAuthenticatedUser();
+        // Always derive creator from authenticated session — never trust client-supplied userId.
+        User creator = getAuthenticatedUser();
         if (creator == null) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(401).build();
         }
         ComplianceCase created = caseWorkflowService.createCase(
                 request.getCaseReference(),
@@ -42,15 +61,11 @@ public class ComplianceCaseWorkflowController {
         return ResponseEntity.ok(created);
     }
 
-    private User getAuthenticatedUser() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || "anonymousUser".equals(auth.getPrincipal())) return null;
-        return userRepository.findByUsername(auth.getName()).orElse(null);
-    }
-
     @PostMapping("/assign")
     public ResponseEntity<ComplianceCase> assignCase(@RequestBody AssignCaseRequest request) {
-        User assigner = fetchUser(request.getAssignerUserId());
+        User assigner = getAuthenticatedUser();
+        if (assigner == null) return ResponseEntity.status(401).build();
+        guardCaseAccess(request.getCaseId());
         ComplianceCase updated = caseWorkflowService.assignCase(
                 request.getCaseId(),
                 request.getAssigneeUserId(),
@@ -60,7 +75,9 @@ public class ComplianceCaseWorkflowController {
 
     @PostMapping("/status")
     public ResponseEntity<ComplianceCase> updateStatus(@RequestBody UpdateStatusRequest request) {
-        User user = fetchUser(request.getUserId());
+        User user = getAuthenticatedUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        guardCaseAccess(request.getCaseId());
         ComplianceCase updated = caseWorkflowService.updateStatus(
                 request.getCaseId(),
                 CaseStatus.valueOf(request.getStatus()),
@@ -70,7 +87,9 @@ public class ComplianceCaseWorkflowController {
 
     @PostMapping("/escalate")
     public ResponseEntity<ComplianceCase> escalate(@RequestBody EscalateCaseRequest request) {
-        User user = fetchUser(request.getUserId());
+        User user = getAuthenticatedUser();
+        if (user == null) return ResponseEntity.status(401).build();
+        guardCaseAccess(request.getCaseId());
         ComplianceCase updated = caseWorkflowService.escalateCase(
                 request.getCaseId(),
                 request.getEscalatedToUserId(),
@@ -82,6 +101,12 @@ public class ComplianceCaseWorkflowController {
     private User fetchUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    private User getAuthenticatedUser() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || "anonymousUser".equals(auth.getPrincipal())) return null;
+        return userRepository.findByUsername(auth.getName()).orElse(null);
     }
 
     public static class CreateCaseRequest {

@@ -1,0 +1,205 @@
+package com.posgateway.aml.integration.cbk;
+
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Thread-safe OAuth2 token cache for the CBK GDI gateway.
+ *
+ * <p>Tokens are cached per PSP (keyed on {@code pspId}).  A cached token is
+ * reused until it is within {@code cbk.token-buffer-seconds} of its reported
+ * expiry; at that point the next call transparently fetches a fresh token.
+ *
+ * <p>Token endpoint: {@code https://{activeHost}/oauth2/v1/token}
+ * (pre-prod: {@code https://{preprodHost}/oauth2/v1/token} — no /preprod prefix
+ * on the token URL itself, only on data-submission URLs).
+ */
+@Service
+public class CbkTokenService {
+
+    private static final Logger log = LoggerFactory.getLogger(CbkTokenService.class);
+
+    private final CbkProperties properties;
+    private final WebClient webClient;
+
+    /**
+     * Token cache keyed by (pspId, env). The same PSP can in theory have
+     * separate live/preprod credentials and tokens, so we don't collapse them.
+     */
+    private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
+    /** Per-cache-key lock objects (avoids locking on interned strings from the global JVM pool). */
+    private final ConcurrentHashMap<String, Object> keyLocks = new ConcurrentHashMap<>();
+
+    public CbkTokenService(CbkProperties properties) {
+        this.properties = properties;
+
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, properties.getConnectTimeoutMs())
+                .responseTimeout(Duration.ofMillis(properties.getReadTimeoutMs()))
+                .doOnConnected(conn -> conn.addHandlerLast(
+                        new ReadTimeoutHandler(properties.getReadTimeoutMs(), TimeUnit.MILLISECONDS)));
+
+        // No baked-in baseUrl — token endpoint URL is built per call from the
+        // PSP's resolved environment so two PSPs in different envs share this client.
+        this.webClient = WebClient.builder()
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
+                .build();
+    }
+
+    /**
+     * Returns a valid Bearer token for the given PSP and environment.
+     *
+     * <p>If {@code clientId} / {@code clientSecret} are null or blank the global
+     * fallback credentials from {@link CbkProperties} are used.
+     *
+     * @param pspId        PSP identifier (cache key)
+     * @param clientId     per-PSP OAuth2 client_id, or null to use global
+     * @param clientSecret per-PSP OAuth2 client_secret, or null to use global
+     * @param liveEffective true → request a token from the live host; false → preprod
+     * @return access_token string
+     * @throws RuntimeException if token acquisition fails
+     */
+    public String getToken(Long pspId, String clientId, String clientSecret, boolean liveEffective) {
+        String cacheKey = pspId + ":" + (liveEffective ? "live" : "preprod");
+        CachedToken cached = tokenCache.get(cacheKey);
+        if (cached != null && !cached.isExpired(properties.getTokenBufferSeconds())) {
+            return cached.accessToken;
+        }
+        // Fetch fresh token — synchronised per cache key to avoid thundering herd.
+        synchronized (keyLocks.computeIfAbsent(cacheKey, k -> new Object())) {
+            cached = tokenCache.get(cacheKey);
+            if (cached != null && !cached.isExpired(properties.getTokenBufferSeconds())) {
+                return cached.accessToken;
+            }
+            CachedToken fresh = fetchToken(pspId,
+                    effectiveClientId(clientId), effectiveClientSecret(clientSecret), liveEffective);
+            tokenCache.put(cacheKey, fresh);
+            return fresh.accessToken;
+        }
+    }
+
+    /** Backwards-compatible overload — defaults to preprod. */
+    public String getToken(Long pspId, String clientId, String clientSecret) {
+        return getToken(pspId, clientId, clientSecret, false);
+    }
+
+    // ---- private helpers ----
+
+    private String effectiveClientId(String perPsp) {
+        return (perPsp != null && !perPsp.isBlank()) ? perPsp : properties.getClientId();
+    }
+
+    private String effectiveClientSecret(String perPsp) {
+        return (perPsp != null && !perPsp.isBlank()) ? perPsp : properties.getClientSecret();
+    }
+
+    private CachedToken fetchToken(Long pspId, String clientId, String clientSecret, boolean liveEffective) {
+        log.debug("Fetching CBK OAuth2 token for PSP {} (env={})",
+                pspId, liveEffective ? "LIVE" : "preprod");
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "client_credentials");
+        form.add("scope", properties.scopeFor(liveEffective));
+        form.add("client_id", clientId);
+        form.add("client_secret", clientSecret);
+
+        String tokenUrl = properties.baseUrlFor(liveEffective) + "/oauth2/v1/token";
+
+        TokenResponse resp;
+        try {
+            resp = webClient.post()
+                    .uri(tokenUrl)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(form))
+                    .retrieve()
+                    .bodyToMono(TokenResponse.class)
+                    .block(Duration.ofMillis(properties.getReadTimeoutMs() + 1000L));
+        } catch (Exception e) {
+            log.error("CBK token fetch failed for PSP {}: {}", pspId, e.getMessage());
+            throw new CbkGdiException("Token fetch failed for PSP " + pspId + ": " + e.getMessage(), e);
+        }
+
+        if (resp == null || resp.accessToken == null || resp.accessToken.isBlank()) {
+            throw new CbkGdiException("CBK returned empty access_token for PSP " + pspId);
+        }
+
+        long expiresIn = (resp.expiresIn != null ? resp.expiresIn : 3600L);
+        Instant expiry = Instant.now().plusSeconds(expiresIn);
+        log.debug("CBK token obtained for PSP {} (expires_in={}s)", pspId, expiresIn);
+        return new CachedToken(resp.accessToken, expiry);
+    }
+
+    // ---- inner types ----
+
+    private static final class CachedToken {
+        final String accessToken;
+        final Instant expiryTime;
+
+        CachedToken(String accessToken, Instant expiryTime) {
+            this.accessToken = accessToken;
+            this.expiryTime = expiryTime;
+        }
+
+        boolean isExpired(int bufferSeconds) {
+            return Instant.now().isAfter(expiryTime.minusSeconds(bufferSeconds));
+        }
+    }
+
+    /** Jackson-mapped token response from CBK. */
+    private static final class TokenResponse {
+        @com.fasterxml.jackson.annotation.JsonProperty("access_token")
+        String accessToken;
+
+        @com.fasterxml.jackson.annotation.JsonProperty("expires_in")
+        Long expiresIn;
+    }
+
+    /** Unchecked exception thrown when CBK token acquisition fails unrecoverably. */
+    public static class CbkGdiException extends RuntimeException {
+        private final int httpStatus;
+        private final String responseBody;
+        private final long durationMs;
+        private final int sourceRecordCount;
+
+        public CbkGdiException(String message) {
+            this(message, -1, null, 0, 0, null);
+        }
+
+        public CbkGdiException(String message, Throwable cause) {
+            this(message, -1, null, 0, 0, cause);
+        }
+
+        public CbkGdiException(String message, int httpStatus, String responseBody,
+                               long durationMs, Throwable cause) {
+            this(message, httpStatus, responseBody, durationMs, 0, cause);
+        }
+
+        public CbkGdiException(String message, int httpStatus, String responseBody,
+                               long durationMs, int sourceRecordCount, Throwable cause) {
+            super(message, cause);
+            this.httpStatus = httpStatus;
+            this.responseBody = responseBody;
+            this.durationMs = durationMs;
+            this.sourceRecordCount = Math.max(0, sourceRecordCount);
+        }
+
+        public int getHttpStatus() { return httpStatus; }
+        public String getResponseBody() { return responseBody; }
+        public long getDurationMs() { return durationMs; }
+        public int getSourceRecordCount() { return sourceRecordCount; }
+    }
+}
