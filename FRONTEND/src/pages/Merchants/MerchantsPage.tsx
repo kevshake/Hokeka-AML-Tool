@@ -4,11 +4,14 @@ import { useAllPsps, useMerchants } from "../../features/api/queries";
 import { useCreateMerchant, type CreateMerchantRequest } from "../../features/api/mutations";
 import type { Merchant, Psp } from "../../types";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import GlassCard from "../../components/Common/GlassCard";
+import GlassModal from "../../components/Common/GlassModal";
+import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import { Download, Eye, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Download, Eye, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 
 type Owner = CreateMerchantRequest["beneficialOwners"][number];
 
@@ -198,24 +201,17 @@ export default function MerchantsPage() {
 
   return (
     <HokekaPageShell title="Merchants" subtitle="Onboard, screen, and monitor merchant risk profiles" noCard>
-      <div className="flex items-center justify-between pb-3">
-        <button
-          onClick={handleExportCSV}
-          disabled={!content.length}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-glass-muted transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
-        >
+      <GlassCard padding="md" glowVariant="teal" static>
+      <div className="mb-3 flex items-center justify-between">
+        <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
           <Download size={14} /> Export CSV
-        </button>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800"
-        >
+        </GlassButton>
+        <button type="button" onClick={() => setAddOpen(true)} className="hokeka-btn-primary">
           <Plus size={14} /> Onboard Merchant
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
-        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 320px)" }}>
+      <div className="hokeka-table-wrap" style={{ maxHeight: "calc(100vh - 320px)" }}>
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={24} className="animate-spin text-glass-muted" />
@@ -225,35 +221,28 @@ export default function MerchantsPage() {
               Error loading merchants: {error instanceof Error ? error.message : "Unknown error"}
             </div>
           ) : (
-            <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b border-white/10 bg-[var(--surface-2)]">
+            <table className="hokeka-table">
+              <thead>
+                <tr>
                   {["Merchant ID", "Legal Name", "Country", "MCC", "Risk", "Score", "KYC", "CBK Ready", "Actions"].map(
                     (heading) => (
-                      <th
-                        key={heading}
-                        className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted"
-                      >
-                        {heading}
-                      </th>
+                      <th key={heading}>{heading}</th>
                     ),
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {content.map((merchant) => (
-                  <tr key={merchant.merchantId} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-sm text-white">
-                      {merchant.merchantId}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white">
+                  <tr key={merchant.merchantId}>
+                    <td className="font-mono">{merchant.merchantId}</td>
+                    <td>
                       <p>{merchant.legalName}</p>
                       {merchant.tradingName && (
                         <p className="mt-0.5 text-xs text-glass-muted">{merchant.tradingName}</p>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">{merchant.country || "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">{merchant.mcc || "-"}</td>
+                    <td className="text-ink-muted">{merchant.country || "-"}</td>
+                    <td className="text-ink-muted">{merchant.mcc || "-"}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {merchant.riskLevel ? (
                         <TwBadge variant={riskBadge(merchant.riskLevel)}>{merchant.riskLevel}</TwBadge>
@@ -261,12 +250,8 @@ export default function MerchantsPage() {
                         <span className="text-glass-muted">-</span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">
-                      {merchant.riskScore ?? "-"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">
-                      {merchant.kycStatus || "-"}
-                    </td>
+                    <td className="text-ink-muted">{merchant.riskScore ?? "-"}</td>
+                    <td className="text-ink-muted">{merchant.kycStatus || "-"}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <TwBadge
                         variant={
@@ -280,10 +265,11 @@ export default function MerchantsPage() {
                           : "Incomplete"}
                       </TwBadge>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td>
                       <button
+                        type="button"
                         onClick={() => setViewMerchant(merchant)}
-                        className="flex items-center gap-1 text-xs text-burgundy-400 transition-colors hover:text-burgundy-300"
+                        className="flex items-center gap-1 text-xs text-gold transition-colors hover:underline"
                       >
                         <Eye size={14} /> View
                       </button>
@@ -300,7 +286,7 @@ export default function MerchantsPage() {
               </tbody>
             </table>
           )}
-        </div>
+      </div>
         <TwPagination
           page={page.index}
           totalPages={totalPages}
@@ -309,32 +295,45 @@ export default function MerchantsPage() {
           onPageChange={(nextPage) => setPage((current) => ({ ...current, index: nextPage }))}
           onRowsPerPageChange={(size) => setPage({ index: 0, size })}
         />
-      </div>
+      </GlassCard>
 
-      {viewMerchant && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setViewMerchant(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2">
-            <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)] shadow-2xl">
-              <div className="flex items-start justify-between border-b border-white/10 px-6 py-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{viewMerchant.legalName}</h3>
-                  <p className="mt-0.5 font-mono text-xs text-glass-muted">Merchant #{viewMerchant.merchantId}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {viewMerchant.riskLevel && (
-                    <TwBadge variant={riskBadge(viewMerchant.riskLevel)}>{viewMerchant.riskLevel}</TwBadge>
-                  )}
-                  <button
-                    title="Close"
-                    onClick={() => setViewMerchant(null)}
-                    className="rounded p-1 text-glass-muted transition-colors hover:bg-white/10"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-              <div className="max-h-[65vh] overflow-y-auto px-6 py-4">
+      <GlassModal
+        open={!!viewMerchant}
+        onClose={() => setViewMerchant(null)}
+        title={viewMerchant?.legalName ?? "Merchant"}
+        subtitle={viewMerchant ? `Merchant #${viewMerchant.merchantId}` : undefined}
+        maxWidth="lg"
+        headerExtra={
+          viewMerchant?.riskLevel ? (
+            <TwBadge variant={riskBadge(viewMerchant.riskLevel)}>{viewMerchant.riskLevel}</TwBadge>
+          ) : null
+        }
+        bodyClassName="max-h-[65vh]"
+        footer={
+          viewMerchant ? (
+            <>
+              {viewMerchant.complianceCaseId && (
+                <Link
+                  to={`/records/COMPLIANCE_CASE/${viewMerchant.complianceCaseId}`}
+                  onClick={() => setViewMerchant(null)}
+                  className="rounded-lg border border-hairline px-4 py-1.5 text-xs text-ink hover:bg-burgundy-800"
+                >
+                  Open case
+                </Link>
+              )}
+              <Link
+                to={`/records/MERCHANT/${viewMerchant.merchantId}`}
+                onClick={() => setViewMerchant(null)}
+                className="hokeka-btn-primary"
+              >
+                Trace record
+              </Link>
+            </>
+          ) : null
+        }
+      >
+              {viewMerchant && (
+              <div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <Detail label="Trading name" value={viewMerchant.tradingName} />
                   <Detail label="Country" value={viewMerchant.country} />
@@ -354,26 +353,22 @@ export default function MerchantsPage() {
                 </div>
 
                 {viewMerchant.decisionReason && (
-                  <div className="mt-5 border-t border-white/10 pt-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">
-                      Decision evidence
-                    </p>
-                    <p className="mt-1 text-sm text-white/80">{viewMerchant.decisionReason}</p>
+                  <div className="mt-5 border-t border-hairline pt-4">
+                    <p className="hokeka-field-label">Decision evidence</p>
+                    <p className="mt-1 text-sm text-ink-muted">{viewMerchant.decisionReason}</p>
                   </div>
                 )}
 
-                <div className="mt-5 border-t border-white/10 pt-4">
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-glass-muted">
-                    Beneficial owners
-                  </p>
+                <div className="mt-5 border-t border-hairline pt-4">
+                  <p className="mb-3 hokeka-field-label">Beneficial owners</p>
                   <div className="space-y-2">
                     {(viewMerchant.beneficialOwnerResults || []).map((owner) => (
                       <div
                         key={owner.ownerId}
-                        className="flex items-center justify-between border border-white/10 px-3 py-2"
+                        className="flex items-center justify-between border border-hairline px-3 py-2"
                       >
                         <div>
-                          <p className="text-sm text-white">{owner.fullName}</p>
+                          <p className="text-sm text-ink">{owner.fullName}</p>
                           <p className="text-xs text-glass-muted">
                             {owner.isSanctioned ? "Sanctions match" : "No sanctions match"}
                             {owner.isPep ? " / PEP" : ""}
@@ -382,7 +377,7 @@ export default function MerchantsPage() {
                         <Link
                           to={`/records/BENEFICIAL_OWNER/${owner.ownerId}`}
                           onClick={() => setViewMerchant(null)}
-                          className="text-xs text-burgundy-400 hover:text-burgundy-300"
+                          className="text-xs text-gold hover:underline"
                         >
                           Trace
                         </Link>
@@ -394,48 +389,34 @@ export default function MerchantsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 border-t border-white/10 px-6 py-3">
-                {viewMerchant.complianceCaseId && (
-                  <Link
-                    to={`/records/COMPLIANCE_CASE/${viewMerchant.complianceCaseId}`}
-                    onClick={() => setViewMerchant(null)}
-                    className="rounded-lg border border-white/10 px-4 py-1.5 text-xs text-white hover:bg-white/5"
-                  >
-                    Open case
-                  </Link>
-                )}
-                <Link
-                  to={`/records/MERCHANT/${viewMerchant.merchantId}`}
-                  onClick={() => setViewMerchant(null)}
-                  className="rounded-lg border border-gold/50 px-4 py-1.5 text-xs text-gold hover:bg-gold hover:text-black"
-                >
-                  Trace record
-                </Link>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+              )}
+      </GlassModal>
 
-      {addOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setAddOpen(false)} />
-          <div className="fixed left-1/2 top-1/2 z-50 max-h-[94vh] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2">
-            <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)] shadow-2xl">
-              <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-                <h3 className="text-lg font-semibold text-white">Onboard and Screen Merchant</h3>
-                <button
-                  title="Close"
-                  onClick={() => setAddOpen(false)}
-                  className="rounded p-1 text-glass-muted transition-colors hover:bg-white/10"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="max-h-[76vh] space-y-6 overflow-y-auto px-6 py-5">
+      <GlassModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Onboard and Screen Merchant"
+        maxWidth="xl"
+        bodyClassName="max-h-[76vh] space-y-6"
+        footer={
+          <>
+            <GlassButton variant="default" size="sm" onClick={() => setAddOpen(false)}>
+              Cancel
+            </GlassButton>
+            <button
+              type="button"
+              onClick={handleAddMerchant}
+              disabled={!formIsValid || createMerchant.isPending}
+              className="hokeka-btn-primary disabled:opacity-45"
+            >
+              {createMerchant.isPending && <Loader2 size={14} className="animate-spin" />}
+              Screen and Onboard
+            </button>
+          </>
+        }
+      >
                 <section>
-                  <h4 className="mb-3 text-sm font-semibold text-white">Legal entity</h4>
+                  <h4 className="mb-3 text-sm font-semibold text-ink">Legal entity</h4>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <TwSelect
                       label="PSP"
@@ -542,8 +523,8 @@ export default function MerchantsPage() {
                   </div>
                 </section>
 
-                <section className="border-t border-white/10 pt-5">
-                  <h4 className="mb-3 text-sm font-semibold text-white">CBK reporting source fields</h4>
+                <section className="border-t border-hairline pt-5">
+                  <h4 className="mb-3 text-sm font-semibold text-ink">CBK reporting source fields</h4>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <TwInput
                       label="Settlement account number"
@@ -567,30 +548,31 @@ export default function MerchantsPage() {
                   </div>
                 </section>
 
-                <section className="border-t border-white/10 pt-5">
+                <section className="border-t border-hairline pt-5">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-semibold text-white">Beneficial owners</h4>
-                      <p className={`mt-0.5 text-xs ${ownershipTotal > 100 ? "text-red-400" : "text-glass-muted"}`}>
+                      <h4 className="text-sm font-semibold text-ink">Beneficial owners</h4>
+                      <p className={`mt-0.5 text-xs ${ownershipTotal > 100 ? "text-danger" : "text-glass-muted"}`}>
                         Declared ownership: {ownershipTotal}%
                       </p>
                     </div>
-                    <button
+                    <GlassButton
+                      variant="default"
+                      size="sm"
                       onClick={() =>
                         setFormData((current) => ({
                           ...current,
                           beneficialOwners: [...current.beneficialOwners, emptyOwner()],
                         }))
                       }
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/5"
                     >
                       <UserPlus size={14} /> Add owner
-                    </button>
+                    </GlassButton>
                   </div>
 
                   <div className="space-y-4">
                     {formData.beneficialOwners.map((owner, index) => (
-                      <div key={index} className="border border-white/10 p-4">
+                      <div key={index} className="border border-hairline p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <p className="text-xs font-semibold uppercase tracking-wider text-glass-muted">
                             Owner {index + 1}
@@ -658,28 +640,7 @@ export default function MerchantsPage() {
                     ))}
                   </div>
                 </section>
-              </div>
-
-              <div className="flex justify-end gap-2 border-t border-white/10 px-6 py-3">
-                <button
-                  onClick={() => setAddOpen(false)}
-                  className="rounded-lg border border-white/10 px-4 py-1.5 text-xs text-white hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddMerchant}
-                  disabled={!formIsValid || createMerchant.isPending}
-                  className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-1.5 text-xs font-medium text-white hover:bg-burgundy-800 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  {createMerchant.isPending && <Loader2 size={14} className="animate-spin" />}
-                  Screen and Onboard
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      </GlassModal>
 
       <TwSnackbar
         open={snackbar.open}
@@ -694,8 +655,10 @@ export default function MerchantsPage() {
 function Detail({ label, value }: { label: string; value: string | number | undefined | null }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">{label}</p>
-      <p className="mt-0.5 text-sm text-white/80">{value === undefined || value === null || value === "" ? "-" : value}</p>
+      <p className="hokeka-field-label">{label}</p>
+      <p className="mt-0.5 text-sm text-ink-muted">
+        {value === undefined || value === null || value === "" ? "-" : value}
+      </p>
     </div>
   );
 }

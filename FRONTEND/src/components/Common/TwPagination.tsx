@@ -33,12 +33,12 @@ export default function TwPagination({
   const { start, end } = getDisplayRange(page, rowsPerPage, totalCount)
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-glass-border bg-[rgba(12,6,8,0.88)] px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline bg-burgundy-900/90 px-4 py-3">
       <div className="flex items-center gap-2 text-xs text-glass-muted">
         <span>
           {start}–{end} of {totalCount}
         </span>
-        <span className="text-white/20">|</span>
+        <span className="text-ink-subtle">|</span>
         <span className="flex items-center gap-1.5">
           Rows:
           <select
@@ -63,8 +63,8 @@ export default function TwPagination({
           className={cn(
             'rounded-lg p-1.5 transition-colors',
             page === 0
-              ? 'cursor-not-allowed text-white/20'
-              : 'text-glass-muted hover:bg-burgundy-850/70 hover:text-white',
+              ? 'cursor-not-allowed text-ink-subtle'
+              : 'text-glass-muted hover:bg-burgundy-800 hover:text-ink',
           )}
         >
           <ChevronsLeft size={16} />
@@ -76,14 +76,14 @@ export default function TwPagination({
           className={cn(
             'rounded-lg p-1.5 transition-colors',
             page === 0
-              ? 'cursor-not-allowed text-white/20'
-              : 'text-glass-muted hover:bg-burgundy-850/70 hover:text-white',
+              ? 'cursor-not-allowed text-ink-subtle'
+              : 'text-glass-muted hover:bg-burgundy-800 hover:text-ink',
           )}
         >
           <ChevronLeft size={16} />
         </button>
 
-        <span className="min-w-[4.5rem] text-center text-xs font-medium text-white/70">
+        <span className="min-w-[4.5rem] text-center text-xs font-medium text-ink-muted">
           Page {page + 1} of {totalPages || 1}
         </span>
 
@@ -94,8 +94,8 @@ export default function TwPagination({
           className={cn(
             'rounded-lg p-1.5 transition-colors',
             page >= totalPages - 1
-              ? 'cursor-not-allowed text-white/20'
-              : 'text-glass-muted hover:bg-burgundy-850/70 hover:text-white',
+              ? 'cursor-not-allowed text-ink-subtle'
+              : 'text-glass-muted hover:bg-burgundy-800 hover:text-ink',
           )}
         >
           <ChevronRight size={16} />
@@ -107,8 +107,8 @@ export default function TwPagination({
           className={cn(
             'rounded-lg p-1.5 transition-colors',
             page >= totalPages - 1
-              ? 'cursor-not-allowed text-white/20'
-              : 'text-glass-muted hover:bg-burgundy-850/70 hover:text-white',
+              ? 'cursor-not-allowed text-ink-subtle'
+              : 'text-glass-muted hover:bg-burgundy-800 hover:text-ink',
           )}
         >
           <ChevronsRight size={16} />

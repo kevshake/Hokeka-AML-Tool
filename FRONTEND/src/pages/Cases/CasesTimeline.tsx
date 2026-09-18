@@ -48,8 +48,8 @@ const EVENT_STYLES: Record<string, { icon: typeof CircleDot; color: string; back
 
 const FALLBACK_EVENT_STYLE = {
   icon: CircleDot,
-  color: "text-white/70",
-  background: "bg-white/10",
+  color: "text-ink-muted",
+  background: "bg-burgundy-800",
 };
 
 function formatTimestamp(timestamp: string): string {
@@ -86,26 +86,26 @@ function TimelineEventRow({ event, isLast }: { event: CaseTimelineEvent; isLast:
 
   return (
     <div className="relative grid grid-cols-[36px_minmax(0,1fr)] gap-3 pb-4">
-      {!isLast && <div className="absolute bottom-0 left-[17px] top-9 w-px bg-white/10" />}
+      {!isLast && <div className="absolute bottom-0 left-[17px] top-9 w-px bg-hairline" />}
       <div className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full ${style.background} ${style.color}`}>
         <Icon size={17} />
       </div>
-      <div className="min-w-0 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3">
+      <div className="min-w-0 rounded-lg border border-hairline bg-burgundy-850/70 px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white">{event.description}</p>
-            <p className="mt-1 text-xs uppercase text-white/40">{labelForKey(event.type)}</p>
+            <p className="text-sm font-semibold text-ink">{event.description}</p>
+            <p className="mt-1 text-xs uppercase text-ink-subtle">{labelForKey(event.type)}</p>
           </div>
           <time className="shrink-0 text-xs text-glass-muted" dateTime={event.timestamp}>
             {formatTimestamp(event.timestamp)}
           </time>
         </div>
         {metadata.length > 0 && (
-          <dl className="mt-3 grid gap-x-6 gap-y-2 border-t border-white/10 pt-3 sm:grid-cols-2 xl:grid-cols-3">
+          <dl className="mt-3 grid gap-x-6 gap-y-2 border-t border-hairline pt-3 sm:grid-cols-2 xl:grid-cols-3">
             {metadata.map(([key, value]) => (
               <div key={key} className="min-w-0">
-                <dt className="text-[11px] uppercase text-white/35">{labelForKey(key)}</dt>
-                <dd className="mt-0.5 truncate text-xs text-white/75" title={value}>{value}</dd>
+                <dt className="hokeka-field-label">{labelForKey(key)}</dt>
+                <dd className="mt-0.5 truncate text-xs text-ink-muted" title={value}>{value}</dd>
               </div>
             ))}
           </dl>
@@ -157,7 +157,7 @@ export default function CasesTimeline() {
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700"
+            className="hokeka-field h-10"
           >
             <option value="">All statuses</option>
             {(Object.keys(STATUS_LABELS) as CaseStatus[]).map((status) => (
@@ -172,7 +172,7 @@ export default function CasesTimeline() {
             <select
               value={pspFilter}
               onChange={(event) => setPspFilter(event.target.value)}
-              className="h-10 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700"
+              className="hokeka-field h-10"
             >
               <option value="">All PSPs</option>
               {(allPsps ?? []).map((psp) => {
@@ -190,7 +190,7 @@ export default function CasesTimeline() {
             value={selectedCaseId || ""}
             onChange={(event) => setSelectedCaseId(Number(event.target.value))}
             disabled={casesQuery.isLoading || cases.length === 0}
-            className="h-10 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-burgundy-700 disabled:opacity-50"
+            className="hokeka-field h-10 disabled:opacity-50"
           >
             {cases.length === 0 && <option value="">No cases available</option>}
             {cases.map((item) => (
@@ -201,9 +201,9 @@ export default function CasesTimeline() {
       </div>
 
       {selectedCase && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-white/10 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-hairline py-3">
           <div>
-            <p className="text-sm font-semibold text-white">{selectedCase.caseReference}</p>
+            <p className="text-sm font-semibold text-ink">{selectedCase.caseReference}</p>
             <p className="mt-0.5 text-xs text-glass-muted">{events.length} recorded event{events.length === 1 ? "" : "s"}</p>
           </div>
           <button
@@ -227,13 +227,13 @@ export default function CasesTimeline() {
       )}
 
       {!casesQuery.isLoading && !casesQuery.isError && cases.length === 0 && (
-        <div className="border-y border-white/10 py-12 text-center text-sm text-glass-muted">
+        <div className="border-y border-hairline py-12 text-center text-sm text-glass-muted">
           No cases match the selected filters.
         </div>
       )}
 
       {!timelineQuery.isLoading && !timelineQuery.isError && selectedCaseId > 0 && events.length === 0 && (
-        <div className="border-y border-white/10 py-12 text-center text-sm text-glass-muted">
+        <div className="border-y border-hairline py-12 text-center text-sm text-glass-muted">
           No lifecycle events have been recorded for this case.
         </div>
       )}

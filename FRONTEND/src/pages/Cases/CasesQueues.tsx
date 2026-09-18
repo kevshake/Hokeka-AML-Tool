@@ -1,22 +1,22 @@
-import { Box, Paper, Typography, Chip, CircularProgress } from "@mui/material";
+import { Loader2 } from "lucide-react";
 import { useCases } from "../../features/api/queries";
 import type { CaseStatus, Priority } from "../../types";
-import { withAlpha } from "../../theme/tokens"
+import TwBadge from "../../components/Common/TwBadge";
 
-const statusConfig: Record<CaseStatus, { label: string; color: string; bg: string }> = {
-  NEW: { label: "New", color: "var(--info)", bg: "var(--ink)" },
-  ASSIGNED: { label: "Assigned", color: "#b094c2", bg: "var(--ink)" },
-  INVESTIGATING: { label: "Investigating", color: "var(--warning)", bg: "var(--ink)" },
-  PENDING_REVIEW: { label: "Pending Review", color: "var(--risk-high)", bg: "var(--ink)" },
-  ESCALATED: { label: "Escalated", color: "var(--danger)", bg: "var(--ink)" },
-  RESOLVED: { label: "Resolved", color: "var(--success)", bg: "var(--ink)" },
+const statusConfig: Record<CaseStatus, { label: string; glow: "info" | "warning" | "danger" | "success" | "gold" }> = {
+  NEW: { label: "New", glow: "info" },
+  ASSIGNED: { label: "Assigned", glow: "gold" },
+  INVESTIGATING: { label: "Investigating", glow: "warning" },
+  PENDING_REVIEW: { label: "Pending Review", glow: "danger" },
+  ESCALATED: { label: "Escalated", glow: "danger" },
+  RESOLVED: { label: "Resolved", glow: "success" },
 };
 
-const priorityColors: Record<Priority, string> = {
-  CRITICAL: "var(--danger)",
-  HIGH: "var(--risk-high)",
-  MEDIUM: "var(--warning)",
-  LOW: "var(--muted)",
+const priorityVariant = (priority: Priority): "danger" | "warning" | "success" | "default" => {
+  if (priority === "CRITICAL") return "danger";
+  if (priority === "HIGH" || priority === "MEDIUM") return "warning";
+  if (priority === "LOW") return "success";
+  return "default";
 };
 
 const QUEUE_STATUSES: CaseStatus[] = ["NEW", "ASSIGNED", "INVESTIGATING", "PENDING_REVIEW", "ESCALATED"];
@@ -27,98 +27,53 @@ function QueueColumn({ status }: { status: CaseStatus }) {
   const cases = data?.content || [];
 
   return (
-    <Box sx={{ minWidth: 240, flex: "0 0 240px" }}>
-      <Box
-        sx={{
-          px: 1.5, py: 1, mb: 1, borderRadius: 1,
-          backgroundColor: cfg.bg,
-          border: `1px solid ${withAlpha(cfg.color, 0.25)}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ color: cfg.color, fontWeight: 700 }}>
-          {cfg.label}
-        </Typography>
-        <Chip
-          label={data?.totalElements ?? (isLoading ? "…" : 0)}
-          size="small"
-          sx={{ backgroundColor: cfg.color + "20", color: cfg.color, fontWeight: 600, height: 20, fontSize: "0.7rem" }}
-        />
-      </Box>
+    <div className="min-w-[240px] flex-[0_0_240px]">
+      <div className="mb-2 flex items-center justify-between rounded-lg border border-hairline bg-burgundy-900 px-3 py-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink">{cfg.label}</span>
+        <TwBadge variant="default">{data?.totalElements ?? (isLoading ? "…" : 0)}</TwBadge>
+      </div>
 
       {isLoading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-          <CircularProgress size={20} />
-        </Box>
+        <div className="flex justify-center py-6">
+          <Loader2 size={20} className="animate-spin text-glass-muted" />
+        </div>
       ) : cases.length === 0 ? (
-        <Box sx={{ p: 2, textAlign: "center" }}>
-          <Typography variant="caption" sx={{ color: "text.disabled" }}>No cases</Typography>
-        </Box>
+        <div className="rounded-lg border border-dashed border-hairline px-3 py-6 text-center text-xs text-glass-muted">
+          No cases
+        </div>
       ) : (
-        cases.map(c => (
-          <Paper
+        cases.map((c) => (
+          <div
             key={c.id}
-            elevation={0}
-            sx={{
-              p: 1.5, mb: 1,
-              border: "1px solid rgba(0,0,0,0.08)",
-              borderRadius: 1,
-              backgroundColor: "background.paper",
-              "&:hover": { borderColor: cfg.color + "60", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" },
-              cursor: "default",
-            }}
+            className="mb-2 rounded-lg border border-hairline bg-burgundy-850/80 p-3 transition-colors hover:border-hairline-strong"
           >
-            <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: "monospace", display: "block", mb: 0.5 }}>
-              {c.caseReference}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "text.primary", fontSize: "0.8rem", mb: 1, lineHeight: 1.4 }}>
-              {c.description?.length > 80 ? c.description.slice(0, 80) + "…" : c.description || "No description"}
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Chip
-                label={c.priority}
-                size="small"
-                sx={{
-                  height: 18, fontSize: "0.65rem",
-                  backgroundColor: priorityColors[c.priority] + "20",
-                  color: priorityColors[c.priority],
-                  fontWeight: 600,
-                }}
-              />
-              {c.slaDeadline && (
-                <Typography variant="caption" sx={{ color: new Date(c.slaDeadline) < new Date() ? "var(--danger)" : "text.disabled", fontSize: "0.65rem" }}>
-                  SLA: {new Date(c.slaDeadline).toLocaleDateString()}
-                </Typography>
-              )}
-            </Box>
-          </Paper>
+            <p className="font-mono text-[11px] text-glass-muted">{c.caseReference}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-ink-muted">
+              {c.description?.length > 80 ? `${c.description.slice(0, 80)}…` : c.description || "No description"}
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <TwBadge variant={priorityVariant(c.priority)}>{c.priority}</TwBadge>
+              <span className="truncate text-[11px] text-glass-muted">
+                {c.assignedTo?.username || "Unassigned"}
+              </span>
+            </div>
+          </div>
         ))
       )}
-    </Box>
+    </div>
   );
 }
 
 export default function CasesQueues() {
   return (
-    <Box>
-      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-        Cases grouped by workflow status. Showing up to 20 per queue.
-      </Typography>
-      <Box
-        sx={{
-          display: "flex",
-          gap: 2,
-          overflowX: "auto",
-          pb: 2,
-          "&::-webkit-scrollbar": { height: 6 },
-          "&::-webkit-scrollbar-track": { backgroundColor: "var(--surface-3)", borderRadius: 3 },
-          "&::-webkit-scrollbar-thumb": { backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 3 },
-        }}
-      >
-        {QUEUE_STATUSES.map(status => (
+    <div>
+      <span className="hokeka-section-label">Workflow</span>
+      <h3 className="mt-1 mb-4 font-display text-lg font-semibold tracking-tight text-ink">Case queues</h3>
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {QUEUE_STATUSES.map((status) => (
           <QueueColumn key={status} status={status} />
         ))}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

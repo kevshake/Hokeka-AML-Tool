@@ -185,19 +185,126 @@
     box-shadow: var(--shadow-md);
   }
 
-  /* --- Sidebar active item (website `.product-nav .active`) -------------- */
-  .hokeka-nav-active {
-    position: relative;
-    background: var(--surface-3);
-    border: 1px solid var(--line);
-    box-shadow: none;
+  /* --- Sidebar: Riday-style nested tree (Hokeka glass tokens) ------------ */
+  .hokeka-nav-section-trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 1.15rem;
+    text-align: left;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    transition:
+      color 0.2s var(--ease),
+      background-color 0.2s var(--ease);
   }
 
-  .hokeka-nav-active::before {
+  .hokeka-nav-section-trigger:hover {
+    color: var(--ink);
+    background: rgb(var(--surface-3-rgb) / 0.45);
+  }
+
+  .hokeka-nav-section-trigger[aria-expanded='true'] {
+    color: var(--brand-accent);
+  }
+
+  .hokeka-nav-tree {
+    position: relative;
+    margin: 0.15rem 0.65rem 0.35rem 1.35rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid var(--line);
+  }
+
+  .hokeka-nav-tree::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 0.55rem;
+    bottom: 0.55rem;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgb(var(--brand-accent-rgb) / 0.35) 18%,
+      rgb(var(--brand-accent-rgb) / 0.35) 82%,
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  .hokeka-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0.12rem 0;
+    min-height: 2.25rem;
+    border-radius: var(--radius);
+    padding: 0 0.65rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    transition:
+      color 0.2s var(--ease),
+      background-color 0.2s var(--ease),
+      border-color 0.2s var(--ease),
+      box-shadow 0.2s var(--ease);
+  }
+
+  .hokeka-nav-item::before {
+    content: '';
+    position: absolute;
+    left: -0.85rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 1px;
+    background: var(--line);
+    transform: translateY(-50%);
+    transition: background-color 0.2s var(--ease);
+  }
+
+  .hokeka-nav-item:hover {
+    color: var(--ink);
+    background: rgb(var(--surface-3-rgb) / 0.55);
+  }
+
+  .hokeka-nav-item:hover::before {
+    background: rgb(var(--brand-accent-rgb) / 0.45);
+  }
+
+  /* Active child — soft gold/burgundy glass pill */
+  .hokeka-nav-active,
+  .hokeka-nav-item.hokeka-nav-active {
+    color: var(--brand-accent);
+    background:
+      linear-gradient(
+        135deg,
+        rgb(var(--brand-accent-rgb) / 0.16),
+        rgb(var(--surface-3-rgb) / 0.92)
+      );
+    border: 1px solid rgb(var(--brand-accent-rgb) / 0.38);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--brand-accent-rgb) / 0.12),
+      0 8px 18px -14px rgba(0, 0, 0, 0.65);
+  }
+
+  .hokeka-nav-active::before,
+  .hokeka-nav-item.hokeka-nav-active::before {
+    left: -0.86rem;
+    width: 0.68rem;
+    height: 2px;
+    background: var(--brand-accent);
+  }
+
+  .hokeka-nav-active::after {
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
     width: 2px;
+    border-radius: var(--radius) 0 0 var(--radius);
     background: var(--brand-accent);
   }
 

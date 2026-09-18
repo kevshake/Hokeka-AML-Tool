@@ -10,6 +10,8 @@ interface SettingsTabBarProps {
   activeIndex: number;
   onChange: (index: number) => void;
   className?: string;
+  /** Accessible name for the tablist (defaults to Settings sections). */
+  ariaLabel?: string;
 }
 
 /** Glass-aligned tab strip for Settings / admin shells. */
@@ -18,6 +20,7 @@ export default function SettingsTabBar({
   activeIndex,
   onChange,
   className,
+  ariaLabel = "Settings sections",
 }: SettingsTabBarProps) {
   return (
     <div
@@ -26,7 +29,7 @@ export default function SettingsTabBar({
         className,
       )}
       role="tablist"
-      aria-label="Settings sections"
+      aria-label={ariaLabel}
     >
       {tabs.map((tab, index) => {
         const active = index === activeIndex;

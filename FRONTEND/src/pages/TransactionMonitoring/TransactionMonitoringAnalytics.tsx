@@ -40,14 +40,15 @@ export default function TransactionMonitoringAnalytics() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-lg font-semibold text-white">Transaction Analytics</h3>
+      <span className="hokeka-section-label">Analytics</span>
+      <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-ink">Transaction Analytics</h3>
 
       {indicators.length > 0 && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {indicators.slice(0, 4).map((indicator: any, idx: number) => (
-            <div key={indicator.id || indicator.name || idx} className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+            <div key={indicator.id || indicator.name || idx} className="hokeka-glass-card rounded-xl p-4">
               <p className="mb-1 text-sm text-glass-muted">{indicator.name || indicator.type || "Risk Indicator"}</p>
-              <p className="text-xl font-bold text-white">{indicator.value || indicator.count || 0}</p>
+              <p className="text-xl font-bold tabular-nums text-ink">{indicator.value || indicator.count || 0}</p>
               {indicator.percentage && <p className="text-xs text-glass-muted">{indicator.percentage}%</p>}
             </div>
           ))}
@@ -55,8 +56,8 @@ export default function TransactionMonitoringAnalytics() {
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
-          <h4 className="mb-3 text-sm font-semibold text-white">Risk Distribution</h4>
+        <div className="hokeka-glass-card rounded-xl p-4">
+          <h4 className="mb-3 text-sm font-semibold text-ink">Risk Distribution</h4>
           {riskChartData ? (
             <div className="h-[300px]">
               <Doughnut
