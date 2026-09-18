@@ -356,6 +356,10 @@ public class MerchantOnboardingService {
         }
 
         MerchantOnboardingResponse response = builder.build();
+        if (merchant.getPsp() != null) {
+            response.setPspId(merchant.getPsp().getPspId());
+            response.setPspCode(merchant.getPsp().getPspCode());
+        }
         return response;
     }
 
