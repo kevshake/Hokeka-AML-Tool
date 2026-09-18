@@ -74,6 +74,7 @@ NEO4J_PASSWORD=<strong unique password>
 JWT_SECRET=<256-bit secret>
 ENCRYPTION_KEY=<32-byte key>
 AML_MS_INTERNAL_KEY=<shared secret: backend -> aml-ms>
+AML_INTERNAL_API_KEY=<same shared secret; compatibility name for direct aml-ms launches>
 
 # Defaulted, override per environment
 CORS_ALLOWED_ORIGINS=https://aml.hokeka.com,https://testaml.hokeka.com
@@ -81,6 +82,22 @@ KAFKA_BOOTSTRAP_SERVERS=kafka-prod:29092
 ```
 
 Generate each secret independently (`openssl rand -base64 32`). Never reuse one across two variables.
+The two AML names are the exception: they are aliases for one backend-to-microservice credential and
+must contain the same value. On Hostinger, generate it once and append both names to the deployment
+environment before starting Compose:
+
+```bash
+cd /opt/aml-fraud-detector
+umask 077
+AML_KEY="$(openssl rand -base64 48)"
+printf 'AML_MS_INTERNAL_KEY=%s\nAML_INTERNAL_API_KEY=%s\n' "$AML_KEY" "$AML_KEY" >> .env
+unset AML_KEY
+docker compose -f docker-compose.prod.yml up -d backend-prod aml-ms-prod
+```
+
+`docker-compose.prod.yml` currently forwards `AML_MS_INTERNAL_KEY` to both containers;
+`AML_INTERNAL_API_KEY` is retained for standalone/legacy Hostinger service definitions. Do not put
+either value in an nginx file, image, repository, or shell history.
 
 Fixed inside the compose file and **not** taken from `.env`: `DATABASE_URL`
 (`jdbc:postgresql://postgres-prod:5432/fraud_detector`), `SPRING_PROFILES_ACTIVE=production`,
@@ -287,21 +304,24 @@ nothing in CI produced a `.so`/`.dll`, so ABI drift could ship undetected.
 
 ## 4. Releasing — the package server
 
-`install.sh` fetches from `$REPO_URL`, default `https://packages.hokeka.com/edge`:
+`install.sh` fetches from `$REPO_URL`, default `https://packages.hokeka.com/edge`. On the Hostinger
+VPS, `HOSTINGER_PACKAGES_DIR=/var/www/packages.hokeka.com` has this physical layout:
 
 ```
-/edge/install.sh
-/edge/stable.json                              {"version":"1.2.3"}
-/edge/beta.json
-/edge/<version>/SHA256SUMS
-/edge/<version>/SHA256SUMS.asc                 detached GPG signature
-/edge/<version>/edge-host.jar
-/edge/<version>/libedge_engine-linux-x86_64.so
-/edge/<version>/libedge_engine-linux-aarch64.so
-/edge/<version>/edge_engine-windows-x86_64.dll
+/var/www/packages.hokeka.com/
+├── stable/<version>/...                       stable signed release files
+├── beta/<version>/...                         beta signed release files
+└── edge/
+    ├── install.sh
+    ├── stable.json                            {"version":"1.2.3"}
+    ├── beta.json
+    └── <version> -> ../{stable,beta}/<version>
 ```
 
-Serve strictly over HTTPS with HSTS. Never publish a plain-HTTP fallback.
+The symlink keeps the public contract `/edge/<version>/...` independent of channel. Each version
+contains `SHA256SUMS`, `SHA256SUMS.asc`, `edge-host.jar`, and the platform native libraries. Give the
+SSH deployment user write access to this docroot and nginx read/traverse access. Serve it strictly
+over HTTPS with HSTS and never publish a plain-HTTP fallback.
 
 ### 4.1 Cutting a release
 
@@ -340,9 +360,13 @@ Two ordering properties matter and should not be "tidied":
 | `RELEASE_GPG_PRIVATE_KEY` | Armored private half of the Hokeka release signing key |
 | `RELEASE_GPG_PASSPHRASE` | Its passphrase |
 | `RELEASE_GPG_FINGERPRINT` | Expected fingerprint, asserted after import — guards against a wrong or rotated key being swapped into the secret |
-| `AWS_ROLE_ARN` | Assumed via OIDC; needs `s3:PutObject` + CloudFront invalidation. No long-lived keys |
-| `RELEASE_S3_BUCKET` | Bucket backing `packages.hokeka.com` |
-| `RELEASE_CLOUDFRONT_ID` | Distribution to invalidate |
+| `HOSTINGER_SSH_HOST` | Hostname of the packages VPS |
+| `HOSTINGER_SSH_USER` | Restricted deployment user with write access to the package docroot |
+| `HOSTINGER_SSH_KEY` | Private SSH key for that deployment user |
+| `HOSTINGER_PACKAGES_DIR` | nginx docroot, normally `/var/www/packages.hokeka.com` |
+
+AWS is not required. `AWS_ROLE_ARN` plus `RELEASE_S3_BUCKET` enables the legacy S3 fallback when no
+Hostinger secrets are present; `RELEASE_CLOUDFRONT_ID` optionally invalidates its CDN.
 
 The `publish` job uses the `release` GitHub environment — configure required reviewers on it so a
 tag push alone cannot ship to customers.
@@ -375,6 +399,24 @@ Commit the pinned `install.sh` — the public half is meant to be public.
 `--insecure-skip-signature` exists for internal mirrors you already trust by other means; it must
 never be used against `packages.hokeka.com`, and it warns loudly.
 
+### 4.4 OPS-REQUIRED — DNS and first key upload
+
+Before the first non-dry-run release, operations must:
+
+1. Create the `packages.hokeka.com` DNS A/AAAA record for the Hostinger VPS, configure nginx with
+   `/var/www/packages.hokeka.com` as its document root, obtain a TLS certificate, and verify HTTPS.
+2. Create the restricted SSH deployment user/key, pre-create `stable`, `beta`, and `edge` under the
+   docroot with nginx-readable permissions, and set all four `HOSTINGER_*` secrets on the protected
+   GitHub `release` environment.
+3. On a dedicated signing host, run `./scripts/generate-release-key.sh --pin`, commit the pinned
+   `edge-host/deploy/install.sh`, then upload `private-key.asc`, its passphrase, and
+   `fingerprint.txt` as the three `RELEASE_GPG_*` GitHub secrets.
+4. Run a manual dry release first. For the first real tag, confirm the public key embedded in
+   `/edge/install.sh` has the expected fingerprint and verify `SHA256SUMS.asc` from the VPS.
+
+The private release key is uploaded only to GitHub's protected release secrets, never to the VPS.
+The VPS receives the public key as part of the pinned installer.
+
 ---
 
 ## 5. Blocking gaps
@@ -383,7 +425,7 @@ These are real and unresolved. Read them before promising an install date to a c
 
 | # | Gap | Consequence |
 |---|---|---|
-| 1 | **The release job now exists** (`.github/workflows/release.yml`) but **the S3 bucket + CDN behind `packages.hokeka.com` still has to be provisioned**, and the six repo secrets in §4.2 set. | Until the bucket exists the workflow has nowhere to publish. This is now infrastructure provisioning, not development. |
+| 1 | **The release job now publishes to Hostinger**, but operations must complete §4.4: DNS/TLS, nginx docroot, deployment user, and the four `HOSTINGER_*` secrets. | Until the VPS is provisioned the workflow has nowhere to publish. AWS is only an optional fallback. |
 | 2 | **The signing key is not yet generated or pinned.** Tooling is done (`scripts/generate-release-key.sh --pin`, verified end to end); the key itself must be generated on a signing host and the three secrets set. | Blocks the first public release by design — the installer is fail-closed with an empty pin. One command plus secret configuration. |
 | 3 | `deploy-to-hostinger.sh` writes placeholder secrets and starts the stack anyway. | A control plane can come up on real infrastructure with `CHANGE_ME_*` credentials. Mitigated by §1.3, but the script should fail instead of defaulting. |
 | 4 | Aerospike code paths are unit-tested, never run against a live Aerospike. | Needs a Testcontainers integration test or a staging install before it is trustworthy. |

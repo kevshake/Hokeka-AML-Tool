@@ -11,6 +11,65 @@
 > **Retained for reference only:** the nginx config, security headers, HikariCP tuning, monitoring
 > and troubleshooting sections below are still useful.
 
+## Current Hostinger operations supplement
+
+This short section is current; the legacy bare-metal procedure after it is not.
+
+### Internal AML API key
+
+The backend and `aml-ms-prod` authenticate with one shared random value. On the Hostinger VPS, write
+both supported environment names to `/opt/aml-fraud-detector/.env`; they are aliases and must match:
+
+```bash
+cd /opt/aml-fraud-detector
+umask 077
+AML_KEY="$(openssl rand -base64 48)"
+printf 'AML_MS_INTERNAL_KEY=%s\nAML_INTERNAL_API_KEY=%s\n' "$AML_KEY" "$AML_KEY" >> .env
+unset AML_KEY
+docker compose -f docker-compose.prod.yml up -d backend-prod aml-ms-prod
+```
+
+The current Compose file forwards `AML_MS_INTERNAL_KEY` to both containers.
+`AML_INTERNAL_API_KEY` supports direct/legacy Hostinger service definitions. Never expose this value
+through nginx or use different values for the two processes.
+
+### Hostinger package hosting and release signing
+
+Set `HOSTINGER_PACKAGES_DIR=/var/www/packages.hokeka.com`. The release workflow uploads signed files
+with `scripts/publish-packages-hostinger.sh` into:
+
+```text
+/var/www/packages.hokeka.com/
+├── stable/<version>/...
+├── beta/<version>/...
+└── edge/
+    ├── install.sh
+    ├── stable.json
+    ├── beta.json
+    └── <version> -> ../{stable,beta}/<version>
+```
+
+nginx serves the docroot as `https://packages.hokeka.com`; the `/edge` symlinks preserve immutable
+version URLs. Generate and pin the signing key on a dedicated signing host:
+
+```bash
+./scripts/generate-release-key.sh --pin
+```
+
+Commit the pinned installer and set `RELEASE_GPG_PRIVATE_KEY`, `RELEASE_GPG_PASSPHRASE`, and
+`RELEASE_GPG_FINGERPRINT` in GitHub's protected `release` environment. The private key must never be
+copied to the VPS.
+
+### OPS-REQUIRED
+
+Before the first release, operations must point the `packages.hokeka.com` DNS A/AAAA record at the
+Hostinger VPS, provision nginx + TLS for the package docroot, and create a restricted SSH deployment
+user. Set `HOSTINGER_SSH_HOST`, `HOSTINGER_SSH_USER`, `HOSTINGER_SSH_KEY`, and
+`HOSTINGER_PACKAGES_DIR` in GitHub. After running the key-generation command, perform the first
+release-key secret upload to GitHub, run a dry release, then verify the pinned fingerprint and
+`SHA256SUMS.asc` from the public package URL. See
+[`docs/INSTALL.md` §4](../docs/INSTALL.md#4-releasing--the-package-server) for the canonical process.
+
 # =============================================================================
 # FRAUD DETECTOR - PRODUCTION DEPLOYMENT GUIDE
 # For External Access via hokeka.com

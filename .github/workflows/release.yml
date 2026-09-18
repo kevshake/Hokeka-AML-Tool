@@ -25,10 +25,13 @@ name: Release edge
 #   RELEASE_GPG_PASSPHRASE    its passphrase
 #   RELEASE_GPG_FINGERPRINT   expected full fingerprint, asserted before signing (guards against a
 #                             rotated/incorrect key being swapped into the secret)
-#   AWS_ROLE_ARN              role assumed via OIDC; needs s3:PutObject on the bucket + CloudFront
-#                             invalidation. No long-lived access keys.
-#   RELEASE_S3_BUCKET         bucket backing packages.hokeka.com
-#   RELEASE_CLOUDFRONT_ID     distribution to invalidate
+#   HOSTINGER_SSH_HOST        packages VPS hostname
+#   HOSTINGER_SSH_USER        restricted deployment user
+#   HOSTINGER_SSH_KEY         private SSH key for that user
+#   HOSTINGER_PACKAGES_DIR    nginx docroot (normally /var/www/packages.hokeka.com)
+#
+# Optional AWS fallback (used only when no Hostinger secrets are configured):
+#   AWS_ROLE_ARN, RELEASE_S3_BUCKET, and optionally RELEASE_CLOUDFRONT_ID
 #
 # Tag -> channel:  v1.2.3 -> stable   |   v1.2.3-beta.1 (any prerelease suffix) -> beta
 
@@ -51,7 +54,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write                # OIDC federation to AWS
 
 env:
   JAVA_VERSION: '21'
@@ -292,6 +294,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release          # gate this with required reviewers in repo settings
+    # OIDC is scoped to this job and used only by the optional AWS fallback.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      HOSTINGER_SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+      HOSTINGER_SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+      HOSTINGER_PACKAGES_DIR: ${{ secrets.HOSTINGER_PACKAGES_DIR }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      RELEASE_S3_BUCKET: ${{ secrets.RELEASE_S3_BUCKET }}
+      RELEASE_CLOUDFRONT_ID: ${{ secrets.RELEASE_CLOUDFRONT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -313,7 +326,8 @@ jobs:
           # Everything install.sh asks for must be present. A missing arch would leave clients on
           # that platform aborting mid-install against a published release.
           for required in edge-host.jar libedge_engine-linux-x86_64.so \
-                          libedge_engine-linux-aarch64.so libedge_engine-linux-x86_64-musl.so; do
+                          libedge_engine-linux-aarch64.so libedge_engine-linux-x86_64-musl.so \
+                          edge_engine-windows-x86_64.dll; do
             test -f "release/$required" || { echo "::error::missing required artifact: $required"; exit 1; }
           done
 
@@ -359,24 +373,78 @@ jobs:
 
       - name: Publish the artifacts (dry run)
         if: needs.plan.outputs.dry_run == 'true'
-        working-directory: release
         run: |
-          echo "DRY RUN — would upload to s3://<bucket>/edge/${{ needs.plan.outputs.version }}/:"
-          ls -la
-          echo "DRY RUN — would then flip edge/${{ needs.plan.outputs.channel }}.json"
+          scripts/publish-packages-hostinger.sh \
+            --release-dir release \
+            --version '${{ needs.plan.outputs.version }}' \
+            --channel '${{ needs.plan.outputs.channel }}' \
+            --installer edge-host/deploy/install.sh \
+            --dry-run
+
+      - name: Select publish target
+        if: needs.plan.outputs.dry_run != 'true'
+        id: target
+        env:
+          HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          hostinger_set=0
+          for value in "$HOSTINGER_SSH_HOST" "$HOSTINGER_SSH_USER" "$HOSTINGER_PACKAGES_DIR" \
+                       "$HOSTINGER_SSH_KEY"; do
+            [ -n "$value" ] && hostinger_set=$((hostinger_set + 1))
+          done
+
+          if [ "$hostinger_set" -eq 4 ]; then
+            echo "target=hostinger" >> "$GITHUB_OUTPUT"
+          elif [ "$hostinger_set" -ne 0 ]; then
+            echo "::error::Hostinger publishing is partially configured; set all four HOSTINGER_* secrets"
+            exit 1
+          elif [ -n "$AWS_ROLE_ARN" ] && [ -n "$RELEASE_S3_BUCKET" ]; then
+            echo "::warning::Hostinger secrets are absent; using the optional AWS fallback"
+            echo "target=aws" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No publish target configured. Set the four HOSTINGER_* secrets (preferred), or AWS_ROLE_ARN and RELEASE_S3_BUCKET."
+            exit 1
+          fi
+
+      - name: Configure Hostinger SSH
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'hostinger'
+        env:
+          HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$HOSTINGER_SSH_KEY" > "$RUNNER_TEMP/hostinger_packages_key"
+          chmod 600 "$RUNNER_TEMP/hostinger_packages_key"
+          ssh-keyscan -H "$HOSTINGER_SSH_HOST" >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          echo "HOSTINGER_SSH_KEY_PATH=$RUNNER_TEMP/hostinger_packages_key" >> "$GITHUB_ENV"
+
+      # The script uploads to stable/ or beta/, exposes the immutable version under /edge, and
+      # flips the channel manifest last.
+      - name: Publish to Hostinger VPS
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'hostinger'
+        run: |
+          scripts/publish-packages-hostinger.sh \
+            --release-dir release \
+            --version '${{ needs.plan.outputs.version }}' \
+            --channel '${{ needs.plan.outputs.channel }}' \
+            --installer edge-host/deploy/install.sh
 
       - name: Configure AWS credentials
-        if: needs.plan.outputs.dry_run != 'true'
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'aws'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: eu-west-1
 
-      # STEP A — artifacts go up first, and only if this version does not already exist.
-      - name: Upload the version directory
-        if: needs.plan.outputs.dry_run != 'true'
+      # Optional AWS fallback: artifacts go up first, and only if this version is new.
+      - name: Upload the version directory to AWS
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'aws'
         env:
-          BUCKET:  ${{ secrets.RELEASE_S3_BUCKET }}
+          BUCKET: ${{ env.RELEASE_S3_BUCKET }}
           VERSION: ${{ needs.plan.outputs.version }}
         shell: bash
         run: |
@@ -393,10 +461,10 @@ jobs:
           echo "uploaded edge/$VERSION/"
 
       # STEP B — the installer itself, served from the repo so the documented one-liner works.
-      - name: Publish install.sh
-        if: needs.plan.outputs.dry_run != 'true'
+      - name: Publish install.sh to AWS
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'aws'
         env:
-          BUCKET: ${{ secrets.RELEASE_S3_BUCKET }}
+          BUCKET: ${{ env.RELEASE_S3_BUCKET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -404,10 +472,10 @@ jobs:
               --content-type 'text/x-shellscript' --cache-control 'public, max-age=300'
 
       # STEP C — the commit point. Everything above is inert until this manifest names the version.
-      - name: Flip the channel manifest
-        if: needs.plan.outputs.dry_run != 'true'
+      - name: Flip the AWS channel manifest
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'aws'
         env:
-          BUCKET:  ${{ secrets.RELEASE_S3_BUCKET }}
+          BUCKET: ${{ env.RELEASE_S3_BUCKET }}
           VERSION: ${{ needs.plan.outputs.version }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
         shell: bash
@@ -416,7 +484,7 @@ jobs:
           # Re-verify the release is fully readable BEFORE pointing clients at it.
           for required in SHA256SUMS SHA256SUMS.asc edge-host.jar \
                           libedge_engine-linux-x86_64.so libedge_engine-linux-aarch64.so \
-                          libedge_engine-linux-x86_64-musl.so; do
+                          libedge_engine-linux-x86_64-musl.so edge_engine-windows-x86_64.dll; do
             aws s3 ls "s3://$BUCKET/edge/$VERSION/$required" >/dev/null \
               || { echo "::error::$required is not readable in edge/$VERSION — refusing to flip $CHANNEL"; exit 1; }
           done
@@ -427,10 +495,10 @@ jobs:
               --content-type 'application/json' --cache-control 'public, max-age=60'
           echo "$CHANNEL now points at $VERSION"
 
-      - name: Invalidate the CDN
-        if: needs.plan.outputs.dry_run != 'true'
+      - name: Invalidate the AWS CDN
+        if: needs.plan.outputs.dry_run != 'true' && steps.target.outputs.target == 'aws' && env.RELEASE_CLOUDFRONT_ID != ''
         env:
-          DIST: ${{ secrets.RELEASE_CLOUDFRONT_ID }}
+          DIST: ${{ env.RELEASE_CLOUDFRONT_ID }}
         run: |
           aws cloudfront create-invalidation --distribution-id "$DIST" \
               --paths '/edge/stable.json' '/edge/beta.json' '/edge/install.sh'
