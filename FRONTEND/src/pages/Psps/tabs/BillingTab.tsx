@@ -1,19 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Alert,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Button,
   Grid,
   Divider,
@@ -35,14 +26,30 @@ import {
   Payment as PaymentIcon,
   AccountBalance as BankIcon,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { apiClient } from "../../../lib/apiClient";
 import { getApiUrl } from "../../../config/api";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import PlanUsageCard from "./PlanUsageCard";
+import GlassCard from "../../../components/Common/GlassCard";
+import TwBadge from "../../../components/Common/TwBadge";
+import {
+  SCREENING_SKUS,
+  serviceTypeLabel,
+  type BillingServiceSku,
+} from "../../../lib/billingServiceTypes";
 
 const ACCENT = "var(--gold)";
+
+interface EffectiveRate {
+  rateId?: number;
+  serviceType: string;
+  baseRate: number;
+  currency: string;
+  isActive?: boolean;
+  description?: string;
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -207,25 +214,52 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, sub }: KpiCardProps) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2, height: "100%" }}>
-      <CardContent sx={{ pb: "16px !important" }}>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}
-        >
-          {label}
+    <GlassCard padding="sm" glowVariant="gold" static className="h-full !p-4">
+      <p className="text-[0.6563rem] font-semibold uppercase tracking-widest text-ink-muted">{label}</p>
+      <p className="mt-1 font-display text-2xl font-semibold tracking-tight text-gold">{value}</p>
+      {sub ? <p className="mt-1 text-xs text-ink-muted">{sub}</p> : null}
+    </GlassCard>
+  );
+}
+
+function SectionTitle({ icon, title, hint }: { icon: ReactNode; title: string; hint?: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <span className="text-gold">{icon}</span>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600, fontFamily: "var(--font-display)" }}>
+        {title}
+      </Typography>
+      {hint ? (
+        <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+          {hint}
         </Typography>
-        <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: ACCENT }}>
-          {value}
-        </Typography>
-        {sub && (
-          <Typography variant="caption" color="text.secondary">
-            {sub}
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function SkuRateCard({ sku, rate }: { sku: BillingServiceSku; rate: EffectiveRate | null }) {
+  const amount = rate?.baseRate ?? sku.defaultRateUsd;
+  const currency = rate?.currency ?? "USD";
+  return (
+    <GlassCard padding="sm" glowVariant={sku.glow} static className="h-full !p-4">
+      <p className="font-display text-sm font-semibold text-ink">{sku.label}</p>
+      <p className="mt-0.5 min-h-[2.5rem] text-xs leading-relaxed text-ink-muted">{sku.description}</p>
+      <div className="mt-3 flex items-baseline gap-1">
+        <span className="font-display text-xl font-semibold text-gold">
+          {new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4,
+          }).format(Number(amount))}
+        </span>
+        <span className="text-xs text-ink-muted">/ request</span>
+      </div>
+      <div className="mt-2">
+        <TwBadge variant={rate ? "gold" : "default"}>{rate ? "Your rate" : "Platform default"}</TwBadge>
+      </div>
+    </GlassCard>
   );
 }
 
@@ -595,6 +629,18 @@ export default function BillingTab({ pspId }: BillingTabProps) {
   } = useInvoices(pspId);
   const { data: bankDetails } = useBankDetails();
 
+  const skuRateQueries = useQueries({
+    queries: SCREENING_SKUS.map((sku) => ({
+      queryKey: ["billing", "rate", pspId, sku.code],
+      queryFn: () =>
+        apiClient
+          .get<EffectiveRate>(`billing/rates?pspId=${pspId}&serviceType=${sku.code}`)
+          .catch(() => null),
+      enabled: !!pspId,
+      staleTime: 5 * 60_000,
+    })),
+  });
+
   const [toast, setToast] = useState<{
     open: boolean;
     severity: "success" | "error";
@@ -658,13 +704,20 @@ export default function BillingTab({ pspId }: BillingTabProps) {
       {/* ── Section 0: Plan entitlements + usage against quota (self-service only) ──── */}
       {isOwnTenant && <PlanUsageCard />}
 
+      {/* ── Unit rates (screening SKUs) ─────────────────────────────────── */}
+      <span className="hokeka-section-label">Pricing</span>
+      <SectionTitle icon={<ReceiptIcon sx={{ fontSize: 20 }} />} title="Unit rates" hint="Per-request screening prices" />
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {SCREENING_SKUS.map((sku, index) => (
+          <Grid item xs={12} sm={6} md={3} key={sku.code}>
+            <SkuRateCard sku={sku} rate={skuRateQueries[index]?.data ?? null} />
+          </Grid>
+        ))}
+      </Grid>
+
       {/* ── Section 1: Current Plan ─────────────────────────────────────── */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <CreditCardIcon sx={{ color: ACCENT, fontSize: 20 }} />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Current Plan
-        </Typography>
-      </Box>
+      <span className="hokeka-section-label">Subscription</span>
+      <SectionTitle icon={<CreditCardIcon sx={{ fontSize: 20 }} />} title="Current plan" />
 
       {subLoading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
@@ -685,13 +738,9 @@ export default function BillingTab({ pspId }: BillingTabProps) {
       )}
 
       {!subLoading && !subError && subscription && (
-        <Card
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 4, borderColor: "color-mix(in srgb, var(--gold) 25%, transparent)" }}
-        >
-          <CardContent>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+        <GlassCard padding="md" glowVariant="gold" static className="mb-8">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>
                 <Link to={`/records/SUBSCRIPTION/${subscription.subscriptionId}`}>{subscription.tierName}</Link>
               </Typography>
               <Chip
@@ -717,6 +766,9 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                 }
                 sx={{ fontWeight: 600, fontSize: "0.7rem" }}
               />
+              {subscription.billingCycle === "ANNUAL" && (
+                <TwBadge variant="gold">Annual billing</TwBadge>
+              )}
             </Box>
 
             {/* Trial warning */}
@@ -847,28 +899,19 @@ export default function BillingTab({ pspId }: BillingTabProps) {
 
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" color="text.secondary">
-                To upgrade your plan or change your billing cycle, please
-                contact your account manager.
+                To upgrade your plan or switch to annual billing, contact your account manager.
               </Typography>
             </Box>
-          </CardContent>
-        </Card>
+        </GlassCard>
       )}
 
       {/* ── Section 2: Current Month Usage ──────────────────────────────── */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <BarChartIcon sx={{ color: ACCENT, fontSize: 20 }} />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Current Month Usage
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ ml: "auto" }}
-        >
-          Auto-refreshes every 60 s
-        </Typography>
-      </Box>
+      <span className="hokeka-section-label">Usage</span>
+      <SectionTitle
+        icon={<BarChartIcon sx={{ fontSize: 20 }} />}
+        title="Current month usage"
+        hint="Auto-refreshes every 60 s"
+      />
 
       {usageLoading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
@@ -915,59 +958,40 @@ export default function BillingTab({ pspId }: BillingTabProps) {
           </Grid>
 
           {usage.breakdown && usage.breakdown.length > 0 && (
-            <TableContainer
-              component={Paper}
-              variant="outlined"
-              sx={{ borderRadius: 2 }}
-            >
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "var(--surface-2)" }}>
-                    <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      Service Type
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-                    >
-                      Request Count
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-                    >
-                      Cost (USD)
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+            <div className="hokeka-table-wrap">
+              <table className="hokeka-table">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th className="text-right">Requests</th>
+                    <th className="text-right">Cost (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {usage.breakdown.map((line) => (
-                    <TableRow key={line.serviceType} hover>
-                      <TableCell sx={{ fontSize: "0.85rem" }}>
-                        {line.serviceType}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontSize: "0.85rem" }}>
-                        {fmtNumber(line.count)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontSize: "0.85rem" }}>
+                    <tr key={line.serviceType}>
+                      <td>
+                        <span className="font-medium">{serviceTypeLabel(line.serviceType)}</span>
+                        <span className="mt-0.5 block font-mono text-[0.68rem] text-ink-muted">
+                          {line.serviceType}
+                        </span>
+                      </td>
+                      <td className="text-right">{fmtNumber(line.count)}</td>
+                      <td className="text-right font-semibold text-gold">
                         {fmtMoney(line.costUsd, "USD")}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                </tbody>
+              </table>
+            </div>
           )}
         </Box>
       )}
 
       {/* ── Section 3: Invoice History ───────────────────────────────────── */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <ReceiptIcon sx={{ color: ACCENT, fontSize: 20 }} />
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Invoice History
-        </Typography>
-      </Box>
+      <span className="hokeka-section-label">Invoices</span>
+      <SectionTitle icon={<ReceiptIcon sx={{ fontSize: 20 }} />} title="Invoice history" />
 
       {invoicesLoading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
@@ -990,104 +1014,63 @@ export default function BillingTab({ pspId }: BillingTabProps) {
         )}
 
       {!invoicesLoading && !invoicesError && invoices && invoices.length > 0 && (
-        <TableContainer
-          component={Paper}
-          variant="outlined"
-          sx={{ borderRadius: 2, mb: 3 }}
-        >
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: "var(--surface-2)" }}>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Invoice #
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Period
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ fontWeight: 700, fontSize: "0.8rem" }}
-                >
-                  Total Amount
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Currency
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Status
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Due Date
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                  Actions
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <div className="hokeka-table-wrap mb-6">
+          <table className="hokeka-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Period</th>
+                <th className="text-right">Amount</th>
+                <th>Currency</th>
+                <th>Status</th>
+                <th>Due</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {invoices.map((inv) => (
-                <TableRow key={inv.invoiceId} hover>
-                  <TableCell
-                    sx={{
-                      fontSize: "0.85rem",
-                      fontFamily: "monospace",
-                    }}
-                  >
+                <tr key={inv.invoiceId}>
+                  <td className="font-mono text-sm">
                     <Link to={`/records/INVOICE/${inv.invoiceId}`}>{inv.invoiceNumber}</Link>
-                  </TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>
-                    {fmtDate(inv.billingPeriodStart)} –{" "}
-                    {fmtDate(inv.billingPeriodEnd)}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontSize: "0.85rem", fontWeight: 600 }}
-                  >
+                  </td>
+                  <td className="text-sm">
+                    {fmtDate(inv.billingPeriodStart)} – {fmtDate(inv.billingPeriodEnd)}
+                  </td>
+                  <td className="text-right font-semibold text-gold">
                     {fmtMoney(inv.totalAmount, inv.currency)}
-                  </TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>
-                    {inv.currency}
-                  </TableCell>
-                  <TableCell>
+                  </td>
+                  <td>{inv.currency}</td>
+                  <td>
                     <Chip
                       label={inv.status}
                       size="small"
                       color={invoiceStatusColor(inv.status)}
                       sx={{ fontWeight: 600, fontSize: "0.7rem" }}
                     />
-                  </TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>
-                    {fmtDate(inv.dueDate)}
-                  </TableCell>
-                  <TableCell>
+                  </td>
+                  <td>{fmtDate(inv.dueDate)}</td>
+                  <td>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
                       <Button
                         size="small"
                         startIcon={<DownloadIcon fontSize="small" />}
-                        onClick={() =>
-                          handleDownloadPdf(inv.invoiceId, inv.invoiceNumber)
-                        }
+                        onClick={() => handleDownloadPdf(inv.invoiceId, inv.invoiceNumber)}
                         sx={{
                           color: ACCENT,
                           textTransform: "none",
                           fontSize: "0.78rem",
                           minWidth: 0,
-                          "&:hover": {
-                            backgroundColor: "var(--surface-3)",
-                          },
+                          "&:hover": { backgroundColor: "var(--surface-3)" },
                         }}
                       >
                         PDF
                       </Button>
-
                       {isPayable(inv.status) && (
                         <Button
                           size="small"
                           variant="outlined"
                           startIcon={<PaymentIcon fontSize="small" />}
-                          onClick={() =>
-                            setPayDialog({ open: true, invoice: inv })
-                          }
+                          onClick={() => setPayDialog({ open: true, invoice: inv })}
                           sx={{
                             textTransform: "none",
                             fontSize: "0.78rem",
@@ -1103,12 +1086,12 @@ export default function BillingTab({ pspId }: BillingTabProps) {
                         </Button>
                       )}
                     </Box>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Payment Dialog */}
