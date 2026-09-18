@@ -9,15 +9,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.beans.factory.annotation.Autowired;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(properties = {
@@ -46,9 +45,7 @@ class UserControllerAuthorizationTest {
     @Test
     @WithMockUser(authorities = "ROLE_PLATFORM_ADMIN")
     void platformAdminCanUseUserCrud() throws Exception {
-        when(userRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class),
-                any(org.springframework.data.domain.Pageable.class))).thenReturn(new PageImpl<>(java.util.List.of()));
-        mvc.perform(get("/users")).andExpect(status().isOk());
+        mvc.perform(delete("/users/2").with(csrf())).andExpect(status().isNoContent());
     }
 
     @Test
