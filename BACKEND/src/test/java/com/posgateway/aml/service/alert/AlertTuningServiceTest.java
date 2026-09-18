@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -33,13 +34,14 @@ class AlertTuningServiceTest {
     @Mock private RuleEffectivenessService effectivenessService;
     @Mock private UserRepository userRepository;
     @Mock private PspIsolationService pspIsolationService;
+    @Mock private com.posgateway.aml.service.rules.RuleGovernanceService governanceService;
 
     private AlertTuningService service;
 
     @BeforeEach
     void setUp() {
         service = new AlertTuningService(recommendationRepository, ruleRepository, effectivenessService,
-                userRepository, pspIsolationService, new ObjectMapper());
+                userRepository, pspIsolationService, new ObjectMapper(), governanceService);
     }
 
     @Test
@@ -76,10 +78,21 @@ class AlertTuningServiceTest {
 
         service.applyRecommendation(20L, "admin");
 
-        assertEquals("{\"count_threshold\":125}", rule.getParameters());
         assertEquals("APPLIED", recommendation.getStatus());
         assertEquals(5L, recommendation.getAppliedBy());
-        verify(ruleRepository).save(rule);
+
+        // The tuned parameters must go through maker/checker, NOT a direct repository write: a
+        // direct save produced no RuleVersion, needed no second approver and skipped the engine
+        // reload, leaving holes in the rule_versions audit trail.
+        org.mockito.ArgumentCaptor<RuleDefinition> patch =
+                org.mockito.ArgumentCaptor.forClass(RuleDefinition.class);
+        verify(governanceService).proposeUpdate(org.mockito.ArgumentMatchers.eq(rule), patch.capture(),
+                org.mockito.ArgumentMatchers.eq(user), org.mockito.ArgumentMatchers.anyString());
+        assertEquals("{\"count_threshold\":125}", patch.getValue().getParameters());
+        // Only the parameters are proposed — no other field is silently altered.
+        assertNull(patch.getValue().getRuleExpression());
+        assertNull(patch.getValue().getAction());
+        verify(ruleRepository, org.mockito.Mockito.never()).save(any(RuleDefinition.class));
     }
 
     private static RuleDefinition rule(Long id, String name, String parameters) {

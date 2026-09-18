@@ -182,6 +182,35 @@ class EdgeRuleCompilerTest {
                         EdgeMetricsIngestService.METRICS_CONTEXT.getBytes(StandardCharsets.UTF_8)));
     }
 
+    @Test
+    void refusesToSealAZeroRuleBundleBecauseItWouldAllowEverything() throws Exception {
+        RuleDefinitionRepository repository = mock(RuleDefinitionRepository.class);
+        // A rule with no structured rule_json cannot be compiled to IR, so it is skipped — which is
+        // exactly how the whole seeded catalogue silently produces an EMPTY (fully permissive) bundle.
+        RuleDefinition uncompilable = ruleDefinition(1L, "SpEL only", "HOLD", 25, 5, null);
+        when(repository.findByEnabledTrueAndPspIdOrderByPriorityDesc(anyLong()))
+                .thenReturn(List.of(uncompilable));
+
+        EdgeControlPlaneKeys keys = new EdgeControlPlaneKeys(new EdgeProperties());
+        EdgeBundleDistributionService distribution = new EdgeBundleDistributionService(
+                repository, compiler, bundleService, keys, new HokekaSecureEnvelope());
+
+        KeyPair edgeX = KeyPairGenerator.getInstance("X25519").generateKeyPair();
+        EdgeNode node = new EdgeNode();
+        node.setId(1L);
+        node.setPspId(42L);
+        node.setEdgeId("acme-eu-1");
+        node.setStatus(EdgeNodeStatus.ACTIVE);
+        node.setEdgeX25519PublicKey(Base64.getEncoder().encodeToString(
+                HokekaSecureEnvelope.rawFromX25519Public(
+                        (java.security.interfaces.XECPublicKey) edgeX.getPublic())));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                EdgeBundleDistributionService.EmptyBundleException.class,
+                () -> distribution.sealFor(node),
+                "an empty rule set must never be sealed and served — the edge would allow all traffic");
+    }
+
     private static RuleDefinition ruleDefinition(long id, String name, String action, int score,
                                                  int priority, String ruleJson) {
         RuleDefinition r = new RuleDefinition();

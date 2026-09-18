@@ -1,0 +1,450 @@
+name: Release edge
+
+# Publishes a Hokeka Edge release to packages.hokeka.com — the server half of the install chain
+# whose client half lives in edge-host/deploy/install.sh.
+#
+# Two properties drive the whole design:
+#
+#   1. ORDERING. Artifacts are uploaded FIRST and the channel manifest is flipped LAST. install.sh
+#      resolves $CHANNEL.json -> <version> -> <version>/SHA256SUMS -> artifacts. If the manifest
+#      named a version before its files existed, every client installing in that window would abort
+#      on a 404. The flip is therefore the commit point of the release.
+#
+#   2. SIGNING. SHA256SUMS is detached-signed with the Hokeka release key and published alongside as
+#      SHA256SUMS.asc. Checksums alone protect against corruption and an untrusted mirror; they do
+#      NOT protect against a compromised origin, because whoever can rewrite an artifact can rewrite
+#      the checksum next to it. install.sh pins the public key and verifies the signature BEFORE it
+#      trusts a single digest.
+#
+# Immutability: a version prefix that already exists is never overwritten. Re-releasing a version
+# would silently change what an installer pinned with --version, so the job refuses and you cut a
+# new tag instead.
+#
+# Required repository secrets:
+#   RELEASE_GPG_PRIVATE_KEY   armored private key of the Hokeka release signing key
+#   RELEASE_GPG_PASSPHRASE    its passphrase
+#   RELEASE_GPG_FINGERPRINT   expected full fingerprint, asserted before signing (guards against a
+#                             rotated/incorrect key being swapped into the secret)
+#   AWS_ROLE_ARN              role assumed via OIDC; needs s3:PutObject on the bucket + CloudFront
+#                             invalidation. No long-lived access keys.
+#   RELEASE_S3_BUCKET         bucket backing packages.hokeka.com
+#   RELEASE_CLOUDFRONT_ID     distribution to invalidate
+#
+# Tag -> channel:  v1.2.3 -> stable   |   v1.2.3-beta.1 (any prerelease suffix) -> beta
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build, checksum and sign, but publish nothing'
+        type: boolean
+        default: true
+      version:
+        description: 'Version to build (e.g. 1.2.3). Required for manual runs.'
+        type: string
+
+concurrency:
+  group: release-edge
+  cancel-in-progress: false      # never interrupt a partially-uploaded release
+
+permissions:
+  contents: read
+  id-token: write                # OIDC federation to AWS
+
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  # ── 0. Work out what we are releasing, and refuse anything ambiguous ────────────────────────────
+  plan:
+    name: Resolve version and channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version:  ${{ steps.resolve.outputs.version }}
+      channel:  ${{ steps.resolve.outputs.channel }}
+      dry_run:  ${{ steps.resolve.outputs.dry_run }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            dry_run=false
+          else
+            version="${{ inputs.version }}"
+            dry_run="${{ inputs.dry_run }}"
+            [ -n "$version" ] || { echo "::error::a manual run must supply 'version'"; exit 1; }
+          fi
+
+          # Strict semver. A malformed version becomes a directory name on a public server and a
+          # value install.sh pins forever, so reject rather than normalise.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$version' is not valid semver (expected 1.2.3 or 1.2.3-beta.1)"; exit 1
+          fi
+
+          # A prerelease suffix must never land on the stable channel.
+          case "$version" in
+            *-*) channel=beta ;;
+            *)   channel=stable ;;
+          esac
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version to the $channel channel (dry_run=$dry_run)"
+
+  # ── 1. Gate: the release must pass the same checks CI enforces ──────────────────────────────────
+  # A tag can point at any commit, including one that never went through a PR. Re-running the
+  # interop suite here is what stops a release whose Java seal side and Rust open side have drifted —
+  # the failure mode that silently stops PSP nodes receiving rules.
+  verify:
+    name: Verify (tests + HSE-1 interop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: edge-engine
+
+      - name: Edge host tests
+        working-directory: edge-host
+        run: mvn -B --no-transfer-progress test
+
+      - name: Regenerate the HSE-1 interop vector from Java
+        working-directory: BACKEND
+        run: mvn -B --no-transfer-progress test -Dtest=EdgeBundleServiceTest -DfailIfNoSpecifiedTests=false
+
+      - name: Rust workspace tests (incl. interop)
+        working-directory: edge-engine
+        run: cargo test --workspace
+
+  # ── 2. Build the native cores ───────────────────────────────────────────────────────────────────
+  # x86_64 builds and runs the JNI crossing natively. aarch64 is cross-compiled, so the crossing
+  # CANNOT be exercised here — see the note on that leg.
+  native:
+    name: Native core (${{ matrix.artifact }})
+    needs: [plan, verify]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true            # a partial set of cores must not reach the publish step
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            libname: libedge_engine.so
+            artifact: libedge_engine-linux-x86_64.so
+            cross: false
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            libname: libedge_engine.so
+            artifact: libedge_engine-linux-aarch64.so
+            cross: false
+          # musl build for Alpine and other musl estates. A glibc .so cannot load on musl, so
+          # without this artifact --native is impossible there and the installer refuses it.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            libname: libedge_engine.so
+            artifact: libedge_engine-linux-x86_64-musl.so
+            cross: musl
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            libname: edge_engine.dll
+            artifact: edge_engine-windows-x86_64.dll
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: edge-engine
+          key: ${{ matrix.target }}
+
+      - name: Install the musl toolchain
+        if: matrix.cross == 'musl'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev
+          {
+            echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc'
+            echo 'CC_x86_64_unknown_linux_musl=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Build the native core (cdylib)
+        working-directory: edge-engine
+        run: cargo build --release --target ${{ matrix.target }} -p edge-jni
+
+      - name: Verify the library was produced
+        shell: bash
+        run: |
+          set -euo pipefail
+          lib="edge-engine/target/${{ matrix.target }}/release/${{ matrix.libname }}"
+          test -f "$lib" || { echo "::error::${{ matrix.libname }} was not produced for ${{ matrix.target }}"; exit 1; }
+          echo "built ${{ matrix.artifact }} ($(wc -c < "$lib") bytes)"
+
+      # Runs the real Java -> Rust crossing against the freshly built library. Every published core
+      # must have had its JNI boundary executed on its OWN platform — x86_64 and aarch64 each on a
+      # native runner, musl inside an Alpine container (below). Nothing ships unexercised.
+      - name: Exercise the JNI boundary
+        if: matrix.cross != 'musl'
+        working-directory: edge-host
+        shell: bash
+        run: >
+          mvn -B --no-transfer-progress test -Pnative-core
+          -Dnative.core.dir="${{ github.workspace }}/edge-engine/target/${{ matrix.target }}/release"
+
+      # The musl library cannot be loaded by the runner's glibc JVM, so the crossing runs inside a
+      # musl userspace instead of being skipped. This is the whole point of the musl artifact: if it
+      # cannot load under musl, Alpine customers get the silent Java-interpreter fallback we just
+      # taught the installer to refuse.
+      - name: Exercise the JNI boundary (musl, in Alpine)
+        if: matrix.cross == 'musl'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${{ github.workspace }}:/w" -w /w/edge-host \
+            -e MAVEN_OPTS=-Dmaven.repo.local=/w/.m2 \
+            maven:3-eclipse-temurin-21-alpine \
+            mvn -B --no-transfer-progress test -Pnative-core \
+                -Dnative.core.dir=/w/edge-engine/target/${{ matrix.target }}/release
+
+      - name: Stage under the published artifact name
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "edge-engine/target/${{ matrix.target }}/release/${{ matrix.libname }}" "dist/${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── 3. Build the edge host jar ──────────────────────────────────────────────────────────────────
+  jar:
+    name: Edge host jar
+    needs: [plan, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      # Stamp the release version so a node reports what it is actually running. Without this the
+      # jar carries the POM's -SNAPSHOT and every deployed node looks identical in support.
+      - name: Set the release version
+        working-directory: edge-host
+        run: mvn -B --no-transfer-progress versions:set -DnewVersion=${{ needs.plan.outputs.version }} -DgenerateBackupPoms=false
+
+      - name: Package
+        working-directory: edge-host
+        run: mvn -B --no-transfer-progress package -DskipTests
+
+      - name: Stage under the published artifact name
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # Spring Boot leaves the plain jar as *.jar.original; pick the executable fat jar only.
+          jar="$(find edge-host/target -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)"
+          [ -n "$jar" ] || { echo "::error::no jar produced by the edge-host build"; exit 1; }
+          cp "$jar" dist/edge-host.jar
+          echo "packaged edge-host.jar ($(wc -c < dist/edge-host.jar) bytes) from $jar"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edge-host-jar
+          path: dist/edge-host.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── 4. Checksum, sign, publish, then flip the channel ───────────────────────────────────────────
+  publish:
+    name: Sign and publish ${{ needs.plan.outputs.version }}
+    needs: [plan, native, jar]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release          # gate this with required reviewers in repo settings
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect the release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: staging
+          pattern: '{core-*,edge-host-jar}'
+          merge-multiple: true
+
+      - name: Assemble and checksum
+        id: sums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find staging -type f \( -name '*.so' -o -name '*.dll' -o -name '*.jar' \) -exec cp {} release/ \;
+
+          # Everything install.sh asks for must be present. A missing arch would leave clients on
+          # that platform aborting mid-install against a published release.
+          for required in edge-host.jar libedge_engine-linux-x86_64.so \
+                          libedge_engine-linux-aarch64.so libedge_engine-linux-x86_64-musl.so; do
+            test -f "release/$required" || { echo "::error::missing required artifact: $required"; exit 1; }
+          done
+
+          cd release
+          # Plain `sha256sum` output — the exact two-field format install.sh parses.
+          sha256sum edge-host.jar *.so *.dll > SHA256SUMS
+          echo "--- SHA256SUMS ---"; cat SHA256SUMS
+
+      - name: Import the release signing key
+        env:
+          GPG_KEY:        ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          GPG_FINGERPRINT: ${{ secrets.RELEASE_GPG_FINGERPRINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${GPG_KEY:-}" ] || { echo "::error::RELEASE_GPG_PRIVATE_KEY is not set — refusing to publish an unsigned release"; exit 1; }
+          [ -n "${GPG_FINGERPRINT:-}" ] || { echo "::error::RELEASE_GPG_FINGERPRINT is not set"; exit 1; }
+
+          printf '%s' "$GPG_KEY" | gpg --batch --import
+
+          # Assert the imported key is the one we expect. Without this, swapping the secret would
+          # silently start signing releases with a key no installer trusts — or worse, one an
+          # attacker controls but clients have been told to trust.
+          if ! gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10}' | grep -qx "$GPG_FINGERPRINT"; then
+            echo "::error::the imported key does not match RELEASE_GPG_FINGERPRINT"; exit 1
+          fi
+          echo "signing key $GPG_FINGERPRINT imported"
+
+      - name: Sign SHA256SUMS
+        env:
+          GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+        working-directory: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --armor --detach-sign --output SHA256SUMS.asc SHA256SUMS
+
+          # Verify what we just produced, exactly as install.sh will. Publishing a signature that
+          # does not verify would hard-fail every client install.
+          gpg --verify SHA256SUMS.asc SHA256SUMS
+          echo "signature verified locally"
+
+      - name: Publish the artifacts (dry run)
+        if: needs.plan.outputs.dry_run == 'true'
+        working-directory: release
+        run: |
+          echo "DRY RUN — would upload to s3://<bucket>/edge/${{ needs.plan.outputs.version }}/:"
+          ls -la
+          echo "DRY RUN — would then flip edge/${{ needs.plan.outputs.channel }}.json"
+
+      - name: Configure AWS credentials
+        if: needs.plan.outputs.dry_run != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      # STEP A — artifacts go up first, and only if this version does not already exist.
+      - name: Upload the version directory
+        if: needs.plan.outputs.dry_run != 'true'
+        env:
+          BUCKET:  ${{ secrets.RELEASE_S3_BUCKET }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Immutability: a published version is never rewritten. --version pins it forever, so
+          # changing its contents would change what an already-installed node believes it verified.
+          existing="$(aws s3 ls "s3://$BUCKET/edge/$VERSION/" 2>/dev/null | wc -l)"
+          if [ "$existing" -gt 0 ]; then
+            echo "::error::edge/$VERSION/ already exists — releases are immutable; cut a new version"; exit 1
+          fi
+
+          aws s3 cp release/ "s3://$BUCKET/edge/$VERSION/" --recursive \
+              --cache-control 'public, max-age=31536000, immutable'
+          echo "uploaded edge/$VERSION/"
+
+      # STEP B — the installer itself, served from the repo so the documented one-liner works.
+      - name: Publish install.sh
+        if: needs.plan.outputs.dry_run != 'true'
+        env:
+          BUCKET: ${{ secrets.RELEASE_S3_BUCKET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws s3 cp edge-host/deploy/install.sh "s3://$BUCKET/edge/install.sh" \
+              --content-type 'text/x-shellscript' --cache-control 'public, max-age=300'
+
+      # STEP C — the commit point. Everything above is inert until this manifest names the version.
+      - name: Flip the channel manifest
+        if: needs.plan.outputs.dry_run != 'true'
+        env:
+          BUCKET:  ${{ secrets.RELEASE_S3_BUCKET }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Re-verify the release is fully readable BEFORE pointing clients at it.
+          for required in SHA256SUMS SHA256SUMS.asc edge-host.jar \
+                          libedge_engine-linux-x86_64.so libedge_engine-linux-aarch64.so \
+                          libedge_engine-linux-x86_64-musl.so; do
+            aws s3 ls "s3://$BUCKET/edge/$VERSION/$required" >/dev/null \
+              || { echo "::error::$required is not readable in edge/$VERSION — refusing to flip $CHANNEL"; exit 1; }
+          done
+
+          printf '{"version":"%s"}\n' "$VERSION" > "$CHANNEL.json"
+          # Short TTL: the manifest is the one mutable object in the layout.
+          aws s3 cp "$CHANNEL.json" "s3://$BUCKET/edge/$CHANNEL.json" \
+              --content-type 'application/json' --cache-control 'public, max-age=60'
+          echo "$CHANNEL now points at $VERSION"
+
+      - name: Invalidate the CDN
+        if: needs.plan.outputs.dry_run != 'true'
+        env:
+          DIST: ${{ secrets.RELEASE_CLOUDFRONT_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$DIST" \
+              --paths '/edge/stable.json' '/edge/beta.json' '/edge/install.sh'
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "## Edge release ${{ needs.plan.outputs.version }}"
+            echo
+            echo "- channel: \`${{ needs.plan.outputs.channel }}\`"
+            echo "- dry run: \`${{ needs.plan.outputs.dry_run }}\`"
+            echo
+            echo '```'
+            cat release/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

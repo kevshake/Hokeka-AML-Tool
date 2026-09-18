@@ -100,8 +100,13 @@ public class AsyncConfig {
     }
 
     /**
-     * Dedicated executor for billing/metering event publishing.
-     * {@code MeteringEventPublisher} methods are annotated {@code @Async("meteringExecutor")}.
+     * Dedicated executor for billing/metering event publishing, so metering never competes with
+     * transaction processing for threads.
+     *
+     * <p>Metering is recorded by {@code ApiUsageTrackingService.logRequest}, driven by
+     * {@code UsageTrackingFilter} for every mapped HTTP endpoint. Any future service-layer metering
+     * should call that service directly and qualify with this executor — do NOT re-introduce a
+     * parallel publisher for endpoints the filter already meters, or the tenant is billed twice.
      */
     @Bean(name = "meteringExecutor")
     public Executor meteringExecutor() {

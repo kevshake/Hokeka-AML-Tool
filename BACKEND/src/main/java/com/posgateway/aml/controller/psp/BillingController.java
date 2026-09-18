@@ -57,19 +57,22 @@ public class BillingController {
     private final SubscriptionRepository subscriptionRepository;
     private final ApiUsageLogRepository apiUsageLogRepository;
     private final InvoicePdfService invoicePdfService;
+    private final com.posgateway.aml.service.psp.PspService pspService;
 
     public BillingController(BillingService billingService,
                              InvoiceMapper invoiceMapper,
                              InvoiceRepository invoiceRepository,
                              SubscriptionRepository subscriptionRepository,
                              ApiUsageLogRepository apiUsageLogRepository,
-                             InvoicePdfService invoicePdfService) {
+                             InvoicePdfService invoicePdfService,
+                             com.posgateway.aml.service.psp.PspService pspService) {
         this.billingService = billingService;
         this.invoiceMapper = invoiceMapper;
         this.invoiceRepository = invoiceRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.apiUsageLogRepository = apiUsageLogRepository;
         this.invoicePdfService = invoicePdfService;
+        this.pspService = pspService;
     }
 
     // =========================================================================
@@ -77,13 +80,28 @@ public class BillingController {
     // =========================================================================
 
     @GetMapping("/rates")
-    public ResponseEntity<BillingRate> getRate(@RequestParam Long pspId, @RequestParam String serviceType) {
+    public ResponseEntity<BillingRate> getRate(@RequestParam Long pspId, @RequestParam String serviceType,
+                                               @AuthenticationPrincipal User currentUser) {
+        // Tenant scope: a PSP user may only read its own negotiated rate; admins may read any.
+        if (!hasAdminRole(currentUser)) {
+            Long ownPspId = currentUser != null && currentUser.getPsp() != null
+                    ? currentUser.getPsp().getPspId() : null;
+            if (ownPspId == null || !ownPspId.equals(pspId)) {
+                return ResponseEntity.status(403).build();
+            }
+        }
         Optional<BillingRate> rate = billingService.getEffectiveRate(pspId, serviceType);
         return rate.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Manual invoice generation for an arbitrary PSP/period. Platform-admin only: it takes the
+     * target pspId from the request body, so without this guard any authenticated tenant could
+     * generate (and read back) an invoice for any other PSP.
+     */
     @PostMapping("/invoices/generate")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<InvoiceResponse> generateInvoice(@RequestBody InvoiceGenerationRequest request) {
         log.info("Manual invoice generation trigger for PSP {}", request.getPspId());
         LocalDate periodStart = LocalDate.of(request.getYear(), request.getMonth(), 1);
@@ -194,6 +212,13 @@ public class BillingController {
         }
         Invoice saved = invoiceRepository.save(invoice);
         log.info("Invoice {} status updated to {}", invoiceId, saved.getStatus());
+        // If this settled the invoice, lift any dunning suspension once all dues are cleared.
+        if ("PAID".equals(saved.getStatus())) {
+            Long pspId = invoiceRepository.findPspIdByInvoiceId(invoiceId);
+            if (pspId != null) {
+                pspService.reactivateIfDuesCleared(pspId);
+            }
+        }
         return ResponseEntity.ok(saved);
     }
 

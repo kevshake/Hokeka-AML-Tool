@@ -60,6 +60,39 @@ public interface ApiUsageLogRepository extends JpaRepository<ApiUsageLog, Long> 
                         @Param("end") LocalDateTime end);
 
         /**
+         * Same shape as {@link #getUsageSummaryByService} but only rows not yet rolled into an
+         * invoice. Used by invoice generation so a re-run (or overlapping period) never bills the
+         * same consumption twice. Display/analytics endpoints keep using the un-filtered variant.
+         */
+        @Query("SELECT a.serviceType, COUNT(a), SUM(a.costAmount) " +
+                        "FROM ApiUsageLog a " +
+                        "WHERE a.psp.pspId = :pspId " +
+                        "AND a.billable = true " +
+                        "AND a.invoiceId IS NULL " +
+                        "AND a.requestTimestamp BETWEEN :start AND :end " +
+                        "GROUP BY a.serviceType")
+        List<Object[]> getUninvoicedUsageSummaryByService(
+                        @Param("pspId") Long pspId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
+        /**
+         * Stamp every billable, not-yet-invoiced usage row for a PSP in a period with the invoice
+         * that consumed it. Idempotent: rows already carrying an invoice_id are left untouched.
+         */
+        @org.springframework.data.jpa.repository.Modifying
+        @Query("UPDATE ApiUsageLog a SET a.invoiceId = :invoiceId " +
+                        "WHERE a.psp.pspId = :pspId " +
+                        "AND a.billable = true " +
+                        "AND a.invoiceId IS NULL " +
+                        "AND a.requestTimestamp BETWEEN :start AND :end")
+        int markUsageInvoiced(
+                        @Param("pspId") Long pspId,
+                        @Param("invoiceId") Long invoiceId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
+        /**
          * Count all requests (billable and non-billable) for a PSP in a period.
          */
         @Query("SELECT COUNT(a) FROM ApiUsageLog a WHERE a.psp.pspId = :pspId " +

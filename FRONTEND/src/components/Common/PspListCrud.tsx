@@ -10,6 +10,15 @@ interface PspListCrudProps {
   onRefresh: () => void;
   /** Extra input fields beyond the standard name field */
   extraFields?: { key: string; label: string; placeholder?: string; type?: string }[];
+  /**
+   * The JSON property the primary "name" input maps to on THIS entity's DTO.
+   *
+   * The CBK DTOs each name it differently (directorNames, productName, shareholderName, ...) and
+   * none of them has a plain `name`. This component used to post `{name: ...}` unconditionally, and
+   * because Spring's FAIL_ON_UNKNOWN_PROPERTIES is disabled the field was silently dropped — the
+   * server persisted an all-null row and the UI still reported "Added successfully."
+   */
+  nameField?: string;
 }
 
 // Backend CBK sub-resource controllers are all mapped under
@@ -18,7 +27,7 @@ interface PspListCrudProps {
 // segment (e.g. "directors", "trust-accounts").
 const cbkBase = (apiPath: string, pspId: string) => `/api/v1/psps/${pspId}/cbk/${apiPath}`;
 
-export default function PspListCrud({ title, items, pspId, apiPath, onRefresh, extraFields }: PspListCrudProps) {
+export default function PspListCrud({ title, items, pspId, apiPath, onRefresh, extraFields, nameField = "name" }: PspListCrudProps) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({ name: "" });
   const [saving, setSaving] = useState(false);
@@ -31,10 +40,14 @@ export default function PspListCrud({ title, items, pspId, apiPath, onRefresh, e
     if (!form.name?.trim()) return;
     setSaving(true);
     try {
+      // Map the generic `name` input onto the DTO's real property before sending, so the value
+      // actually lands instead of being silently discarded as an unknown field.
+      const { name, ...rest } = form;
+      const payload: Record<string, string> = { ...rest, [nameField]: name };
       const res = await fetch(cbkBase(apiPath, pspId), {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       onRefresh();
@@ -103,7 +116,7 @@ export default function PspListCrud({ title, items, pspId, apiPath, onRefresh, e
         {items.map((item: any) => (
           <div key={item.id} className="flex items-center justify-between rounded-lg border border-white/5 px-3 py-2 transition-colors hover:bg-white/[0.02]">
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-white truncate">{item.name || item.fullName || `#${item.id}`}</p>
+              <p className="text-sm text-white truncate">{item[nameField] || item.name || item.fullName || `#${item.id}`}</p>
               {extraFields?.map((f) => (
                 item[f.key] ? <p key={f.key} className="text-xs text-glass-muted truncate">{item[f.key]}</p> : null
               ))}

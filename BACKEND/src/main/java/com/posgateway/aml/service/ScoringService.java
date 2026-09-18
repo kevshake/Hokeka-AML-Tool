@@ -332,19 +332,25 @@ public class ScoringService {
         riskDetails.put("sar_required", ruleResult.isSarRequired());
         riskDetails.put("ctr_required", ruleResult.isCtrRequired());
         riskDetails.put("regulatory_evidence", ruleResult.getRegulatoryEvidence());
+        // Persist the summed rule score_impact so it is recorded on the transaction and available to
+        // the decision/reporting layers (it was previously computed and thrown away).
+        riskDetails.put("rule_score_total", ruleResult.getScoreImpact());
     }
 
     private double resolveScoreAfterRules(double score, com.posgateway.aml.rules.RuleEvaluationResult ruleResult) {
+        double resolved = score;
         if ("BLOCK".equals(ruleResult.getDecision())) {
-            return 1.0;
+            resolved = 1.0;
+        } else if ("HOLD".equals(ruleResult.getDecision()) && score < 0.7) {
+            resolved = 0.85;
+        } else if ("REVIEW".equals(ruleResult.getDecision()) && score < 0.5) {
+            resolved = 0.65;
         }
-        if ("HOLD".equals(ruleResult.getDecision()) && score < 0.7) {
-            return 0.85;
-        }
-        if ("REVIEW".equals(ruleResult.getDecision()) && score < 0.5) {
-            return 0.65;
-        }
-        return score;
+        // Blend the summed rule score_impact as a bounded, escalate-only risk contribution so a stack
+        // of high-score_impact rules actually raises the outcome instead of the value being discarded.
+        // Capped at +0.25 (100 points → 0.25) and can only raise the score, never lower it.
+        double contribution = Math.min(0.25, Math.max(0.0, ruleResult.getScoreImpact()) / 400.0);
+        return Math.min(1.0, Math.max(resolved, score + contribution));
     }
 
     private Double extractOptionalDouble(Object value) {

@@ -29,8 +29,9 @@ class RuleGovernanceServiceTest {
 
     @BeforeEach
     void setUp() {
+        ObjectMapper objectMapper = new ObjectMapper();
         service = new RuleGovernanceService(ruleRepository, versionRepository, droolsRulesService,
-                new ObjectMapper());
+                objectMapper, new SpelRuleExecutor(objectMapper));
         when(ruleRepository.findByNameAndPspId(anyString(), org.mockito.ArgumentMatchers.nullable(Long.class)))
                 .thenReturn(Optional.empty());
         when(ruleRepository.save(any(RuleDefinition.class))).thenAnswer(invocation -> {
@@ -90,6 +91,51 @@ class RuleGovernanceServiceTest {
         assertThatThrownBy(() -> service.approve(7L, user(11L, "reviewer"), null, " "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reason");
+    }
+
+    @Test
+    void clientSuppliedIdentityAndProvenanceFieldsAreStrippedOnCreate() {
+        // The API binds the JPA entity straight from the request body. A caller must not be able to
+        // set `id` (which would turn save() into an UPDATE of an arbitrary existing rule), claim
+        // systemManaged (undeletable + identity-locked), forge catalogue provenance, or inject
+        // version pointers that corrupt the maker/checker audit chain.
+        RuleDefinition hostile = rule("Hostile", true);
+        hostile.setId(999L);
+        hostile.setSystemManaged(true);
+        hostile.setExternalCode("R-2");
+        hostile.setDerivedFromRuleId(123L);
+        hostile.setCurrentVersionId(456L);
+        hostile.setPendingVersionId(789L);
+
+        RuleDefinition saved = service.proposeCreate(hostile, user(10L, "maker"), 5L, "Create");
+
+        assertThat(saved.getId()).isEqualTo(42L); // assigned by the repository, not the client
+        assertThat(saved.isSystemManaged()).isFalse();
+        assertThat(saved.getExternalCode()).isNull();
+        assertThat(saved.getDerivedFromRuleId()).isNull();
+        assertThat(saved.getCurrentVersionId()).isNull();
+        assertThat(saved.getPspId()).isEqualTo(5L); // ownership assigned server-side
+    }
+
+    @Test
+    void editingARuleDoesNotSilentlyReEnableIt() {
+        // `enabled` is a primitive defaulting to true, so a PUT body that omits it deserialises to
+        // true. Editing (say) a description must never re-arm a deliberately disabled rule —
+        // enablement changes go through the dedicated enable/disable endpoints.
+        RuleDefinition existing = rule("Disabled rule", false);
+        ReflectionTestUtils.setField(existing, "id", 77L);
+        existing.setEnabled(false);
+
+        RuleDefinition patch = new RuleDefinition(); // enabled defaults to TRUE
+        patch.setDescription("Just fixing a typo");
+
+        service.proposeUpdate(existing, patch, user(10L, "maker"), "Edit description");
+
+        RuleVersion version = storedVersion.get();
+        assertThat(version).isNotNull();
+        assertThat(version.getSnapshot())
+                .as("an edit must preserve the rule's disabled state, not re-arm it")
+                .containsEntry("enabled", false);
     }
 
     private RuleDefinition rule(String name, boolean enabled) {

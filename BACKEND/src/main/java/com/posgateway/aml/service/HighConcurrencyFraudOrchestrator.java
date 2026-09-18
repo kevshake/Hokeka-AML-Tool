@@ -77,9 +77,11 @@ public class HighConcurrencyFraudOrchestrator {
             ScoringResult scoringResult = scoringService.scoreTransaction(
                 transaction.getTxnId(), features);
 
-            // Step 3: Make decision (forward scoring latency for monitoring)
+            // Step 3: Make decision (forward scoring latency AND rule outcomes so REVIEW/ALERT
+            // rules and SAR/CTR flags are applied and persisted, not silently dropped)
             DecisionResult decision = decisionEngine.evaluate(
-                transaction, scoringResult.getScore(), features, scoringResult.getLatencyMs());
+                transaction, scoringResult.getScore(), features, scoringResult.getLatencyMs(),
+                scoringResult.getRiskDetails());
 
             long latencyMs = System.currentTimeMillis() - startTime;
 

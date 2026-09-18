@@ -87,6 +87,58 @@ class RulesExecutionServiceTest {
         assertEquals("REPORTABLE", result.getRegulatoryEvidence().get("ctrEvaluationStatus"));
     }
 
+    /**
+     * A PSP that deliberately disables its entire rule set must NOT have the global system defaults
+     * silently re-armed underneath it — that is the opposite of what the operator asked for. The
+     * fallback exists only for a tenant that has no rules provisioned at all.
+     */
+    @Test
+    void deliberatelyDisablingEveryRuleDoesNotReArmTheGlobalDefaults() {
+        when(ruleRepository.findByEnabledTrueAndPspIdOrderByPriorityDesc(7L)).thenReturn(List.of());
+        when(ruleRepository.existsByPspId(7L)).thenReturn(true); // provisioned, but all disabled
+        when(droolsRulesService.evaluate(anyLong(), any(), anyDouble()))
+                .thenReturn(new RuleEvaluationResult(102L, "ALLOW", List.of(), List.of(), false, false, 0, 1));
+
+        com.posgateway.aml.compliance.RegulatoryComplianceService.ComplianceDecision allow =
+                new com.posgateway.aml.compliance.RegulatoryComplianceService.ComplianceDecision();
+        allow.setDecision("ALLOW");
+        when(regulatoryComplianceService.evaluateCompliance(
+                any(), any(), any(), anyBoolean(), anyLong(), anyDouble(), anyBoolean(), any()))
+                .thenReturn(allow);
+
+        RulesExecutionService service = new RulesExecutionService(
+                ruleRepository, droolsRulesService, spelRuleExecutor, effectivenessService,
+                featureStoreService, regulatoryComplianceService);
+        service.evaluateTransaction(102L, fact, Map.of("pspId", 7L), 0.2);
+
+        verify(ruleRepository, org.mockito.Mockito.never())
+                .findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc();
+    }
+
+    /** A freshly onboarded PSP with no rules at all still gets the defaults, so it is never unprotected. */
+    @Test
+    void unprovisionedPspStillFallsBackToTheGlobalDefaults() {
+        when(ruleRepository.findByEnabledTrueAndPspIdOrderByPriorityDesc(9L)).thenReturn(List.of());
+        when(ruleRepository.existsByPspId(9L)).thenReturn(false); // never provisioned
+        when(ruleRepository.findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc()).thenReturn(List.of());
+        when(droolsRulesService.evaluate(anyLong(), any(), anyDouble()))
+                .thenReturn(new RuleEvaluationResult(103L, "ALLOW", List.of(), List.of(), false, false, 0, 1));
+
+        com.posgateway.aml.compliance.RegulatoryComplianceService.ComplianceDecision allow =
+                new com.posgateway.aml.compliance.RegulatoryComplianceService.ComplianceDecision();
+        allow.setDecision("ALLOW");
+        when(regulatoryComplianceService.evaluateCompliance(
+                any(), any(), any(), anyBoolean(), anyLong(), anyDouble(), anyBoolean(), any()))
+                .thenReturn(allow);
+
+        RulesExecutionService service = new RulesExecutionService(
+                ruleRepository, droolsRulesService, spelRuleExecutor, effectivenessService,
+                featureStoreService, regulatoryComplianceService);
+        service.evaluateTransaction(103L, fact, Map.of("pspId", 9L), 0.2);
+
+        verify(ruleRepository).findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc();
+    }
+
     @Test
     void ruleEvaluationFailureForcesHold() {
         RuleDefinition rule = new RuleDefinition();

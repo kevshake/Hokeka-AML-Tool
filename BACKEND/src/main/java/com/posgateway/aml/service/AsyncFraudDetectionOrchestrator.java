@@ -70,7 +70,7 @@ public class AsyncFraudDetectionOrchestrator {
                 featuresFuture.thenCompose(features ->
                     CompletableFuture.supplyAsync(() ->
                         decisionEngine.evaluate(transaction, scoringResult.getScore(), features,
-                                scoringResult.getLatencyMs()))));
+                                scoringResult.getLatencyMs(), scoringResult.getRiskDetails()))));
 
             // Combine results
             return decisionFuture.thenCombine(scoringFuture, (decision, scoringResult) -> {

@@ -44,6 +44,14 @@ public class RuleFeatureEnrichmentService {
     private final CashStructuringDetectionService cashStructuringDetectionService;
     private final LevenshteinDistance levenshteinDistance = new LevenshteinDistance();
 
+    /**
+     * Maximum edit distance at which two counterparty names count as near-duplicates for
+     * {@code account_name_levenshtein_exceeded}. Was a hardcoded 2; now tunable per deployment
+     * without a code change (R-118 declares the same idea as {@code max_levenshtein_distance}).
+     */
+    @org.springframework.beans.factory.annotation.Value("${rules.name-similarity.max-distance:2}")
+    private int nameSimilarityMaxDistance = 2;
+
     public RuleFeatureEnrichmentService(TransactionRepository transactionRepository,
                                         MerchantRepository merchantRepository,
                                         HighRiskCountryRepository highRiskCountryRepository,
@@ -92,7 +100,7 @@ public class RuleFeatureEnrichmentService {
         enrichAdvancedVelocityRatios(transaction, features, now, panHash, merchantId);
         enrichStructuringSignals(transaction, features);
         enrichFanInFanOut(transaction, features, now, panHash, merchantId);
-        enrichRoundValueMetrics(features, panHash, now);
+        enrichRoundValueMetrics(features, panHash, now, amountCents);
         enrichChargebackMetrics(transaction, features, merchantId, now);
         enrichBlacklistHits(transaction, features);
         enrichMerchantProfile(transaction, features, merchantId);
@@ -403,20 +411,29 @@ public class RuleFeatureEnrichmentService {
                 // skip
             }
         }
-        boolean exceeded = false;
+        // Detects NEAR-DUPLICATE counterparty names on one card: two distinct names within the
+        // configured edit distance (e.g. "Acme Ltd" vs "Acrne Ltd") — a typo-squatting / impersonation
+        // signal. Distance 0 (identical) is excluded because that is just the same counterparty.
+        //
+        // NOTE ON NAMING: the feature is called "..._exceeded" and R-118 is titled "Levenshtein
+        // Mismatch", which reads as "names differ by MORE than the threshold". It is deliberately NOT
+        // implemented that way: these are distinct merchant legal names on one card, so almost any two
+        // differ by more than a few edits, and inverting the comparison would fire on nearly every
+        // transaction. Renaming the feature/rule to "similar_counterparty_names" needs a rule-catalogue
+        // migration and is tracked in TODO.md.
+        int maxDistance = Math.max(1, nameSimilarityMaxDistance);
+        boolean nearDuplicateFound = false;
+        outer:
         for (int i = 0; i < names.size(); i++) {
             for (int j = i + 1; j < names.size(); j++) {
                 int dist = levenshteinDistance.apply(normalizeName(names.get(i)), normalizeName(names.get(j)));
-                if (dist > 0 && dist <= 2) {
-                    exceeded = true;
-                    break;
+                if (dist > 0 && dist <= maxDistance) {
+                    nearDuplicateFound = true;
+                    break outer;
                 }
             }
-            if (exceeded) {
-                break;
-            }
         }
-        features.put("account_name_levenshtein_exceeded", exceeded);
+        features.put("account_name_levenshtein_exceeded", nearDuplicateFound);
     }
 
     private static String normalizeName(String name) {
@@ -445,7 +462,19 @@ public class RuleFeatureEnrichmentService {
                 .count();
     }
 
-    private void enrichRoundValueMetrics(Map<String, Object> features, String panHash, LocalDateTime now) {
+    /**
+     * @param currentAmountCents the amount of the transaction being evaluated. {@code
+     *        amount_ending_pattern} describes THIS transaction — it previously described
+     *        {@code window.get(0)}, i.e. the card's <em>previous</em> transaction (the history query
+     *        excludes the current one), so the rule fired on the wrong transaction's amount.
+     */
+    private void enrichRoundValueMetrics(Map<String, Object> features, String panHash, LocalDateTime now,
+                                         Long currentAmountCents) {
+        // The ending-pattern signal is about the current transaction and does not need history.
+        if (currentAmountCents != null) {
+            long cents = Math.abs(currentAmountCents % 100);
+            features.put("amount_ending_pattern", cents == 99 || cents == 0);
+        }
         if (panHash == null) {
             return;
         }
@@ -462,12 +491,6 @@ public class RuleFeatureEnrichmentService {
         double share = (roundCount * 100.0) / window.size();
         features.put("round_value_share_pct", share);
         features.put("round_value_txn_count", roundCount);
-
-        Long amountCents = window.get(0).getAmountCents();
-        if (amountCents != null) {
-            String cents = String.valueOf(Math.abs(amountCents % 100));
-            features.put("amount_ending_pattern", cents.endsWith("99") || cents.equals("0"));
-        }
     }
 
     private boolean isRoundAmount(TransactionEntity t) {
@@ -531,7 +554,23 @@ public class RuleFeatureEnrichmentService {
         features.put("card_issuer_country_blacklist",
                 cardCountry != null && featureCacheService.isBlacklisted("card_country", cardCountry));
         features.put("reference_keyword_blacklist", containsBlacklistedKeyword(reference));
-        features.put("anonymous_payment_screening_hit", false);
+
+        // R-170 "Anonymous Payment Screening": the payer cannot be identified from this payment.
+        // Was hardcoded false in BOTH producers, so the rule could never fire. Implemented from the
+        // real anonymity signals the transaction carries:
+        //   - a PREPAID instrument (bearer-style, not bound to an identified holder),
+        //   - a cash transaction, or
+        //   - no customer identification at all (neither account reference nor email).
+        String cardType = transaction.getCardType();
+        boolean prepaidInstrument = cardType != null && cardType.toUpperCase().contains("PREPAID");
+        boolean noCustomerIdentification =
+                isBlank(transaction.getCustomerAccountReference()) && isBlank(transaction.getCustomerEmail());
+        features.put("anonymous_payment_screening_hit",
+                prepaidInstrument || transaction.isCashTransaction() || noCustomerIdentification);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private boolean containsBlacklistedKeyword(String reference) {
@@ -579,7 +618,10 @@ public class RuleFeatureEnrichmentService {
         features.put("entity_screening_hit", sanctionsHit || merchant.isPep());
         features.put("bank_name_screening_hit", false);
         features.put("counterparty_screening_hit", false);
-        features.put("anonymous_payment_screening_hit", false);
+        // NOTE: anonymous_payment_screening_hit is deliberately NOT set here. This merchant-profile
+        // enrichment runs AFTER the transaction-level blacklist enrichment, so writing it here would
+        // overwrite the real signal computed there with a constant false (which is what previously
+        // made R-170 permanently dead even once a value was available).
         features.put("adverse_media_hit", false);
     }
 

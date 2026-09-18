@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -54,16 +55,20 @@ public class MpesaService {
     private volatile String cachedToken = null;
     private volatile long tokenFetchedAt = 0L;
 
+    private final com.posgateway.aml.service.psp.PspService pspService;
+
     public MpesaService(MpesaProperties props,
                         PaymentAttemptRepository paymentAttemptRepository,
                         InvoiceRepository invoiceRepository,
                         ObjectMapper objectMapper,
-                        WebClient.Builder webClientBuilder) {
+                        WebClient.Builder webClientBuilder,
+                        com.posgateway.aml.service.psp.PspService pspService) {
         this.props = props;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.invoiceRepository = invoiceRepository;
         this.objectMapper = objectMapper;
         this.webClient = webClientBuilder.build();
+        this.pspService = pspService;
     }
 
     // ─── OAuth2 token ─────────────────────────────────────────────────────────
@@ -201,6 +206,7 @@ public class MpesaService {
      * }
      * </pre>
      */
+    @Transactional
     public void processCallback(Map<String, Object> callbackBody) {
         try {
             JsonNode root = objectMapper.valueToTree(callbackBody);
@@ -224,6 +230,17 @@ public class MpesaService {
             }
 
             PaymentAttempt attempt = optAttempt.get();
+
+            // Replay/idempotency guard: a callback for an attempt that has already reached a terminal
+            // state must not be processed again (no re-marking an invoice PAID, no double reactivation).
+            // Combined with @Transactional, a replayed or duplicated Daraja callback is a safe no-op.
+            String currentStatus = attempt.getStatus();
+            if ("SUCCESS".equals(currentStatus) || "UNDERPAID".equals(currentStatus)
+                    || "FAILED".equals(currentStatus) || "CANCELLED".equals(currentStatus)) {
+                log.info("Ignoring duplicate/replayed M-Pesa callback for CheckoutRequestID={} "
+                        + "(attempt already {})", checkoutRequestId, currentStatus);
+                return;
+            }
             attempt.setResultCode(String.valueOf(resultCode));
             attempt.setResultDescription(resultDesc);
             attempt.setCompletedAt(OffsetDateTime.now());
@@ -265,6 +282,13 @@ public class MpesaService {
                         invoiceRepository.save(invoice);
                         log.info("Invoice {} marked PAID via M-Pesa receipt {} (amount {})",
                                 attempt.getInvoiceId(), mpesaReceiptNumber, settledAmount);
+                        // Paying clears the debt — lift any dunning suspension if all dues are settled.
+                        try {
+                            pspService.reactivateIfDuesCleared(attempt.getPspId());
+                        } catch (Exception reactivateEx) {
+                            log.warn("Reactivation check failed for PSP {} after payment: {}",
+                                    attempt.getPspId(), reactivateEx.getMessage());
+                        }
                     } else {
                         log.warn("Invoice {} not found when processing successful M-Pesa callback", attempt.getInvoiceId());
                     }

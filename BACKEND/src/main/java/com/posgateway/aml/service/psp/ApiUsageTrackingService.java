@@ -53,6 +53,13 @@ public class ApiUsageTrackingService {
             BigDecimal cost = billingService.calculateUsageCost(event.getPspId(), event.getServiceType(), 1);
             String currency = billingService.getEffectiveCurrency(event.getPspId(), event.getServiceType());
 
+            // Only a successful (2xx) request performed billable work. A PSP must not be charged for
+            // its own 4xx rejections or the platform's 5xx errors — the cost is still recorded for
+            // analytics, but billable=false keeps it out of every invoice/quota aggregate.
+            Integer status = event.getResponseStatus();
+            boolean success = status == null || (status >= 200 && status < 300);
+            boolean billable = success && cost.compareTo(BigDecimal.ZERO) > 0;
+
             ApiUsageLog usageLog = ApiUsageLog.builder()
                     .psp(psp)
                     .user(user)
@@ -62,7 +69,7 @@ public class ApiUsageTrackingService {
                     .responseStatus(event.getResponseStatus())
                     .responseTimeMs(event.getResponseTimeMs())
                     .serviceType(event.getServiceType())
-                    .billable(cost.compareTo(BigDecimal.ZERO) > 0)
+                    .billable(billable)
                     .costAmount(cost)
                     .costCurrency(currency)
                     .requestId(event.getRequestId())

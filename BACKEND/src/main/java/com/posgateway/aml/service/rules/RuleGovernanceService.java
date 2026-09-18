@@ -23,24 +23,63 @@ public class RuleGovernanceService {
     private final RuleVersionRepository versionRepository;
     private final DroolsRulesService droolsRulesService;
     private final ObjectMapper objectMapper;
+    private final SpelRuleExecutor spelRuleExecutor;
 
     public RuleGovernanceService(RuleDefinitionRepository ruleRepository,
             RuleVersionRepository versionRepository,
             DroolsRulesService droolsRulesService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            SpelRuleExecutor spelRuleExecutor) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
         this.droolsRulesService = droolsRulesService;
         this.objectMapper = objectMapper;
+        this.spelRuleExecutor = spelRuleExecutor;
+    }
+
+    /**
+     * Reject an unsafe or syntactically-invalid SpEL rule expression at authoring time — before it is
+     * proposed or activated — so an operator/LLM cannot store an RCE attempt and a typo cannot force
+     * every transaction to HOLD at runtime. No-op for non-SPEL rule types or blank expressions.
+     */
+    private void validateSpelExpression(String ruleType, String ruleExpression) {
+        if ("SPEL".equalsIgnoreCase(ruleType) && ruleExpression != null && !ruleExpression.isBlank()) {
+            spelRuleExecutor.validateExpression(ruleExpression);
+        }
+    }
+
+    /**
+     * Strip every field a client must never set on a create. The rules API binds the JPA entity
+     * straight from the request body, so without this a caller could supply:
+     * <ul>
+     *   <li>{@code id} — turning the subsequent {@code save()} into an UPDATE of an arbitrary
+     *       existing rule (including another tenant's, or a locked system rule);</li>
+     *   <li>{@code systemManaged} — making its own rule undeletable and identity-locked;</li>
+     *   <li>{@code externalCode} / {@code derivedFromRuleId} — forging catalogue provenance;</li>
+     *   <li>{@code currentVersionId} / {@code pendingVersionId} / {@code currentVersionNumber} —
+     *       corrupting the maker/checker audit chain.</li>
+     * </ul>
+     * Ownership and lifecycle are assigned by the caller of this method, never by the client.
+     */
+    private void sanitizeClientSuppliedFields(RuleDefinition proposed) {
+        proposed.setId(null);
+        proposed.setSystemManaged(false);
+        proposed.setExternalCode(null);
+        proposed.setDerivedFromRuleId(null);
+        proposed.setCurrentVersionId(null);
+        proposed.setPendingVersionId(null);
     }
 
     @Transactional
     public RuleDefinition proposeCreate(RuleDefinition proposed, User maker, Long pspId, String summary) {
+        sanitizeClientSuppliedFields(proposed);
         // Names are unique per owner, so a PSP may have a rule whose name matches another PSP's or
         // a system default's — only a clash within the same owner (pspId) is rejected.
         ruleRepository.findByNameAndPspId(proposed.getName(), pspId).ifPresent(existing -> {
             throw new IllegalArgumentException("A rule named '" + proposed.getName() + "' already exists");
         });
+        // Reject unsafe/invalid SpEL up front so the maker gets an immediate, clear error.
+        validateSpelExpression(proposed.getRuleType(), proposed.getRuleExpression());
         Map<String, Object> snapshot = snapshot(proposed);
         boolean requestedEnabled = bool(snapshot.get("enabled"));
         proposed.setEnabled(false);
@@ -258,7 +297,11 @@ public class RuleGovernanceService {
         put(target, "score", patch.getScore());
         put(target, "action", patch.getAction());
         put(target, "priority", patch.getPriority());
-        target.put("enabled", patch.isEnabled());
+        // `enabled` is deliberately NOT taken from the patch. RuleDefinition.enabled is a primitive
+        // that defaults to TRUE, so a PUT body omitting the field deserialises to true and would
+        // silently re-arm a rule that was deliberately disabled (e.g. editing only a description).
+        // Enablement changes go through the dedicated POST /rules/{id}/enable|disable endpoints;
+        // `target` already carries the rule's current state from snapshot().
         if (!systemManaged) {
             put(target, "category", patch.getCategory());
             put(target, "ruleSubtype", patch.getRuleSubtype());
@@ -280,6 +323,8 @@ public class RuleGovernanceService {
         rule.setDrlContent(string(value.get("drlContent")));
         rule.setRuleType(string(value.get("ruleType")));
         rule.setRuleExpression(string(value.get("ruleExpression")));
+        // Activation guarantee: an unsafe/invalid SpEL expression must never become live.
+        validateSpelExpression(rule.getRuleType(), rule.getRuleExpression());
         rule.setScore(integer(value.get("score")));
         rule.setAction(string(value.get("action")));
         rule.setPriority(integer(value.get("priority")));

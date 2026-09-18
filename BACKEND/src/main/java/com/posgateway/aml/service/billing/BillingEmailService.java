@@ -32,6 +32,7 @@ public class BillingEmailService {
 
     private final JavaMailSender mailSender;
     private final InvoicePdfService invoicePdfService;
+    private final com.posgateway.aml.repository.InvoiceRepository invoiceRepository;
 
     @Value("${notifications.from-address:no-reply@hokeka.com}")
     private String fromAddress;
@@ -56,9 +57,23 @@ public class BillingEmailService {
      */
     public BillingEmailService(
             @org.springframework.beans.factory.annotation.Autowired(required = false) JavaMailSender mailSender,
-            InvoicePdfService invoicePdfService) {
+            InvoicePdfService invoicePdfService,
+            com.posgateway.aml.repository.InvoiceRepository invoiceRepository) {
         this.mailSender = mailSender;
         this.invoicePdfService = invoicePdfService;
+        this.invoiceRepository = invoiceRepository;
+    }
+
+    /**
+     * Re-load the invoice with its Psp and line items eagerly initialised. These email/PDF methods run
+     * on an {@code @Async} thread with no persistence context, so touching the lazy {@code psp} /
+     * {@code lineItems} on the passed-in (detached) entity would throw LazyInitializationException.
+     */
+    private Invoice withDetails(Invoice invoice) {
+        if (invoice == null || invoice.getInvoiceId() == null) {
+            return invoice;
+        }
+        return invoiceRepository.findByIdWithDetails(invoice.getInvoiceId()).orElse(invoice);
     }
 
     // -------------------------------------------------------------------------
@@ -72,6 +87,7 @@ public class BillingEmailService {
     @Async
     public void sendInvoiceEmail(Invoice invoice) {
         if (!canSend()) return;
+        invoice = withDetails(invoice);
 
         String to = resolveRecipient(invoice);
         if (to == null) return;
@@ -107,6 +123,7 @@ public class BillingEmailService {
     @Async
     public void sendDunningReminderEmail(Invoice invoice) {
         if (!canSend()) return;
+        invoice = withDetails(invoice);
 
         String to = resolveRecipient(invoice);
         if (to == null) return;
@@ -134,6 +151,7 @@ public class BillingEmailService {
     @Async
     public void sendEscalationEmail(Invoice invoice, String adminEmail) {
         if (!canSend()) return;
+        invoice = withDetails(invoice);
 
         String pspTo = resolveRecipient(invoice);
         String subject = "ESCALATION — Invoice #" + invoice.getInvoiceNumber()

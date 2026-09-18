@@ -33,7 +33,8 @@ public class ApiUsageLog {
     @Column(name = "http_method", nullable = false, length = 10)
     private String httpMethod;
 
-    @Column(name = "request_timestamp")
+    /** NOT NULL since V215: it is the TimescaleDB partitioning column and part of the primary key. */
+    @Column(name = "request_timestamp", nullable = false)
     private LocalDateTime requestTimestamp = LocalDateTime.now();
 
     @Column(name = "response_status")
@@ -84,6 +85,14 @@ public class ApiUsageLog {
 
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;
+
+    /**
+     * Set once this usage row has been rolled into an issued invoice, so a re-run of the billing
+     * cycle (or an overlapping period) can never bill the same consumption twice. Null = not yet
+     * invoiced. Deliberately excluded from the all-args constructor (defaults to null on ingest).
+     */
+    @Column(name = "invoice_id")
+    private Long invoiceId;
 
     public ApiUsageLog() {
     }
@@ -282,6 +291,14 @@ public class ApiUsageLog {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public Long getInvoiceId() {
+        return invoiceId;
+    }
+
+    public void setInvoiceId(Long invoiceId) {
+        this.invoiceId = invoiceId;
     }
 
     public static ApiUsageLogBuilder builder() {

@@ -16,6 +16,13 @@ public class RuleEvaluationResult {
     private final long evaluationTimeMs;
     private final java.util.Map<String, Object> regulatoryEvidence;
 
+    /**
+     * Summed score_impact of every triggered rule. Set after construction. Previously the summed
+     * value was written only to a feature-store key that nothing read, so every rule's score_impact
+     * was decorative; it now flows into riskDetails and the post-rule score.
+     */
+    private double scoreImpact = 0.0;
+
     public RuleEvaluationResult(Long txnId, String decision, java.util.List<String> reasons,
             java.util.List<String> triggeredRules, boolean sarRequired,
             boolean ctrRequired, int rulesExecuted, long evaluationTimeMs) {
@@ -74,6 +81,14 @@ public class RuleEvaluationResult {
 
     public java.util.Map<String, Object> getRegulatoryEvidence() {
         return regulatoryEvidence;
+    }
+
+    public double getScoreImpact() {
+        return scoreImpact;
+    }
+
+    public void setScoreImpact(double scoreImpact) {
+        this.scoreImpact = scoreImpact;
     }
 
     @Override

@@ -39,6 +39,8 @@ import { useState } from "react";
 import { apiClient } from "../../../lib/apiClient";
 import { getApiUrl } from "../../../config/api";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../../contexts/AuthContext";
+import PlanUsageCard from "./PlanUsageCard";
 
 const ACCENT = "var(--gold)";
 
@@ -522,6 +524,10 @@ interface BillingTabProps {
 
 export default function BillingTab({ pspId }: BillingTabProps) {
   const queryClient = useQueryClient();
+  // /entitlements/me reports the CALLER's own tenant, so only show the plan/usage panel when the
+  // tab is showing the caller's own PSP (self-service), not when an admin is viewing another PSP.
+  const { user } = useAuth();
+  const isOwnTenant = !!user && String(user.pspId) === String(pspId);
   const { data: subscription, isLoading: subLoading, isError: subError } =
     usePspSubscription(pspId);
   const { data: usage, isLoading: usageLoading, isError: usageError } =
@@ -593,6 +599,9 @@ export default function BillingTab({ pspId }: BillingTabProps) {
 
   return (
     <Box>
+      {/* ── Section 0: Plan entitlements + usage against quota (self-service only) ──── */}
+      {isOwnTenant && <PlanUsageCard />}
+
       {/* ── Section 1: Current Plan ─────────────────────────────────────── */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <CreditCardIcon sx={{ color: ACCENT, fontSize: 20 }} />

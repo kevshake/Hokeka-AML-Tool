@@ -156,13 +156,28 @@ public class EdgeDistributionController {
                     .build();
         }
 
-        EdgeBundleDistributionService.SealedBundle sealed = distributionService.sealFor(node);
+        EdgeBundleDistributionService.SealedBundle sealed;
+        try {
+            sealed = distributionService.sealFor(node);
+        } catch (EdgeBundleDistributionService.EmptyBundleException e) {
+            // A zero-rule bundle would tell the edge to allow everything. Answer 503 (not 200, not
+            // 304) so the poller retries without advancing its ETag and the node keeps its previous
+            // verified bundle — or stays fail-closed if it never had one.
+            enrollmentService.recordSeen(node.getId(), agentVersion);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .header("X-Edge-Bundle-Error", "empty-rule-set")
+                    .build();
+        }
         enrollmentService.recordBundleDelivery(node.getId(), sealed.version(), agentVersion);
 
         return ResponseEntity.ok()
                 .eTag(quoted(sealed.version()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .header("X-Edge-Bundle-Version", Long.toString(sealed.version()))
+                // Surface how many rules were dropped as uncompilable; previously computed and
+                // discarded, leaving a silently-degraded rule set invisible to operators.
+                .header("X-Edge-Rules-Skipped", Integer.toString(sealed.skippedRules().size()))
+                .header("X-Edge-Rules-Count", Integer.toString(sealed.ruleCount()))
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(sealed.sealed());
     }

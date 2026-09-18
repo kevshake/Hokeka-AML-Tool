@@ -51,20 +51,27 @@ WHERE NOT EXISTS (
 );
 
 -- 3. Seed pricing tiers
+-- NOTE: pricing_tiers has no `tier_config` column (that column lives on billing_rates); the
+-- volume-discount JSONB column is `volume_discounts` and its expected shape is a flat
+-- {threshold:discountFraction} map (see PricingTier.getVolumeDiscountsMap). The prior seed wrote a
+-- non-existent column with an unreadable nested shape, which aborted the whole migration run on a
+-- fresh database (blocking every migration after V147). Seed the headline pricing only and leave
+-- volume_discounts at its '{}' default; a correctly-shaped discount ladder is a later data task.
 INSERT INTO pricing_tiers (tier_code, tier_name, monthly_fee_usd, per_check_price_usd, included_checks,
-                           monthly_minimum_usd, tier_config, is_active, created_at)
+                           monthly_minimum_usd, is_active, created_at)
 SELECT * FROM (VALUES
-    ('STARTER', 'Starter', 0.00, 0.05, 1000, 0.00, '{"volume_discounts":[{"minChecks":0,"rate":0.05}]}', TRUE, NOW()),
-    ('GROWTH', 'Growth', 199.00, 0.03, 10000, 199.00, '{"volume_discounts":[{"minChecks":0,"rate":0.03},{"minChecks":50000,"rate":0.02}]}', TRUE, NOW()),
-    ('SCALE', 'Scale', 499.00, 0.02, 50000, 499.00, '{"volume_discounts":[{"minChecks":0,"rate":0.02},{"minChecks":100000,"rate":0.015}]}', TRUE, NOW()),
-    ('ENTERPRISE', 'Enterprise', 999.00, 0.01, 200000, 999.00, '{"volume_discounts":[{"minChecks":0,"rate":0.01}]}', TRUE, NOW())
-) AS src(tc, tn, mf, pcp, ic, mm, tcj, ia, ca)
+    ('STARTER', 'Starter', 0.00, 0.05, 1000, 0.00, TRUE, NOW()),
+    ('GROWTH', 'Growth', 199.00, 0.03, 10000, 199.00, TRUE, NOW()),
+    ('SCALE', 'Scale', 499.00, 0.02, 50000, 499.00, TRUE, NOW()),
+    ('ENTERPRISE', 'Enterprise', 999.00, 0.01, 200000, 999.00, TRUE, NOW())
+) AS src(tc, tn, mf, pcp, ic, mm, ia, ca)
 WHERE NOT EXISTS (
     SELECT 1 FROM pricing_tiers p WHERE p.tier_code = src.tc
 );
 
 -- 4. Seed default billing rates
-INSERT INTO billing_rates (psp_id, service_type, base_rate, billing_model, is_active, effective_from)
+-- NOTE: the billing_rates pricing-model column is `pricing_model`, not `billing_model`.
+INSERT INTO billing_rates (psp_id, service_type, base_rate, pricing_model, is_active, effective_from)
 SELECT NULL, st, 0.050, 'PER_REQUEST', TRUE, NOW()
 FROM (VALUES ('TRANSACTION_PROCESSING'), ('SANCTIONS_SCREENING'), ('AML_CHECK'),
              ('SCREENING'), ('RISK_ASSESSMENT'), ('REPORT_GENERATION'),

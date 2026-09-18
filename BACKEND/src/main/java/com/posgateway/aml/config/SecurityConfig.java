@@ -165,6 +165,11 @@ public class SecurityConfig {
                                                                 "/api/v1/edge/metrics")
                                                 .permitAll()
                                                 .requestMatchers("/edge/**", "/api/v1/edge/**").authenticated()
+                                                // On-prem PSP service auth (client credentials in body; no user session).
+                                                .requestMatchers(
+                                                                "/onprem/auth/**",
+                                                                "/api/v1/onprem/auth/**")
+                                                .permitAll()
                                                 // Read-only regulator feed authenticates a hashed access key in the controller.
                                                 .requestMatchers("/api/v1/regulator/virtual-assets/**", "/regulator/virtual-assets/**").permitAll()
                                                 // Swagger / OpenAPI documentation (springdoc-openapi).

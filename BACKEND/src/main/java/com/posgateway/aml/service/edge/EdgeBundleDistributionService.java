@@ -76,9 +76,33 @@ public class EdgeBundleDistributionService {
      * replay guard, and only then hands the inner {@code payload} to the interpreter. Sealing the
      * bare IR would be rejected by every edge as "replay envelope has no payload".
      */
+    /**
+     * Thrown instead of sealing a bundle that would contain no rules. Callers must translate this to
+     * a non-200 response so the edge keeps whatever bundle it already has (or stays fail-closed if it
+     * has none) rather than being handed a permissive one.
+     */
+    public static class EmptyBundleException extends IllegalStateException {
+        public EmptyBundleException(String message) {
+            super(message);
+        }
+    }
+
     @Transactional(readOnly = true)
     public SealedBundle sealFor(EdgeNode node) {
         EdgeRuleCompiler.CompilationResult compiled = compiler.compile(rulesFor(node.getPspId()));
+
+        // FAIL-CLOSED: both edge interpreters start at ALLOW and iterate the rule list, so a
+        // zero-rule bundle is a signed instruction to allow everything. That can happen silently when
+        // every rule fails to compile (e.g. none carry structured rule_json). Refuse to seal it —
+        // an edge must never be armed with a permissive bundle.
+        if (compiled.rules().isEmpty()) {
+            log.error("Refusing to seal an EMPTY rule bundle for edge {} (psp {}): {} rule(s) were "
+                            + "skipped as uncompilable {}. The edge keeps its previous bundle.",
+                    node.getEdgeId(), node.getPspId(), compiled.skipped().size(), compiled.skipped());
+            throw new EmptyBundleException(
+                    "refusing to distribute a zero-rule bundle (would allow all traffic); "
+                            + compiled.skipped().size() + " rule(s) failed to compile");
+        }
 
         byte[] plaintext = wrapInReplayEnvelope(
                 bundleService.buildBundleJson(compiled.version(), node.getPspId(), compiled.rules()),
@@ -109,14 +133,23 @@ public class EdgeBundleDistributionService {
     }
 
     /**
-     * A PSP's own enabled rules; when it has none yet (no per-PSP copies provisioned), the enabled
-     * global system defaults, so a freshly onboarded edge still evaluates something meaningful.
+     * A PSP's own enabled rules. Only when the PSP has NO rules provisioned at all (a fresh tenant,
+     * no per-PSP copies yet) do we fall back to the enabled global system defaults, so a newly
+     * onboarded edge still evaluates something meaningful.
+     *
+     * <p>Falling back on "no enabled rules" alone would silently re-arm the global defaults on an
+     * edge whose PSP had deliberately disabled its entire rule set — distributing rules the operator
+     * explicitly turned off. That case now yields an empty set, which {@link #sealFor} refuses to
+     * seal, so the edge keeps its previous bundle instead of being handed unexpected rules.
      */
     private List<RuleDefinition> rulesFor(Long pspId) {
         List<RuleDefinition> own = ruleDefinitionRepository
                 .findByEnabledTrueAndPspIdOrderByPriorityDesc(pspId);
         if (!own.isEmpty()) {
             return own;
+        }
+        if (pspId != null && ruleDefinitionRepository.existsByPspId(pspId)) {
+            return List.of(); // provisioned but deliberately all-disabled — do not substitute defaults
         }
         return ruleDefinitionRepository.findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc();
     }

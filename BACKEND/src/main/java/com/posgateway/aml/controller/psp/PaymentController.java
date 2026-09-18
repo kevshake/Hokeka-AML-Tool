@@ -13,6 +13,8 @@ import com.posgateway.aml.repository.PaymentAttemptRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -69,12 +71,20 @@ public class PaymentController {
     @Value("${mpesa.callback.secret:}")
     private String mpesaCallbackSecret;
 
+    private final Environment environment;
+
     public PaymentController(InvoiceRepository invoiceRepository,
                              PaymentAttemptRepository paymentAttemptRepository,
-                             MpesaService mpesaService) {
+                             MpesaService mpesaService,
+                             Environment environment) {
         this.invoiceRepository = invoiceRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.mpesaService = mpesaService;
+        this.environment = environment;
+    }
+
+    private boolean isProduction() {
+        return environment.acceptsProfiles(Profiles.of("production", "prod"));
     }
 
     // ─── POST /billing/payments/initiate ─────────────────────────────────────
@@ -133,6 +143,16 @@ public class PaymentController {
         if (request.getPhoneNumber() == null || request.getPhoneNumber().isBlank()) {
             return ResponseEntity.badRequest()
                     .body(new PaymentInitiateResponse(null, null, "REJECTED", "phoneNumber is required for M-Pesa payment"));
+        }
+
+        // M-Pesa settles in KES only. Sending a non-KES invoice amount as KES would push the wrong
+        // sum and then mark the invoice PAID in full on callback (the amounts compare equal). Refuse
+        // it here and direct the PSP to another method rather than mishandle the currency.
+        String invoiceCurrency = invoice.getCurrency() != null ? invoice.getCurrency() : "KES";
+        if (!"KES".equalsIgnoreCase(invoiceCurrency)) {
+            return ResponseEntity.badRequest().body(new PaymentInitiateResponse(null, null, "REJECTED",
+                    "M-Pesa settles in KES only; this invoice is denominated in " + invoiceCurrency
+                            + ". Please pay by bank transfer or contact billing."));
         }
 
         // Create attempt record
@@ -243,6 +263,12 @@ public class PaymentController {
                 // Benign ack — do NOT process. Safaricom's real callback carries the token.
                 return ResponseEntity.ok(Map.of("ResultCode", "00", "ResultDesc", "Success"));
             }
+        } else if (isProduction()) {
+            // Fail closed: in production an unset secret means we cannot distinguish Safaricom from a
+            // forger, so we must NOT mark any invoice PAID. Acknowledge benignly and drop the payload.
+            log.error("M-Pesa callback REFUSED in production: mpesa.callback.secret is not set. "
+                    + "Set it and register .../callback?token=SECRET before accepting live payments.");
+            return ResponseEntity.ok(Map.of("ResultCode", "00", "ResultDesc", "Success"));
         } else {
             log.warn("M-Pesa callback is UNAUTHENTICATED (mpesa.callback.secret not set) — "
                     + "set it and register .../callback?token=SECRET to prevent payment forgery");

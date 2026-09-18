@@ -38,18 +38,22 @@ public class AlertTuningService {
     private final PspIsolationService pspIsolationService;
     private final ObjectMapper objectMapper;
 
+    private final com.posgateway.aml.service.rules.RuleGovernanceService governanceService;
+
     public AlertTuningService(AlertTuningRecommendationRepository recommendationRepository,
             RuleDefinitionRepository ruleRepository,
             RuleEffectivenessService effectivenessService,
             UserRepository userRepository,
             PspIsolationService pspIsolationService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            com.posgateway.aml.service.rules.RuleGovernanceService governanceService) {
         this.recommendationRepository = recommendationRepository;
         this.ruleRepository = ruleRepository;
         this.effectivenessService = effectivenessService;
         this.userRepository = userRepository;
         this.pspIsolationService = pspIsolationService;
         this.objectMapper = objectMapper;
+        this.governanceService = governanceService;
     }
 
     @Transactional
@@ -121,9 +125,16 @@ public class AlertTuningService {
         }
 
         Map<String, Object> proposedParameters = parseParameters(recommendation.getProposedParameters());
-        rule.setParameters(writeParameters(proposedParameters));
-        rule.setUpdatedBy(appliedBy.getId());
-        ruleRepository.save(rule);
+
+        // Route the change through maker/checker instead of writing the rule directly. A direct
+        // ruleRepository.save() here produced no RuleVersion, required no second approver and did not
+        // reload the engine — leaving holes in the rule_versions audit trail that every other
+        // mutation path is forced to fill. The patch carries ONLY the tuned parameters; merge() is
+        // null-guarded, so no other field is touched.
+        RuleDefinition patch = new RuleDefinition();
+        patch.setParameters(writeParameters(proposedParameters));
+        governanceService.proposeUpdate(rule, patch, appliedBy,
+                "Apply alert-tuning recommendation " + recommendationId);
 
         recommendation.setStatus("APPLIED");
         recommendation.setAppliedBy(appliedBy.getId());

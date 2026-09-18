@@ -9,22 +9,42 @@ import org.slf4j.LoggerFactory;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Executes SpEL (Spring Expression Language) based rules.
- * Thread-safe implementation with expression caching.
- * Supports #tx (TransactionFact), #features (velocity/screening context), #params (rule tunables).
+ * Executes SpEL (Spring Expression Language) rules over #tx (TransactionFact), #features
+ * (velocity/screening context) and #params (rule tunables).
+ *
+ * <p><b>Security:</b> rule expressions are operator- and (via {@code AiRuleGeneratorService})
+ * LLM-authored, i.e. untrusted. They are evaluated in a <b>sandboxed {@link SimpleEvaluationContext}</b>,
+ * NOT a {@code StandardEvaluationContext}. The sandbox excludes Java type references
+ * ({@code T(java.lang.Runtime)}), constructors ({@code new ProcessBuilder(...)}), bean references
+ * ({@code @beanName}) and static-method invocation — closing the authenticated-RCE path
+ * ({@code T(java.lang.Runtime).getRuntime().exec(...)}) while still allowing property access,
+ * map indexing, operators and instance-method calls the real rules need
+ * ({@code #tx.isHighRiskCountry()}, {@code #tx.amount.doubleValue()}, {@code {'a','b'}.contains(x)}).
+ * As defence-in-depth and for clear author-time errors, {@link #assertSafe(String)} additionally
+ * rejects reflection-shaped tokens before an expression is ever parsed or stored.
  */
 @Service
 public class SpelRuleExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(SpelRuleExecutor.class);
+
+    /**
+     * Substrings that must never appear in a rule expression. The runtime sandbox already blocks
+     * type refs / constructors / statics, but rejecting these at authoring time gives a clear error
+     * and also blocks the residual reflection route ({@code #this.getClass().getClassLoader()...}).
+     */
+    private static final List<String> FORBIDDEN_TOKENS = List.of(
+            "T(", "new ", "getClass", "getClassLoader", "forName", ".class", "@",
+            "Runtime", "ProcessBuilder", "System.", "Thread", "exec(", "loadClass");
 
     private final ExpressionParser parser = new SpelExpressionParser();
     private final ObjectMapper objectMapper;
@@ -47,14 +67,19 @@ public class SpelRuleExecutor {
         }
 
         try {
-            Expression exp = expressionCache.computeIfAbsent(rule.getRuleExpression(), parser::parseExpression);
+            Expression exp = expressionCache.computeIfAbsent(rule.getRuleExpression(), this::parseSafe);
 
-            StandardEvaluationContext context = new StandardEvaluationContext(fact);
+            // Sandboxed context: no T()/constructors/beans/static methods, but property access,
+            // map indexing and instance-method calls are permitted.
+            SimpleEvaluationContext context = SimpleEvaluationContext
+                    .forReadOnlyDataBinding()
+                    .withInstanceMethods()
+                    .build();
             context.setVariable("tx", fact);
             context.setVariable("features", features != null ? features : Collections.emptyMap());
             context.setVariable("params", parseParameters(rule.getParameters()));
 
-            Boolean result = exp.getValue(context, Boolean.class);
+            Boolean result = exp.getValue(context, fact, Boolean.class);
             return result != null && result;
 
         } catch (Exception e) {
@@ -64,6 +89,41 @@ public class SpelRuleExecutor {
             }
             throw new RuleEvaluationException(
                     "Could not evaluate rule '" + rule.getName() + "'", e);
+        }
+    }
+
+    /**
+     * Validate an expression at authoring time: it must contain no forbidden construct AND parse
+     * cleanly. Call this before persisting an operator/LLM-authored rule so a malformed or unsafe
+     * expression is rejected with a clear error instead of forcing every transaction to HOLD (or,
+     * previously, executing arbitrary code) at runtime.
+     *
+     * @throws RuleEvaluationException if the expression is unsafe or syntactically invalid
+     */
+    public void validateExpression(String expression) {
+        if (expression == null || expression.isBlank()) {
+            throw new RuleEvaluationException("Rule expression is blank");
+        }
+        parseSafe(expression);
+    }
+
+    private Expression parseSafe(String expression) {
+        assertSafe(expression);
+        try {
+            return parser.parseExpression(expression);
+        } catch (RuntimeException e) {
+            throw new RuleEvaluationException("Rule expression is not valid SpEL: " + e.getMessage(), e);
+        }
+    }
+
+    private static void assertSafe(String expression) {
+        for (String token : FORBIDDEN_TOKENS) {
+            if (expression.contains(token)) {
+                throw new RuleEvaluationException(
+                        "Rule expression uses a forbidden construct '" + token
+                                + "'. Rules may only read #tx / #features / #params and call safe "
+                                + "instance methods — no type references, reflection, constructors or beans.");
+            }
         }
     }
 

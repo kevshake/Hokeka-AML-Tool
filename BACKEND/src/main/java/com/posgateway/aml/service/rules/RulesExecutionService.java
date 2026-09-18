@@ -80,7 +80,12 @@ public class RulesExecutionService {
         List<RuleDefinition> allRules;
         if (evaluationPspId != null) {
             allRules = ruleRepository.findByEnabledTrueAndPspIdOrderByPriorityDesc(evaluationPspId);
-            if (allRules.isEmpty()) {
+            // "No ENABLED rules" is ambiguous, so distinguish the two causes before falling back.
+            // Falling back on emptiness alone meant a PSP that deliberately disabled its whole rule
+            // set silently had the global system defaults re-armed underneath it — the opposite of
+            // what the operator asked for. Only fall back when the PSP has NO rules provisioned at
+            // all (a fresh tenant, which must never be left unprotected).
+            if (allRules.isEmpty() && !ruleRepository.existsByPspId(evaluationPspId)) {
                 allRules = ruleRepository.findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc();
             }
         } else {
@@ -176,7 +181,7 @@ public class RulesExecutionService {
 
         featureStore.storeRiskScore("txn:" + txnId, scoreAdjustment, "rule_based");
 
-        return new RuleEvaluationResult(
+        RuleEvaluationResult result = new RuleEvaluationResult(
                 txnId,
                 decision,
                 reasons,
@@ -186,6 +191,9 @@ public class RulesExecutionService {
                 allRules.size() + droolsResult.getRulesExecuted() + regulatoryChecks,
                 System.currentTimeMillis() - startedAt,
                 regulatoryEvidence);
+        // Carry the summed score_impact so it reaches the decision layer instead of being discarded.
+        result.setScoreImpact(scoreAdjustment);
+        return result;
     }
 
     private Long resolvePspId(Map<String, Object> features) {

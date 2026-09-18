@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +72,70 @@ public class EdgeAdminController {
         return ResponseEntity.ok(enrollmentService.listVisibleNodes(pspId).stream()
                 .map(EdgeNodeView::of)
                 .toList());
+    }
+
+    /**
+     * Fleet analytics rollup over the aggregate counts the on-prem engines pushed.
+     *
+     * <p>Rule evaluation happens on customer premises; these summed counters are the control plane's
+     * only view of what the fleet actually decided. Without this the pushed analytics were stored and
+     * only ever readable one node at a time, so nothing consumed them in aggregate.
+     *
+     * <p>Tenant-scoped: a PSP user always gets exactly its own PSP's rollup regardless of the
+     * {@code pspId} parameter; only a platform admin may request the cross-tenant view.
+     *
+     * @param days lookback window in days (default 7, clamped to 1..90)
+     */
+    @GetMapping("/analytics")
+    public ResponseEntity<Map<String, Object>> analytics(@RequestParam(required = false) Long pspId,
+                                                         @RequestParam(defaultValue = "7") int days) {
+        int lookback = Math.max(1, Math.min(90, days));
+        Instant to = Instant.now();
+        Instant from = to.minus(lookback, ChronoUnit.DAYS);
+
+        // getCurrentUserPspId() returns 0L for a platform admin and the real id for a PSP user, so a
+        // PSP user can never widen its scope by passing someone else's pspId.
+        Long callerPspId = pspIsolationService.getCurrentUserPspId();
+        Long scoped = (callerPspId == null || callerPspId == 0L) ? pspId : callerPspId;
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("fromInclusive", from);
+        body.put("toExclusive", to);
+        body.put("lookbackDays", lookback);
+
+        if (scoped == null) {
+            // Platform-wide view, broken down per tenant.
+            List<Map<String, Object>> perPsp = metricsRepository.summarizeAllPsps(from, to).stream()
+                    .map(r -> {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        row.put("pspId", r[0]);
+                        row.put("nodes", r[1]);
+                        row.put("totalEvaluated", r[2]);
+                        row.put("allowed", r[3]);
+                        row.put("alerted", r[4]);
+                        row.put("held", r[5]);
+                        row.put("blocked", r[6]);
+                        return row;
+                    })
+                    .toList();
+            body.put("scope", "PLATFORM");
+            body.put("perPsp", perPsp);
+            return ResponseEntity.ok(body);
+        }
+
+        Object[] s = metricsRepository.summarizeForPsp(scoped, from, to);
+        // An aggregate query always returns one row; guard anyway so an empty window reports zeros
+        // rather than throwing (and is never mistaken for "no traffic recorded").
+        body.put("scope", "PSP");
+        body.put("pspId", scoped);
+        body.put("nodes", s != null ? s[0] : 0L);
+        body.put("totalEvaluated", s != null ? s[1] : 0L);
+        body.put("allowed", s != null ? s[2] : 0L);
+        body.put("alerted", s != null ? s[3] : 0L);
+        body.put("held", s != null ? s[4] : 0L);
+        body.put("blocked", s != null ? s[5] : 0L);
+        body.put("avgP95LatencyMicros", s != null ? s[6] : 0.0);
+        return ResponseEntity.ok(body);
     }
 
     /** Node detail plus health / last-seen and its most recent aggregate metrics windows. */

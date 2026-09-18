@@ -70,6 +70,8 @@ public class PspActivationFilter extends OncePerRequestFilter {
             "/edge/enroll",
             "/edge/bundle",
             "/edge/metrics",
+            // On-prem machine-to-machine lease endpoints (client credentials in body).
+            "/onprem/auth/**",
             // Swagger / OpenAPI
             "/swagger-ui.html", "/swagger-ui/**", "/api-docs", "/api-docs/**",
             "/v3/api-docs", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**");

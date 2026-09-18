@@ -118,6 +118,80 @@ jobs:
         working-directory: edge-engine
         run: cargo fmt --all --check
 
+
+  edge-native:
+    # The on-prem engine ships to BOTH Windows and Linux customer estates, so the Rust core must
+    # build — and its JNI boundary must actually execute — on both. Previously CI produced a Linux
+    # .so only, so a Windows-only breakage (or an ABI/signature drift seen only there) would have
+    # shipped undetected. System.loadLibrary("edge_engine") resolves the right filename per platform
+    # (edge_engine.dll / libedge_engine.so), so one Java code path covers both.
+    name: Native edge core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            libname: libedge_engine.so
+            artifact: libedge_engine-linux-x86_64
+          - os: windows-latest
+            libname: edge_engine.dll
+            artifact: edge_engine-windows-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: edge-engine
+
+      - name: Rust unit tests
+        working-directory: edge-engine
+        run: cargo test --workspace
+
+      - name: Build the native core (cdylib)
+        working-directory: edge-engine
+        run: cargo build --release -p edge-jni
+
+      - name: Verify the platform library was produced
+        shell: bash
+        run: |
+          set -euo pipefail
+          lib="edge-engine/target/release/${{ matrix.libname }}"
+          test -f "$lib" || { echo "::error::${{ matrix.libname }} was not produced on ${{ matrix.os }}"; exit 1; }
+          echo "built ${{ matrix.libname }} ($(wc -c < "$lib") bytes)"
+
+      # Executes the real Java -> Rust JNI crossing against the freshly built library.
+      - name: Exercise the JNI boundary
+        working-directory: edge-host
+        shell: bash
+        run: >
+          mvn -B --no-transfer-progress test -Pnative-core
+          -Dnative.core.dir="${{ github.workspace }}/edge-engine/target/release"
+
+      # The container image (jib) ships the Linux library inside it, so stage it there on the
+      # Linux leg. Windows customers run the engine natively and receive the .dll artifact instead.
+      - name: Stage the Linux library into the container image layout
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p edge-host/src/main/jib/opt/hokeka/lib
+          cp "edge-engine/target/release/${{ matrix.libname }}" edge-host/src/main/jib/opt/hokeka/lib/
+          echo "staged ${{ matrix.libname }} for the container image"
+
+      - name: Upload the native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: edge-engine/target/release/${{ matrix.libname }}
+          if-no-files-found: error
+
   frontend:
     name: Dashboard (FRONTEND)
     runs-on: ubuntu-latest
@@ -160,6 +234,60 @@ jobs:
             (Resolve-Path ./install.ps1), [ref]$null, [ref]$errors) | Out-Null
           if ($errors) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
           Write-Host 'install.ps1: SYNTAX OK'
+      # The signature check is the only thing standing between a client and a tampered origin, and
+      # it is easy to defeat by accident — reordering two lines so a digest is trusted before the
+      # manifest is authenticated leaves every existing test passing.
+      - name: Signature verification is wired in and ordered correctly
+        working-directory: edge-host/deploy
+        run: |
+          set -euo pipefail
+          grep -q '^verify_signature()' install.sh \
+            || { echo "::error::verify_signature() is missing from install.sh"; exit 1; }
+
+          sig_line=$(grep -n 'verify_signature "\$DOWNLOAD_DIR/SHA256SUMS"' install.sh | cut -d: -f1)
+          fv_line=$(grep -n 'fetch_verified "edge-host.jar"' install.sh | cut -d: -f1)
+          [ -n "$sig_line" ] || { echo "::error::download_artifacts never calls verify_signature"; exit 1; }
+          [ "$sig_line" -lt "$fv_line" ] \
+            || { echo "::error::SHA256SUMS is trusted before its signature is verified"; exit 1; }
+          echo "signature verified at line $sig_line, before first artifact use at line $fv_line"
+
+      # A glibc core cannot load on musl and vice versa; the failure mode is a SILENT fallback to
+      # the slow Java interpreter. The installer must pick the core by libc, and must refuse only
+      # the combination we publish nothing for (musl on ARM).
+      - name: libc detection selects the right core
+        working-directory: edge-host/deploy
+        run: |
+          set -euo pipefail
+          sed -n '/^detect_libc() {/,/^}/p'        install.sh >  /tmp/libc.sh
+          sed -n '/^detect_platform() {/,/^}/p'    install.sh >> /tmp/libc.sh
+          sed -n '/^download_artifacts() {/,/^}/p' install.sh >  /tmp/dl.sh
+
+          gate() { # gate <MODE> <musl?> <arch>
+            MODE="$1" FAKE_MUSL="$2" FAKE_ARCH="$3" bash -c '
+              PSPID=1; EDGEID=e; CONTROLPLANE=https://edge.hokeka.com
+              log(){ :; }; ok(){ :; }; warn(){ :; }; die(){ exit 1; }
+              ldd(){ if [ "$FAKE_MUSL" = 1 ]; then echo "musl libc"; else echo "ldd (GNU libc) 2.39"; fi; }
+              uname(){ if [ "$1" = "-m" ]; then echo "$FAKE_ARCH"; else echo Linux; fi; }
+              source /tmp/libc.sh; detect_platform' >/dev/null 2>&1
+          }
+          gate native 1 x86_64  || { echo "::error::--native wrongly refused on musl/x86_64 (a musl core IS published)"; exit 1; }
+          gate native 1 aarch64 && { echo "::error::--native accepted on musl/aarch64 — no such core is published"; exit 1; } || true
+          gate native 0 x86_64  || { echo "::error::--native wrongly refused on glibc"; exit 1; }
+          gate container 1 aarch64 || { echo "::error::container mode wrongly refused on musl"; exit 1; }
+
+          picked() { # picked <libc> <arch>
+            LIBC="$1" ARCH="$2" bash -c '
+              RESOLVED_VERSION=1.0.0; REPO_URL=http://x; OFFLINE=0; DOWNLOAD_DIR=$(mktemp -d)
+              log(){ :; }; ok(){ :; }; die(){ exit 1; }
+              detect_arch(){ :; }; resolve_version(){ :; }; fetch(){ :; }; verify_signature(){ :; }
+              fetch_verified(){ echo "$1"; touch "$DOWNLOAD_DIR/$1"; }
+              source /tmp/dl.sh; download_artifacts' | grep edge_engine
+          }
+          [ "$(picked glibc x86_64)" = "libedge_engine-linux-x86_64.so" ]      || { echo "::error::wrong core for glibc/x86_64"; exit 1; }
+          [ "$(picked musl  x86_64)" = "libedge_engine-linux-x86_64-musl.so" ] || { echo "::error::wrong core for musl/x86_64"; exit 1; }
+          [ "$(picked glibc aarch64)" = "libedge_engine-linux-aarch64.so" ]    || { echo "::error::wrong core for glibc/aarch64"; exit 1; }
+          echo "libc gate + core selection verified"
+
       - name: Compose validity + database isolation
         working-directory: edge-host/deploy
         run: |

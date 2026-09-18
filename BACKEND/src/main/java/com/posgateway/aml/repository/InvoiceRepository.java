@@ -59,4 +59,24 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     BigDecimal sumOverdueAmount(@Param("today") LocalDate today);
 
     List<Invoice> findByPsp_PspIdAndStatus(Long pspId, String status);
+
+    /**
+     * Count a PSP's still-outstanding invoices: anything marked OVERDUE, or a SENT invoice already
+     * past its due date. Zero means the tenant has cleared its dues and may be reactivated.
+     */
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.psp.pspId = :pspId "
+            + "AND (i.status = 'OVERDUE' OR (i.status = 'SENT' AND i.dueDate < :today))")
+    long countOutstanding(@Param("pspId") Long pspId, @Param("today") LocalDate today);
+
+    /** The owning PSP id for an invoice, without triggering a lazy load of the Psp association. */
+    @Query("SELECT i.psp.pspId FROM Invoice i WHERE i.invoiceId = :invoiceId")
+    Long findPspIdByInvoiceId(@Param("invoiceId") Long invoiceId);
+
+    /**
+     * Load an invoice with its Psp and line items eagerly initialised, so the async email/PDF path
+     * (which runs on a thread with no persistence context) never hits a LazyInitializationException.
+     */
+    @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.psp LEFT JOIN FETCH i.lineItems "
+            + "WHERE i.invoiceId = :invoiceId")
+    Optional<Invoice> findByIdWithDetails(@Param("invoiceId") Long invoiceId);
 }

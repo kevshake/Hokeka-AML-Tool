@@ -1,5 +1,6 @@
 package com.posgateway.aml.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.posgateway.aml.model.AlertDisposition;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -226,5 +227,41 @@ public class Alert {
 
     public void setDisposedAt(LocalDateTime disposedAt) {
         this.disposedAt = disposedAt;
+    }
+
+    // ── API aliases ──────────────────────────────────────────────────────────────────────────────
+    // GET /alerts serialises this entity directly, and the dashboard reads id/alertType/priority/
+    // description — none of which existed under those names, so alert ids rendered as "#undefined",
+    // React row keys collided, and bulk triage PUT to /alerts/undefined/status. These read-only
+    // aliases publish the expected names ALONGSIDE the canonical ones, so no existing consumer of
+    // alertId/reason/severity/sourceType breaks. @Transient keeps JPA out of it (this is a
+    // field-access entity, so the getters are not persistent properties anyway).
+
+    /** Alias of {@link #alertId} — the dashboard's row key and display id. */
+    @Transient
+    @JsonProperty("id")
+    public Long getIdAlias() {
+        return alertId;
+    }
+
+    /** Alias of {@link #reason} — shown in the dashboard's Description column. */
+    @Transient
+    @JsonProperty("description")
+    public String getDescriptionAlias() {
+        return reason;
+    }
+
+    /** Alias of {@link #severity} (INFO/WARN/CRITICAL) — the dashboard's Priority badge. */
+    @Transient
+    @JsonProperty("priority")
+    public String getPriorityAlias() {
+        return severity;
+    }
+
+    /** Alias for the dashboard's Type column: the alert's source, falling back to its action. */
+    @Transient
+    @JsonProperty("alertType")
+    public String getAlertTypeAlias() {
+        return sourceType != null && !sourceType.isBlank() ? sourceType : action;
     }
 }

@@ -90,8 +90,10 @@ public class BatchScoringService {
                 if (result.getScore() != null) {
                     // Route through the decision engine so settled-transaction monitoring
                     // raises alerts/cases (and persists features + decision), instead of
-                    // silently saving a score with no downstream action.
-                    decisionEngine.evaluate(transaction, result.getScore(), features);
+                    // silently saving a score with no downstream action. Forward the rule
+                    // outcomes (riskDetails) so REVIEW/ALERT rules and SAR/CTR flags apply.
+                    decisionEngine.evaluate(transaction, result.getScore(), features,
+                            result.getLatencyMs(), result.getRiskDetails());
                 } else {
                     // No score available (scoring path unavailable) — persist the features
                     // we did compute so they are not lost.
