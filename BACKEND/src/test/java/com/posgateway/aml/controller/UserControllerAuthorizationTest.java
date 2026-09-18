@@ -20,8 +20,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(value = UserController.class, properties = "spring.security.enabled=false")
-@Import(UserControllerAuthorizationTest.MethodSecurity.class)
+@WebMvcTest(properties = "spring.security.enabled=false", useDefaultFilters = false)
+@Import({UserController.class, UserControllerAuthorizationTest.MethodSecurity.class})
 class UserControllerAuthorizationTest {
     @TestConfiguration
     @EnableMethodSecurity
