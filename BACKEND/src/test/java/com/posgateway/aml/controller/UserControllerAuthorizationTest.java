@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -47,7 +47,7 @@ class UserControllerAuthorizationTest {
     @WithMockUser(authorities = "ROLE_PLATFORM_ADMIN")
     void platformAdminCanUseUserCrud() throws Exception {
         when(userRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class),
-                any(org.springframework.data.domain.Pageable.class))).thenReturn(Page.empty());
+                any(org.springframework.data.domain.Pageable.class))).thenReturn(new PageImpl<>(java.util.List.of()));
         mvc.perform(get("/users")).andExpect(status().isOk());
     }
 
