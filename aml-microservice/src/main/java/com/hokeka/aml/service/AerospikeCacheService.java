@@ -1,10 +1,12 @@
 package com.hokeka.aml.service;
 
+import com.aeroorm.AeroRepository;
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.policy.WritePolicy;
+import com.hokeka.aml.cache.RiskProfileCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +56,9 @@ public class AerospikeCacheService {
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
 
+    @Autowired(required = false)
+    private AeroRepository<RiskProfileCache> riskProfileRepository;
+
     public boolean isConnected() {
         return aerospikeClient != null && aerospikeClient.isConnected();
     }
@@ -63,28 +68,21 @@ public class AerospikeCacheService {
     // ──────────────────────────────────────────────────────────────────
 
     public void putRiskProfile(Long customerId, Map<String, Object> profile) {
-        if (!isConnected() || customerId == null) return;
+        if (!isConnected() || customerId == null || riskProfileRepository == null) return;
         try {
-            Key key = new Key(namespace, SET_RISK_PROFILE, customerId.toString());
-            WritePolicy wp = new WritePolicy();
-            wp.expiration = TTL_RISK_PROFILE;
-            Bin[] bins = toBins(profile);
-            aerospikeClient.put(wp, key, bins);
-            log.debug("Risk profile cached via Aerospike for customerId={}", customerId);
+            riskProfileRepository.saveMap(customerId.toString(), profile, TTL_RISK_PROFILE);
+            log.debug("Risk profile cached via AeroORM for customerId={}", customerId);
         } catch (Exception e) {
-            log.warn("Aerospike risk-profile write failed for customerId={}: {}", customerId, e.getMessage());
+            log.warn("AeroORM risk-profile write failed for customerId={}: {}", customerId, e.getMessage());
         }
     }
 
     public Map<String, Object> getRiskProfile(Long customerId) {
-        if (!isConnected() || customerId == null) return null;
+        if (!isConnected() || customerId == null || riskProfileRepository == null) return null;
         try {
-            Key key = new Key(namespace, SET_RISK_PROFILE, customerId.toString());
-            Record rec = aerospikeClient.get(null, key);
-            if (rec == null) return null;
-            return toMap(rec);
+            return riskProfileRepository.findMap(customerId.toString());
         } catch (Exception e) {
-            log.warn("Aerospike risk-profile read failed for customerId={}: {}", customerId, e.getMessage());
+            log.warn("AeroORM risk-profile read failed for customerId={}: {}", customerId, e.getMessage());
             return null;
         }
     }

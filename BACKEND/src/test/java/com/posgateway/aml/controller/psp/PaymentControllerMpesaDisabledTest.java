@@ -26,7 +26,9 @@ class PaymentControllerMpesaDisabledTest {
         when(invoices.findById(1L)).thenReturn(Optional.of(invoice));
         MpesaService mpesa = mock(MpesaService.class);
         PaymentController controller = new PaymentController(invoices,
-                mock(PaymentAttemptRepository.class), mpesa, new MockEnvironment());
+                mock(PaymentAttemptRepository.class), mpesa,
+                mock(com.posgateway.aml.service.billing.CardBillingService.class),
+                new MockEnvironment());
         ReflectionTestUtils.setField(controller, "mpesaEnabled", false);
         PaymentInitiateRequest request = new PaymentInitiateRequest();
         request.setInvoiceId(1L);

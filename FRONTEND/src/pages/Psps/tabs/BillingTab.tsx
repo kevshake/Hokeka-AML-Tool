@@ -25,6 +25,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  MenuItem,
 } from "@mui/material";
 import {
   DownloadOutlined as DownloadIcon,
@@ -33,7 +34,6 @@ import {
   Receipt as ReceiptIcon,
   Payment as PaymentIcon,
   AccountBalance as BankIcon,
-  PhoneAndroid as PhoneIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { apiClient } from "../../../lib/apiClient";
@@ -112,7 +112,7 @@ interface PaymentInitiateResponse {
   message: string;
 }
 
-type PaymentMethod = "MPESA" | "BANK_TRANSFER";
+type PaymentMethod = "CARD" | "BANK_TRANSFER";
 
 // ─── Local hooks (billing) ─────────────────────────────────────────────────
 
@@ -246,8 +246,12 @@ function PaymentDialog({
   onSuccess,
   bankDetails,
 }: PaymentDialogProps) {
-  const [payMethod, setPayMethod] = useState<PaymentMethod>("MPESA");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("CARD");
+  const [cardTokenRef, setCardTokenRef] = useState("");
+  const [cardLast4, setCardLast4] = useState("");
+  const [cardBrand, setCardBrand] = useState("VISA");
+  const [cardExpiryMonth, setCardExpiryMonth] = useState("");
+  const [cardExpiryYear, setCardExpiryYear] = useState("");
   const [bankRef, setBankRef] = useState("");
   const [paying, setPaying] = useState(false);
   const [result, setResult] = useState<{
@@ -258,9 +262,12 @@ function PaymentDialog({
   const handleClose = () => {
     if (paying) return;
     setResult(null);
-    setPhoneNumber("");
+    setCardTokenRef("");
+    setCardLast4("");
+    setCardExpiryMonth("");
+    setCardExpiryYear("");
     setBankRef("");
-    setPayMethod("MPESA");
+    setPayMethod("CARD");
     onClose();
   };
 
@@ -270,19 +277,34 @@ function PaymentDialog({
     setResult(null);
 
     try {
+      if (payMethod === "CARD" && cardTokenRef.trim()) {
+        await fetch(getApiUrl(`billing/payment-methods?pspId=${sessionStorage.getItem("_psp") ?? "0"}`), {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-PSP-ID": sessionStorage.getItem("_psp") ?? "0",
+          },
+          body: JSON.stringify({
+            tokenVaultRef: cardTokenRef.trim(),
+            last4: cardLast4.trim(),
+            brand: cardBrand,
+            expiryMonth: Number(cardExpiryMonth),
+            expiryYear: Number(cardExpiryYear),
+          }),
+        });
+      }
+
       const body: {
         invoiceId: number;
         paymentMethod: PaymentMethod;
-        phoneNumber?: string;
         bankReference?: string;
       } = {
         invoiceId: invoice.invoiceId,
         paymentMethod: payMethod,
       };
 
-      if (payMethod === "MPESA") {
-        body.phoneNumber = phoneNumber;
-      } else {
+      if (payMethod === "BANK_TRANSFER") {
         body.bankReference = bankRef;
       }
 
@@ -384,9 +406,9 @@ function PaymentDialog({
           sx={{ mb: 2 }}
           disabled={paying}
         >
-          <ToggleButton value="MPESA" sx={{ textTransform: "none", gap: 0.5 }}>
-            <PhoneIcon fontSize="small" />
-            M-Pesa
+          <ToggleButton value="CARD" sx={{ textTransform: "none", gap: 0.5 }}>
+            <BankIcon fontSize="small" />
+            Card (annual)
           </ToggleButton>
           <ToggleButton value="BANK_TRANSFER" sx={{ textTransform: "none", gap: 0.5 }}>
             <BankIcon fontSize="small" />
@@ -394,20 +416,54 @@ function PaymentDialog({
           </ToggleButton>
         </ToggleButtonGroup>
 
-        {/* M-Pesa section */}
-        {payMethod === "MPESA" && (
-          <Box>
+        {payMethod === "CARD" && (
+          <Box sx={{ display: "grid", gap: 1.5 }}>
             <TextField
-              label="M-Pesa Phone Number"
-              placeholder="07XXXXXXXX or 254XXXXXXXXX"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              label="Token vault reference"
+              value={cardTokenRef}
+              onChange={(e) => setCardTokenRef(e.target.value)}
               fullWidth
               size="small"
               disabled={paying}
-              helperText="Enter the Kenya phone number registered with M-Pesa (e.g. 0712345678)"
-              InputProps={{ startAdornment: <PhoneIcon fontSize="small" sx={{ mr: 0.5, color: "text.secondary" }} /> }}
+              helperText="Tokenized card reference from your vault (never store PAN here)."
             />
+            <TextField
+              label="Last 4 digits"
+              value={cardLast4}
+              onChange={(e) => setCardLast4(e.target.value)}
+              fullWidth
+              size="small"
+              disabled={paying}
+            />
+            <TextField
+              select
+              label="Brand"
+              value={cardBrand}
+              onChange={(e) => setCardBrand(e.target.value)}
+              fullWidth
+              size="small"
+              disabled={paying}
+            >
+              <MenuItem value="VISA">VISA</MenuItem>
+              <MenuItem value="MASTERCARD">MASTERCARD</MenuItem>
+              <MenuItem value="AMEX">AMEX</MenuItem>
+            </TextField>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <TextField
+                label="Expiry month"
+                value={cardExpiryMonth}
+                onChange={(e) => setCardExpiryMonth(e.target.value)}
+                size="small"
+                disabled={paying}
+              />
+              <TextField
+                label="Expiry year"
+                value={cardExpiryYear}
+                onChange={(e) => setCardExpiryYear(e.target.value)}
+                size="small"
+                disabled={paying}
+              />
+            </Box>
           </Box>
         )}
 
@@ -488,7 +544,7 @@ function PaymentDialog({
             onClick={handleSubmit}
             disabled={
               paying ||
-              (payMethod === "MPESA" && !phoneNumber.trim()) ||
+              (payMethod === "CARD" && (!cardTokenRef.trim() || !cardLast4.trim())) ||
               (payMethod === "BANK_TRANSFER" && !bankRef.trim())
             }
             startIcon={
@@ -506,7 +562,7 @@ function PaymentDialog({
           >
             {paying
               ? "Processing..."
-              : payMethod === "MPESA"
+              : payMethod === "CARD"
               ? "Send STK Push"
               : "Submit Reference"}
           </Button>
