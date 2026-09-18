@@ -12,6 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
@@ -57,6 +58,7 @@ public class AuthenticationController {
     private com.posgateway.aml.service.auth.OnboardingInviteService onboardingInviteService;
 
     @PostMapping("/register")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterRequest request) {
         if (request == null
                 || isBlank(request.getUsername())

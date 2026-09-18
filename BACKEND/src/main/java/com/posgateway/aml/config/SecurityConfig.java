@@ -205,6 +205,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/auth/csrf", "/api/v1/auth/csrf").permitAll()
                                                 .requestMatchers("/auth/register-with-invite",
                                                                 "/api/v1/auth/register-with-invite").permitAll()
+                                                .requestMatchers("/auth/register", "/api/v1/auth/register")
+                                                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_PLATFORM_ADMIN")
                                                 .requestMatchers("/api/v1/auth/session/check",
                                                                 "/api/v1/auth/session/refresh")
                                                 .authenticated()
