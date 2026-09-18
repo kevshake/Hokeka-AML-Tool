@@ -34,11 +34,11 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 |---|---|---|
 | Business KYB (registration, ownership, UBO capture + validation) | ✅ | `MerchantOnboardingService` (reg#/tax/UBO %≤100, ID required); OpenCorporates registry match (token-gated → REVIEW when off) |
 | Risk-based onboarding (LOW auto-approve vs REVIEW/REJECT) | ✅ | `MerchantOnboardingService.calculateRiskScore/makeDecision`; tiered SIMPLIFIED/STANDARD/ENHANCED CDD |
-| Sanctions screening, fail-closed on outage | ✅ | Fail-closed everywhere (UNAVAILABLE→HOLD/REVIEW): `DecisionEngine`, `RealTimeTransactionScreeningService`, periodic jobs |
+| Sanctions screening, fail-closed on outage | ✅ | Fail-closed everywhere (UNAVAILABLE→HOLD/REVIEW): `DecisionEngine`, `RealTimeTransactionScreeningService`, periodic jobs; empty Aerospike set → UNAVAILABLE (not CLEAR) in aml-microservice `SanctionsService` |
 | Fuzzy matching (phonetic/typo/transliteration) | ✅ | aml-microservice `SanctionsService`: DoubleMetaphone + Jaccard/Levenshtein + NFD transliteration |
 | Adverse media (GDELT) | 🟡 | Real HTTPS GDELT client, wired to onboarding + periodic; company-level only, flag-gated |
 | Daily rescreening | 🟡 | Daily crons rescreen **merchants+UBOs due** only (not end-customers); two overlapping 03:00 jobs on the same due-set |
-| **Sanctions data present** | 🔴/🟡 | **`sanctions.download.enabled=false` by default; empty Aerospike set returns CLEAR (fail-open on empty data).** Highest screening risk despite correct outage handling. (Startup health guard exists — see W38-2 — but the empty-data→CLEAR path must be closed at the microservice.) |
+| **Sanctions data present** | 🟡 | **`sanctions.download.enabled=false` by default** — watchlist must be ingested before screening is meaningful. Empty/unloaded Aerospike set now fails closed as **UNAVAILABLE** (not CLEAR) via `SanctionsService.hasSanctionsData()`; startup health guard (W38-2) still applies. |
 | **PEP screening** | 🟠 | Ingest never tags entities `PEP`/`pepLevel`, so the `isPep` branch effectively never fires; no current/former/RCA; family/associate is a manual checkbox |
 | Individual CIP / cardholder counterparty screening | 🟡 | Merchant/B2B-centric; individuals exist only as UBOs; gov-IDs captured but not authenticated; counterparty screening ships `screen-counterparty=false` |
 | Document/ID verification | 🟡 | Storage + ClamAV malware scan + **manual** human verification; no automated IDV/OCR/liveness |
@@ -57,7 +57,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Geographic rules | 🟡 | High-risk jurisdiction present; **no true impossible-travel (time/distance), no IP-vs-billing** (entity carries only merchantCountry) |
 | Behavioral rules | 🟡 | Most present; the computed `zscore_amount` feeds ML only — **no rule consumes it** |
 | Counterparty (shell/offshore) | 🟡 | Screening hits wired; shell/offshore is **keyword-match only** |
-| Post-transaction batch monitoring | 🟠 | `BatchScoringService` re-scores + `findAll()` full-table scan but **never routes through DecisionEngine** → settled-txn monitoring raises no alerts/cases |
+| Post-transaction batch monitoring | ✅ | `BatchScoringService` routes each scored transaction through `DecisionEngine` (alerts/cases raised); paginated feature backfill replaced full-table `findAll()` scan |
 | Payment-message / Travel-Rule completeness (core card path) | 🔴 | Exists only in the separate crypto/VASP module, not the core rules taxonomy |
 | Enforced pre-auth latency budget | 🔴 | No deadline guard (but this is ingest, not a synchronous pre-auth gate) |
 
@@ -87,7 +87,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Website / transaction-laundering monitoring | 🟡 | `ContentMonitoringService` daily single-page keyword scan → case; **no crawler, redirect chains, product classification, content-vs-onboarding diff, or evidence retention** |
 | Merchant expected-profile baseline | 🟡 | Only `expectedMonthlyVolume` stored; no expected ticket/currencies/refund-ratio/cross-border-ratio/business-model |
 | Linked-merchant network / reincarnation | 🟡 | `LinkAnalysisService` matches device+IP vs blocked merchants only; no shared UBO/phone/email/domain/settlement/address/webhook |
-| Funnel-account / trade-based-ML detectors | 🟠 | Real in `AmlScenarioDetectionService` but **no controller/scheduler reaches them** |
+| Funnel-account / trade-based-ML detectors | ✅ | Wired via `AmlDetectionController` (`/aml/detection/funnel-accounts`, `/aml/detection/trade-based-ml`) |
 | Peer-group comparison, dormant reactivation | 🟠 | Fully coded in `BehavioralAnalyticsService` but **orphaned (no caller)** |
 | Rapid refund cycling, circular funds | 🟠 | Computed as features (`refund_share_pct`, `circular_trading_count`) that **drive no rule/alert** |
 | Shared settlement account, bust-out, MCC-behavior inconsistency, self-funding, sudden-growth-vs-historical | 🔴 | Not implemented |
@@ -137,14 +137,14 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 ## 9. Prioritized remediation
 
 **P0 — can produce a wrong AML outcome on a live path**
-1. Sanctions **empty-data → CLEAR** (close the fail-open at the microscore even when the list is empty).
+1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds.
 2. **PEP classification dead** — tag `PEP`/`pepLevel` at ingest so the `isPep` path fires.
-3. **Batch monitoring raises no alerts** — route `BatchScoringService` results through `DecisionEngine`; replace `findAll()` scan.
+3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill.
 
 **P1 — reachable stub / inert control ("dummy code")**
 4. ~~`TransactionLimitService.setTemporaryLimit` persisted nothing~~ ✅ **FIXED** (V200 + enforcement).
 5. `BehavioralProfilingService` fake z-score → compute real σ/z-score.
-6. Wire orphaned real detectors: `detectFunnelAccounts`, `detectTradeBasedMl` → `AmlDetectionController`; wire refund-cycling & circular-funds features to a rule/alert.
+6. ~~Wire orphaned real detectors: `detectFunnelAccounts`, `detectTradeBasedMl` → `AmlDetectionController`~~ ✅ **FIXED**; wire refund-cycling & circular-funds features to a rule/alert.
 7. `SchemeReportingController` pack export ignores type → real CSV/PDF.
 8. `DecisionEngine` BLOCK → invoke existing `PaymentBlacklistService`.
 9. Remove misleading "nightly retrain" comments (or build the trainer).

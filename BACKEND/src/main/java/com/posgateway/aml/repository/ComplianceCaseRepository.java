@@ -3,6 +3,7 @@ package com.posgateway.aml.repository;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -270,4 +271,18 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
 
     /** Cases created within a window (for SAR-filing-SLA denominator). */
     long countByCreatedAtAfter(LocalDateTime since);
+
+    @Query("SELECT c FROM ComplianceCase c WHERE " +
+           "LOWER(COALESCE(c.caseReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(c.description, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(c.id AS string) LIKE CONCAT('%', :q, '%') " +
+           "ORDER BY c.createdAt DESC")
+    List<ComplianceCase> searchGlobal(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT c FROM ComplianceCase c WHERE c.pspId = :pspId AND (" +
+           "LOWER(COALESCE(c.caseReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(c.description, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(c.id AS string) LIKE CONCAT('%', :q, '%')) " +
+           "ORDER BY c.createdAt DESC")
+    List<ComplianceCase> searchGlobalForPsp(@Param("pspId") Long pspId, @Param("q") String q, Pageable pageable);
 }

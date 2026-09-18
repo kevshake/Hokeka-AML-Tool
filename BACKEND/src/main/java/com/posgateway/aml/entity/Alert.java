@@ -1,8 +1,10 @@
 package com.posgateway.aml.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import com.posgateway.aml.model.AlertDisposition;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.time.LocalDateTime;
 
 /**
@@ -10,6 +12,7 @@ import java.time.LocalDateTime;
  * Stores generated alerts and cases for manual review
  */
 @Entity
+@Filter(name = PspTenantFilter.NAME)
 @Table(name = "alerts", indexes = {
         @Index(name = "idx_alert_status", columnList = "status"),
         @Index(name = "idx_alert_created", columnList = "created_at"),

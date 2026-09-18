@@ -2,6 +2,7 @@ package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.model.AlertDisposition;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -185,4 +186,20 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     List<Object[]> getDailyAlertCountsByPsp(@Param("pspId") Long pspId,
                                              @Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end);
+
+    @Query("SELECT a FROM Alert a WHERE " +
+           "LOWER(COALESCE(a.reason, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(a.sourceReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(a.action, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(a.alertId AS string) LIKE CONCAT('%', :q, '%') " +
+           "ORDER BY a.createdAt DESC")
+    List<Alert> searchGlobal(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT a FROM Alert a WHERE a.pspId = :pspId AND (" +
+           "LOWER(COALESCE(a.reason, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(a.sourceReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(a.action, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(a.alertId AS string) LIKE CONCAT('%', :q, '%')) " +
+           "ORDER BY a.createdAt DESC")
+    List<Alert> searchGlobalForPsp(@Param("pspId") Long pspId, @Param("q") String q, Pageable pageable);
 }

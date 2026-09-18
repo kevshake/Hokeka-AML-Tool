@@ -3,11 +3,13 @@ package com.posgateway.aml.entity.compliance;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
 import jakarta.persistence.*;
 import jakarta.persistence.Index;
+import org.hibernate.annotations.Filter;
 import org.hibernate.envers.Audited;
 
 import java.time.LocalDateTime;
@@ -21,6 +23,7 @@ import java.util.Set;
  * @Audited: Hibernate Envers automatically tracks all changes
  */
 @Entity
+@Filter(name = PspTenantFilter.NAME)
 @Table(name = "compliance_cases", indexes = {
         @Index(name = "idx_case_merchant", columnList = "merchant_id"),
         @Index(name = "idx_case_psp", columnList = "psp_id"),

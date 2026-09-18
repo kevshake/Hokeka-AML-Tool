@@ -1,6 +1,8 @@
 package com.posgateway.aml.entity;
 
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -9,6 +11,7 @@ import java.time.LocalDateTime;
  * Stores raw transactions from all merchants
  */
 @Entity
+@Filter(name = PspTenantFilter.NAME)
 @Table(name = "transactions", indexes = {
         @Index(name = "idx_txn_merchant", columnList = "merchant_id"),
         @Index(name = "idx_txn_timestamp", columnList = "txn_ts"),

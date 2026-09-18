@@ -1,6 +1,24 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-09-18_
 
+## Wave 69 — W35-1, W20-17, W18-7, gap register (2026-09-18)
+
+- **W35-1** — Hibernate `@Filter` tenant backstop on `TransactionEntity`, `Alert`, `ComplianceCase`,
+  `User`, `Merchant`; `PspFilterEnabler` + `PspTenantWriteGuard`; V222 backfills `alerts.psp_id`;
+  documented in `docs/architecture/tenant-isolation.md`. Integration test proves cross-tenant
+  `findById` is hidden.
+- **W20-17** — `GET /api/v1/search?q=` tenant-scoped global search (transactions, alerts, cases,
+  merchants); OpenAPI tag; FRONTEND `GlobalSearchDialog` wired to header ⌘K stub.
+- **W18-7** — `SANCTIONS` signals from real `AerospikeSanctionsScreeningService` matches in
+  `MultiAssetRiskEngine`; `CYBER` signals from transaction metadata and
+  `CyberIncidentRiskSignalBridge` (metadata-linked transactions only).
+- **Gap register** — drift fixed for batch→DecisionEngine, funnel/TBML endpoints, empty Aerospike
+  fail-closed; aml-microservice test for connected-but-empty dataset.
+
+**Still deferred (NEEDS-DECISION / infra):** W47 AeroORM, W45 settlement hash, W29-2 OCR/IDV,
+W21-7 travel-rule wire contract, plus ~13 product items (RBAC `/users/me`, ML blend, InternalAuthFilter
+fail-closed, public register, M-Pesa domain, billing pricing, …).
+
 ## Wave 68 — System communication follow-ups (2026-09-18)
 
 Closed the four engineering actions from `docs/SYSTEM-COMMUNICATION-AND-TX-PATH-ANALYSIS.md`:
