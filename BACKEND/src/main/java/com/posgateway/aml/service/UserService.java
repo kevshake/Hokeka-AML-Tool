@@ -54,19 +54,12 @@ public class UserService {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
 
-        // Validate Role belongs to PSP
-        if (role.getPsp() != null && !role.getPsp().equals(psp)) {
-            // Check if it's not a system role (system roles have null psp and can be
-            // assigned to anyone?)
-            // Usually System Roles are for System Users, but maybe we allow "View Only"
-            // system role to be assigned to PSP users?
-            // For strict isolation: PSP Users must have PSP Roles OR specific Global Roles
-            // if allowed.
-            // Simplified: PSP Users must have Role.psp == user.psp OR Role.psp == null
-            // (Global)
-            if (psp != null && !role.isSystemRole()) { // If user is PSP user, but role is another PSP's role
-                throw new IllegalArgumentException("Cannot assign a role from a different PSP");
-            }
+        // Validate role tenant: compare psp_id, not entity identity (detached/managed Psp
+        // instances with the same id must not fail equals()).
+        Long rolePspId = pspIdOf(role.getPsp());
+        Long targetPspId = pspIdOf(psp);
+        if (rolePspId != null && targetPspId != null && !rolePspId.equals(targetPspId)) {
+            throw new IllegalArgumentException("Cannot assign a role from a different PSP");
         }
 
         // If user is System (psp=null), Role must be System (psp=null)
@@ -102,8 +95,9 @@ public class UserService {
         if (roleId != null) {
             Role role = roleRepository.findById(roleId)
                     .orElseThrow(() -> new IllegalArgumentException("Role not found"));
-            // Validate role scoping matches user's PSP
-            if (user.getPsp() != null && role.getPsp() != null && !role.getPsp().equals(user.getPsp())) {
+            Long rolePspId = pspIdOf(role.getPsp());
+            Long userPspId = pspIdOf(user.getPsp());
+            if (rolePspId != null && userPspId != null && !rolePspId.equals(userPspId)) {
                 throw new IllegalArgumentException("Role does not belong to user's PSP");
             }
             user.setRole(role);
@@ -163,5 +157,9 @@ public class UserService {
 
     public java.util.Optional<User> getSuperAdmin() {
         return userRepository.findFirstByRole_NameOrderByIdAsc("SUPER_ADMIN");
+    }
+
+    private static Long pspIdOf(Psp psp) {
+        return psp == null ? null : psp.getPspId();
     }
 }
