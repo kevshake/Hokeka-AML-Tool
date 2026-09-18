@@ -1,6 +1,5 @@
 import {
   Box,
-  Paper,
   Typography,
   TextField,
   Button,
@@ -11,8 +10,6 @@ import {
   InputLabel,
   Alert,
   CircularProgress,
-  Tabs,
-  Tab,
   Chip,
   Tooltip,
   Divider,
@@ -27,6 +24,8 @@ import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
 import PlatformAdminTab from "./tabs/PlatformAdminTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import GlassCard from "../../components/Common/GlassCard";
+import SettingsTabBar, { type SettingsTabItem } from "../../components/Settings/SettingsTabBar";
 
 
 interface Psp {
@@ -59,11 +58,17 @@ interface ThemePresets {
   };
 }
 
-function TabPanel(props: { children?: React.ReactNode; index: number; value: number }) {
-  const { children, value, index, ...other } = props;
+function TabPanel(props: { children?: React.ReactNode; index: number; value: number; tabId: string }) {
+  const { children, value, index, tabId, ...other } = props;
   return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`settings-panel-${tabId}`}
+      aria-labelledby={`settings-tab-${tabId}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 0.5 }}>{children}</Box>}
     </div>
   );
 }
@@ -166,10 +171,16 @@ export default function SettingsPage() {
   const isSuperAdmin = user?.pspId === 0;
   const isPspUser = !!user && user.pspId > 0; // PSP_ADMIN or PSP_USER
 
-  // Tab index computation:
-  // PSP users:     0 = Billing  (only tab shown)
-  // Platform admins: 0 = PSP Theme Management, 1 = System Settings (super-admin only)
-  const billingTabIndex = 0; // always 0 for PSP users; tab is hidden for admins so index is irrelevant
+  const settingsTabs: SettingsTabItem[] = isPspUser
+    ? [
+        { id: "billing", label: "Billing" },
+        { id: "webhooks", label: "Webhooks" },
+      ]
+    : [
+        { id: "theme", label: "PSP Theme" },
+        ...(isSuperAdmin ? [{ id: "system", label: "System Settings" } as SettingsTabItem] : []),
+        ...(isSuperAdmin ? [{ id: "platform-admin", label: "Platform Admin" } as SettingsTabItem] : []),
+      ];
 
   // System Settings Interface
   interface SystemSettings {
@@ -244,18 +255,17 @@ export default function SettingsPage() {
       noCard
     >
     <Box>
-      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
-        {!isPspUser && <Tab label="PSP Theme Management" />}
-        {!isPspUser && isSuperAdmin && <Tab label="System Settings" />}
-        {!isPspUser && isSuperAdmin && <Tab label="Platform Admin" />}
-        {isPspUser && <Tab label="Billing" />}
-        {isPspUser && <Tab label="Webhooks" />}
-      </Tabs>
+      <SettingsTabBar
+        tabs={settingsTabs}
+        activeIndex={tabValue}
+        onChange={setTabValue}
+      />
 
-      {!isPspUser && <TabPanel value={tabValue} index={0}>
-        <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-          <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
-            PSP Theme Customization
+      {!isPspUser && <TabPanel value={tabValue} index={0} tabId="theme">
+        <GlassCard padding="md" glowVariant="gold">
+          <span className="hokeka-section-label">Branding</span>
+          <Typography variant="h6" sx={{ color: "text.primary", mt: 1, mb: 2, fontFamily: "var(--font-display)" }}>
+            PSP theme customization
           </Typography>
 
           {successMessage && (
@@ -461,14 +471,15 @@ export default function SettingsPage() {
           ) : (
             <Alert severity="info">Please select a PSP to manage its theme.</Alert>
           )}
-        </Paper>
+        </GlassCard>
       </TabPanel>}
 
       {!isPspUser && isSuperAdmin && (
-        <TabPanel value={tabValue} index={1}>
-          <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <Typography variant="h6" sx={{ color: "text.primary", mb: 2 }}>
-              System Configuration
+        <TabPanel value={tabValue} index={1} tabId="system">
+          <GlassCard padding="md" glowVariant="teal">
+            <span className="hokeka-section-label">Platform</span>
+            <Typography variant="h6" sx={{ color: "text.primary", mt: 1, mb: 2, fontFamily: "var(--font-display)" }}>
+              System configuration
             </Typography>
 
             <Grid container spacing={3}>
@@ -572,24 +583,26 @@ export default function SettingsPage() {
                 </>
               )}
             </Grid>
-          </Paper>
+          </GlassCard>
         </TabPanel>
       )}
 
       {!isPspUser && isSuperAdmin && (
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={2} tabId="platform-admin">
           <PlatformAdminTab />
         </TabPanel>
       )}
 
       {isPspUser && (
-        <TabPanel value={tabValue} index={billingTabIndex}>
-          <BillingTab pspId={String(user!.pspId)} />
+        <TabPanel value={tabValue} index={0} tabId="billing">
+          <GlassCard padding="md" glowVariant="gold" static>
+            <BillingTab pspId={String(user!.pspId)} />
+          </GlassCard>
         </TabPanel>
       )}
 
       {isPspUser && (
-        <TabPanel value={tabValue} index={billingTabIndex + 1}>
+        <TabPanel value={tabValue} index={1} tabId="webhooks">
           <WebhooksTab />
         </TabPanel>
       )}
