@@ -3,6 +3,7 @@ package com.posgateway.aml.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.enrichment.BinLookupService;
@@ -19,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,6 +83,51 @@ class TransactionIngestionServiceTest {
                 payload.capture());
         assertEquals(false, payload.getValue().contains("4111111111111111"));
         assertEquals(true, payload.getValue().contains("\"cashTransaction\":true"));
+    }
+
+    @Test
+    void duplicateClientReferenceReturnsExistingTransactionWithoutReEnqueue() {
+        TransactionRepository transactionRepository = mock(TransactionRepository.class);
+        MerchantRepository merchantRepository = mock(MerchantRepository.class);
+        KafkaOutboxService outboxService = mock(KafkaOutboxService.class);
+        TransactionStatisticsService statisticsService = mock(TransactionStatisticsService.class);
+        RiskScoringService riskScoringService = mock(RiskScoringService.class);
+        IpGeoService ipGeoService = mock(IpGeoService.class);
+        BinLookupService binLookupService = mock(BinLookupService.class);
+
+        Psp psp = new Psp();
+        psp.setPspId(3L);
+        Merchant merchant = new Merchant();
+        merchant.setMerchantId(4L);
+        merchant.setPsp(psp);
+        merchant.setCountry("KEN");
+
+        TransactionEntity existing = new TransactionEntity();
+        existing.setTxnId(101L);
+        existing.setPspId(3L);
+        existing.setClientReference("idem-key-1");
+
+        when(merchantRepository.findById(4L)).thenReturn(Optional.of(merchant));
+        when(transactionRepository.findByPspIdAndClientReference(3L, "idem-key-1"))
+                .thenReturn(Optional.of(existing));
+
+        TransactionIngestionService service = new TransactionIngestionService(
+                transactionRepository, merchantRepository, new ObjectMapper(), outboxService,
+                statisticsService, riskScoringService, ipGeoService, binLookupService,
+                new com.posgateway.aml.service.security.PiiLookupHasher("0123456789abcdef0123456789abcdef"));
+
+        TransactionIngestionService.TransactionRequest request = new TransactionIngestionService.TransactionRequest();
+        request.setMerchantId("4");
+        request.setAmountCents(5000L);
+        request.setCurrency("KES");
+        request.setClientReference("idem-key-1");
+
+        TransactionEntity result = service.ingestTransaction(request);
+
+        assertEquals(101L, result.getTxnId());
+        verify(transactionRepository, never()).save(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
+        verify(statisticsService, never()).recordTransaction(any(), any(), any(), any());
     }
 
     @Test

@@ -303,7 +303,7 @@ public class DecisionEngine {
      * subscriptions, reusing the exact event payload already built for the Kafka outbox below.
      */
     @Autowired(required = false)
-    private com.posgateway.aml.service.psp.WebhookService webhookService;
+    private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
@@ -521,18 +521,13 @@ public class DecisionEngine {
                     payload);
             logger.debug("Queued alert-generated event: alertId={}", alert.getAlertId());
 
-            // W36-2: fan this same event out to the PSP's active RISK_ALERT webhook
-            // subscriptions. Best-effort and isolated from the outbox enqueue above -- a webhook
-            // delivery failure (unreachable callback URL, DNS failure, etc.) must never roll back
-            // or fail the alert/Kafka path, which is why this has its own try/catch rather than
-            // sharing the outer one.
-            if (webhookService != null && transaction.getPspId() != null) {
-                try {
-                    webhookService.sendWebhook(transaction.getPspId(), "RISK_ALERT", event);
-                } catch (Exception webhookEx) {
-                    logger.warn("RISK_ALERT webhook dispatch failed for alertId={}: {}",
-                            alert.getAlertId(), webhookEx.getMessage());
-                }
+            // Durable webhook delivery: enqueued in the same transaction as the alert row.
+            if (webhookOutboxService != null && transaction.getPspId() != null) {
+                webhookOutboxService.enqueueForPsp(
+                        transaction.getPspId(),
+                        "RISK_ALERT",
+                        event,
+                        "webhook.risk_alert:" + alert.getAlertId());
             }
         } catch (Exception e) {
             throw new IllegalStateException(

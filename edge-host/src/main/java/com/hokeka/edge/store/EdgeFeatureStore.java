@@ -35,6 +35,14 @@ public interface EdgeFeatureStore {
     Map<String, Object> deriveFeatures(String panHash);
 
     /**
+     * Like {@link #deriveFeatures(String)} but reports whether the store was unavailable for this
+     * lookup (distinct from "no history yet").
+     */
+    default FeatureDerivation deriveFeaturesDetailed(String panHash) {
+        return new FeatureDerivation(deriveFeatures(panHash), !available());
+    }
+
+    /**
      * Persist the transaction, the decision it received, and advance its velocity counters, so
      * subsequent evaluations can be checked against it and an investigator can see what was decided
      * and which rules fired. Must never throw — a store failure degrades enrichment, it does not fail

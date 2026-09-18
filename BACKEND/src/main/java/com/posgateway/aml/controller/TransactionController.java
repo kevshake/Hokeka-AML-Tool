@@ -104,6 +104,7 @@ public class TransactionController {
     @PostMapping("/ingest")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER')")
     public CompletableFuture<ResponseEntity<FraudDetectionResponseDTO>> ingestTransaction(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody TransactionRequestDTO requestDTO) {
 
         logger.debug("Received transaction ingestion request from merchant: {}",
@@ -119,7 +120,8 @@ public class TransactionController {
             }
 
             // Convert DTO to service request
-            TransactionIngestionService.TransactionRequest request = convertToServiceRequest(requestDTO);
+            TransactionIngestionService.TransactionRequest request =
+                    convertToServiceRequest(requestDTO, idempotencyKey);
 
             // Step 1: Ingest transaction (store in database)
             TransactionEntity transaction = ingestionService.ingestTransaction(request);
@@ -222,7 +224,7 @@ public class TransactionController {
         try {
             // Convert DTOs to service requests
             List<TransactionIngestionService.TransactionRequest> requests = requestDTOs.stream()
-                    .map(this::convertToServiceRequest)
+                    .map(dto -> convertToServiceRequest(dto, null))
                     .collect(Collectors.toList());
 
             // Batch ingest transactions
@@ -277,8 +279,9 @@ public class TransactionController {
     }
 
     private TransactionIngestionService.TransactionRequest convertToServiceRequest(
-            TransactionRequestDTO dto) {
+            TransactionRequestDTO dto, String idempotencyKey) {
         TransactionIngestionService.TransactionRequest request = new TransactionIngestionService.TransactionRequest();
+        request.setClientReference(resolveClientReference(idempotencyKey, dto));
         request.setMerchantId(dto.getMerchantId());
         request.setTerminalId(dto.getTerminalId());
         request.setAmountCents(dto.getAmountCents());
@@ -295,6 +298,16 @@ public class TransactionController {
         request.setCustomerAccountReference(dto.getCustomerAccountReference());
         request.setCustomerEmail(dto.getCustomerEmail());
         return request;
+    }
+
+    private String resolveClientReference(String idempotencyKey, TransactionRequestDTO dto) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            return idempotencyKey.trim();
+        }
+        if (dto.getClientReference() != null && !dto.getClientReference().isBlank()) {
+            return dto.getClientReference().trim();
+        }
+        return null;
     }
 
     private FraudDetectionResponseDTO createErrorResponse(String message) {

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository for Transaction Entity
@@ -40,6 +41,8 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     @Modifying
     @Query(value = "DELETE FROM transactions WHERE txn_id IN (:ids)", nativeQuery = true)
     int deleteTransactionsByIds(@Param("ids") List<Long> ids);
+
+    Optional<TransactionEntity> findByPspIdAndClientReference(Long pspId, String clientReference);
 
     /**
      * Find transactions by merchant ID

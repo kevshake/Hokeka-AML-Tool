@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 // @RequiredArgsConstructor removed
@@ -36,6 +38,7 @@ public class PspService {
     private final SubscriptionRepository subscriptionRepository;
     private final PricingTierRepository pricingTierRepository;
     private final InvoiceRepository invoiceRepository;
+    private final WebhookOutboxService webhookOutboxService;
 
     /** Tier code every new PSP is placed on if it exists; otherwise the cheapest active tier is used. */
     @Value("${saas.onboarding.default-tier-code:STARTER}")
@@ -50,7 +53,8 @@ public class PspService {
             com.posgateway.aml.service.rules.RuleProvisioningService ruleProvisioningService,
             SubscriptionRepository subscriptionRepository,
             PricingTierRepository pricingTierRepository,
-            InvoiceRepository invoiceRepository) {
+            InvoiceRepository invoiceRepository,
+            WebhookOutboxService webhookOutboxService) {
         this.pspRepository = pspRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -59,6 +63,7 @@ public class PspService {
         this.subscriptionRepository = subscriptionRepository;
         this.pricingTierRepository = pricingTierRepository;
         this.invoiceRepository = invoiceRepository;
+        this.webhookOutboxService = webhookOutboxService;
     }
 
     /**
@@ -83,8 +88,10 @@ public class PspService {
         }
         // Activate inline (not via updatePspStatus) so this method's own @CacheEvict fires — a
         // self-invocation would bypass the proxy and leave the psps cache stale.
+        String previousStatus = psp.getStatus();
         psp.activate();
         pspRepository.save(psp);
+        enqueueMerchantStatusChangeWebhook(psp, previousStatus, "DUNNING_CLEARED");
         log.info("Reactivated PSP {} — all outstanding invoices cleared", pspId);
         return true;
     }
@@ -261,6 +268,7 @@ public class PspService {
 
         log.info("Updating PSP {} status to {}", pspId, status);
 
+        String previousStatus = psp.getStatus();
         switch (status) {
             case "ACTIVE":
                 psp.activate();
@@ -276,6 +284,28 @@ public class PspService {
         }
 
         pspRepository.save(psp);
+        if (!status.equals(previousStatus)) {
+            enqueueMerchantStatusChangeWebhook(psp, previousStatus, "MANUAL_STATUS_UPDATE");
+        }
+    }
+
+    private void enqueueMerchantStatusChangeWebhook(Psp psp, String previousStatus, String reason) {
+        if (webhookOutboxService == null || psp.getPspId() == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pspId", psp.getPspId());
+        payload.put("pspCode", psp.getPspCode());
+        payload.put("previousStatus", previousStatus);
+        payload.put("status", psp.getStatus());
+        payload.put("reason", reason);
+        payload.put("timestamp", LocalDateTime.now().toString());
+        webhookOutboxService.enqueueForPsp(
+                psp.getPspId(),
+                "MERCHANT_STATUS_CHANGE",
+                payload,
+                "webhook.merchant_status:" + psp.getPspId() + ":" + psp.getStatus() + ":"
+                        + LocalDateTime.now());
     }
 
     @Transactional

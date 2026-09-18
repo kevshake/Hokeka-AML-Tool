@@ -2,6 +2,8 @@ package com.hokeka.edge;
 
 import com.hokeka.edge.channel.EdgeMetricsAggregator;
 import com.hokeka.edge.store.EdgeFeatureStore;
+import com.hokeka.edge.store.FeatureDerivation;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,6 +27,9 @@ public class EdgeController {
     private final EdgeEngine engine;
     private final EdgeMetricsAggregator metrics;
     private final EdgeFeatureStore featureStore;
+
+    @Value("${featurestore.fail-closed:true}")
+    private boolean failClosedOnStoreUnavailable;
 
     public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics,
                           EdgeFeatureStore featureStore) {
@@ -61,8 +67,9 @@ public class EdgeController {
      * <p>The caller-supplied features are enriched with locally-derived history (velocity counts and
      * amount sums for the card) read from the on-prem store, so the Rust core checks the transaction
      * against what this card did before — not just the single request body. The transaction is then
-     * recorded locally so it counts toward future evaluations. Both steps are fail-soft: if the store
-     * is unavailable the decision is still made, on the caller-supplied features alone.
+     * recorded locally so it counts toward future evaluations. When
+     * {@code featurestore.fail-closed=true} (default), an unavailable store yields HOLD instead of
+     * evaluating without velocity history.
      */
     @PostMapping("/evaluate")
     public ResponseEntity<EdgeRuleInterpreter.Decision> evaluate(@RequestBody Map<String, Object> features) {
@@ -70,9 +77,21 @@ public class EdgeController {
 
         String panHash = features.get("pan_hash") == null ? null : String.valueOf(features.get("pan_hash"));
 
+        FeatureDerivation derived = featureStore.deriveFeaturesDetailed(panHash);
+        if (failClosedOnStoreUnavailable && derived.storeUnavailable()
+                && panHash != null && !panHash.isBlank()) {
+            EdgeRuleInterpreter.Decision hold = new EdgeRuleInterpreter.Decision(
+                    EdgeRuleInterpreter.Action.HOLD,
+                    0,
+                    List.of(),
+                    List.of("feature store unavailable (fail-closed): pre-auth evaluation withheld"));
+            metrics.record(hold, (System.nanoTime() - startNanos) / 1000.0);
+            return ResponseEntity.ok(hold);
+        }
+
         // Caller-supplied values win over derived ones, so an integrator can override for testing
         // or supply a richer value than the local store can compute.
-        Map<String, Object> enriched = new java.util.LinkedHashMap<>(featureStore.deriveFeatures(panHash));
+        Map<String, Object> enriched = new LinkedHashMap<>(derived.features());
         enriched.putAll(features);
 
         EdgeRuleInterpreter.Decision decision = engine.evaluate(enriched);

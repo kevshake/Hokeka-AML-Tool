@@ -35,6 +35,9 @@ public class TransactionEntity {
     @Column(name = "psp_id")
     private Long pspId;
 
+    @Column(name = "client_reference", length = 200)
+    private String clientReference;
+
     @Column(name = "terminal_id")
     private String terminalId;
 
@@ -189,6 +192,14 @@ public class TransactionEntity {
 
     public void setPspId(Long pspId) {
         this.pspId = pspId;
+    }
+
+    public String getClientReference() {
+        return clientReference;
+    }
+
+    public void setClientReference(String clientReference) {
+        this.clientReference = clientReference;
     }
 
     public String getTerminalId() {

@@ -457,12 +457,12 @@ Cloud path has **strong outbox atomicity** but **weak ingest idempotency** and *
 
 **Already shipped since backlog text:** W21-7 travel-rule jurisdiction (`MultiAssetRiskEngine.java:59-69`), W26-8 webhooks UI, batch→DecisionEngine (`BatchScoringService.java:95`).
 
-### Recommended next 5 engineering actions (no code in this PR)
+### Recommended next 5 engineering actions
 
-1. **Publish integrator contract for edge + cloud** — Document whether POST `/transactions/ingest` is mandatory after edge ALLOW/HOLD/BLOCK for SAR/case/webhook coverage; align `edge-transaction-evaluation.md` and `PSP_API_GUIDE.md`.
-2. **Webhook durability parity** — Route `RISK_ALERT` (and future case/merchant events) through the same transactional outbox pattern as Kafka, with delivery receipts and operator-visible failure state.
-3. **Wire dormant webhook producers** — Emit `CASE_UPDATE` from `CaseEventProducer` and `MERCHANT_STATUS_CHANGE` from `PspService` status transitions; update `API_INTEGRATION.md` to match `PSP_API_GUIDE.md`.
-4. **Pre-auth hardening** — (a) Batch Aerospike reads on edge; (b) configurable fail-closed when edge feature store unavailable; (c) add ingest idempotency key on `txn_id` or client reference.
+1. ~~**Publish integrator contract for edge + cloud**~~ — **Shipped:** [`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md); `edge-transaction-evaluation.md` and `PSP_API_GUIDE.md` updated.
+2. ~~**Webhook durability parity**~~ — **Shipped:** `event_outbox` channel `WEBHOOK`, `WebhookOutboxService` + `WebhookOutboxDispatcher`, HMAC preserved, `FAILED` terminal state.
+3. ~~**Wire dormant webhook producers**~~ — **Shipped:** `CASE_UPDATE` from case lifecycle; `MERCHANT_STATUS_CHANGE` from `PspService` status transitions.
+4. ~~**Pre-auth hardening**~~ — **Shipped:** batch Aerospike reads; `featurestore.fail-closed` (default true); ingest idempotency via `Idempotency-Key` / `clientReference`.
 5. **Close gap-register P0 drift** — Update `AML-FRAUD-COVERAGE-GAP-REGISTER.md` for batch scoring, funnel/TBML, W21-7; triage sanctions empty-list behaviour with a live Aerospike test.
 
 ---
