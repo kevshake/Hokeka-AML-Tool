@@ -8,7 +8,7 @@ import com.posgateway.aml.service.security.PspIsolationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.data.domain.Page;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.security.enabled=false",
         "spring.data.jpa.repositories.enabled=false"
 }, useDefaultFilters = false)
-@Import({UserController.class, UserControllerAuthorizationTest.MethodSecurity.class})
+@ContextConfiguration(classes = {UserController.class, UserControllerAuthorizationTest.MethodSecurity.class})
 class UserControllerAuthorizationTest {
     @TestConfiguration
     @EnableMethodSecurity
