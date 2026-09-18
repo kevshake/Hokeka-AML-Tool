@@ -72,7 +72,7 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
      */
     @org.springframework.data.jpa.repository.Query(value =
         "SELECT COUNT(*) FROM suspicious_activity_reports s " +
-        "JOIN compliance_cases c ON c.id = s.case_id " +
+        "JOIN compliance_cases c ON c.case_id = s.case_id " +
         "WHERE s.filed_at IS NOT NULL " +
         "  AND s.filed_at >= :since " +
         "  AND s.filed_at <= c.created_at + (:slaDays * INTERVAL '1 day')",
