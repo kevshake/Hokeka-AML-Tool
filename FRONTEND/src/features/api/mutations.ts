@@ -157,9 +157,11 @@ export const useRunMerchantVerification = () => {
 };
 
 export const useRunG2WebsiteScan = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (merchantId: number) =>
       apiClient.post<{
+        id?: number;
         merchantId: number;
         website?: string;
         scannedUrl?: string;
@@ -168,6 +170,19 @@ export const useRunG2WebsiteScan = () => {
         message: string;
         caseCreated: boolean;
       }>(`monitoring/g2/merchants/${merchantId}/scan`),
+    onSuccess: (_data, merchantId) => {
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "g2", "scans", merchantId] });
+    },
+  });
+};
+
+export const useTriggerSanctionsDownload = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.post<{ triggered: boolean; message: string }>("sanctions/download/trigger"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sanctions"] });
+    },
   });
 };
 

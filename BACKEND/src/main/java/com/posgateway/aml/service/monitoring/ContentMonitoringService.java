@@ -3,8 +3,11 @@ package com.posgateway.aml.service.monitoring;
 
 
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.entity.monitoring.G2ContentScanEvent;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.monitoring.G2ContentScanEventRepository;
 import com.posgateway.aml.service.case_management.ComplianceCaseService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
@@ -27,13 +30,16 @@ public class ContentMonitoringService {
 
     private final MerchantRepository merchantRepository;
     private final ComplianceCaseService caseService;
+    private final G2ContentScanEventRepository scanEventRepository;
     private final RestTemplate restTemplate;
 
     public ContentMonitoringService(MerchantRepository merchantRepository,
                                     ComplianceCaseService caseService,
+                                    G2ContentScanEventRepository scanEventRepository,
                                     RestTemplateBuilder restTemplateBuilder) {
         this.merchantRepository = merchantRepository;
         this.caseService = caseService;
+        this.scanEventRepository = scanEventRepository;
         this.restTemplate = restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
@@ -64,7 +70,7 @@ public class ContentMonitoringService {
 
         for (Merchant merchant : activeMerchants) {
             if (merchant.getWebsite() != null && !merchant.getWebsite().isEmpty()) {
-                scanMerchantWebsite(merchant);
+                scanMerchantWebsite(merchant, "SCHEDULED");
             }
         }
     }
@@ -73,17 +79,35 @@ public class ContentMonitoringService {
         return monitoringEnabled;
     }
 
+    public List<String> transactionLaunderingRuleCodes() {
+        return List.of("URL_MISMATCH_SUSPECTED_LAUNDERING", "MCC_MISMATCH_SUSPECTED_LAUNDERING");
+    }
+
+    public List<G2ContentScanEvent> recentScansForMerchant(Long merchantId, int limit) {
+        return scanEventRepository.findByMerchantIdOrderByScannedAtDesc(merchantId, PageRequest.of(0, limit));
+    }
+
     /**
      * Scan one merchant website for transaction-laundering / undeclared-business keywords.
      * Creates a compliance case when a risky keyword is found.
      */
     public G2ScanResult scanMerchantWebsite(Merchant merchant) {
+        return scanMerchantWebsite(merchant, null);
+    }
+
+    public G2ScanResult scanMerchantWebsite(Merchant merchant, String scannedBy) {
+        G2ScanResult result;
         if (!monitoringEnabled) {
-            return G2ScanResult.disabled(merchant.getMerchantId(), merchant.getWebsite());
+            result = G2ScanResult.disabled(merchant.getMerchantId(), merchant.getWebsite());
+        } else if (merchant.getWebsite() == null || merchant.getWebsite().isBlank()) {
+            result = G2ScanResult.noWebsite(merchant.getMerchantId());
+        } else {
+            result = executeWebsiteScan(merchant);
         }
-        if (merchant.getWebsite() == null || merchant.getWebsite().isBlank()) {
-            return G2ScanResult.noWebsite(merchant.getMerchantId());
-        }
+        return persistScanEvent(merchant, result, scannedBy);
+    }
+
+    private G2ScanResult executeWebsiteScan(Merchant merchant) {
         try {
             String url = normalizeWebsiteUrl(merchant.getWebsite());
             String htmlContent = restTemplate.getForObject(url, String.class);
@@ -112,7 +136,24 @@ public class ContentMonitoringService {
         }
     }
 
+    private G2ScanResult persistScanEvent(Merchant merchant, G2ScanResult result, String scannedBy) {
+        G2ContentScanEvent event = new G2ContentScanEvent();
+        event.setMerchantId(merchant.getMerchantId());
+        if (merchant.getPsp() != null) {
+            event.setPspId(merchant.getPsp().getPspId());
+        }
+        event.setWebsite(result.website());
+        event.setScannedUrl(result.scannedUrl());
+        event.setStatus(result.status());
+        event.setMatchedKeyword(result.matchedKeyword());
+        event.setMessage(result.message());
+        event.setCaseCreated(result.caseCreated());
+        event.setScannedBy(scannedBy);
+        return G2ScanResult.fromEntity(scanEventRepository.save(event));
+    }
+
     public record G2ScanResult(
+            Long id,
             Long merchantId,
             String website,
             String scannedUrl,
@@ -121,26 +162,32 @@ public class ContentMonitoringService {
             String message,
             boolean caseCreated) {
         static G2ScanResult disabled(Long merchantId, String website) {
-            return new G2ScanResult(merchantId, website, null, "DISABLED", null,
+            return new G2ScanResult(null, merchantId, website, null, "DISABLED", null,
                     "G2 content monitoring is disabled (G2_MONITORING_ENABLED=false)", false);
         }
 
         static G2ScanResult noWebsite(Long merchantId) {
-            return new G2ScanResult(merchantId, null, null, "NO_WEBSITE", null,
+            return new G2ScanResult(null, merchantId, null, null, "NO_WEBSITE", null,
                     "Merchant has no website URL configured", false);
         }
 
         static G2ScanResult clear(Long merchantId, String scannedUrl, String message) {
-            return new G2ScanResult(merchantId, scannedUrl, scannedUrl, "CLEAR", null, message, false);
+            return new G2ScanResult(null, merchantId, scannedUrl, scannedUrl, "CLEAR", null, message, false);
         }
 
         static G2ScanResult match(Long merchantId, String scannedUrl, String keyword) {
-            return new G2ScanResult(merchantId, scannedUrl, scannedUrl, "MATCH", keyword,
+            return new G2ScanResult(null, merchantId, scannedUrl, scannedUrl, "MATCH", keyword,
                     "Risky keyword detected — compliance case opened", true);
         }
 
         static G2ScanResult error(Long merchantId, String website, String message) {
-            return new G2ScanResult(merchantId, website, null, "ERROR", null, message, false);
+            return new G2ScanResult(null, merchantId, website, null, "ERROR", null, message, false);
+        }
+
+        static G2ScanResult fromEntity(G2ContentScanEvent event) {
+            return new G2ScanResult(event.getId(), event.getMerchantId(), event.getWebsite(),
+                    event.getScannedUrl(), event.getStatus(), event.getMatchedKeyword(),
+                    event.getMessage(), event.isCaseCreated());
         }
     }
 

@@ -39,9 +39,9 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Adverse media (GDELT) | 🟡 | Real HTTPS GDELT client, wired to onboarding + periodic; company-level only, flag-gated |
 | Daily rescreening | 🟡 | Daily crons rescreen **merchants+UBOs due** only (not end-customers); two overlapping 03:00 jobs on the same due-set |
 | **Sanctions data present** | 🟡 | **`sanctions.download.enabled=false` by default** — watchlist must be ingested before screening is meaningful. Empty/unloaded Aerospike set now fails closed as **UNAVAILABLE** (not CLEAR) via `SanctionsService.hasSanctionsData()`; startup health guard (W38-2) still applies. |
-| **PEP screening** | 🟠 | Ingest never tags entities `PEP`/`pepLevel`, so the `isPep` branch effectively never fires; no current/former/RCA; family/associate is a manual checkbox |
+| **PEP screening** | 🟡 | OpenSanctions ingest tags `pepLevel` (PEP/RCA) at download; UBO/merchant `isPep` updated on screening; dashboard shows PEP matches. Family/associate remains manual checkbox |
 | Individual CIP / cardholder counterparty screening | 🟡 | Merchant/B2B-centric; individuals exist only as UBOs; gov-IDs captured but not authenticated; counterparty screening ships `screen-counterparty=false` |
-| Document/ID verification | 🟡 | Storage + ClamAV malware scan + **manual** human verification; no automated IDV/OCR/liveness |
+| Document/ID verification | 🟡 | Storage + ClamAV + **manual** review; **internal IDV auto-approve** (Wave 70, not Sumsub) wired E2E on KYC Verification tab; external adapters (Smile ID, etc.) fail-closed until credentialed |
 | EDD (source of funds/wealth) | 🟡 | Requirement computed, but `initiateEdd` is manual; SOF/SOW are attestation booleans |
 
 ## 3. Transaction monitoring & rules
@@ -84,7 +84,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 |---|---|---|
 | Structuring / rapid-movement / round-dollar scenarios | ✅ | `AmlDetectionController` `/aml/detection` exposes these three |
 | Volume-vs-expected & business-age risk | ✅ | `RiskScoringService.scoreVolume/scoreBusinessAge` |
-| Website / transaction-laundering monitoring | 🟡 | `ContentMonitoringService` daily single-page keyword scan → case; **no crawler, redirect chains, product classification, content-vs-onboarding diff, or evidence retention** |
+| Website / transaction-laundering monitoring | 🟡 | G2: `ContentMonitoringService` keyword scan → case + **persisted scan events** + dashboard manual scan/history; URL/MCC mismatch Easy Rules active. **No** crawler/redirect/product-classification yet |
 | Merchant expected-profile baseline | 🟡 | Only `expectedMonthlyVolume` stored; no expected ticket/currencies/refund-ratio/cross-border-ratio/business-model |
 | Linked-merchant network / reincarnation | 🟡 | `LinkAnalysisService` matches device+IP vs blocked merchants only; no shared UBO/phone/email/domain/settlement/address/webhook |
 | Funnel-account / trade-based-ML detectors | ✅ | Wired via `AmlDetectionController` (`/aml/detection/funnel-accounts`, `/aml/detection/trade-based-ml`) |
@@ -138,7 +138,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 
 **P0 — can produce a wrong AML outcome on a live path**
 1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds.
-2. **PEP classification dead** — tag `PEP`/`pepLevel` at ingest so the `isPep` path fires.
+2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`.
 3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill.
 
 **P1 — reachable stub / inert control ("dummy code")**

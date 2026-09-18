@@ -12,8 +12,10 @@ import { apiClient } from "../../lib/apiClient";
 import { getApiUrl } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  useG2MerchantScans,
   useG2MonitoringStatus,
   useMerchantVerificationSignals,
+  type G2ScanEvent,
   type MerchantVerificationSignal,
   type UnderwritingOutcome,
 } from "../../features/api/queries";
@@ -39,6 +41,15 @@ interface Overview {
   cdd: { riskLevel: string; riskScore: number; cddLevel: string; requiredDocuments: string[]; eddRequired: boolean };
   completeness: { overallPercentage: number; completenessLevel: string; documentPercentage: number; ownerPercentage: number; basicInfoPercentage: number; missingItems: string[] };
   ownership: Ownership; edd: EddStatus;
+  verification?: {
+    latestRunId?: string; lastVerifiedAt?: string;
+    internalIdvAutoApproveApplied: boolean; manualReviewRecommended: boolean;
+    latestRunSignalCount: number; note: string;
+  };
+  providerGates?: {
+    sanctionsDownloadEnabled: boolean; adverseMediaEnabled: boolean;
+    g2MonitoringEnabled: boolean; sumsubEnabled: boolean; idvPolicyNote: string;
+  };
 }
 interface DocumentEvidence {
   id: number; fileName: string; documentType: string; status: string; expiryDate?: string; uploadedAt?: string;
@@ -118,6 +129,7 @@ export default function KycMerchantDetailPage() {
   });
   const verificationSignalsQuery = useMerchantVerificationSignals(id, tab === "verification");
   const g2StatusQuery = useG2MonitoringStatus();
+  const g2ScansQuery = useG2MerchantScans(id, tab === "verification");
   const runVerification = useRunMerchantVerification();
   const runG2Scan = useRunG2WebsiteScan();
   const [lastOutcome, setLastOutcome] = useState<UnderwritingOutcome | null>(null);
@@ -224,7 +236,9 @@ export default function KycMerchantDetailPage() {
           {tab === "verification" && (
             <VerificationTab
               signals={verificationSignalsQuery.data || []}
-              loading={verificationSignalsQuery.isLoading}
+              g2Scans={g2ScansQuery.data || []}
+              g2Rules={g2StatusQuery.data?.transactionLaunderingRules || []}
+              loading={verificationSignalsQuery.isLoading || g2ScansQuery.isLoading}
               lastOutcome={lastOutcome}
               g2Enabled={g2StatusQuery.data?.enabled ?? false}
               canRun={canScreen}
@@ -273,8 +287,10 @@ export default function KycMerchantDetailPage() {
   );
 }
 
-function VerificationTab({ signals, loading, lastOutcome, g2Enabled, canRun, pending, onRunVerification, onRunG2Scan }: {
+function VerificationTab({ signals, g2Scans, g2Rules, loading, lastOutcome, g2Enabled, canRun, pending, onRunVerification, onRunG2Scan }: {
   signals: MerchantVerificationSignal[];
+  g2Scans: G2ScanEvent[];
+  g2Rules: string[];
   loading: boolean;
   lastOutcome: UnderwritingOutcome | null;
   g2Enabled: boolean;
@@ -329,6 +345,17 @@ function VerificationTab({ signals, loading, lastOutcome, g2Enabled, canRun, pen
         </tbody>
       </table>
       {!latestSignals.length && <Empty icon={<ShieldCheck size={34} />} text="No verification signals yet. Run underwriting from onboarding or use Run underwriting above." />}
+    </div>
+    {g2Rules.length > 0 && <div className="mt-6"><h3 className="mb-2 text-sm font-semibold text-white">G2 transaction-laundering rules (Easy Rules engine)</h3><div className="flex flex-wrap gap-2">{g2Rules.map((rule) => <TwBadge key={rule} variant="info">{rule.replaceAll("_", " ")}</TwBadge>)}</div></div>}
+    <h3 className="mb-2 mt-6 text-sm font-semibold text-white">G2 website scan history</h3>
+    <div className="overflow-auto border border-white/10">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-[var(--surface-2)] text-xs uppercase text-glass-muted"><tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">URL</th><th className="px-3 py-2">Keyword</th><th className="px-3 py-2">Case</th></tr></thead>
+        <tbody className="divide-y divide-white/10">
+          {g2Scans.map((scan) => <tr key={scan.id}><td className="px-3 py-2 text-glass-muted">{scan.scannedAt ? new Date(scan.scannedAt).toLocaleString() : "—"}</td><td className="px-3 py-2"><TwBadge variant={scan.status === "MATCH" ? "danger" : scan.status === "CLEAR" ? "success" : "warning"}>{scan.status}</TwBadge></td><td className="px-3 py-2 text-xs text-white">{scan.scannedUrl || scan.website || "—"}</td><td className="px-3 py-2 text-glass-muted">{scan.matchedKeyword || "—"}</td><td className="px-3 py-2">{scan.caseCreated ? "Opened" : "—"}</td></tr>)}
+        </tbody>
+      </table>
+      {!g2Scans.length && <p className="p-4 text-sm text-glass-muted">No G2 website scans recorded yet.</p>}
     </div>
   </section>;
 }
@@ -417,8 +444,21 @@ function OverviewTab({ overview }: { overview: Overview }) {
     ["CDD level", overview.cdd.cddLevel], ["Risk", `${overview.cdd.riskLevel} (${overview.cdd.riskScore.toFixed(1)})`],
     ["KYC completeness", `${overview.completeness.overallPercentage.toFixed(0)}%`], ["Ownership", `${overview.ownership.totalOwnershipPercentage}%`],
     ["EDD", overview.edd.status],
+    ["Internal IDV", overview.verification?.internalIdvAutoApproveApplied ? "Auto-approved" : overview.verification?.manualReviewRecommended ? "Manual review" : "Pending / not run"],
   ];
-  return <section><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{metrics.map(([label, value]) => <div key={label} className="border-l-2 border-burgundy-600 bg-[var(--surface-2)] px-4 py-3"><p className="text-xs uppercase text-glass-muted">{label}</p><p className="mt-1 text-lg font-semibold text-white">{value}</p></div>)}</div><div className="mt-6 grid gap-6 lg:grid-cols-2"><div><h2 className="mb-3 text-sm font-semibold text-white">Required evidence</h2><div className="flex flex-wrap gap-2">{overview.cdd.requiredDocuments.map((item) => <TwBadge key={item} variant="info">{item.replaceAll("_", " ")}</TwBadge>)}</div></div><div><h2 className="mb-3 text-sm font-semibold text-white">Outstanding KYC items</h2>{overview.completeness.missingItems.length ? <ul className="space-y-2 text-sm text-amber-200">{overview.completeness.missingItems.map((item) => <li key={item} className="border-l-2 border-amber-600 pl-3">{item}</li>)}</ul> : <p className="flex items-center gap-2 text-sm text-emerald-300"><ShieldCheck size={17} /> No missing items identified.</p>}</div></div></section>;
+  const gates = overview.providerGates;
+  return <section>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{metrics.map(([label, value]) => <div key={label} className="border-l-2 border-burgundy-600 bg-[var(--surface-2)] px-4 py-3"><p className="text-xs uppercase text-glass-muted">{label}</p><p className="mt-1 text-lg font-semibold text-white">{value}</p></div>)}</div>
+    {overview.verification?.note && <p className="mt-4 border-l-2 border-burgundy-600 pl-3 text-sm text-glass-muted">{overview.verification.note}</p>}
+    {gates && <div className="mt-4 rounded-lg border border-white/10 bg-[var(--surface-2)] p-4 text-xs text-glass-muted">
+      <p className="mb-2 font-semibold text-white">Provider gates</p>
+      <p>Sanctions ingest: {gates.sanctionsDownloadEnabled ? "enabled" : "disabled — set SANCTIONS_DOWNLOAD_ENABLED=true"}</p>
+      <p>Adverse media (GDELT): {gates.adverseMediaEnabled ? "enabled" : "disabled — set ADVERSE_MEDIA_ENABLED=true"}</p>
+      <p>G2 content monitoring: {gates.g2MonitoringEnabled ? "enabled" : "disabled"}</p>
+      <p className="mt-2 text-white/70">{gates.idvPolicyNote}</p>
+    </div>}
+    <div className="mt-6 grid gap-6 lg:grid-cols-2"><div><h2 className="mb-3 text-sm font-semibold text-white">Required evidence</h2><div className="flex flex-wrap gap-2">{overview.cdd.requiredDocuments.map((item) => <TwBadge key={item} variant="info">{item.replaceAll("_", " ")}</TwBadge>)}</div></div><div><h2 className="mb-3 text-sm font-semibold text-white">Outstanding KYC items</h2>{overview.completeness.missingItems.length ? <ul className="space-y-2 text-sm text-amber-200">{overview.completeness.missingItems.map((item) => <li key={item} className="border-l-2 border-amber-600 pl-3">{item}</li>)}</ul> : <p className="flex items-center gap-2 text-sm text-emerald-300"><ShieldCheck size={17} /> No missing items identified.</p>}</div></div>
+  </section>;
 }
 
 function DocumentsTab({ documents, loading, merchantId }: { documents: DocumentEvidence[]; loading: boolean; merchantId: number }) {

@@ -4,6 +4,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.underwriting.MerchantVerificationSignalRepository;
 import com.posgateway.aml.service.compliance.AuditService;
 import com.posgateway.aml.service.corporate.CorporateIntelligenceService;
 import com.posgateway.aml.service.edd.EnhancedDueDiligenceService;
@@ -33,12 +34,14 @@ class KycDueDiligenceControllerTest {
     @Mock KycCompletenessService completenessService;
     @Mock AuditService auditService;
     @Mock CorporateIntelligenceService corporateIntelligenceService;
+    @Mock MerchantVerificationSignalRepository verificationSignalRepository;
     private KycDueDiligenceController controller;
 
     @BeforeEach
     void setUp() {
         controller = new KycDueDiligenceController(merchantRepository, isolationService, ownershipService,
-                eddService, cddService, completenessService, auditService, corporateIntelligenceService);
+                eddService, cddService, completenessService, auditService, corporateIntelligenceService,
+                verificationSignalRepository);
     }
 
     @Test

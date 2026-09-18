@@ -6,7 +6,10 @@ import com.posgateway.aml.entity.merchant.BeneficialOwner;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.model.ScreeningResult;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.underwriting.MerchantVerificationSignalRepository;
+import com.posgateway.aml.entity.underwriting.MerchantVerificationSignal;
 import com.posgateway.aml.service.compliance.AuditService;
+import org.springframework.beans.factory.annotation.Value;
 import com.posgateway.aml.dto.corporate.CorporateIntelligenceDtos.CheckResponse;
 import com.posgateway.aml.service.corporate.CorporateIntelligenceService;
 import com.posgateway.aml.service.edd.EnhancedDueDiligenceService;
@@ -38,6 +41,16 @@ public class KycDueDiligenceController {
     private final KycCompletenessService completenessService;
     private final AuditService auditService;
     private final CorporateIntelligenceService corporateIntelligenceService;
+    private final MerchantVerificationSignalRepository verificationSignalRepository;
+
+    @Value("${sanctions.download.enabled:false}")
+    private boolean sanctionsDownloadEnabled;
+
+    @Value("${adverse.media.enabled:false}")
+    private boolean adverseMediaEnabled;
+
+    @Value("${g2.monitoring.enabled:true}")
+    private boolean g2MonitoringEnabled;
 
     public KycDueDiligenceController(MerchantRepository merchantRepository,
                                      PspIsolationService isolationService,
@@ -46,7 +59,8 @@ public class KycDueDiligenceController {
                                      RiskBasedCddService cddService,
                                      KycCompletenessService completenessService,
                                      AuditService auditService,
-                                     CorporateIntelligenceService corporateIntelligenceService) {
+                                     CorporateIntelligenceService corporateIntelligenceService,
+                                     MerchantVerificationSignalRepository verificationSignalRepository) {
         this.merchantRepository = merchantRepository;
         this.isolationService = isolationService;
         this.ownershipService = ownershipService;
@@ -55,6 +69,7 @@ public class KycDueDiligenceController {
         this.completenessService = completenessService;
         this.auditService = auditService;
         this.corporateIntelligenceService = corporateIntelligenceService;
+        this.verificationSignalRepository = verificationSignalRepository;
     }
 
     @GetMapping("/overview")
@@ -64,7 +79,9 @@ public class KycDueDiligenceController {
                 cddService.assessCustomerRisk(merchant),
                 completenessService.calculateCompletenessScore(merchantId),
                 ownership(ownershipService.getOwnershipStructure(merchantId)),
-                eddService.getEddStatus(merchantId));
+                eddService.getEddStatus(merchantId),
+                verificationSummary(merchantId),
+                providerGates());
     }
 
     @GetMapping("/beneficial-owners")
@@ -214,11 +231,57 @@ public class KycDueDiligenceController {
         return value.substring(Math.max(0, value.length() - 4));
     }
 
+    private VerificationSummary verificationSummary(Long merchantId) {
+        List<MerchantVerificationSignal> signals =
+                verificationSignalRepository.findByMerchantIdOrderByObservedAtDesc(merchantId);
+        if (signals.isEmpty()) {
+            return new VerificationSummary(null, null, false, false, 0,
+                    "No underwriting verification run recorded yet");
+        }
+        String latestRunId = signals.get(0).getRunId();
+        List<MerchantVerificationSignal> latestRun = signals.stream()
+                .filter(s -> latestRunId.equals(s.getRunId()))
+                .toList();
+        boolean internalIdv = latestRun.stream()
+                .anyMatch(s -> "INTERNAL_IDV_AUTO_APPROVE".equals(s.getSignalCode()));
+        boolean manualReview = latestRun.stream()
+                .anyMatch(s -> Boolean.TRUE.equals(s.getRequiresManualReview()));
+        LocalDateTime lastAt = latestRun.stream()
+                .map(MerchantVerificationSignal::getObservedAt)
+                .filter(java.util.Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        String note = internalIdv
+                ? "Internal IDV auto-approve path applied (Wave 70 — not Sumsub)"
+                : manualReview
+                ? "Manual review recommended from latest verification signals"
+                : "Latest verification run recorded";
+        return new VerificationSummary(latestRunId, lastAt, internalIdv, manualReview, latestRun.size(), note);
+    }
+
+    private ProviderGates providerGates() {
+        return new ProviderGates(
+                sanctionsDownloadEnabled,
+                adverseMediaEnabled,
+                g2MonitoringEnabled,
+                false,
+                "Sumsub removed; screening uses aml-microservice. Internal IDV auto-approve replaces external Sumsub IDV.");
+    }
+
     public record DueDiligenceOverview(Long merchantId, String merchantName,
                                        RiskBasedCddService.CddAssessment cdd,
                                        KycCompletenessService.CompletenessScore completeness,
                                        OwnershipResponse ownership,
-                                       EnhancedDueDiligenceService.EddStatus edd) {}
+                                       EnhancedDueDiligenceService.EddStatus edd,
+                                       VerificationSummary verification,
+                                       ProviderGates providerGates) {}
+    public record VerificationSummary(String latestRunId, LocalDateTime lastVerifiedAt,
+                                      boolean internalIdvAutoApproveApplied,
+                                      boolean manualReviewRecommended, int latestRunSignalCount,
+                                      String note) {}
+    public record ProviderGates(boolean sanctionsDownloadEnabled, boolean adverseMediaEnabled,
+                                boolean g2MonitoringEnabled, boolean sumsubEnabled,
+                                String idvPolicyNote) {}
     public record OwnershipResponse(Long merchantId, int totalOwnershipPercentage, boolean complete,
                                     List<BeneficialOwnerResponse> owners, List<Long> ultimateBeneficialOwnerIds) {}
     public record BeneficialOwnerResponse(Long id, String fullName, LocalDate dateOfBirth, String nationality,

@@ -605,12 +605,53 @@ export interface G2MonitoringStatus {
   enabled: boolean;
   provider: string;
   description: string;
+  transactionLaunderingRules?: string[];
+  envKeys?: string;
 }
 
 export const useG2MonitoringStatus = () => {
   return useQuery({
     queryKey: ["monitoring", "g2", "status"],
     queryFn: () => apiClient.get<G2MonitoringStatus>("monitoring/g2/status"),
+    staleTime: 60_000,
+  });
+};
+
+export interface G2ScanEvent {
+  id: number;
+  merchantId: number;
+  website?: string;
+  scannedUrl?: string;
+  status: string;
+  matchedKeyword?: string;
+  message?: string;
+  caseCreated: boolean;
+  scannedAt?: string;
+  scannedBy?: string;
+}
+
+export const useG2MerchantScans = (merchantId: number, enabled = true) => {
+  return useQuery({
+    queryKey: ["monitoring", "g2", "scans", merchantId],
+    queryFn: () => apiClient.get<G2ScanEvent[]>(`monitoring/g2/merchants/${merchantId}/scans?limit=20`),
+    enabled: Number.isFinite(merchantId) && merchantId > 0 && enabled,
+  });
+};
+
+export interface SanctionsDownloadStatus {
+  enabled: boolean;
+  provider: string;
+  opensanctionsUrlConfigured: boolean;
+  lastSuccessfulUpdate?: string;
+  hoursSinceLastUpdate: number;
+  pepClassificationAtIngest: boolean;
+  envKeys: string;
+}
+
+export const useSanctionsDownloadStatus = () => {
+  return useQuery({
+    queryKey: ["sanctions", "download", "status"],
+    queryFn: () => apiClient.get<SanctionsDownloadStatus>("sanctions/download/status"),
     staleTime: 60_000,
   });
 };

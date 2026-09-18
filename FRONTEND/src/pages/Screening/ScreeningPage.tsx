@@ -4,15 +4,21 @@ import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwBadge from "../../components/Common/TwBadge";
 import { AlertTriangle, Loader2, Search, Shield, UserCheck } from "lucide-react";
 import MonitoringAlertsPanel from "../../components/monitoring/MonitoringAlertsPanel";
-import { useSanctionsHealth, useSanctionsListVersions } from "../../features/api/queries";
+import { useSanctionsDownloadStatus, useSanctionsHealth, useSanctionsListVersions } from "../../features/api/queries";
+import { useTriggerSanctionsDownload } from "../../features/api/mutations";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
   const { data: health } = useSanctionsHealth();
   const { data: listVersions = [] } = useSanctionsListVersions();
+  const { data: downloadStatus } = useSanctionsDownloadStatus();
+  const triggerDownload = useTriggerSanctionsDownload();
+  const canManageIngest = ["SUPER_ADMIN", "ADMIN", "COMPLIANCE_OFFICER", "MLRO"].includes(user?.role?.name?.toUpperCase() || "");
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
@@ -44,6 +50,27 @@ export default function ScreeningPage() {
             <p className="font-medium">Screening engine degraded</p>
             <p className="mt-1 text-amber-200/90">{health.message}</p>
             <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded (`sanctions.download.enabled=true`).</p>
+          </div>
+        </div>
+      )}
+      {downloadStatus && (
+        <div className="mb-4 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3 text-xs text-glass-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
+              <p className="mt-1">PEP tags applied at ingest ({downloadStatus.pepClassificationAtIngest ? "role.pep / role.rca" : "off"}).
+                {downloadStatus.lastSuccessfulUpdate ? ` Last success: ${downloadStatus.lastSuccessfulUpdate}.` : " No successful ingest recorded."}</p>
+              {!downloadStatus.enabled && <p className="mt-1 text-amber-200">Set SANCTIONS_DOWNLOAD_ENABLED=true and sanctions.opensanctions.url for live watchlist data.</p>}
+            </div>
+            {canManageIngest && downloadStatus.enabled && (
+              <button
+                onClick={() => triggerDownload.mutate()}
+                disabled={triggerDownload.isPending}
+                className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50"
+              >
+                {triggerDownload.isPending ? "Triggering..." : "Trigger ingest"}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -88,6 +115,8 @@ export default function ScreeningPage() {
               </h4>
               {result.status === "UNAVAILABLE" ? (
                 <TwBadge variant="warning">UNAVAILABLE</TwBadge>
+              ) : result.pepMatchFound ? (
+                <TwBadge variant="warning">PEP MATCH</TwBadge>
               ) : result.matchFound !== undefined ? (
                 <TwBadge variant={result.matchFound ? "danger" : "success"}>
                   {result.matchFound ? "MATCH FOUND" : "NO MATCH"}
@@ -103,6 +132,7 @@ export default function ScreeningPage() {
                     <p className="text-sm font-semibold text-white">{match.name || match.fullName || "Unknown"}</p>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-glass-muted">
                       {match.listName && <span>List: {match.listName}</span>}
+                      {match.pepLevel && <span>PEP: {match.pepLevel}</span>}
                       {match.score !== undefined && <span>Score: {match.score}</span>}
                       {match.category && <span>Category: {match.category}</span>}
                     </div>
