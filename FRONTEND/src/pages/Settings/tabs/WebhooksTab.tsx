@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Box,
-  Paper,
   Typography,
   TextField,
   Button,
@@ -14,10 +13,13 @@ import {
   CircularProgress,
   IconButton,
   Tooltip,
-  Chip,
   Snackbar,
 } from "@mui/material";
-import { Add as AddIcon, Delete as DeleteIcon, ContentCopy as CopyIcon } from "@mui/icons-material";
+import { Add as AddIcon, Delete as DeleteIcon } from "@mui/icons-material";
+import { Webhook } from "lucide-react";
+import GlassCard from "../../../components/Common/GlassCard";
+import CopyOnceToken from "../../../components/Common/CopyOnceToken";
+import TwBadge from "../../../components/Common/TwBadge";
 import {
   useWebhookSubscriptions,
   type WebhookSubscriptionRow,
@@ -29,15 +31,16 @@ import {
 
 const EVENT_TYPES = ["RISK_ALERT", "CASE_UPDATE", "MERCHANT_STATUS_CHANGE"];
 
-/**
- * W26-8 fix: the Psp entity had no webhook/notification settings at all -- PSPs had no way to
- * configure a callback URL for AML results. Built over W36-2's WebhookSubscriptionController
- * (already tenant-scoped: subscribe/list/unsubscribe act only on the caller's own PSP).
- *
- * Note: CASE_UPDATE and MERCHANT_STATUS_CHANGE can be subscribed to, but nothing in the codebase
- * emits them yet (only RISK_ALERT is actually wired to a real trigger, from this same session's
- * W36-2 fix) -- the UI says so rather than implying full delivery.
- */
+const inputSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "var(--radius)",
+    backgroundColor: "var(--surface-1)",
+    "& fieldset": { borderColor: "var(--line-control)" },
+    "&:hover fieldset": { borderColor: "rgb(var(--brand-accent-rgb) / 0.5)" },
+    "&.Mui-focused fieldset": { borderColor: "var(--brand-accent)" },
+  },
+};
+
 export default function WebhooksTab() {
   const { data: subscriptions = [], isLoading, isError } = useWebhookSubscriptions();
   const createSub = useCreateWebhookSubscription();
@@ -48,7 +51,9 @@ export default function WebhooksTab() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [toast, setToast] = useState<{ open: boolean; severity: "success" | "error"; message: string }>({
-    open: false, severity: "success", message: "",
+    open: false,
+    severity: "success",
+    message: "",
   });
 
   const handleCreate = async () => {
@@ -80,34 +85,38 @@ export default function WebhooksTab() {
   };
 
   return (
-    <Paper sx={{ p: 2, backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-      <Typography variant="h6" sx={{ color: "text.primary", mb: 1 }}>
-        Webhook Subscriptions
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Get notified in real time instead of polling. Only <strong>RISK_ALERT</strong> is currently
-        delivered — CASE_UPDATE and MERCHANT_STATUS_CHANGE can be subscribed to, but nothing emits
-        them yet.
-      </Typography>
+    <GlassCard padding="md" glowVariant="teal">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-surface-2 text-teal">
+          <Webhook size={18} />
+        </div>
+        <div>
+          <span className="hokeka-section-label">Integrations</span>
+          <Typography variant="h6" sx={{ mt: 0.5, fontFamily: "var(--font-display)" }}>
+            Webhook subscriptions
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Get notified in real time instead of polling. Only <strong>RISK_ALERT</strong> is currently
+            delivered — other event types can be subscribed to, but nothing emits them yet.
+          </Typography>
+        </div>
+      </div>
 
       {newSecret && (
-        <Alert
-          severity="info"
-          sx={{ mb: 2 }}
-          onClose={() => setNewSecret(null)}
-          action={
-            <Tooltip title="Copy signing secret">
-              <IconButton size="small" onClick={() => navigator.clipboard.writeText(newSecret)}>
-                <CopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          }
-        >
-          Signing secret (shown once, store it now): <code>{newSecret}</code>
-        </Alert>
+        <CopyOnceToken
+          token={newSecret}
+          title="Signing secret — copy now"
+          hint="Store this secret to verify webhook payloads. It cannot be shown again."
+          onDismiss={() => setNewSecret(null)}
+          className="mb-4"
+        />
       )}
 
-      {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load webhook subscriptions.</Alert>}
+      {isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to load webhook subscriptions.
+        </Alert>
+      )}
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6}>
@@ -118,17 +127,22 @@ export default function WebhooksTab() {
             value={form.callbackUrl}
             onChange={(e) => setForm((f) => ({ ...f, callbackUrl: e.target.value }))}
             placeholder="https://yourdomain.com/webhooks/hokeka"
+            sx={inputSx}
           />
         </Grid>
         <Grid item xs={8} sm={4}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Event Type</InputLabel>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Event type</InputLabel>
             <Select
               value={form.eventType}
-              label="Event Type"
+              label="Event type"
               onChange={(e) => setForm((f) => ({ ...f, eventType: e.target.value }))}
             >
-              {EVENT_TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+              {EVENT_TYPES.map((t) => (
+                <MenuItem key={t} value={t}>
+                  {t.replaceAll("_", " ")}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Grid>
@@ -139,7 +153,13 @@ export default function WebhooksTab() {
             startIcon={creating ? <CircularProgress size={16} /> : <AddIcon />}
             onClick={handleCreate}
             disabled={creating || !form.callbackUrl}
-            sx={{ height: "40px", textTransform: "none" }}
+            sx={{
+              height: "40px",
+              textTransform: "none",
+              borderRadius: "var(--radius)",
+              backgroundColor: "var(--brand-secondary)",
+              color: "var(--brand-on-secondary)",
+            }}
           >
             Add
           </Button>
@@ -148,31 +168,26 @@ export default function WebhooksTab() {
 
       {isLoading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <CircularProgress size={24} />
+          <CircularProgress size={24} sx={{ color: "var(--brand-secondary)" }} />
         </Box>
       ) : subscriptions.length > 0 ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <div className="flex flex-col gap-2">
           {subscriptions.map((sub) => (
-            <Box
+            <div
               key={sub.id}
-              sx={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                p: 1.5, border: "1px solid rgba(0,0,0,0.08)", borderRadius: 1,
-              }}
+              className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-surface-1/80 px-4 py-3 transition hover:border-hairline-strong"
             >
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
                   {sub.callbackUrl}
                 </Typography>
-                <Box sx={{ display: "flex", gap: 1, mt: 0.5, alignItems: "center" }}>
-                  <Chip label={sub.eventType} size="small" />
-                  <Chip
-                    label={sub.active ? "Active" : "Inactive"}
-                    size="small"
-                    color={sub.active ? "success" : "default"}
-                  />
+                <Box sx={{ display: "flex", gap: 1, mt: 0.75, alignItems: "center", flexWrap: "wrap" }}>
+                  <TwBadge variant="info">{sub.eventType.replaceAll("_", " ")}</TwBadge>
+                  <TwBadge variant={sub.active ? "success" : "default"}>
+                    {sub.active ? "Active" : "Inactive"}
+                  </TwBadge>
                   {sub.failureCount > 0 && (
-                    <Chip label={`${sub.failureCount} failed deliveries`} size="small" color="warning" />
+                    <TwBadge variant="warning">{sub.failureCount} failed deliveries</TwBadge>
                   )}
                 </Box>
               </Box>
@@ -182,19 +197,22 @@ export default function WebhooksTab() {
                     size="small"
                     onClick={() => handleDelete(sub.id)}
                     disabled={deletingId === sub.id}
-                    sx={{ color: "var(--danger, #d32f2f)" }}
+                    sx={{ color: "var(--danger)" }}
                   >
                     {deletingId === sub.id ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" />}
                   </IconButton>
                 </span>
               </Tooltip>
-            </Box>
+            </div>
           ))}
-        </Box>
+        </div>
       ) : (
-        <Typography variant="body2" color="text.disabled" sx={{ textAlign: "center", py: 3 }}>
-          No webhook subscriptions configured.
-        </Typography>
+        <div className="hokeka-empty-state py-8">
+          <p className="hokeka-empty-state__title">No webhooks configured</p>
+          <p className="hokeka-empty-state__body">
+            Add a callback URL to receive AML alerts and future event types at your endpoint.
+          </p>
+        </div>
       )}
 
       <Snackbar
@@ -207,6 +225,6 @@ export default function WebhooksTab() {
           {toast.message}
         </Alert>
       </Snackbar>
-    </Paper>
+    </GlassCard>
   );
 }
