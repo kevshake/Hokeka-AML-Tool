@@ -1,5 +1,6 @@
 package com.hokeka.aml.service;
 
+import com.aerospike.client.AerospikeClient;
 import com.hokeka.aml.model.AmlResult;
 import com.hokeka.aml.model.SanctionsScreenResponse;
 import com.hokeka.aml.model.TransactionRequest;
@@ -12,10 +13,29 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class SanctionsAvailabilityTest {
+
+    @Test
+    void connectedButEmptyDatasetReturnsUnavailableNotClear() {
+        AerospikeClient client = mock(AerospikeClient.class);
+        when(client.isConnected()).thenReturn(true);
+        doAnswer(invocation -> null).when(client).query(any(), any(), any());
+        doAnswer(invocation -> null).when(client).scanAll(any(), any(), any(), any());
+
+        SanctionsService service = new SanctionsService();
+        ReflectionTestUtils.setField(service, "aerospikeClient", client);
+        ReflectionTestUtils.setField(service, "useSearchIndex", false);
+
+        SanctionsScreenResponse result = service.screenName("Jane Doe", "PERSON");
+
+        assertEquals("UNAVAILABLE", result.getStatus());
+        assertTrue(result.getMatches().isEmpty());
+    }
 
     @Test
     void disconnectedAerospikeReturnsUnavailable() {

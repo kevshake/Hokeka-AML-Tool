@@ -4,7 +4,11 @@ import com.posgateway.aml.client.blockchain.BlockchainAnalyticsClient;
 import com.posgateway.aml.dto.multiasset.MultiAssetDtos.IngestTransactionRequest;
 import com.posgateway.aml.entity.crypto.TravelRuleJurisdictionPolicy;
 import com.posgateway.aml.entity.multiasset.*;
+import com.posgateway.aml.model.ScreeningResult;
+import com.posgateway.aml.model.ScreeningResult.EntityType;
+import com.posgateway.aml.model.ScreeningResult.ScreeningStatus;
 import com.posgateway.aml.repository.crypto.TravelRulePolicyRepository;
+import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -55,6 +59,10 @@ public class MultiAssetRiskEngine {
     @Autowired(required = false)
     private TravelRulePolicyRepository travelRulePolicyRepository;
 
+    /** Optional — when absent (e.g. direct unit construction) sanctions checks are skipped. */
+    @Autowired(required = false)
+    private AerospikeSanctionsScreeningService sanctionsScreeningService;
+
     /**
      * Resolves the USD travel-rule threshold for this PSP+jurisdiction, falling back to the
      * global default when no repository is wired (e.g. this unit-constructed test instance), no
@@ -96,6 +104,9 @@ public class MultiAssetRiskEngine {
                     assessCrypto(sourceAccount, destinationAccount, request, signals, customer.getPspId());
             case BANKING -> { }
         }
+
+        checkSanctions(customer, request, signals);
+        checkCyberIncidentContext(request, signals);
 
         int score = Math.min(100, signals.stream().mapToInt(SignalDraft::scoreImpact).sum());
         RiskDecision decision = score >= 70 ? RiskDecision.BLOCK
@@ -502,9 +513,65 @@ public class MultiAssetRiskEngine {
         signals.add(new SignalDraft(code, signalTypeFor(code), severity, impact, description, evidence));
     }
 
+    private void checkSanctions(MultiAssetCustomer customer, IngestTransactionRequest request,
+            List<SignalDraft> signals) {
+        if (sanctionsScreeningService == null) {
+            return;
+        }
+        String screenedName = firstNonBlank(request.counterpartyReference(), customer.getDisplayName());
+        if (screenedName == null || screenedName.isBlank()) {
+            return;
+        }
+        ScreeningResult result = sanctionsScreeningService.screenName(screenedName, EntityType.PERSON);
+        ScreeningStatus status = result.getStatus();
+        if (status == ScreeningStatus.MATCH || status == ScreeningStatus.POTENTIAL_MATCH) {
+            add(signals, "SANCTIONS_NAME_MATCH", 65,
+                    "Sanctions screening returned a confirmed or potential match.",
+                    Map.of("screenedName", screenedName,
+                            "status", status.name(),
+                            "highestScore", result.getHighestMatchScore(),
+                            "matchCount", result.getMatchCount()));
+            return;
+        }
+        if (status == ScreeningStatus.UNAVAILABLE) {
+            add(signals, "SANCTIONS_SCREENING_UNAVAILABLE", 30,
+                    "Sanctions screening unavailable; transaction requires review.",
+                    Map.of("screenedName", screenedName));
+        }
+    }
+
+    private void checkCyberIncidentContext(IngestTransactionRequest request, List<SignalDraft> signals) {
+        Map<String, Object> metadata = request.metadata();
+        if (metadata == null || metadata.isEmpty()) {
+            return;
+        }
+        Object incidentNumber = metadata.get("cyberIncidentNumber");
+        Object incidentId = metadata.get("cyberIncidentId");
+        Object confirmed = metadata.get("cyberIncidentConfirmed");
+        if ((incidentNumber != null && !String.valueOf(incidentNumber).isBlank())
+                || (incidentId != null && !String.valueOf(incidentId).isBlank())
+                || Boolean.TRUE.equals(confirmed)) {
+            Map<String, Object> evidence = new LinkedHashMap<>();
+            if (incidentNumber != null) {
+                evidence.put("cyberIncidentNumber", incidentNumber);
+            }
+            if (incidentId != null) {
+                evidence.put("cyberIncidentId", incidentId);
+            }
+            if (confirmed != null) {
+                evidence.put("cyberIncidentConfirmed", confirmed);
+            }
+            add(signals, "CYBER_INCIDENT_LINKED", 45,
+                    "Transaction metadata references a reported cyber-security incident.",
+                    evidence);
+        }
+    }
+
     private static FinancialCrimeSignalType signalTypeFor(String code) {
         if ("SECURITIES_MATCHED_ORDER".equals(code)) return FinancialCrimeSignalType.MARKET_ABUSE;
         if (code.startsWith("CRYPTO_")) return FinancialCrimeSignalType.CRYPTO_EXPOSURE;
+        if (code.startsWith("SANCTIONS_")) return FinancialCrimeSignalType.SANCTIONS;
+        if (code.startsWith("CYBER_")) return FinancialCrimeSignalType.CYBER;
         return FinancialCrimeSignalType.AML;
     }
 

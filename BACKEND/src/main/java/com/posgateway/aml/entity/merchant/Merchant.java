@@ -1,6 +1,8 @@
 package com.posgateway.aml.entity.merchant;
 
+import com.posgateway.aml.config.tenant.PspTenantFilter;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -11,6 +13,7 @@ import java.util.List;
  * Merchant entity for AML screening and onboarding
  */
 @Entity
+@Filter(name = PspTenantFilter.NAME)
 @Table(name = "merchants", indexes = {
         @Index(name = "idx_merchant_status", columnList = "status"),
         @Index(name = "idx_merchant_country", columnList = "address_country"),

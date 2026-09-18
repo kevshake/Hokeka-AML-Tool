@@ -11,4 +11,6 @@ public interface MultiAssetRiskSignalRepository extends JpaRepository<MultiAsset
     List<MultiAssetRiskSignal> findTop100ByCustomerIdAndPspIdOrderByCreatedAtDesc(Long customerId, Long pspId);
     List<MultiAssetRiskSignal> findByTransactionIdOrderByCreatedAtAsc(Long transactionId);
     Page<MultiAssetRiskSignal> findByPspIdOrderByCreatedAtDesc(Long pspId, Pageable pageable);
+
+    boolean existsByTransactionIdAndSignalCode(Long transactionId, String signalCode);
 }

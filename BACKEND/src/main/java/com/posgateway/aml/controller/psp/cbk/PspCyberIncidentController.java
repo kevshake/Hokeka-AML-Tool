@@ -5,6 +5,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.psp.cbk.PspCyberIncident;
 import com.posgateway.aml.model.UserRole;
 import com.posgateway.aml.repository.psp.cbk.PspCyberIncidentRepository;
+import com.posgateway.aml.service.cbk.CyberIncidentRiskSignalBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -28,9 +29,12 @@ public class PspCyberIncidentController {
     private static final Logger log = LoggerFactory.getLogger(PspCyberIncidentController.class);
 
     private final PspCyberIncidentRepository repository;
+    private final CyberIncidentRiskSignalBridge cyberIncidentRiskSignalBridge;
 
-    public PspCyberIncidentController(PspCyberIncidentRepository repository) {
+    public PspCyberIncidentController(PspCyberIncidentRepository repository,
+            CyberIncidentRiskSignalBridge cyberIncidentRiskSignalBridge) {
         this.repository = repository;
+        this.cyberIncidentRiskSignalBridge = cyberIncidentRiskSignalBridge;
     }
 
     private User getCurrentUser() {
@@ -104,7 +108,9 @@ public class PspCyberIncidentController {
                 // regulatory record's audit attribution cannot be forged (W49-1).
                 .createdBy(user.getId())
                 .build();
-        return ResponseEntity.ok(repository.save(e));
+        PspCyberIncident saved = repository.save(e);
+        cyberIncidentRiskSignalBridge.emitSignalsForIncident(saved);
+        return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}")

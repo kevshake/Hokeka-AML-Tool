@@ -2,6 +2,7 @@ package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.TransactionEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -717,4 +718,22 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
            "SELECT 1 FROM TransactionFeatures f WHERE f.txnId = t.txnId AND f.featureJson IS NOT NULL)")
     List<TransactionEntity> findTransactionsMissingFeatures(
             org.springframework.data.domain.Pageable pageable);
+
+    // -----------------------------------------------------------------------
+    // Global search (W20-17)
+    // -----------------------------------------------------------------------
+
+    @Query("SELECT t FROM TransactionEntity t WHERE " +
+           "LOWER(COALESCE(t.clientReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(t.merchantId, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(t.txnId AS string) LIKE CONCAT('%', :q, '%') " +
+           "ORDER BY t.txnTs DESC")
+    List<TransactionEntity> searchGlobal(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT t FROM TransactionEntity t WHERE t.pspId = :pspId AND (" +
+           "LOWER(COALESCE(t.clientReference, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(COALESCE(t.merchantId, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "CAST(t.txnId AS string) LIKE CONCAT('%', :q, '%')) " +
+           "ORDER BY t.txnTs DESC")
+    List<TransactionEntity> searchGlobalForPsp(@Param("pspId") Long pspId, @Param("q") String q, Pageable pageable);
 }
