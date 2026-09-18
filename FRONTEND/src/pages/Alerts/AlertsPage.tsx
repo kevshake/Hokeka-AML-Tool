@@ -6,6 +6,9 @@ import { useResponsivePagination } from "../../hooks/useResponsivePagination";
 import type { ApiError } from "../../lib/apiClient";
 import type { Alert, Priority } from "../../types";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import GlassCard from "../../components/Common/GlassCard";
+import GlassModal from "../../components/Common/GlassModal";
+import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
@@ -17,7 +20,6 @@ import {
   Loader2,
   RotateCcw,
   Search,
-  X,
 } from "lucide-react";
 
 const priorityVariant = (p: Priority): "danger" | "warning" | "default" => {
@@ -112,17 +114,13 @@ export default function AlertsPage() {
 
   return (
     <HokekaPageShell title="Alerts" subtitle="Review, triage, and resolve compliance alerts" noCard>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <GlassCard padding="md" glowVariant="red" static>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4">
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportCSV}
-            disabled={!content.length}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-glass-muted transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
-          >
+          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
             <Download size={14} />
             Export CSV
-          </button>
+          </GlassButton>
           {selected.size > 0 && (
             <span className="text-xs text-glass-muted">{selected.size} selected</span>
           )}
@@ -132,7 +130,7 @@ export default function AlertsPage() {
           <button
             disabled={selected.size === 0}
             onClick={() => setBulkOpen(!bulkOpen)}
-            className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800 disabled:cursor-not-allowed disabled:opacity-30"
+            className="hokeka-btn-primary disabled:opacity-45"
           >
             <ChevronDown size={14} />
             Bulk Actions {selected.size > 0 ? `(${selected.size})` : ""}
@@ -140,14 +138,14 @@ export default function AlertsPage() {
           {bulkOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setBulkOpen(false)} />
-              <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-white/10 bg-[var(--surface-2)] py-1 shadow-xl">
-                <button onClick={() => handleBulkAction("INVESTIGATING")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-white transition-colors hover:bg-white/5">
+              <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-hairline bg-burgundy-850 py-1 shadow-editorial">
+                <button type="button" onClick={() => handleBulkAction("INVESTIGATING")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink transition-colors hover:bg-burgundy-800">
                   <Search size={14} /> Mark as Investigating
                 </button>
-                <button onClick={() => handleBulkAction("RESOLVED")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-white transition-colors hover:bg-white/5">
+                <button type="button" onClick={() => handleBulkAction("RESOLVED")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink transition-colors hover:bg-burgundy-800">
                   <CheckCheck size={14} /> Mark as Resolved
                 </button>
-                <button onClick={() => handleBulkAction("OPEN")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-white transition-colors hover:bg-white/5">
+                <button type="button" onClick={() => handleBulkAction("OPEN")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink transition-colors hover:bg-burgundy-800">
                   <RotateCcw size={14} /> Reopen
                 </button>
               </div>
@@ -156,9 +154,7 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
-        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 320px)" }}>
+      <div className="hokeka-table-wrap" style={{ maxHeight: "calc(100vh - 320px)" }}>
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={24} className="animate-spin text-glass-muted" />
@@ -173,62 +169,61 @@ export default function AlertsPage() {
                   : "Unknown error"}
             </div>
           ) : (
-            <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b border-white/10 bg-[var(--surface-2)]">
-                  <th className="w-10 px-4 py-3 text-left">
+            <table className="hokeka-table">
+              <thead>
+                <tr>
+                  <th className="w-10">
                     <input
                       type="checkbox"
                       checked={allSelected}
                       ref={(el) => { if (el) el.indeterminate = someSelected }}
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       disabled={!content.length}
-                      className="rounded border-white/20 bg-white/5 accent-gold text-gold focus:ring-gold"
+                      className="rounded border-hairline accent-gold"
                     />
                   </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">ID</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Type</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Priority</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Status</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Description</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Created</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Actions</th>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Description</th>
+                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {content.map((alert) => (
                   <tr
                     key={alert.id}
-                    className={`transition-colors hover:bg-white/[0.02] ${
-                      selected.has(alert.id) ? "bg-burgundy-700/5" : ""
-                    }`}
+                    className={selected.has(alert.id) ? "bg-burgundy-800/40" : undefined}
                   >
-                    <td className="px-4 py-3">
+                    <td>
                       <input
                         type="checkbox"
                         checked={selected.has(alert.id)}
                         onChange={(e) => handleSelectOne(alert.id, e.target.checked)}
-                        className="rounded border-white/20 bg-white/5 accent-gold text-gold focus:ring-gold"
+                        className="rounded border-hairline accent-gold"
                       />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white">#{alert.id}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{alert.alertType}</td>
+                    <td>#{alert.id}</td>
+                    <td>{alert.alertType}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <TwBadge variant={priorityVariant(alert.priority)}>{alert.priority}</TwBadge>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <TwBadge variant={alertStatusVariant(alert.status)}>{alert.status}</TwBadge>
                     </td>
-                    <td className="max-w-xs truncate px-4 py-3 text-sm text-white/80">
+                    <td className="max-w-xs truncate text-ink-muted">
                       {alert.description || <span className="text-glass-muted">-</span>}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
+                    <td className="text-glass-muted">
                       {new Date(alert.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td>
                       <button
+                        type="button"
                         onClick={() => setViewAlert(alert)}
-                        className="flex items-center gap-1 text-xs text-burgundy-400 transition-colors hover:text-burgundy-300"
+                        className="flex items-center gap-1 text-xs text-gold hover:underline"
                       >
                         <Eye size={14} /> View
                       </button>
@@ -245,7 +240,7 @@ export default function AlertsPage() {
               </tbody>
             </table>
           )}
-        </div>
+      </div>
 
         <TwPagination
           page={page.index}
@@ -255,80 +250,74 @@ export default function AlertsPage() {
           onPageChange={(newPage) => { setPage(prev => ({ ...prev, index: newPage })); setSelected(new Set()); }}
           onRowsPerPageChange={(newSize) => { setPage({ index: 0, size: newSize }); setSelected(new Set()); }}
         />
-      </div>
+      </GlassCard>
 
-      {/* Alert Detail Modal */}
-      {viewAlert && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setViewAlert(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2">
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-2)] shadow-2xl">
-              {/* Header */}
-              <div className="flex items-start justify-between border-b border-white/10 px-6 py-4">
+      <GlassModal
+        open={!!viewAlert}
+        onClose={() => setViewAlert(null)}
+        title={viewAlert ? `Alert #${viewAlert.id}` : "Alert"}
+        subtitle={viewAlert?.alertType}
+        maxWidth="md"
+        headerExtra={
+          viewAlert ? (
+            <>
+              <TwBadge variant={priorityVariant(viewAlert.priority)}>{viewAlert.priority}</TwBadge>
+              <TwBadge variant={alertStatusVariant(viewAlert.status)}>{viewAlert.status}</TwBadge>
+            </>
+          ) : null
+        }
+        footer={
+          viewAlert ? (
+            <>
+              <Link
+                to={`/records/ALERT/${viewAlert.id}`}
+                onClick={() => setViewAlert(null)}
+                className="hokeka-btn-primary"
+              >
+                Trace record
+              </Link>
+              <GlassButton variant="default" size="sm" onClick={() => setViewAlert(null)}>
+                Close
+              </GlassButton>
+            </>
+          ) : null
+        }
+      >
+        {viewAlert && (
+          <div className="space-y-4">
+            <div>
+              <p className="hokeka-field-label">Description</p>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                {viewAlert.description || "No description provided."}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {viewAlert.transactionId && (
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Alert #{viewAlert.id}</h3>
-                  <p className="mt-0.5 text-xs text-glass-muted">{viewAlert.alertType}</p>
+                  <p className="hokeka-field-label">Transaction ID</p>
+                  <p className="mt-0.5 font-mono text-sm text-ink">#{viewAlert.transactionId}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <TwBadge variant={priorityVariant(viewAlert.priority)}>{viewAlert.priority}</TwBadge>
-                  <TwBadge variant={alertStatusVariant(viewAlert.status)}>{viewAlert.status}</TwBadge>
-                  <button
-                    onClick={() => setViewAlert(null)}
-                    className="rounded p-1 text-glass-muted transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="space-y-4 px-6 py-4">
+              )}
+              {viewAlert.caseId && (
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Description</p>
-                  <p className="mt-1 text-sm leading-relaxed text-white/80">
-                    {viewAlert.description || "No description provided."}
-                  </p>
+                  <p className="hokeka-field-label">Linked Case</p>
+                  <p className="mt-0.5 font-mono text-sm text-ink">Case #{viewAlert.caseId}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {viewAlert.transactionId && (
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Transaction ID</p>
-                      <p className="mt-0.5 font-mono text-sm text-white">#{viewAlert.transactionId}</p>
-                    </div>
-                  )}
-                  {viewAlert.caseId && (
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Linked Case</p>
-                      <p className="mt-0.5 font-mono text-sm text-white">Case #{viewAlert.caseId}</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Created</p>
-                    <p className="mt-0.5 text-sm text-white/80">{new Date(viewAlert.createdAt).toLocaleString()}</p>
-                  </div>
-                  {viewAlert.resolvedAt && (
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Resolved</p>
-                      <p className="mt-0.5 text-sm text-emerald-400">{new Date(viewAlert.resolvedAt).toLocaleString()}</p>
-                    </div>
-                  )}
+              )}
+              <div>
+                <p className="hokeka-field-label">Created</p>
+                <p className="mt-0.5 text-sm text-ink-muted">{new Date(viewAlert.createdAt).toLocaleString()}</p>
+              </div>
+              {viewAlert.resolvedAt && (
+                <div>
+                  <p className="hokeka-field-label">Resolved</p>
+                  <p className="mt-0.5 text-sm text-success">{new Date(viewAlert.resolvedAt).toLocaleString()}</p>
                 </div>
-              </div>
-
-              {/* Footer */}
-              <div className="flex justify-end border-t border-white/10 px-6 py-3">
-                <Link to={`/records/ALERT/${viewAlert.id}`} onClick={() => setViewAlert(null)} className="mr-2 rounded-lg border border-gold/50 px-4 py-1.5 text-xs text-gold transition-colors hover:bg-gold hover:text-black">Trace record</Link>
-                <button
-                  onClick={() => setViewAlert(null)}
-                  className="rounded-lg border border-white/10 px-4 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
-                >
-                  Close
-                </button>
-              </div>
+              )}
             </div>
           </div>
-        </>
-      )}
+        )}
+      </GlassModal>
 
       <TwSnackbar
         open={snackbar.open}

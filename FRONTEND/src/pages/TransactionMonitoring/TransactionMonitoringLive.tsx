@@ -30,17 +30,19 @@ export default function TransactionMonitoringLive() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-lg font-semibold text-white">Live Transaction Monitoring</h3>
+      <span className="hokeka-section-label">Monitoring</span>
+      <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-ink">
+        Live Transaction Monitoring
+      </h3>
 
-      {/* Stats cards */}
       {stats && !statsLoading && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {Object.entries(stats).map(([key, value]) => (
-            <div key={key} className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-glass-muted">
+            <div key={key} className="hokeka-glass-card rounded-xl p-4">
+              <p className="hokeka-field-label mb-1">
                 {key.replace(/([A-Z])/g, " $1").trim()}
               </p>
-              <p className="text-xl font-bold text-white">
+              <p className="text-xl font-bold tabular-nums text-ink">
                 {typeof value === "number" ? value.toLocaleString() : String(value)}
               </p>
             </div>
@@ -50,32 +52,32 @@ export default function TransactionMonitoringLive() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Transactions table */}
-        <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)] lg:col-span-2">
-          <div className="border-b border-white/10 px-4 py-3">
-            <h4 className="text-sm font-semibold text-white">Monitored Transactions</h4>
+        <div className="hokeka-glass-card overflow-hidden rounded-xl lg:col-span-2">
+          <div className="border-b border-hairline px-4 py-3">
+            <h4 className="text-sm font-semibold text-ink">Monitored Transactions</h4>
           </div>
-          <div className="overflow-auto" style={{ maxHeight: "500px" }}>
+          <div className="hokeka-table-wrap !border-0 !rounded-none" style={{ maxHeight: "500px" }}>
             {transactionsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={24} className="animate-spin text-glass-muted" />
               </div>
             ) : (
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-white/10 bg-[var(--surface-2)]">
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">ID</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Merchant</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Amount</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Decision</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Timestamp</th>
+              <table className="hokeka-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Merchant</th>
+                    <th>Amount</th>
+                    <th>Decision</th>
+                    <th>Timestamp</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                   {content.length > 0 ? content.map((txn: any) => (
-                    <tr key={txn.txnId || txn.transactionId || txn.id} className="transition-colors hover:bg-white/[0.02]">
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80"><Link className="hover:text-gold" to={`/records/TRANSACTION/${txn.txnId || txn.transactionId || txn.id}`}>#{txn.txnId || txn.transactionId || txn.id}</Link></td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{txn.merchantId ? <Link className="hover:text-gold" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
+                    <tr key={txn.txnId || txn.transactionId || txn.id}>
+                      <td><Link className="text-gold hover:underline" to={`/records/TRANSACTION/${txn.txnId || txn.transactionId || txn.id}`}>#{txn.txnId || txn.transactionId || txn.id}</Link></td>
+                      <td>{txn.merchantId ? <Link className="text-gold hover:underline" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
+                      <td>{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <TwBadge variant={decisionBadge(txn.decision)}>{txn.decision || "ALLOW"}</TwBadge>
                       </td>
@@ -98,15 +100,15 @@ export default function TransactionMonitoringLive() {
         </div>
 
         {/* Recent Activity */}
-        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
-          <h4 className="mb-3 text-sm font-semibold text-white">Recent Activity</h4>
+        <div className="hokeka-glass-card rounded-xl p-4">
+          <h4 className="mb-3 text-sm font-semibold text-ink">Recent Activity</h4>
           {activityLoading ? (
             <p className="text-sm text-glass-muted">Loading activity...</p>
           ) : recentActivity && Array.isArray(recentActivity) && recentActivity.length > 0 ? (
             <div className="flex flex-col gap-1.5">
               {recentActivity.slice(0, 10).map((activity: any, idx: number) => (
-                <div key={activity.id || activity.timestamp || idx} className="rounded-lg border border-white/5 bg-[var(--surface-2)] p-3">
-                  <p className="text-sm text-white/80">{activity.description || activity.action || "Activity"}</p>
+                <div key={activity.id || activity.timestamp || idx} className="rounded-lg border border-hairline bg-burgundy-900/60 p-3">
+                  <p className="text-sm text-ink-muted">{activity.description || activity.action || "Activity"}</p>
                   <p className="mt-0.5 text-xs text-glass-muted">
                     {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : ""}
                   </p>
