@@ -40,39 +40,42 @@ INSERT INTO merchants (
     legal_name, trading_name, country, registration_number, tax_id, mcc, business_type,
     expected_monthly_volume, transaction_channel, website,
     address_street, address_city, address_state, address_postal_code, address_country,
-    status, created_at, updated_at
+    status, psp_id, created_at, updated_at
 )
 SELECT 
     'TechFlow Retail Ltd', 'TechFlow Retail', 'USA', 'REG001', 'TAX001', '5999', 'CORPORATION',
     50000000, 'ONLINE', 'https://techflow-retail.com',
     '123 Main St', 'New York', 'NY', '10001', 'USA',
-    'ACTIVE', NOW() - INTERVAL '1 year', NOW()
+    'ACTIVE', (SELECT psp_id FROM psps WHERE psp_code = 'DEMO_VELOCITY' LIMIT 1),
+    NOW() - INTERVAL '1 year', NOW()
 WHERE NOT EXISTS (SELECT 1 FROM merchants WHERE registration_number = 'REG001' AND country = 'USA');
 
 INSERT INTO merchants (
     legal_name, trading_name, country, registration_number, tax_id, mcc, business_type,
     expected_monthly_volume, transaction_channel, website,
     address_street, address_city, address_state, address_postal_code, address_country,
-    status, created_at, updated_at
+    status, psp_id, created_at, updated_at
 )
 SELECT 
     'Global Commerce Inc', 'Global Commerce', 'GBR', 'REG002', 'TAX002', '5999', 'CORPORATION',
     100000000, 'ONLINE', 'https://global-commerce.com',
     '456 High St', 'London', NULL, 'SW1A 1AA', 'GBR',
-    'ACTIVE', NOW() - INTERVAL '8 months', NOW()
+    'ACTIVE', (SELECT psp_id FROM psps WHERE psp_code = 'DEMO_APEX' LIMIT 1),
+    NOW() - INTERVAL '8 months', NOW()
 WHERE NOT EXISTS (SELECT 1 FROM merchants WHERE registration_number = 'REG002' AND country = 'GBR');
 
 INSERT INTO merchants (
     legal_name, trading_name, country, registration_number, tax_id, mcc, business_type,
     expected_monthly_volume, transaction_channel, website,
     address_street, address_city, address_state, address_postal_code, address_country,
-    status, created_at, updated_at
+    status, psp_id, created_at, updated_at
 )
 SELECT 
     'High Risk Trading Co', 'High Risk Trading', 'CHN', 'REG003', 'TAX003', '5999', 'CORPORATION',
     200000000, 'ONLINE', 'https://hrt-co.com',
     '789 Trade Ave', 'Shanghai', NULL, '200000', 'CHN',
-    'PENDING_SCREENING', NOW() - INTERVAL '2 weeks', NOW()
+    'PENDING_SCREENING', (SELECT psp_id FROM psps WHERE psp_code = 'DEMO_VELOCITY' LIMIT 1),
+    NOW() - INTERVAL '2 weeks', NOW()
 WHERE NOT EXISTS (SELECT 1 FROM merchants WHERE registration_number = 'REG003' AND country = 'CHN');
 
 -- ============================================================================

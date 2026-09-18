@@ -50,6 +50,8 @@ public class MerchantOnboardingResponse {
     private Double cra;
     private String cbkEconomicSectorCode;
     private Boolean cbkSettlementAccountConfigured;
+    private Long pspId;
+    private String pspCode;
 
     public MerchantOnboardingResponse() {
     }
@@ -333,6 +335,22 @@ public class MerchantOnboardingResponse {
 
     public void setCbkSettlementAccountConfigured(Boolean cbkSettlementAccountConfigured) {
         this.cbkSettlementAccountConfigured = cbkSettlementAccountConfigured;
+    }
+
+    public Long getPspId() {
+        return pspId;
+    }
+
+    public void setPspId(Long pspId) {
+        this.pspId = pspId;
+    }
+
+    public String getPspCode() {
+        return pspCode;
+    }
+
+    public void setPspCode(String pspCode) {
+        this.pspCode = pspCode;
     }
 
     public static MerchantOnboardingResponseBuilder builder() {

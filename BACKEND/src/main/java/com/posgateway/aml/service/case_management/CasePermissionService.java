@@ -122,7 +122,9 @@ public class CasePermissionService {
     private boolean isAdminOrOfficer(User user) {
         try {
             UserRole role = UserRole.valueOf(user.getRole().getName());
-            return role == UserRole.ADMIN ||
+            return role == UserRole.SUPER_ADMIN ||
+                    role == UserRole.PLATFORM_ADMIN ||
+                    role == UserRole.ADMIN ||
                     role == UserRole.MLRO ||
                     role == UserRole.COMPLIANCE_OFFICER ||
                     role == UserRole.AUDITOR ||

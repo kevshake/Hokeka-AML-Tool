@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useAllPsps, useMerchants } from "../../features/api/queries";
 import { useCreateMerchant, type CreateMerchantRequest } from "../../features/api/mutations";
 import type { Merchant, Psp } from "../../types";
+import { useAuth } from "../../contexts/AuthContext";
+import { isPlatformAdmin } from "../EdgeNodes/edgeMeta";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import GlassCard from "../../components/Common/GlassCard";
 import GlassModal from "../../components/Common/GlassModal";
@@ -60,7 +62,10 @@ const pspLabel = (psp: Psp): string =>
   psp.legalName || psp.tradingName || psp.name || psp.pspCode || `PSP #${pspIdOf(psp)}`;
 
 export default function MerchantsPage() {
+  const { user } = useAuth();
+  const platformAdmin = isPlatformAdmin(user?.role?.name);
   const [page, setPage] = useState({ index: 0, size: 25 });
+  const [pspFilter, setPspFilter] = useState("");
   const [viewMerchant, setViewMerchant] = useState<Merchant | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [formData, setFormData] = useState<CreateMerchantRequest>(emptyForm);
@@ -70,9 +75,11 @@ export default function MerchantsPage() {
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
 
+  const filterPspId = pspFilter ? Number(pspFilter) : undefined;
   const { data: merchants, isLoading, isError, error } = useMerchants({
     page: page.index,
     size: page.size,
+    pspId: filterPspId,
   });
   const { data: psps = [] } = useAllPsps();
   const createMerchant = useCreateMerchant();
@@ -91,12 +98,29 @@ export default function MerchantsPage() {
     [formData.beneficialOwners],
   );
 
+  const tenantPsps = psps.filter((psp) => {
+    const id = pspIdOf(psp);
+    const code = psp.pspCode || "";
+    return id > 0 && code !== "HOKEKA_PLATFORM";
+  });
+
   const pspOptions = [
     { value: "0", label: "Select PSP" },
-    ...psps
-      .filter((psp) => pspIdOf(psp) > 0)
-      .map((psp) => ({ value: String(pspIdOf(psp)), label: pspLabel(psp) })),
+    ...tenantPsps.map((psp) => ({ value: String(pspIdOf(psp)), label: pspLabel(psp) })),
   ];
+
+  const pspFilterOptions = [
+    { value: "", label: "All PSPs" },
+    ...tenantPsps.map((psp) => ({ value: String(pspIdOf(psp)), label: pspLabel(psp) })),
+  ];
+
+  const pspNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    tenantPsps.forEach((psp) => map.set(pspIdOf(psp), pspLabel(psp)));
+    return map;
+  }, [tenantPsps]);
+
+  const showPspColumn = platformAdmin || tenantPsps.length > 1;
 
   const handleExportCSV = () => {
     if (!content.length) return;
@@ -202,10 +226,25 @@ export default function MerchantsPage() {
   return (
     <HokekaPageShell title="Merchants" subtitle="Onboard, screen, and monitor merchant risk profiles" noCard>
       <GlassCard padding="md" glowVariant="teal" static>
-      <div className="mb-3 flex items-center justify-between">
-        <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
-          <Download size={14} /> Export CSV
-        </GlassButton>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {platformAdmin && (
+            <div className="min-w-[200px]">
+              <TwSelect
+                label="Filter by PSP"
+                value={pspFilter}
+                options={pspFilterOptions}
+                onChange={(event) => {
+                  setPspFilter(event.target.value);
+                  setPage((current) => ({ ...current, index: 0 }));
+                }}
+              />
+            </div>
+          )}
+          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
+            <Download size={14} /> Export CSV
+          </GlassButton>
+        </div>
         <button type="button" onClick={() => setAddOpen(true)} className="hokeka-btn-primary">
           <Plus size={14} /> Onboard Merchant
         </button>
@@ -224,7 +263,18 @@ export default function MerchantsPage() {
             <table className="hokeka-table">
               <thead>
                 <tr>
-                  {["Merchant ID", "Legal Name", "Country", "MCC", "Risk", "Score", "KYC", "CBK Ready", "Actions"].map(
+                  {[
+                    "Merchant ID",
+                    ...(showPspColumn ? ["PSP"] : []),
+                    "Legal Name",
+                    "Country",
+                    "MCC",
+                    "Risk",
+                    "Score",
+                    "KYC",
+                    "CBK Ready",
+                    "Actions",
+                  ].map(
                     (heading) => (
                       <th key={heading}>{heading}</th>
                     ),
@@ -235,6 +285,13 @@ export default function MerchantsPage() {
                 {content.map((merchant) => (
                   <tr key={merchant.merchantId}>
                     <td className="font-mono">{merchant.merchantId}</td>
+                    {showPspColumn && (
+                      <td className="text-ink-muted">
+                        {merchant.pspCode ||
+                          (merchant.pspId ? pspNameById.get(merchant.pspId) : undefined) ||
+                          "-"}
+                      </td>
+                    )}
                     <td>
                       <p>{merchant.legalName}</p>
                       {merchant.tradingName && (
@@ -278,7 +335,7 @@ export default function MerchantsPage() {
                 ))}
                 {!content.length && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-sm text-glass-muted">
+                    <td colSpan={showPspColumn ? 10 : 9} className="px-4 py-8 text-center text-sm text-glass-muted">
                       No merchants found
                     </td>
                   </tr>
@@ -335,6 +392,15 @@ export default function MerchantsPage() {
               {viewMerchant && (
               <div>
                 <div className="grid gap-4 sm:grid-cols-3">
+                  {showPspColumn && (
+                    <Detail
+                      label="PSP"
+                      value={
+                        viewMerchant.pspCode ||
+                        (viewMerchant.pspId ? pspNameById.get(viewMerchant.pspId) : undefined)
+                      }
+                    />
+                  )}
                   <Detail label="Trading name" value={viewMerchant.tradingName} />
                   <Detail label="Country" value={viewMerchant.country} />
                   <Detail label="MCC" value={viewMerchant.mcc} />

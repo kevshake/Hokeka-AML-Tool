@@ -184,6 +184,7 @@ export const useTransactions = (params?: number | TransactionQueryParams) => {
 export interface MerchantQueryParams {
   page?: number;
   size?: number;
+  pspId?: number;
 }
 
 export const useMerchants = (params?: MerchantQueryParams) => {
