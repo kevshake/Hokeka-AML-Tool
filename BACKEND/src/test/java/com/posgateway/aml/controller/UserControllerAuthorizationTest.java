@@ -6,7 +6,7 @@ import com.posgateway.aml.service.PermissionService;
 import com.posgateway.aml.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(value = UserController.class, properties = "spring.security.enabled=false")
 @Import(UserControllerAuthorizationTest.MethodSecurity.class)
 class UserControllerAuthorizationTest {
-    @Configuration
+    @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurity {}
 
