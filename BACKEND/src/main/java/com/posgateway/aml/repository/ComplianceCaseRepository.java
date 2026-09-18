@@ -187,13 +187,13 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
      * the {@code full_name} column is built as {@code first || ' ' || last}
      * and only includes users who currently have at least one open case.
      */
-    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.id) " +
+    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.case_id) " +
             "FROM compliance_cases c " +
             "JOIN users u ON u.id = c.assigned_to_user_id" +
             "WHERE c.psp_id = :pspId " +
             "  AND c.status IN ('NEW','ASSIGNED','IN_PROGRESS','PENDING_REVIEW','ESCALATED','PENDING_INFO') " +
             "GROUP BY u.id, full_name " +
-            "ORDER BY COUNT(c.id) DESC",
+            "ORDER BY COUNT(c.case_id) DESC",
            nativeQuery = true)
     List<Object[]> countOpenCasesByAssigneeForPsp(@Param("pspId") Long pspId);
 
@@ -211,12 +211,12 @@ public interface ComplianceCaseRepository extends JpaRepository<ComplianceCase, 
      * across all PSPs (admin view). Same shape as
      * {@link #countOpenCasesByAssigneeForPsp(Long)}.
      */
-    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.id) " +
+    @Query(value = "SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, u.username) AS full_name, COUNT(c.case_id) " +
             "FROM compliance_cases c " +
             "JOIN users u ON u.id = c.assigned_to_user_id " +
             "WHERE c.status IN ('NEW','ASSIGNED','IN_PROGRESS','PENDING_REVIEW','ESCALATED','PENDING_INFO') " +
             "GROUP BY u.id, full_name " +
-            "ORDER BY COUNT(c.id) DESC",
+            "ORDER BY COUNT(c.case_id) DESC",
            nativeQuery = true)
     List<Object[]> countOpenCasesByAssignee();
 

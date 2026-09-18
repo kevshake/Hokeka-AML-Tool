@@ -39,6 +39,7 @@ public class ComplianceCase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "case_id")
     private Long id;
 
     @Column(nullable = false, unique = true, columnDefinition = "TEXT")
