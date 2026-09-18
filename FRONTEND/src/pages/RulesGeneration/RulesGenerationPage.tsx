@@ -43,6 +43,7 @@ import {
   Assessment as EffectivenessIcon,
   AutoAwesome as AutoAwesomeIcon,
   AccountTree as TraceIcon,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -67,6 +68,7 @@ import {
   useGenerateRule,
   useApproveRuleVersion,
   useRejectRuleVersion,
+  useReloadRulesEngine,
   type GeneratedRulePreview,
   type GenerateRuleError,
 } from "../../features/api/mutations";
@@ -228,6 +230,7 @@ export default function RulesGenerationPage() {
   const disableAmlRule = useDisableAmlRule();
   const approveRuleVersion = useApproveRuleVersion();
   const rejectRuleVersion = useRejectRuleVersion();
+  const reloadRulesEngine = useReloadRulesEngine();
   const createVelocityRule = useCreateVelocityRule();
   const updateVelocityRule = useUpdateVelocityRule();
   const deleteVelocityRule = useDeleteVelocityRule();
@@ -337,6 +340,24 @@ export default function RulesGenerationPage() {
               <MenuItem value="my-psp">My PSP</MenuItem>
             </Select>
           </FormControl>
+          {tab === 0 && (
+            <Button
+              variant="outlined"
+              startIcon={reloadRulesEngine.isPending ? <CircularProgress size={16} /> : <RefreshIcon />}
+              disabled={reloadRulesEngine.isPending}
+              onClick={async () => {
+                try {
+                  await reloadRulesEngine.mutateAsync();
+                  setSuccessSnackbar("Drools rules engine reloaded.");
+                } catch (error: any) {
+                  setErrorSnackbar(error?.message || "Failed to reload rules engine.");
+                }
+              }}
+              sx={{ color: "text.secondary", borderColor: "rgba(255,255,255,0.2)" }}
+            >
+              Reload engine
+            </Button>
+          )}
           {tab !== 3 && <Button
             variant="contained"
             startIcon={<AddIcon />}

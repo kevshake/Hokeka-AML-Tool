@@ -1,16 +1,19 @@
 package com.posgateway.aml.controller.underwriting;
 
+import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.underwriting.MerchantVerificationSignal;
 import com.posgateway.aml.model.underwriting.UnderwritingOutcome;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.underwriting.MerchantVerificationSignalRepository;
+import com.posgateway.aml.service.security.PspIsolationService;
 import com.posgateway.aml.service.underwriting.MerchantVerificationOrchestrator;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -24,30 +27,48 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/underwriting/merchants")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','ANALYST','INVESTIGATOR')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','MLRO','PSP_ADMIN','ANALYST','INVESTIGATOR','SCREENING_ANALYST')")
 public class MerchantVerificationController {
 
     private final MerchantVerificationOrchestrator orchestrator;
     private final MerchantRepository merchantRepository;
     private final MerchantVerificationSignalRepository signalRepository;
+    private final PspIsolationService isolationService;
 
     public MerchantVerificationController(MerchantVerificationOrchestrator orchestrator,
                                           MerchantRepository merchantRepository,
-                                          MerchantVerificationSignalRepository signalRepository) {
+                                          MerchantVerificationSignalRepository signalRepository,
+                                          PspIsolationService isolationService) {
         this.orchestrator = orchestrator;
         this.merchantRepository = merchantRepository;
         this.signalRepository = signalRepository;
+        this.isolationService = isolationService;
     }
 
     @PostMapping("/{id}/verify")
     public ResponseEntity<UnderwritingOutcome> verify(@PathVariable Long id) {
-        Merchant merchant = merchantRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found"));
+        Merchant merchant = requireMerchantAccess(id);
         return ResponseEntity.ok(orchestrator.verify(merchant));
     }
 
     @GetMapping("/{id}/signals")
     public ResponseEntity<List<MerchantVerificationSignal>> signals(@PathVariable Long id) {
+        requireMerchantAccess(id);
         return ResponseEntity.ok(signalRepository.findByMerchantIdOrderByObservedAtDesc(id));
+    }
+
+    private Merchant requireMerchantAccess(Long merchantId) {
+        Merchant merchant = merchantRepository.findById(merchantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found"));
+        User user = isolationService.getCurrentUser();
+        if (user == null) {
+            throw new AccessDeniedException("Authenticated user is required");
+        }
+        if (!isolationService.isPlatformAdministrator(user)
+                && (user.getPsp() == null || merchant.getPsp() == null
+                || !user.getPsp().getPspId().equals(merchant.getPsp().getPspId()))) {
+            throw new AccessDeniedException("Cannot access another PSP's verification records");
+        }
+        return merchant;
     }
 }

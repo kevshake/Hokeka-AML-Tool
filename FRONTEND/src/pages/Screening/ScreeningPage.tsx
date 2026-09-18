@@ -2,27 +2,56 @@ import { useState } from "react";
 import { apiClient } from "../../lib/apiClient";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwBadge from "../../components/Common/TwBadge";
-import { Loader2, Search, Shield, UserCheck } from "lucide-react";
+import { AlertTriangle, Loader2, Search, Shield, UserCheck } from "lucide-react";
 import MonitoringAlertsPanel from "../../components/monitoring/MonitoringAlertsPanel";
+import { useSanctionsHealth, useSanctionsListVersions } from "../../features/api/queries";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const { data: health } = useSanctionsHealth();
+  const { data: listVersions = [] } = useSanctionsListVersions();
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
     setLoading(true); setError(null); setResult(null);
     try {
-      const response = await apiClient.post("sanctions/screen", { name });
+      const response = await apiClient.post<Record<string, unknown>>("sanctions/screen", { name });
       setResult(response);
-    } catch (err: any) { setError(err.message || "Screening failed"); }
+      if (response?.screeningProvider === "AML_MICROSERVICE_UNAVAILABLE" || response?.status === "UNAVAILABLE") {
+        setError("Screening service unavailable — no clearance decision was made (fail-closed).");
+      }
+    } catch (err: any) {
+      const body = err?.response ?? err;
+      if (body?.screeningProvider === "AML_MICROSERVICE_UNAVAILABLE" || body?.status === "UNAVAILABLE") {
+        setResult(body);
+        setError(body.message || "Screening service unavailable — no clearance decision was made.");
+      } else {
+        setError(err.message || "Screening failed");
+      }
+    }
     finally { setLoading(false); }
   };
 
   return (
     <HokekaPageShell title="Screening" subtitle="Sanctions, PEP, and watchlist screening">
+      {health && !health.healthy && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-900/20 px-4 py-3 text-sm text-amber-100">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Screening engine degraded</p>
+            <p className="mt-1 text-amber-200/90">{health.message}</p>
+            <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded (`sanctions.download.enabled=true`).</p>
+          </div>
+        </div>
+      )}
+      {listVersions.length > 0 && (
+        <div className="mb-4 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3 text-xs text-glass-muted">
+          Watchlists loaded: {listVersions.map((v) => `${v.listName}${v.recordCount != null ? ` (${v.recordCount})` : ""}`).join(" · ")}
+        </div>
+      )}
       <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
         <div className="mb-4 flex items-center gap-2">
           <Shield size={20} className="text-burgundy-400" />
@@ -57,11 +86,13 @@ export default function ScreeningPage() {
               <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
                 <UserCheck size={16} /> Screening Results
               </h4>
-              {result.matchFound !== undefined && (
+              {result.status === "UNAVAILABLE" ? (
+                <TwBadge variant="warning">UNAVAILABLE</TwBadge>
+              ) : result.matchFound !== undefined ? (
                 <TwBadge variant={result.matchFound ? "danger" : "success"}>
                   {result.matchFound ? "MATCH FOUND" : "NO MATCH"}
                 </TwBadge>
-              )}
+              ) : null}
             </div>
             <hr className="mb-3 border-white/10" />
 

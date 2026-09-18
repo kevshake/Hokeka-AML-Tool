@@ -11,8 +11,15 @@ import TwSnackbar from "../../components/Common/TwSnackbar";
 import { apiClient } from "../../lib/apiClient";
 import { getApiUrl } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  useG2MonitoringStatus,
+  useMerchantVerificationSignals,
+  type MerchantVerificationSignal,
+  type UnderwritingOutcome,
+} from "../../features/api/queries";
+import { useRunG2WebsiteScan, useRunMerchantVerification } from "../../features/api/mutations";
 
-type Tab = "overview" | "ownership" | "intelligence" | "edd" | "documents" | "network";
+type Tab = "overview" | "ownership" | "intelligence" | "verification" | "edd" | "documents" | "network";
 
 interface Owner {
   id: number; fullName: string; dateOfBirth: string; nationality: string; countryOfResidence?: string;
@@ -109,6 +116,11 @@ export default function KycMerchantDetailPage() {
     queryFn: () => apiClient.get(`${base}/corporate-intelligence`),
     enabled: Number.isFinite(id) && tab === "intelligence",
   });
+  const verificationSignalsQuery = useMerchantVerificationSignals(id, tab === "verification");
+  const g2StatusQuery = useG2MonitoringStatus();
+  const runVerification = useRunMerchantVerification();
+  const runG2Scan = useRunG2WebsiteScan();
+  const [lastOutcome, setLastOutcome] = useState<UnderwritingOutcome | null>(null);
 
   const refresh = async () => {
     await Promise.all([
@@ -116,6 +128,7 @@ export default function KycMerchantDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["merchant-documents", id] }),
       queryClient.invalidateQueries({ queryKey: ["corporate-graph", id] }),
       queryClient.invalidateQueries({ queryKey: ["corporate-intelligence", id] }),
+      queryClient.invalidateQueries({ queryKey: ["underwriting", "signals", id] }),
     ]);
   };
   const mutation = useMutation({
@@ -162,7 +175,7 @@ export default function KycMerchantDetailPage() {
       </div>
 
       <div className="mb-5 flex overflow-x-auto border-b border-white/10">
-        {(["overview", "ownership", "intelligence", "edd", "documents", "network"] as Tab[]).map((value) => (
+        {(["overview", "ownership", "intelligence", "verification", "edd", "documents", "network"] as Tab[]).map((value) => (
           <button key={value} onClick={() => setTab(value)} className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm capitalize ${tab === value ? "border-burgundy-500 text-white" : "border-transparent text-glass-muted hover:text-white"}`}>{value}</button>
         ))}
       </div>
@@ -208,6 +221,37 @@ export default function KycMerchantDetailPage() {
               onRun={() => mutation.mutate(() => apiClient.post(`${base}/corporate-intelligence/check`))}
             />
           )}
+          {tab === "verification" && (
+            <VerificationTab
+              signals={verificationSignalsQuery.data || []}
+              loading={verificationSignalsQuery.isLoading}
+              lastOutcome={lastOutcome}
+              g2Enabled={g2StatusQuery.data?.enabled ?? false}
+              canRun={canScreen}
+              pending={runVerification.isPending || runG2Scan.isPending}
+              onRunVerification={() => {
+                runVerification.mutate(id, {
+                  onSuccess: (outcome) => {
+                    setLastOutcome(outcome);
+                    setToast({ open: true, severity: "success", message: `Underwriting decision: ${outcome.decision}` });
+                  },
+                  onError: (error) => setToast({ open: true, severity: "error", message: errorMessage(error) }),
+                });
+              }}
+              onRunG2Scan={() => {
+                runG2Scan.mutate(id, {
+                  onSuccess: (result) => {
+                    setToast({
+                      open: true,
+                      severity: result.status === "MATCH" ? "error" : "success",
+                      message: result.message,
+                    });
+                  },
+                  onError: (error) => setToast({ open: true, severity: "error", message: errorMessage(error) }),
+                });
+              }}
+            />
+          )}
           {tab === "edd" && (
             <section>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">Enhanced due diligence</h2><p className="text-sm text-glass-muted">Status: {edd?.status}</p></div>{edd?.status === "NOT_STARTED" && canManage && <button onClick={initiateEdd} disabled={mutation.isPending} className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800">Initiate EDD</button>}</div>
@@ -227,6 +271,66 @@ export default function KycMerchantDetailPage() {
       <TwSnackbar open={toast.open} message={toast.message} severity={toast.severity} onClose={() => setToast((value) => ({ ...value, open: false }))} />
     </HokekaPageShell>
   );
+}
+
+function VerificationTab({ signals, loading, lastOutcome, g2Enabled, canRun, pending, onRunVerification, onRunG2Scan }: {
+  signals: MerchantVerificationSignal[];
+  loading: boolean;
+  lastOutcome: UnderwritingOutcome | null;
+  g2Enabled: boolean;
+  canRun: boolean;
+  pending: boolean;
+  onRunVerification: () => void;
+  onRunG2Scan: () => void;
+}) {
+  if (loading) return <Loading />;
+  const latestRunId = signals[0]?.runId;
+  const latestSignals = latestRunId ? signals.filter((s) => s.runId === latestRunId) : signals;
+  return <section>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-base font-semibold text-white">Underwriting &amp; IDV evidence</h2>
+        <p className="text-sm text-glass-muted">
+          Internal IDV auto-approve plus fail-closed external adapters (Smile ID, Match Pro, VMSS). Sumsub was removed; screening uses the platform engine.
+        </p>
+      </div>
+      {canRun && <div className="flex flex-wrap gap-2">
+        <button disabled={pending} onClick={onRunVerification} className="flex items-center gap-2 rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50">
+          {pending ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} Run underwriting
+        </button>
+        <button disabled={pending || !g2Enabled} onClick={onRunG2Scan} title={g2Enabled ? "Scan merchant website for risky keywords" : "G2 monitoring disabled (G2_MONITORING_ENABLED=false)"} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-xs text-white hover:bg-white/5 disabled:opacity-50">
+          {pending ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} G2 website scan
+        </button>
+      </div>}
+    </div>
+    {lastOutcome && <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <IntelligenceMetric label="Decision" value={lastOutcome.decision} tone={lastOutcome.decision} />
+      <IntelligenceMetric label="Risk score" value={String(lastOutcome.score)} tone={lastOutcome.score >= 70 ? "REVIEW" : "CLEAR"} />
+      <IntelligenceMetric label="Hard stops" value={String(lastOutcome.hardStops?.length ?? 0)} tone={(lastOutcome.hardStops?.length ?? 0) > 0 ? "REJECT" : "CLEAR"} />
+      <IntelligenceMetric label="Manual review" value={lastOutcome.manualReviewForced ? "Required" : "Not forced"} tone={lastOutcome.manualReviewForced ? "REVIEW" : "CLEAR"} />
+    </div>}
+    <h3 className="mb-2 text-sm font-semibold text-white">Persisted verification signals</h3>
+    <div className="overflow-auto border border-white/10">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-[var(--surface-2)] text-xs uppercase text-glass-muted">
+          <tr><th className="px-3 py-2">Signal</th><th className="px-3 py-2">Severity</th><th className="px-3 py-2">Source</th><th className="px-3 py-2">Manual review</th><th className="px-3 py-2">Observed</th><th className="px-3 py-2">Detail</th></tr>
+        </thead>
+        <tbody className="divide-y divide-white/10">
+          {latestSignals.map((signal) => (
+            <tr key={signal.id}>
+              <td className="px-3 py-2 font-mono text-xs text-white">{signal.signalCode}</td>
+              <td className="px-3 py-2"><TwBadge variant={signal.severity === "CRITICAL" || signal.severity === "HIGH" ? "danger" : signal.severity === "MEDIUM" ? "warning" : "default"}>{signal.severity}</TwBadge></td>
+              <td className="px-3 py-2 text-glass-muted">{signal.source}</td>
+              <td className="px-3 py-2">{signal.requiresManualReview ? "Yes" : "No"}</td>
+              <td className="px-3 py-2 text-glass-muted">{signal.observedAt ? new Date(signal.observedAt).toLocaleString() : "—"}</td>
+              <td className="px-3 py-2 text-xs text-glass-muted">{signal.detail || signal.evidenceReference || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!latestSignals.length && <Empty icon={<ShieldCheck size={34} />} text="No verification signals yet. Run underwriting from onboarding or use Run underwriting above." />}
+    </div>
+  </section>;
 }
 
 function IntelligenceTab({ checks, loading, canRun, pending, onRun }: {

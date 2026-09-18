@@ -134,6 +134,43 @@ export const useDisableAmlRule = () => {
   });
 };
 
+export const useReloadRulesEngine = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.post<string>("rules/reload"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+    },
+  });
+};
+
+export const useRunMerchantVerification = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (merchantId: number) =>
+      apiClient.post<import("./queries").UnderwritingOutcome>(`underwriting/merchants/${merchantId}/verify`),
+    onSuccess: (_data, merchantId) => {
+      queryClient.invalidateQueries({ queryKey: ["underwriting", "signals", merchantId] });
+      queryClient.invalidateQueries({ queryKey: ["kyc-overview", merchantId] });
+    },
+  });
+};
+
+export const useRunG2WebsiteScan = () => {
+  return useMutation({
+    mutationFn: (merchantId: number) =>
+      apiClient.post<{
+        merchantId: number;
+        website?: string;
+        scannedUrl?: string;
+        status: string;
+        matchedKeyword?: string;
+        message: string;
+        caseCreated: boolean;
+      }>(`monitoring/g2/merchants/${merchantId}/scan`),
+  });
+};
+
 export interface ReviewRuleVersionRequest {
   versionId: number;
   reason: string;

@@ -463,6 +463,8 @@ export const useAmlRules = () => {
       // Enrich rules with creator info if available
       return rules.map((rule) => ({
         ...rule,
+        ruleName: rule.ruleName ?? rule.name ?? "",
+        ruleExpression: rule.ruleExpression ?? rule.drlContent ?? rule.ruleJson ?? "",
         isSuperAdmin: !rule.pspId || rule.createdByUser?.role?.name === "ADMIN" || rule.createdByUser?.role?.name === "SUPER_ADMIN",
       }));
     },
@@ -538,6 +540,78 @@ export const useSanctionsListVersions = (listName?: string) => {
         )
         .catch(() => []),
     staleTime: 5 * 60_000,
+  });
+};
+
+export interface SanctionsHealthStatus {
+  healthy: boolean;
+  message: string;
+}
+
+export const useSanctionsHealth = () => {
+  return useQuery({
+    queryKey: ["sanctions", "health"],
+    queryFn: async (): Promise<SanctionsHealthStatus> => {
+      try {
+        const body = await apiClient.get<string>("sanctions/health");
+        return { healthy: true, message: typeof body === "string" ? body : "Sanctions screening service is healthy" };
+      } catch {
+        return { healthy: false, message: "Sanctions screening is temporarily unavailable (aml-microservice or watchlist data)" };
+      }
+    },
+    staleTime: 60_000,
+  });
+};
+
+export interface MerchantVerificationSignal {
+  id: number;
+  merchantId: number;
+  runId: string;
+  signalCode: string;
+  severity: string;
+  source: string;
+  confidence?: number;
+  requiresManualReview?: boolean;
+  evidenceReference?: string;
+  detail?: string;
+  observedAt?: string;
+}
+
+export interface UnderwritingOutcome {
+  decision: string;
+  score: number;
+  scoreComponents?: Record<string, number>;
+  hardStops?: string[];
+  requiredControls?: string[];
+  manualReviewForced?: boolean;
+  signals?: Array<{
+    code: string;
+    severity: string;
+    source: string;
+    requiresManualReview?: boolean;
+    detail?: string;
+  }>;
+}
+
+export const useMerchantVerificationSignals = (merchantId: number, enabled = true) => {
+  return useQuery({
+    queryKey: ["underwriting", "signals", merchantId],
+    queryFn: () => apiClient.get<MerchantVerificationSignal[]>(`underwriting/merchants/${merchantId}/signals`),
+    enabled: Number.isFinite(merchantId) && merchantId > 0 && enabled,
+  });
+};
+
+export interface G2MonitoringStatus {
+  enabled: boolean;
+  provider: string;
+  description: string;
+}
+
+export const useG2MonitoringStatus = () => {
+  return useQuery({
+    queryKey: ["monitoring", "g2", "status"],
+    queryFn: () => apiClient.get<G2MonitoringStatus>("monitoring/g2/status"),
+    staleTime: 60_000,
   });
 };
 
