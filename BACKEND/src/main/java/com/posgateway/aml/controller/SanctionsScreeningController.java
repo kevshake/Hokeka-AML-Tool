@@ -124,7 +124,11 @@ public class SanctionsScreeningController {
                 mm.put("similarityScore", m.similarityScore());
                 mm.put("score", m.similarityScore());
                 mm.put("entityId", m.entityId());
-                mm.put("reason", "Sanctions match");
+                mm.put("pepLevel", m.pepLevel());
+                mm.put("isPep", m.pepLevel() != null && !m.pepLevel().isBlank());
+                mm.put("category", m.pepLevel() != null && !m.pepLevel().isBlank() ? "PEP" : "SANCTIONS");
+                mm.put("reason", m.pepLevel() != null && !m.pepLevel().isBlank()
+                        ? "PEP match (" + m.pepLevel() + ")" : "Sanctions match");
                 matchesList.add(mm);
 
                 Map<String, Object> hh = new HashMap<>();
@@ -137,6 +141,7 @@ public class SanctionsScreeningController {
         }
         response.put("matches", matchesList);
         response.put("hits", hitsList);
+        response.put("pepMatchFound", matchesList.stream().anyMatch(m -> Boolean.TRUE.equals(m.get("isPep"))));
         return response;
     }
 

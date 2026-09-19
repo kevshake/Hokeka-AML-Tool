@@ -132,6 +132,12 @@ public class MerchantVerificationOrchestrator {
             if (idv.approved()) {
                 decision = UnderwritingDecision.APPROVE;
                 outcome.addComponent("INTERNAL_IDV_AUTO_APPROVE", 0);
+                VerificationSignal idvSignal = VerificationSignal.of(
+                        "INTERNAL_IDV_AUTO_APPROVE", SignalSeverity.INFO, "INTERNAL_IDV",
+                        ctx.entityRef(), false, idv.reasonCode());
+                signals.add(idvSignal);
+                outcome.getSignals().add(idvSignal);
+                persistSignals(merchant, runId, List.of(idvSignal));
                 log.info("Internal IDV auto-approved merchant {} using hash-only intelligence",
                         merchant.getMerchantId());
             }

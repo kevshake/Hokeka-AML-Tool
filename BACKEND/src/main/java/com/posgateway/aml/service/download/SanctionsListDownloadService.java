@@ -171,6 +171,23 @@ public class SanctionsListDownloadService {
         }
     }
 
+    public boolean isDownloadEnabled() {
+        return downloadEnabled;
+    }
+
+    public Map<String, Object> status() {
+        LocalDateTime last = lastSuccessfulUpdate.get();
+        long hoursSince = last == null ? -1 : ChronoUnit.HOURS.between(last, LocalDateTime.now());
+        return Map.of(
+                "enabled", downloadEnabled,
+                "provider", "OpenSanctions",
+                "opensanctionsUrlConfigured", opensanctionsUrl != null && !opensanctionsUrl.isBlank(),
+                "lastSuccessfulUpdate", last == null ? "" : last.toString(),
+                "hoursSinceLastUpdate", hoursSince,
+                "pepClassificationAtIngest", true,
+                "envKeys", "SANCTIONS_DOWNLOAD_ENABLED, sanctions.opensanctions.url, sanctions.opensanctions.metadata.url");
+    }
+
     // ---------------- internals ----------------
 
     private void recordSanctionsListMetadata(String version, int recordsProcessed) {

@@ -102,16 +102,17 @@ public class AmlScreeningOrchestrator {
         ScreeningResult result = screeningEngine.screenBeneficialOwner(
                 owner.getFullName(), owner.getDateOfBirth());
 
-        // Update owner flags based on results
-        if (result.hasMatches()) {
-            owner.setIsSanctioned(true);
-            // Check if any match is PEP
-            boolean hasPepMatch = result.getMatches().stream()
-                    .anyMatch(m -> "PEP".equals(m.getListName()) || m.getPepLevel() != null);
-            owner.setIsPep(hasPepMatch);
-        }
-
+        // Update owner flags based on results (fail-closed: UNAVAILABLE leaves flags unchanged).
         if (result.getStatus() != ScreeningResult.ScreeningStatus.UNAVAILABLE) {
+            if (result.hasMatches()) {
+                owner.setIsSanctioned(true);
+                boolean hasPepMatch = result.getMatches().stream()
+                        .anyMatch(m -> isPepMatch(m.getListName(), m.getPepLevel()));
+                owner.setIsPep(hasPepMatch);
+            } else {
+                owner.setIsSanctioned(false);
+                owner.setIsPep(false);
+            }
             owner.setLastScreenedAt(LocalDateTime.now());
         }
 
@@ -134,8 +135,12 @@ public class AmlScreeningOrchestrator {
 
         // Screen all beneficial owners
         List<Map<String, Object>> ownerResults = new ArrayList<>();
+        boolean merchantPepFromOwners = false;
         for (BeneficialOwner owner : merchant.getBeneficialOwners()) {
             ScreeningResult ownerResult = screenBeneficialOwner(owner, merchant);
+            if (Boolean.TRUE.equals(owner.getIsPep())) {
+                merchantPepFromOwners = true;
+            }
 
             Map<String, Object> ownerData = new HashMap<>();
             ownerData.put("ownerId", owner.getOwnerId());
@@ -145,6 +150,13 @@ public class AmlScreeningOrchestrator {
             ownerData.put("isPep", owner.getIsPep());
 
             ownerResults.add(ownerData);
+        }
+
+        if (merchantResult.getStatus() != ScreeningResult.ScreeningStatus.UNAVAILABLE) {
+            boolean merchantDirectPep = merchantResult.getMatches() != null && merchantResult.getMatches().stream()
+                    .anyMatch(m -> isPepMatch(m.getListName(), m.getPepLevel()));
+            merchant.setPep(merchantDirectPep || merchantPepFromOwners);
+            merchantRepository.save(merchant);
         }
 
         // Build response
@@ -226,5 +238,12 @@ public class AmlScreeningOrchestrator {
         } catch (Exception e) {
             log.error("Failed to create audit trail: {}", e.getMessage());
         }
+    }
+
+    private static boolean isPepMatch(String listName, String pepLevel) {
+        if (pepLevel != null && !pepLevel.isBlank()) {
+            return true;
+        }
+        return listName != null && listName.toUpperCase(java.util.Locale.ROOT).contains("PEP");
     }
 }
