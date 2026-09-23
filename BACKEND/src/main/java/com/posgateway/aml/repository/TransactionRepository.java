@@ -736,4 +736,15 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
            "CAST(t.txnId AS string) LIKE CONCAT('%', :q, '%')) " +
            "ORDER BY t.txnTs DESC")
     List<TransactionEntity> searchGlobalForPsp(@Param("pspId") Long pspId, @Param("q") String q, Pageable pageable);
+
+    /**
+     * CTR-eligible transactions not yet linked to a compliance filing deadline.
+     */
+    @Query("SELECT t FROM TransactionEntity t " +
+           "WHERE t.ctrRequired = true AND t.ctrEvaluationStatus = 'REPORTABLE' " +
+           "AND NOT EXISTS (" +
+           "  SELECT 1 FROM ComplianceDeadline d " +
+           "  WHERE d.sourceType = 'TRANSACTION' AND d.sourceId = t.txnId AND d.deadlineType = 'CTR_FILING') " +
+           "ORDER BY t.txnTs ASC")
+    List<TransactionEntity> findReportableCtrWithoutFilingDeadline(Pageable pageable);
 }

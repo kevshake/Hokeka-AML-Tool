@@ -39,6 +39,7 @@ class RuleFeatureEnrichmentServiceTest {
     @Mock private FeatureCacheService featureCacheService;
     @Mock private MerchantScreeningResultRepository merchantScreeningResultRepository;
     @Mock private CashStructuringDetectionService cashStructuringDetectionService;
+    @Mock private com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService;
 
     private RuleFeatureEnrichmentService service;
 
@@ -46,7 +47,8 @@ class RuleFeatureEnrichmentServiceTest {
     void setUp() {
         service = new RuleFeatureEnrichmentService(transactionRepository, merchantRepository,
                 highRiskCountryRepository, chargebackDisputeRepository, featureCacheService,
-                merchantScreeningResultRepository, cashStructuringDetectionService);
+                merchantScreeningResultRepository, cashStructuringDetectionService,
+                behavioralAnalyticsService);
     }
 
     /** Invoke the private enrichment directly so the test does not depend on every collaborator. */

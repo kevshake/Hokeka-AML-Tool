@@ -1,6 +1,12 @@
 # On-prem PSP service authentication / licensing
 
-PSPs may run the AML Fraud Detector **on-prem**, while **service authorization** is issued by Hokeka central servers (app-to-bot / service-to-service). Local user login is separate; without a valid central lease the on-prem instance **fail-closes**.
+> **⚠️ PRODUCT PATH REMOVED (2026-09).** Full-BACKEND on-prem lease mode (`hokeka.auth.enabled`, `/onprem/auth/*`, `/admin/onprem/instances`) is **not supported**. Endpoints return **410 Gone**. The sole on-premises deployment is the **Edge Node** — see `docs/SYSTEM-GLOSSARY.md`, `docs/edge-client-install-guide.md`, and `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`.
+
+The content below is **archival** documentation of the retired lease model.
+
+---
+
+PSPs previously could run the full AML Fraud Detector **on-prem**, while **service authorization** was issued by Hokeka central servers (app-to-bot / service-to-service). Local user login was separate; without a valid central lease the on-prem instance **fail-closed**.
 
 ## Architecture
 

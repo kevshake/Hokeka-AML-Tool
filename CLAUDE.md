@@ -4,14 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository layout
 
-This is a multi-module AML / fraud-detection platform. Three deployable units live side-by-side at the repo root:
+This is a multi-module AML / fraud-detection platform. Canonical topology terms are in `docs/SYSTEM-GLOSSARY.md`.
 
-- `BACKEND/` — Main Spring Boot 3.2 / Java 17 application (`com.posgateway:aml-fraud-detector`). The bulk of business logic, REST controllers, persistence, rules engine, ML, KYC, sanctions screening, case management, and reporting all live here. Default port `2637`.
-- `aml-microservice/` — Smaller standalone Spring Boot service (`com.hokeka:aml-microservice`) focused on Aerospike-backed AML lookups. Independent pom; deploys separately.
-- `FRONTEND/` — React 18 + TypeScript + Vite + MUI SPA. Dev server on `5173`, proxies `/api/v1` to the BACKEND on `2637` (override with `VITE_PROXY_TARGET`).
-- `infra/`, `docker-compose.prod.yml`, `docker-compose.test.yml`, `BACKEND/docker-compose.yml` — Compose files for Postgres, Aerospike, Neo4j, Kafka, nginx, etc.
-- `docs/` — Architecture, SDLC, security, integrations, chargeback, performance docs (most subdirs are sparse — read before assuming anything is canonical).
-- `website/` — Marketing site, separate from the app.
+**Supported runtime (only):**
+
+- `FRONTEND/` — **Console** (React 18 + TypeScript + Vite + MUI). Dev server on `5173`, proxies `/api/v1` to the Control Plane on `2637`.
+- `BACKEND/` — **Control Plane** (Spring Boot 3.2 / Java 17, `com.posgateway:aml-fraud-detector`). Default port `2637`.
+- `aml-microservice/` — Aerospike-backed sanctions lookups (cloud sidecar to Control Plane).
+- `edge-host/` + `edge-engine/` — **Edge Node** (per-PSP on-prem evaluation + Aerospike feature store). Install via `docs/INSTALL.md` / `edge-host/deploy/install.sh`.
+- `infra/`, `docker-compose.prod.yml`, `docker-compose.test.yml` — Cloud stack (Console + Control Plane + data services). **Does not** deploy Edge Nodes for PSPs.
+- `docs/` — Architecture, dual-post contract, edge install, gap register.
+- `website/` — Marketing site.
+
+**Not product runtimes:** full-BACKEND on-prem lease mode (`hokeka.auth.enabled`, `/onprem/auth/*`) — removed; `architecture-v2/` — archival only.
 
 ## Common commands
 
@@ -77,7 +82,7 @@ Production hardening (when running under the `production` profile, not `testenv`
 - Vite manual chunking is configured (`vendor-react`, `vendor-mui`, `vendor-query`, `vendor-charts`) — preserve this when touching `vite.config.ts`.
 
 ### Cross-service contract
-FRONTEND assumes `/api/v1/*` lives on the BACKEND (port 2637 in dev). The `aml-microservice` is a separate service and is not proxied through Vite by default — wire it explicitly when needed.
+FRONTEND assumes `/api/v1/*` lives on the Control Plane (port 2637 in dev). Edge Nodes pull rule bundles and POST metrics to the same API host; PSP transaction **dual-post** (edge pre-auth + cloud ingest) is documented in `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`. The `aml-microservice` is internal to the cloud stack — not proxied through Vite.
 
 ## Working with this repo
 

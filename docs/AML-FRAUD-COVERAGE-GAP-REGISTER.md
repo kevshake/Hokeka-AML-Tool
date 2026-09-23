@@ -71,7 +71,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Card-testing detection | ✅ | Device >5 merchants/24h heuristic, live |
 | ML scoring (external XGBoost) | 🟡 | Real HTTP call but `scoring.service.enabled=false` in all profiles → **rules-only, constant `ml_score=0.0`** (honestly labeled) |
 | DL4J anomaly autoencoder | 🟡 | Genuine load-from-artifact (never random); `dl4j.enabled=false`, no model path → inert |
-| **Behavioral z-score** | 🟠 | `BehavioralProfilingService` Javadoc claims Z-score/sigma but computes plain `mean×5`; sigma constant unused |
+| **Behavioral z-score** | ✅ | `BehavioralProfilingService.isAmountAnomaly` computes real population σ and z-score (≥3σ) over merchant history |
 | **Model retraining / feedback loop** | 🟠 | Labels/chargebacks/FP collected & persisted (real), but comments claim a "nightly retrain" that **does not exist** — no trainer consumes them |
 | Proxy/VPN detection | 🟠 | Hardcoded `/8` IP-prefix guesses; no reputation/ASN |
 | Graph fraud-ring / money-trail / cycle / mule-proximity | 🟠 | Genuine Cypher but **dead code** (no callers, no `controller/network`); Neo4j off by default |
@@ -88,8 +88,8 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Merchant expected-profile baseline | 🟡 | Only `expectedMonthlyVolume` stored; no expected ticket/currencies/refund-ratio/cross-border-ratio/business-model |
 | Linked-merchant network / reincarnation | 🟡 | `LinkAnalysisService` matches device+IP vs blocked merchants only; no shared UBO/phone/email/domain/settlement/address/webhook |
 | Funnel-account / trade-based-ML detectors | ✅ | Wired via `AmlDetectionController` (`/aml/detection/funnel-accounts`, `/aml/detection/trade-based-ml`) |
-| Peer-group comparison, dormant reactivation | 🟠 | Fully coded in `BehavioralAnalyticsService` but **orphaned (no caller)** |
-| Rapid refund cycling, circular funds | 🟠 | Computed as features (`refund_share_pct`, `circular_trading_count`) that **drive no rule/alert** |
+| Peer-group comparison, dormant reactivation | ✅ | `BehavioralAnalyticsService` wired: `/aml/detection/peer-group/{id}`, `/dormant-reactivation`; `peer_group_volume_ratio` → R-127 |
+| Rapid refund cycling, circular funds | ✅ | Features `refund_share_pct` / `circular_trading_count` in `RuleFeatureEnrichmentService`; rules R-125 / R-119 active (V143) |
 | Shared settlement account, bust-out, MCC-behavior inconsistency, self-funding, sudden-growth-vs-historical | 🔴 | Not implemented |
 | Settlement-account-change sensitivity (rescreen/alert) | 🟠 | Change recorded to audit map only; no rescreen trigger / frequency / third-party check |
 
@@ -104,8 +104,8 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | Fraud vs AML engine separation | ✅ | Two distinct engines/scores/workflows; status = max(aml, fraud) but AML alerting independent |
 | CVV handling | ✅ | No CVV stored/logged anywhere |
 | PII/CDD field encryption | 🟡 | AES-GCM on email/national-ID/passport/PSP secrets; **settlement/bank account numbers plaintext** |
-| **CTR auto-filing** | 🟠 | Detection is live/event-driven but the detection→filing bridge is **entirely manual/pull; no scheduled auto-file** |
-| **Audit tamper-evidence** | 🟠 | HMAC-SHA256 per row **but never verified anywhere**, omits before/after/reason, and is **not hash-chained** (deletions/reordering undetectable) |
+| **CTR auto-filing** | 🟡 | Detection live; `CtrFilingBridgeService` schedules `CTR_FILING` compliance deadlines from `REPORTABLE` txns (maker-checker filing still manual) |
+| **Audit tamper-evidence** | 🟡 | HMAC includes before/after/reason + hash-chain (`previous_checksum`, V232); `GET /audit/logs/verify` verifies batches (legacy rows pre-V232 may fail until backfilled) |
 | **PAN storage** | 🟠 | App trusts upstream token; `pan_hash` stored **unencrypted & indexed** — raw PAN in `accountNumber` would persist in clear |
 | Suspicion-timestamp lifecycle (2-day STR clock) | 🟡 | On SAR only (`suspicion_arose_at`, default source `REPORT_CREATED`); **case/alert lack `suspicion_formed_at`/`investigation_started_at`/`mlro_notified_at`** |
 | 7-year retention | 🟡 | Enforced for docs/cases/crypto/reports; **not clearly for core `TransactionEntity`; audit retention defaults to 90 days** |
@@ -143,17 +143,17 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 
 **P1 — reachable stub / inert control ("dummy code")**
 4. ~~`TransactionLimitService.setTemporaryLimit` persisted nothing~~ ✅ **FIXED** (V200 + enforcement).
-5. `BehavioralProfilingService` fake z-score → compute real σ/z-score.
-6. ~~Wire orphaned real detectors: `detectFunnelAccounts`, `detectTradeBasedMl` → `AmlDetectionController`~~ ✅ **FIXED**; wire refund-cycling & circular-funds features to a rule/alert.
+5. ~~`BehavioralProfilingService` fake z-score~~ ✅ **FIXED** — real σ/z-score in `isAmountAnomaly`.
+6. ~~Wire orphaned real detectors + refund/circular features~~ ✅ **FIXED** — R-119/R-125 + peer-group R-127.
 7. `SchemeReportingController` pack export ignores type → real CSV/PDF.
-8. `DecisionEngine` BLOCK → invoke existing `PaymentBlacklistService`.
+8. ~~`DecisionEngine` BLOCK → invoke existing `PaymentBlacklistService`~~ ✅ **FIXED** — `takeBlockAction` adds PAN to blacklist.
 9. Remove misleading "nightly retrain" comments (or build the trainer).
 
 **P2 — compliance hardening**
-10. Audit **hash-chaining** + a verification path; include before/after/reason in HMAC.
+10. ~~Audit **hash-chaining** + verification path~~ 🟡 **PARTIAL** — V232 chain + `/audit/logs/verify`; legacy row backfill optional.
 11. Encrypt settlement/bank account numbers; guard `pan_hash` against raw PAN.
 12. Suspicion lifecycle timestamps on case/alert; 7-year retention for `TransactionEntity`; audit-retention default ≠ 90d.
-13. CTR detection→filing bridge (scheduled).
+13. ~~CTR detection→filing bridge (scheduled)~~ 🟡 **PARTIAL** — `CtrFilingBridgeService` creates deadlines; transport filing still operator-driven.
 14. Scheme thresholds + MCC risk → effective-dated config tables (reuse the `rule_versions` pattern).
 
 **P3 — capability build-out (features, not stubs)**

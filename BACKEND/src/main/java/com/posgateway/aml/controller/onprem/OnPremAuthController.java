@@ -1,8 +1,7 @@
 package com.posgateway.aml.controller.onprem;
 
+import com.posgateway.aml.config.onprem.OnPremLeaseDeprecation;
 import com.posgateway.aml.dto.onprem.OnPremLeaseRequest;
-import com.posgateway.aml.dto.onprem.OnPremLeaseResponse;
-import com.posgateway.aml.service.onprem.OnPremLeaseService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,43 +10,27 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Machine-to-machine lease endpoints for on-prem PSP instances.
- * Authenticated solely by client id/secret in the request body (no user session).
+ * Former machine-to-machine lease endpoints for full-BACKEND on-prem deployments.
+ *
+ * <p><b>Product path removed.</b> PSPs deploy an {@code Edge Node} instead. These endpoints fail
+ * closed with {@code 410 Gone} so legacy installers cannot silently obtain a lease.
  */
 @RestController
 @RequestMapping("/onprem/auth")
 public class OnPremAuthController {
 
-    private final OnPremLeaseService leaseService;
-
-    public OnPremAuthController(OnPremLeaseService leaseService) {
-        this.leaseService = leaseService;
-    }
-
-    /**
-     * Initial authentication / lease grant.
-     * POST /api/v1/onprem/auth/lease
-     */
     @PostMapping("/lease")
-    public ResponseEntity<OnPremLeaseResponse> lease(@Valid @RequestBody OnPremLeaseRequest request) {
-        return ResponseEntity.ok(leaseService.authenticateAndGrant(request));
+    public ResponseEntity<?> lease(@Valid @RequestBody OnPremLeaseRequest request) {
+        return OnPremLeaseDeprecation.gone();
     }
 
-    /**
-     * Explicit renewal alias — identical credentials flow; refreshes validUntil + nextCheckAt.
-     * POST /api/v1/onprem/auth/renew
-     */
     @PostMapping("/renew")
-    public ResponseEntity<OnPremLeaseResponse> renew(@Valid @RequestBody OnPremLeaseRequest request) {
-        return ResponseEntity.ok(leaseService.authenticateAndGrant(request));
+    public ResponseEntity<?> renew(@Valid @RequestBody OnPremLeaseRequest request) {
+        return OnPremLeaseDeprecation.gone();
     }
 
-    /**
-     * Heartbeat / daily check-in — same as renew (server re-assigns nextCheckAt).
-     * POST /api/v1/onprem/auth/heartbeat
-     */
     @PostMapping("/heartbeat")
-    public ResponseEntity<OnPremLeaseResponse> heartbeat(@Valid @RequestBody OnPremLeaseRequest request) {
-        return ResponseEntity.ok(leaseService.authenticateAndGrant(request));
+    public ResponseEntity<?> heartbeat(@Valid @RequestBody OnPremLeaseRequest request) {
+        return OnPremLeaseDeprecation.gone();
     }
 }

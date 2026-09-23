@@ -19,11 +19,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Audit Log Service
@@ -118,11 +124,11 @@ public class AuditLogService {
                     .success(true)
                     .build();
 
-            // Calculate checksum for immutability
-            String contentToHash = log.getUserId() + log.getActionType() + log.getEntityType() +
-                    log.getEntityId() + log.getTimestamp().toString();
-            String checksum = new HmacUtils(HmacAlgorithms.HMAC_SHA_256, hmacKey).hmacHex(contentToHash);
-            log.setChecksum(checksum);
+            String previousChecksum = auditLogRepository.findTopByOrderByIdDesc()
+                    .map(AuditLog::getChecksum)
+                    .orElse(null);
+            log.setPreviousChecksum(previousChecksum);
+            log.setChecksum(computeChecksum(log));
 
             auditLogRepository.save(log);
 
@@ -170,6 +176,59 @@ public class AuditLogService {
         }
     }
     
+    /**
+     * Recompute and verify HMAC checksums (including hash-chain links) for a slice of the audit log.
+     */
+    @Transactional(readOnly = true)
+    public AuditIntegrityReport verifyIntegrity(Long startId, int limit) {
+        int batchSize = Math.max(1, Math.min(limit, 5000));
+        long cursor = startId != null ? startId : 0L;
+        Page<AuditLog> page = auditLogRepository.findByIdGreaterThanEqualOrderByIdAsc(
+                cursor, PageRequest.of(0, batchSize, Sort.by(Sort.Direction.ASC, "id")));
+
+        List<Long> tamperedIds = new ArrayList<>();
+        String chainPrevious = auditLogRepository.findTopByIdLessThanOrderByIdDesc(cursor)
+                .map(AuditLog::getChecksum)
+                .orElse(null);
+
+        for (AuditLog row : page.getContent()) {
+            if (!Objects.equals(row.getPreviousChecksum(), chainPrevious)) {
+                tamperedIds.add(row.getId());
+            }
+            String expected = computeChecksum(row);
+            if (row.getChecksum() == null || !row.getChecksum().equals(expected)) {
+                tamperedIds.add(row.getId());
+            }
+            chainPrevious = row.getChecksum();
+        }
+
+        return new AuditIntegrityReport(page.getNumberOfElements(), tamperedIds, chainPrevious);
+    }
+
+    String computeChecksum(AuditLog log) {
+        String payload = String.join("|",
+                nullSafe(log.getUserId()),
+                nullSafe(log.getActionType()),
+                nullSafe(log.getEntityType()),
+                nullSafe(log.getEntityId()),
+                log.getTimestamp() != null ? log.getTimestamp().toString() : "",
+                nullSafe(log.getBeforeValue()),
+                nullSafe(log.getAfterValue()),
+                nullSafe(log.getReason()),
+                nullSafe(log.getPreviousChecksum()));
+        return new HmacUtils(HmacAlgorithms.HMAC_SHA_256, hmacKey).hmacHex(payload);
+    }
+
+    private static String nullSafe(String value) {
+        return value != null ? value : "";
+    }
+
+    public record AuditIntegrityReport(int rowsVerified, List<Long> tamperedIds, String lastChecksum) {
+        public boolean isValid() {
+            return tamperedIds == null || tamperedIds.isEmpty();
+        }
+    }
+
     // Regulatory evidence is retained for seven years.
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 2 * * *")
     @Transactional

@@ -2,6 +2,7 @@ package com.posgateway.aml.controller;
 
 import com.posgateway.aml.entity.AuditLog;
 import com.posgateway.aml.repository.AuditLogRepository;
+import com.posgateway.aml.service.AuditLogService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
@@ -25,9 +26,11 @@ import java.util.List;
 public class AuditLogController {
 
     private final AuditLogRepository auditLogRepository;
+    private final AuditLogService auditLogService;
 
-    public AuditLogController(AuditLogRepository auditLogRepository) {
+    public AuditLogController(AuditLogRepository auditLogRepository, AuditLogService auditLogService) {
         this.auditLogRepository = auditLogRepository;
+        this.auditLogService = auditLogService;
     }
 
     @GetMapping("/entity")
@@ -149,5 +152,16 @@ public class AuditLogController {
                 .findAll(spec, PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "timestamp")));
 
         return ResponseEntity.ok(pageResult);
+    }
+
+    /**
+     * Verify HMAC checksums and hash-chain links for a batch of audit rows (tamper detection).
+     */
+    @GetMapping("/verify")
+    @PreAuthorize("hasAuthority('VIEW_AUDIT_LOGS')")
+    public ResponseEntity<AuditLogService.AuditIntegrityReport> verifyIntegrity(
+            @RequestParam(required = false) Long startId,
+            @RequestParam(defaultValue = "500") int limit) {
+        return ResponseEntity.ok(auditLogService.verifyIntegrity(startId, limit));
     }
 }
