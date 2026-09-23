@@ -59,7 +59,10 @@ public class UserController {
             @RequestParam(required = false) Long pspId,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size) {
-        if (currentUser != null && !permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
+        if (currentUser == null) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!permissionService.hasPermission(currentUser.getRole(), Permission.MANAGE_USERS)) {
             throw new SecurityException("Not authorized");
         }
 
