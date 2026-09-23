@@ -114,8 +114,7 @@ BEGIN
     SELECT 1 FROM pg_indexes WHERE indexname = 'idx_api_usage_psp_period'
   ) THEN
     CREATE INDEX idx_api_usage_psp_period
-        ON api_usage_logs (psp_id, service_type, request_timestamp DESC)
-        WHERE request_timestamp >= NOW() - INTERVAL '90 days';
+        ON api_usage_logs (psp_id, service_type, request_timestamp DESC);
   END IF;
 END $$;
 
