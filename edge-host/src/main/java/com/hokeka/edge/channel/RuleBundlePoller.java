@@ -50,6 +50,7 @@ public class RuleBundlePoller {
     private volatile String lastError = "";
 
     private final com.hokeka.edge.store.EdgeFeatureStore featureStore;
+    private final LocalRuleBundleCopy localCopy;
 
     public RuleBundlePoller(ControlPlaneProperties properties, SecureChannel channel, SealedEnvelopeCodec codec,
                             ActivationService activation, EdgeEngine engine,
@@ -60,6 +61,7 @@ public class RuleBundlePoller {
         this.activation = activation;
         this.engine = engine;
         this.featureStore = featureStore;
+        this.localCopy = new LocalRuleBundleCopy(properties);
     }
 
     /**
@@ -73,14 +75,29 @@ public class RuleBundlePoller {
     @jakarta.annotation.PostConstruct
     public void restorePersistedBundle() {
         try {
-            featureStore.loadRuleBundle().ifPresent(ir -> {
-                long version = engine.loadVerifiedBundle(ir);
-                log.info("Restored persisted rule bundle v{} at start-up — enforcing immediately "
-                        + "instead of holding until the first poll", version);
-            });
+            byte[] ir = persistedIr();
+            if (ir == null) {
+                return;
+            }
+            long version = engine.loadVerifiedBundle(ir);
+            currentVersionTag = "\"" + version + "\"";
+            log.info("Restored persisted rule bundle v{} at start-up — enforcing immediately "
+                    + "instead of holding until the first poll", version);
         } catch (Exception e) {
             log.warn("Could not restore a persisted rule bundle: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Prefer the on-disk copy (survives an Aerospike outage). Fall back to the feature store for
+     * nodes that persisted only there before the file copy existed.
+     */
+    private byte[] persistedIr() {
+        java.util.Optional<byte[]> file = localCopy.load();
+        if (file.isPresent()) {
+            return file.get();
+        }
+        return featureStore.loadRuleBundle().orElse(null);
     }
 
     public Instant lastSuccess() {
@@ -150,13 +167,23 @@ public class RuleBundlePoller {
                     SealedEnvelopeCodec.CTX_RULE_BUNDLE, identity.edgeId(), now);
 
             long previous = engine.activeVersion();
+            String previousTag = currentVersionTag;
             long version = engine.loadVerifiedBundle(bundleIr);
 
-            currentVersionTag = etag != null ? etag : String.valueOf(version);
+            // The file beside the node identity is the copy the edge keeps for itself. Aerospike is
+            // a second copy used for velocity history; it may be absent. Do not advance the ETag
+            // until the file is durable, or the next poll is a 304 and the copy is never retried.
+            featureStore.saveRuleBundle(version, bundleIr);
+            if (!localCopy.save(version, bundleIr)) {
+                currentVersionTag = previousTag;
+                retain("verified bundle v" + version + " is live in memory but the local copy at "
+                        + localCopy.path() + " was not written");
+                return false;
+            }
+
+            currentVersionTag = etag != null ? etag : "\"" + version + "\"";
             lastSuccess = now;
             lastError = "";
-            // Durability: keep the verified IR locally so a restart resumes enforcing at once.
-            featureStore.saveRuleBundle(version, bundleIr);
             log.info("Rule bundle v{} verified and hot-swapped into the {} evaluator (was v{})",
                     version, engine.activeEvaluator(), previous);
             return true;

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.time.Instant;
@@ -41,10 +42,13 @@ class RuleBundlePollerTest {
     private FakeNativeCore core;
     private EdgeEngine engine;
     private RuleBundlePoller poller;
+    private ControlPlaneProperties properties;
+    private Path home;
 
     @BeforeEach
     void setUp(@TempDir Path dir) {
-        ControlPlaneProperties properties = new ControlPlaneProperties();
+        this.home = dir;
+        properties = new ControlPlaneProperties();
         properties.setBaseUrl("https://edge.hokeka.com");
         properties.setEdgeId(EDGE_ID);
         properties.setPspId("acme");
@@ -113,6 +117,23 @@ class RuleBundlePollerTest {
         assertTrue(core.publishedIr().isEmpty(), "an unverified bundle must never reach the arena");
         assertEquals(-1, engine.activeVersion());
         assertNull(poller.currentVersionTag());
+    }
+
+    @Test
+    void writesALocalCopyAndRestoresItWhenTheFeatureStoreIsAbsent() {
+        assertTrue(poller.applyBundle(sealedBundle(41), "\"41\"", identity,
+                controlPlaneEd25519.getPublic(), now));
+        assertTrue(Files.isRegularFile(home.resolve("rule-bundle.ir")));
+
+        FakeNativeCore restoredCore = new FakeNativeCore(true, 41);
+        EdgeEngine restoredEngine = new EdgeEngine(activation, restoredCore);
+        RuleBundlePoller restored = new RuleBundlePoller(properties, new SecureChannel(properties), codec,
+                activation, restoredEngine, new com.hokeka.edge.store.NoOpFeatureStore());
+        restored.restorePersistedBundle();
+
+        assertEquals(41, restoredEngine.activeVersion());
+        assertEquals("\"41\"", restored.currentVersionTag());
+        assertEquals(1, restoredCore.publishedIr().size());
     }
 
     @Test
