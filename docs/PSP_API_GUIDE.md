@@ -322,6 +322,13 @@ Volume discounts apply automatically for high-volume tiers.
 
 ## 5. Transaction Monitoring
 
+> **Edge + cloud dual-post (required for compliance):** If you deploy an **Edge Node** for pre-auth
+> evaluation, you must **also** call `POST /api/v1/transactions/ingest` after authorisation so the
+> control plane persists the transaction and raises alerts/cases/webhooks. Edge `/edge/evaluate` alone
+> does not create cloud compliance artifacts. Authoritative contract:
+> [`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md). Edge install:
+> [`docs/edge-client-install-guide.md`](edge-client-install-guide.md).
+
 ### Core Transaction Flow
 
 ```

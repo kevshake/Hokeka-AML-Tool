@@ -67,6 +67,9 @@ public class AuditLog {
     @Column(updatable = false)
     private String checksum; // Hash of the record for tamper detection (HMAC)
 
+    @Column(name = "previous_checksum", updatable = false)
+    private String previousChecksum;
+
     public AuditLog() {
     }
 
@@ -235,6 +238,14 @@ public class AuditLog {
 
     public void setChecksum(String checksum) {
         this.checksum = checksum;
+    }
+
+    public String getPreviousChecksum() {
+        return previousChecksum;
+    }
+
+    public void setPreviousChecksum(String previousChecksum) {
+        this.previousChecksum = previousChecksum;
     }
 
     @PrePersist
