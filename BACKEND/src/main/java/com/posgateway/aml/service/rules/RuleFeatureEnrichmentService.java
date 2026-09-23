@@ -42,6 +42,7 @@ public class RuleFeatureEnrichmentService {
     private final FeatureCacheService featureCacheService;
     private final MerchantScreeningResultRepository merchantScreeningResultRepository;
     private final CashStructuringDetectionService cashStructuringDetectionService;
+    private final com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService;
     private final LevenshteinDistance levenshteinDistance = new LevenshteinDistance();
 
     /**
@@ -58,7 +59,8 @@ public class RuleFeatureEnrichmentService {
                                         ChargebackDisputeRepository chargebackDisputeRepository,
                                         FeatureCacheService featureCacheService,
                                         MerchantScreeningResultRepository merchantScreeningResultRepository,
-                                        CashStructuringDetectionService cashStructuringDetectionService) {
+                                        CashStructuringDetectionService cashStructuringDetectionService,
+                                        com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService) {
         this.transactionRepository = transactionRepository;
         this.merchantRepository = merchantRepository;
         this.highRiskCountryRepository = highRiskCountryRepository;
@@ -66,6 +68,7 @@ public class RuleFeatureEnrichmentService {
         this.featureCacheService = featureCacheService;
         this.merchantScreeningResultRepository = merchantScreeningResultRepository;
         this.cashStructuringDetectionService = cashStructuringDetectionService;
+        this.behavioralAnalyticsService = behavioralAnalyticsService;
     }
 
     public void enrich(TransactionEntity transaction, Map<String, Object> features) {
@@ -107,6 +110,30 @@ public class RuleFeatureEnrichmentService {
         enrichMerchantScreeningHits(features, merchantId);
         enrichIpMetrics(transaction, features, now);
         enrichNameSimilarity(features, panHash, merchantId, now);
+        enrichPeerGroupMetrics(merchantId, features);
+    }
+
+    private void enrichPeerGroupMetrics(String merchantId, Map<String, Object> features) {
+        if (merchantId == null || merchantId.isBlank()) {
+            return;
+        }
+        try {
+            Long merchantPk = Long.parseLong(merchantId);
+            var comparison = behavioralAnalyticsService.compareToPeerGroup(merchantPk);
+            Object merchantTotal = comparison.getMerchantMetrics().get("totalAmount");
+            Object peerAvg = comparison.getPeerGroupMetrics().get("averageTotalAmount");
+            if (merchantTotal instanceof java.math.BigDecimal mt
+                    && peerAvg instanceof java.math.BigDecimal pa
+                    && pa.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                double ratio = mt.divide(pa, 4, java.math.RoundingMode.HALF_UP).doubleValue();
+                features.put("peer_group_volume_ratio", ratio);
+            }
+            if (comparison.getDeviations() != null && !comparison.getDeviations().isEmpty()) {
+                features.put("peer_group_deviations", comparison.getDeviations());
+            }
+        } catch (RuntimeException e) {
+            logger.debug("Peer-group enrichment skipped for merchant {}: {}", merchantId, e.getMessage());
+        }
     }
 
     private void enrichVelocityAndHistory(TransactionEntity transaction, Map<String, Object> features,

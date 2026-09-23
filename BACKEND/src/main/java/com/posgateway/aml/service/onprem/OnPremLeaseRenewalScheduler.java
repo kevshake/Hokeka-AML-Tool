@@ -13,7 +13,7 @@ import java.time.Instant;
  * Unreachable upstream or failed auth → {@link OnPremServiceGate} STOPPED (fail-closed).
  */
 @Component
-@ConditionalOnProperty(name = "hokeka.auth.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "hokeka.auth.legacy-lease-enabled", havingValue = "true")
 public class OnPremLeaseRenewalScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OnPremLeaseRenewalScheduler.class);

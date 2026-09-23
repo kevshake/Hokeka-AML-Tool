@@ -81,6 +81,7 @@ export default function HokekaHeader({
 
         <button
           type="button"
+          onClick={() => navigate('/alerts')}
           className="relative flex h-10 w-10 items-center justify-center rounded-full border border-glass-border bg-glass-panel text-white/85 transition-all hover:border-glass-border-hover hover:bg-burgundy-800 hover:text-white hover:shadow-glass-glow"
           aria-label="Notifications"
         >

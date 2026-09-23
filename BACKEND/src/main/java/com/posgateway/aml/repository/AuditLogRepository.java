@@ -43,6 +43,13 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
      */
     List<AuditLog> findTop1ByUserIdAndActionTypeOrderByTimestampDesc(String userId, String actionType);
 
+    java.util.Optional<AuditLog> findTopByOrderByIdDesc();
+
+    org.springframework.data.domain.Page<AuditLog> findByIdGreaterThanEqualOrderByIdAsc(
+            Long id, org.springframework.data.domain.Pageable pageable);
+
+    java.util.Optional<AuditLog> findTopByIdLessThanOrderByIdDesc(Long id);
+
     /**
      * Delete logs before a timestamp (for retention policy)
      */

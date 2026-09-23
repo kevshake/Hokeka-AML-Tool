@@ -1,7 +1,7 @@
 package com.posgateway.aml.config.security;
 
 import com.posgateway.aml.config.onprem.HokekaAuthProperties;
-import com.posgateway.aml.service.onprem.OnPremServiceGate;
+import com.posgateway.aml.config.onprem.OnPremLeaseDeprecation;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,9 +20,9 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Fail-closed gate for on-prem deployments: when the Hokeka service lease is missing/expired
- * or a mandatory check-in failed, block transaction ingest / scoring / AML check APIs.
- * Health, auth, and admin diagnostics remain reachable.
+ * Fail-closed gate when {@code hokeka.auth.enabled=true} on a JVM that was configured for the
+ * removed full-BACKEND on-prem lease product path. All protected APIs return {@code 410 Gone}
+ * with migration guidance — Edge Node is the sole supported on-premises deployment.
  */
 @Component
 @Order(SecurityProperties.DEFAULT_FILTER_ORDER + 15)
@@ -65,11 +65,9 @@ public class OnPremLeaseGateFilter extends OncePerRequestFilter {
 
     private final AntPathMatcher matcher = new AntPathMatcher();
     private final HokekaAuthProperties properties;
-    private final OnPremServiceGate gate;
 
-    public OnPremLeaseGateFilter(HokekaAuthProperties properties, OnPremServiceGate gate) {
+    public OnPremLeaseGateFilter(HokekaAuthProperties properties) {
         this.properties = properties;
-        this.gate = gate;
     }
 
     @Override
@@ -96,25 +94,11 @@ public class OnPremLeaseGateFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        if (gate.isOperationsAllowed()) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        OnPremServiceGate.LeaseState state = gate.current();
-        log.warn("Blocked {} {} — on-prem service authorization STOPPED ({})",
-                request.getMethod(), request.getRequestURI(), state.stopReason());
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        log.warn("Blocked {} {} — full-BACKEND on-prem lease mode removed ({})",
+                request.getMethod(), request.getRequestURI(), OnPremLeaseDeprecation.CODE);
+        response.setStatus(HttpStatus.GONE.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        String reason = state.stopReason() != null ? state.stopReason() : "Service authorization required";
-        response.getWriter().write(
-                "{\"error\":\"On-prem service authorization stopped\","
-                        + "\"code\":\"SERVICE_AUTHORIZATION_STOPPED\","
-                        + "\"reason\":\"" + escape(reason) + "\","
-                        + "\"mode\":\"" + state.mode().name() + "\"}");
-    }
-
-    private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        response.getWriter().write(OnPremLeaseDeprecation.jsonBody());
     }
 
     private static String pathWithinApplication(HttpServletRequest request) {

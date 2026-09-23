@@ -1,6 +1,7 @@
 package com.posgateway.aml.controller.aml;
 
 import com.posgateway.aml.service.aml.AmlScenarioDetectionService;
+import com.posgateway.aml.service.analytics.BehavioralAnalyticsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -20,10 +21,13 @@ import java.util.List;
 public class AmlDetectionController {
 
     private final AmlScenarioDetectionService amlDetectionService;
+    private final BehavioralAnalyticsService behavioralAnalyticsService;
 
     @Autowired
-    public AmlDetectionController(AmlScenarioDetectionService amlDetectionService) {
+    public AmlDetectionController(AmlScenarioDetectionService amlDetectionService,
+                                  BehavioralAnalyticsService behavioralAnalyticsService) {
         this.amlDetectionService = amlDetectionService;
+        this.behavioralAnalyticsService = behavioralAnalyticsService;
     }
 
     @GetMapping("/structuring/{merchantId}")
@@ -74,6 +78,18 @@ public class AmlDetectionController {
         if (startDate == null) startDate = LocalDateTime.now().minusMonths(1);
         if (endDate == null) endDate = LocalDateTime.now();
         return ResponseEntity.ok(amlDetectionService.detectTradeBasedMl(merchantId, startDate, endDate));
+    }
+
+    @GetMapping("/peer-group/{merchantId}")
+    public ResponseEntity<BehavioralAnalyticsService.PeerGroupComparison> comparePeerGroup(
+            @PathVariable Long merchantId) {
+        return ResponseEntity.ok(behavioralAnalyticsService.compareToPeerGroup(merchantId));
+    }
+
+    @GetMapping("/dormant-reactivation")
+    public ResponseEntity<List<BehavioralAnalyticsService.DormantAccountReactivation>> detectDormantReactivation(
+            @RequestParam(defaultValue = "90") int dormantDays) {
+        return ResponseEntity.ok(behavioralAnalyticsService.detectDormantAccountReactivation(dormantDays));
     }
 }
 

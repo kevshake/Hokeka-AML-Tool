@@ -23,18 +23,18 @@ class OnPremLeaseGateFilterTest {
         properties = new HokekaAuthProperties();
         properties.setEnabled(true);
         gate = new OnPremServiceGate(properties);
-        filter = new OnPremLeaseGateFilter(properties, gate);
+        filter = new OnPremLeaseGateFilter(properties);
     }
 
     @Test
-    void blocksIngestWhenStopped() throws Exception {
+    void blocksIngestWithGoneWhenLeaseModeEnabled() throws Exception {
         gate.stop("unreachable");
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/transactions/ingest");
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, new MockFilterChain());
 
-        assertEquals(503, response.getStatus());
-        assertTrue(response.getContentAsString().contains("SERVICE_AUTHORIZATION_STOPPED"));
+        assertEquals(410, response.getStatus());
+        assertTrue(response.getContentAsString().contains("ONPREM_LEASE_DEPRECATED"));
     }
 
     @Test
