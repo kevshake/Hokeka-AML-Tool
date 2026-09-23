@@ -20,8 +20,9 @@ aggregate metrics pushed *up*, both inside mTLS.
 | `docs/edge-transaction-evaluation.md` | How to send transactions and how decisions are resolved from rules — **read before wiring your API nodes** |
 | `docs/edge-install-troubleshooting.md` | Installation failure modes grouped by root cause |
 
-> **Internal reader:** the pipeline that produces these artifacts and the control-plane side of the
-> deployment are documented separately in `docs/INSTALL.md`. This guide is the client-facing half.
+> **Internal reader:** install **process map** — [`docs/install/README.md`](install/README.md).
+> Edge process entry: [`docs/install/01-client-edge-node.md`](install/01-client-edge-node.md).
+> Deep technical reference: `docs/INSTALL.md`. This guide is the client-facing deep dive.
 
 ---
 
