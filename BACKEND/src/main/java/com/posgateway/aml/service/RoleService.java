@@ -151,7 +151,7 @@ public class RoleService {
                        Permission.VIEW_PII, Permission.EXPORT_DATA,
                        Permission.VIEW_TRANSACTION_DETAILS, Permission.VIEW_SCREENING_RESULTS,
                        Permission.MANAGE_WATCHLISTS, Permission.WHITELIST_ENTITY,
-                       Permission.MANAGE_RULES, Permission.MANAGE_PSP_THEME,
+                       Permission.MANAGE_USERS, Permission.MANAGE_RULES, Permission.MANAGE_PSP_THEME,
                        Permission.PSP_SETTINGS_VIEW, Permission.PSP_SETTINGS_EDIT, Permission.PSP_UI_EDIT,
                        Permission.MERCHANT_VIEW, Permission.MERCHANT_EDIT, Permission.REPORT_VIEW));
         initializeSystemRole("COMPLIANCE_OFFICER","Compliance Officer",

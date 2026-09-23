@@ -16,11 +16,13 @@ import com.posgateway.aml.repository.multiasset.*;
 import com.posgateway.aml.service.security.PspIsolationService;
 import com.posgateway.aml.service.multiasset.MultiAssetRiskEngine.CryptoScreeningAssessment;
 import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -57,6 +59,7 @@ class VirtualAssetComplianceServiceTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
         service = new VirtualAssetComplianceService(vaspRepository, vaspScreeningRepository, walletRepository, screeningRepository,
                 policyRepository, transferRepository, attemptRepository, grantRepository, accessLogRepository,
                 accountRepository, transactionRepository, signalRepository, alertRepository, blockchainClient,
@@ -69,6 +72,11 @@ class VirtualAssetComplianceServiceTest {
         transaction.setTransactionType(MultiAssetTransactionType.TRANSFER); transaction.setAmount(BigDecimal.valueOf(2_000));
         transaction.setFiatEquivalentUsd(BigDecimal.valueOf(2_000)); transaction.setCurrency("USDC");
         transaction.setExecutedAt(LocalDateTime.of(2026, 7, 15, 12, 0));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

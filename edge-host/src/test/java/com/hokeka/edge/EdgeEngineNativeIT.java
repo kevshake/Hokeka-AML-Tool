@@ -63,7 +63,8 @@ class EdgeEngineNativeIT {
         EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
         engine.loadVerifiedBundle(IR);
 
-        assertThrows(IllegalStateException.class,
+        // Pre-native structural validation rejects invalid JSON before JNI is reached.
+        assertThrows(IllegalArgumentException.class,
                 () -> engine.loadVerifiedBundle("{ not valid IR".getBytes(StandardCharsets.UTF_8)));
 
         assertEquals(41, engine.activeVersion());
