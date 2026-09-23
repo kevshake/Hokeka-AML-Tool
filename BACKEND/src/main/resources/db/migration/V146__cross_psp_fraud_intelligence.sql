@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS cross_psp_fraud_flags (
     flag_count      INT          NOT NULL DEFAULT 1,
 
     -- Source PSP that first flagged it
-    source_psp_id   BIGINT       REFERENCES psp(psp_id),
+    source_psp_id   BIGINT       REFERENCES psps(psp_id),
     source_alert_id BIGINT       REFERENCES alerts(alert_id),
 
     -- Risk metadata
