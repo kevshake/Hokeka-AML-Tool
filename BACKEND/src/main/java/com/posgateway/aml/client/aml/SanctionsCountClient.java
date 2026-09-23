@@ -59,7 +59,17 @@ public class SanctionsCountClient {
     /** Returns the sanctions record count, or -1 if unavailable. */
     public long getCount() {
         if (!properties.isEnabled()) return -1L;
-        return doGetCount();
+        // doGetCount() is a self-invocation, so the @CircuitBreaker fallback (which
+        // returns -1) is bypassed by the Spring AOP proxy and the underlying
+        // WebClient error would otherwise propagate. Honor the documented contract
+        // (return -1 when unavailable) so callers such as the actuator health
+        // indicator observe a DOWN status instead of surfacing a 500.
+        try {
+            return doGetCount();
+        } catch (Exception e) {
+            log.warn("Sanctions count unavailable: {}", e.getMessage());
+            return -1L;
+        }
     }
 
     @CircuitBreaker(name = CB_NAME, fallbackMethod = "countFallback")
