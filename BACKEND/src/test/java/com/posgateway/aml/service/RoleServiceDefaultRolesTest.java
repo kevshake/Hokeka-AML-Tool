@@ -31,6 +31,7 @@ class RoleServiceDefaultRolesTest {
         // "already exist" so initializeSystemRole skips saving them.
         when(roleRepository.findByNameAndPspIsNull("SUPER_ADMIN")).thenReturn(Optional.of(new Role()));
         when(roleRepository.findByNameAndPspIsNull("ADMIN")).thenReturn(Optional.of(new Role()));
+        when(roleRepository.findByNameAndPspIsNull("PLATFORM_ADMIN")).thenReturn(Optional.of(new Role()));
         when(roleRepository.findByNameAndPspIsNull("COMPLIANCE_OFFICER")).thenReturn(Optional.of(new Role()));
         when(roleRepository.findByNameAndPspIsNull("INVESTIGATOR")).thenReturn(Optional.of(new Role()));
         when(roleRepository.findByNameAndPspIsNull("ANALYST")).thenReturn(Optional.of(new Role()));
@@ -66,8 +67,8 @@ class RoleServiceDefaultRolesTest {
     void previouslyUnprovisionedRolesAreNowSeeded() {
         RoleRepository roleRepository = mock(RoleRepository.class);
         // Everything except the three new roles "already exists" -- not this test's concern.
-        for (String existing : new String[]{"SUPER_ADMIN", "ADMIN", "PSP_ADMIN", "COMPLIANCE_OFFICER",
-                "INVESTIGATOR", "ANALYST", "VIEWER"}) {
+        for (String existing : new String[]{"SUPER_ADMIN", "ADMIN", "PLATFORM_ADMIN", "PSP_ADMIN",
+                "COMPLIANCE_OFFICER", "INVESTIGATOR", "ANALYST", "VIEWER"}) {
             when(roleRepository.findByNameAndPspIsNull(existing)).thenReturn(Optional.of(new Role()));
         }
         when(roleRepository.findByNameAndPspIsNull("SCREENING_ANALYST")).thenReturn(Optional.empty());
