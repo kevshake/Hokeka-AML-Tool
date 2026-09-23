@@ -44,6 +44,8 @@ hokeka:
     signing-public-key: ${CONTROLPLANE_ED25519_PUBLIC_KEY:}
     encryption-public-key: ${CONTROLPLANE_X25519_PUBLIC_KEY:}
     identity-file: ${EDGE_IDENTITY_FILE:/opt/hokeka/secrets/edge-identity.json}
+    # Last verified rule IR. Empty = rule-bundle.ir beside the identity file.
+    bundle-file: ${EDGE_RULE_BUNDLE_FILE:}
 
 management:
   endpoints:

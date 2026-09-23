@@ -420,7 +420,9 @@ docker compose logs -f edge
 
 ### 7.3 Restart behaviour
 
-The verified rule bundle is persisted, so a restart resumes enforcing immediately rather than
+The verified rule bundle is kept on the PSP premises: Aerospike set `rules` / key `active`, and
+`rule-bundle.ir` beside the node identity (`EDGE_RULE_BUNDLE_FILE` overrides the path). Startup
+loads that file even when Aerospike is down, so a restart resumes enforcing immediately rather than
 holding traffic until the next successful poll. A control-plane outage does not stop an already
 enrolled node from deciding.
 
