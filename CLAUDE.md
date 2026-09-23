@@ -11,9 +11,9 @@ This is a multi-module AML / fraud-detection platform. Canonical topology terms 
 - `FRONTEND/` — **Console** (React 18 + TypeScript + Vite + MUI). Dev server on `5173`, proxies `/api/v1` to the Control Plane on `2637`.
 - `BACKEND/` — **Control Plane** (Spring Boot 3.2 / Java 17, `com.posgateway:aml-fraud-detector`). Default port `2637`.
 - `aml-microservice/` — Aerospike-backed sanctions lookups (cloud sidecar to Control Plane).
-- `edge-host/` + `edge-engine/` — **Edge Node** (per-PSP on-prem evaluation + Aerospike feature store). Install via `docs/INSTALL.md` / `edge-host/deploy/install.sh`.
+- `edge-host/` + `edge-engine/` — **Edge Node** (per-PSP on-prem evaluation + Aerospike feature store). Install via [`docs/install/README.md`](docs/install/README.md) (process map) / `edge-host/deploy/install.sh`.
 - `infra/`, `docker-compose.prod.yml`, `docker-compose.test.yml` — Cloud stack (Console + Control Plane + data services). **Does not** deploy Edge Nodes for PSPs.
-- `docs/` — Architecture, dual-post contract, edge install, gap register.
+- `docs/` — Architecture, dual-post contract, edge install, gap register. **Install process map:** `docs/install/README.md`.
 - `website/` — Marketing site.
 
 **Not product runtimes:** full-BACKEND on-prem lease mode (`hokeka.auth.enabled`, `/onprem/auth/*`) — removed; `architecture-v2/` — archival only.
