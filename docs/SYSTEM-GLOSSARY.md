@@ -2,6 +2,8 @@
 
 Canonical names for the **single supported runtime topology**. Folder paths in parentheses.
 
+**Installation processes:** [`docs/install/README.md`](install/README.md) — separates Console, Control Plane, Edge Node, packages CDN, local dev, and dual-post integration.
+
 | Term | Meaning | Folder / artifact |
 |------|---------|-------------------|
 | **Console** | Operator SPA for PSP/platform admins — alerts, cases, edge fleet, rules, reports | `FRONTEND/` |
@@ -22,4 +24,4 @@ Canonical names for the **single supported runtime topology**. Folder paths in p
 
 ## Production compose units
 
-`docker-compose.prod.yml` runs: Console (`frontend-prod`), Control Plane (`backend-prod`), `aml-ms-prod`, Postgres, Aerospike, Kafka, Redis, Neo4j, ClamAV, website. **No Edge Node** — PSPs install edge separately via `docs/INSTALL.md` / `edge-host/deploy/install.sh`.
+`docker-compose.prod.yml` runs: Console (`frontend-prod`), Control Plane (`backend-prod`), `aml-ms-prod`, Postgres, Aerospike, Kafka, Redis, Neo4j, ClamAV, website. **No Edge Node** — PSPs install edge separately via [`docs/install/01-client-edge-node.md`](install/01-client-edge-node.md) / `edge-host/deploy/install.sh`.

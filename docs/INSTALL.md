@@ -1,7 +1,12 @@
 # Installation & Runtime — Canonical Guide
 
-The single authoritative install document for the platform. Where any other document disagrees with
-this one, this one wins; see [§7 Superseded documents](#7-superseded-documents).
+> **Process map (start here):** Step-by-step install **processes** — who installs Edge vs Console vs
+> Control Plane — live in [`docs/install/README.md`](install/README.md). Use that index for
+> runbooks; use **this document** for deep technical reference (secrets, compose internals, release
+> pipeline, verification checklists). Where a process doc and this file disagree on facts, **this
+> file wins**; see [§7 Superseded documents](#7-superseded-documents).
+
+The single authoritative install document for the platform.
 
 There are **two independent deployment targets** with different lifecycles, different operators and
 different security models:
