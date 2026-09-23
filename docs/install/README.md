@@ -2,6 +2,8 @@
 
 **Start here.** This index separates **who installs what** so operators never mix a PSP Edge Node install with the Console (dashboard) or Control Plane stack.
 
+> **Browsable docs site:** Run the install documentation web app from [`docs-site/`](../docs-site/) (`npm install && npm run dev`). It renders this folder's markdown with search, catalog sort/filter, and illustrations — see [`docs-site/README.md`](../docs-site/README.md).
+
 Canonical product names: [`docs/SYSTEM-GLOSSARY.md`](../SYSTEM-GLOSSARY.md).
 
 Deep technical reference (secrets, compose internals, release pipeline details): [`docs/INSTALL.md`](../INSTALL.md).
