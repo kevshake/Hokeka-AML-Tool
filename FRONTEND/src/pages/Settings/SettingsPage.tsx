@@ -16,16 +16,24 @@ import {
 } from "@mui/material";
 import { apiClient } from "../../lib/apiClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BRAND_THEMES } from "../../config/themes";
 import { readableTextOn, withAlpha } from "../../theme/tokens";
 import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
 import PlatformAdminTab from "./tabs/PlatformAdminTab";
+import JevSettingsTab from "./tabs/JevSettingsTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import GlassCard from "../../components/Common/GlassCard";
 import SettingsTabBar, { type SettingsTabItem } from "../../components/Settings/SettingsTabBar";
+import {
+  canAccessJevSettingsTab,
+  getSettingsTabsForUser,
+  settingsTabIndex,
+} from "../../lib/settingsTabs";
+import { isPlatformAdmin } from "../../lib/userAccess";
 
 
 interface Psp {
@@ -76,6 +84,7 @@ function TabPanel(props: { children?: React.ReactNode; index: number; value: num
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [tabValue, setTabValue] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPspId, setSelectedPspId] = useState<number | null>(null);
   const [themeData, setThemeData] = useState<PspTheme | null>(null);
   const [saving, setSaving] = useState(false);
@@ -168,19 +177,43 @@ export default function SettingsPage() {
   };
 
   const { user } = useAuth();
-  const isSuperAdmin = user?.pspId === 0;
-  const isPspUser = !!user && user.pspId > 0; // PSP_ADMIN or PSP_USER
+  const isPlatformOperator = isPlatformAdmin(user);
+  const isPspUser = !!user && user.pspId > 0;
+  const settingsTabs: SettingsTabItem[] = getSettingsTabsForUser(user);
 
-  const settingsTabs: SettingsTabItem[] = isPspUser
-    ? [
-        { id: "billing", label: "Billing" },
-        { id: "webhooks", label: "Webhooks" },
-      ]
-    : [
-        { id: "theme", label: "PSP Theme" },
-        ...(isSuperAdmin ? [{ id: "system", label: "System Settings" } as SettingsTabItem] : []),
-        ...(isSuperAdmin ? [{ id: "platform-admin", label: "Platform Admin" } as SettingsTabItem] : []),
-      ];
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab === "jev" && !canAccessJevSettingsTab(user)) {
+      setSearchParams({}, { replace: true });
+      setTabValue(0);
+      return;
+    }
+    if (requestedTab) {
+      const idx = settingsTabIndex(settingsTabs, requestedTab);
+      if (idx >= 0) {
+        setTabValue(idx);
+      }
+    }
+  }, [searchParams, settingsTabs, user, setSearchParams]);
+
+  useEffect(() => {
+    const active = settingsTabs[tabValue];
+    if (active?.id === "jev" && !canAccessJevSettingsTab(user)) {
+      setTabValue(0);
+    }
+  }, [settingsTabs, tabValue, user]);
+
+  const renderSettingsPanel = (tabId: string, content: ReactNode) => {
+    const index = settingsTabIndex(settingsTabs, tabId);
+    if (index < 0) {
+      return null;
+    }
+    return (
+      <TabPanel value={tabValue} index={index} tabId={tabId}>
+        {content}
+      </TabPanel>
+    );
+  };
 
   // System Settings Interface
   interface SystemSettings {
@@ -196,7 +229,7 @@ export default function SettingsPage() {
   const { data: systemSettingsData, isLoading: isLoadingSystemSettings } = useQuery<SystemSettings>({
     queryKey: ["settings", "system"],
     queryFn: () => apiClient.get<SystemSettings>("settings/system"),
-    enabled: isSuperAdmin,
+    enabled: isPlatformOperator,
   });
 
   // System Settings State (with defaults)
@@ -261,7 +294,8 @@ export default function SettingsPage() {
         onChange={setTabValue}
       />
 
-      {!isPspUser && <TabPanel value={tabValue} index={0} tabId="theme">
+      {renderSettingsPanel("theme",
+          <>
         <GlassCard padding="md" glowVariant="gold">
           <span className="hokeka-section-label">Branding</span>
           <Typography variant="h6" sx={{ color: "text.primary", mt: 1, mb: 2, fontFamily: "var(--font-display)" }}>
@@ -472,10 +506,11 @@ export default function SettingsPage() {
             <Alert severity="info">Please select a PSP to manage its theme.</Alert>
           )}
         </GlassCard>
-      </TabPanel>}
+          </>
+      )}
 
-      {!isPspUser && isSuperAdmin && (
-        <TabPanel value={tabValue} index={1} tabId="system">
+      {renderSettingsPanel("system",
+          <>
           <GlassCard padding="md" glowVariant="teal">
             <span className="hokeka-section-label">Platform</span>
             <Typography variant="h6" sx={{ color: "text.primary", mt: 1, mb: 2, fontFamily: "var(--font-display)" }}>
@@ -584,13 +619,18 @@ export default function SettingsPage() {
               )}
             </Grid>
           </GlassCard>
-        </TabPanel>
+          </>
       )}
 
-      {!isPspUser && isSuperAdmin && (
-        <TabPanel value={tabValue} index={2} tabId="platform-admin">
-          <PlatformAdminTab />
-        </TabPanel>
+      {renderSettingsPanel("platform-admin", <PlatformAdminTab />)}
+
+      {renderSettingsPanel(
+        "jev",
+        canAccessJevSettingsTab(user) ? (
+          <JevSettingsTab />
+        ) : (
+          <Alert severity="error">You do not have permission to view JEV operator settings.</Alert>
+        ),
       )}
 
       {isPspUser && (

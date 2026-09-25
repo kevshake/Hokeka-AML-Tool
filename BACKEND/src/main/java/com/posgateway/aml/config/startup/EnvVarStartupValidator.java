@@ -243,11 +243,14 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.recommended("MAIL_PASSWORD",
                         "SMTP password. Goes with MAIL_HOST."),
 
-                // --- AI Rule Generator (Anthropic Claude) ---
-                EnvVarSpec.requiredWhen("ANTHROPIC_API_KEY", aiRuleGeneratorEnabled,
-                        "Anthropic API key for the AI rule generator. " +
+                // --- AI Rule Generator (JEV / OpenRouter via Control Plane) ---
+                EnvVarSpec.requiredWhen("OPENROUTER_API_KEY", aiRuleGeneratorEnabled,
+                        "OpenRouter API key for JEV (AI rule generator and decision layer). " +
                                 "Required when ai.rule-generator.enabled=true. " +
                                 "Without it, POST /api/v1/rules/generate returns 503."),
+                EnvVarSpec.requiredWhen("JEV_MODEL", aiRuleGeneratorEnabled,
+                        "OpenRouter model id for JEV (e.g. anthropic/claude-3.5-sonnet). " +
+                                "Required when ai.rule-generator.enabled=true."),
 
                 // --- Visa/Verifi inbound authentication ---
                 EnvVarSpec.requiredWhen("VERIFI_RDR_WEBHOOK_SECRET", verifiHs256Enabled,

@@ -7,6 +7,8 @@ export interface DocMetaConfig {
   tags: string[];
   installOrder: number;
   illustration?: string;
+  /** Hidden from the default PSP-facing docs site build (operator install runbooks). */
+  operatorOnly?: boolean;
 }
 
 /** Static catalog metadata keyed by source filename under docs/install/. */
@@ -34,6 +36,7 @@ export const DOC_META: Record<string, DocMetaConfig> = {
     tags: ["frontend", "dashboard", "nginx"],
     installOrder: 2,
     illustration: "console.png",
+    operatorOnly: true,
   },
   "03-control-plane.md": {
     slug: "03-control-plane",
@@ -42,6 +45,7 @@ export const DOC_META: Record<string, DocMetaConfig> = {
     tags: ["docker", "postgres", "vps", "flyway"],
     installOrder: 1,
     illustration: "control-plane.png",
+    operatorOnly: true,
   },
   "04-packages-cdn-and-edge-release.md": {
     slug: "04-packages-cdn-and-edge-release",

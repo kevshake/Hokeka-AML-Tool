@@ -20,8 +20,9 @@ Operators use Console to:
 - View alerts and cases
 - Enroll and approve **Edge Nodes** (Setup Wizard generates install commands for clients)
 - Configure rules, limits, and reporting
+- **Hokeka AI** — Platform operator configuration (engine toggles, PSP inline mode) and tenant-facing **Hokeka Intelligence** verdict panels on alert/case/screening/KYC detail views (advisory recommendations with audit trail; no vendor or model details shown to PSP users)
 
-Console does **not** evaluate transactions and does **not** replace Edge Node or dual-post API wiring.
+Console does **not** evaluate transactions and does **not** replace Edge Node or dual-post API wiring. AI vendor credentials live only on the Control Plane.
 
 ---
 

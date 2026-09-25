@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.config.edge.EdgeControlPlaneKeys;
 import com.posgateway.aml.config.edge.EdgeProperties;
+import com.posgateway.aml.dto.edge.EdgeDecisionRequest;
+import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.dto.edge.EdgeEnrollRequest;
 import com.posgateway.aml.dto.edge.EdgeEnrollResponse;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.service.edge.EdgeBundleDistributionService;
+import com.posgateway.aml.service.edge.EdgeDecisionService;
 import com.posgateway.aml.service.edge.EdgeEnrollmentException;
 import com.posgateway.aml.service.edge.EdgeEnrollmentService;
 import com.posgateway.aml.service.edge.EdgeIdentityResolver;
@@ -66,6 +69,7 @@ public class EdgeDistributionController {
     private final EdgeEnrollmentService enrollmentService;
     private final EdgeBundleDistributionService distributionService;
     private final EdgeMetricsIngestService metricsIngestService;
+    private final EdgeDecisionService edgeDecisionService;
     private final EdgeReplayGuard replayGuard;
     private final EdgeControlPlaneKeys controlPlaneKeys;
     private final EdgeProperties properties;
@@ -76,6 +80,7 @@ public class EdgeDistributionController {
                                       EdgeEnrollmentService enrollmentService,
                                       EdgeBundleDistributionService distributionService,
                                       EdgeMetricsIngestService metricsIngestService,
+                                      EdgeDecisionService edgeDecisionService,
                                       EdgeReplayGuard replayGuard,
                                       EdgeControlPlaneKeys controlPlaneKeys,
                                       EdgeProperties properties,
@@ -84,6 +89,7 @@ public class EdgeDistributionController {
         this.enrollmentService = enrollmentService;
         this.distributionService = distributionService;
         this.metricsIngestService = metricsIngestService;
+        this.edgeDecisionService = edgeDecisionService;
         this.replayGuard = replayGuard;
         this.controlPlaneKeys = controlPlaneKeys;
         this.properties = properties;
@@ -232,6 +238,26 @@ public class EdgeDistributionController {
             log.warn("Malformed metrics upload from edge {}: {}", node.getEdgeId(), e.toString());
             return ResponseEntity.badRequest().body(Map.of("error", "malformed metrics envelope"));
         }
+    }
+
+    // ── POST /edge/decision ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Edge → Control Plane JEV decision path. Authenticated via mTLS + ACTIVE node state.
+     * OpenRouter is called only here on the Control Plane — never on the Edge Node.
+     */
+    @PostMapping(path = "/decision", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<EdgeDecisionResponse> decision(HttpServletRequest request,
+                                                         @RequestBody EdgeDecisionRequest body) {
+        Optional<EdgeNode> authorized = authorize(request);
+        if (authorized.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        EdgeNode node = authorized.get();
+        EdgeDecisionResponse response = edgeDecisionService.handle(node, body);
+        enrollmentService.recordSeen(node.getId(), identityResolver.agentVersion(request));
+        return ResponseEntity.ok(response);
     }
 
     // ── internals ────────────────────────────────────────────────────────────────────────────────

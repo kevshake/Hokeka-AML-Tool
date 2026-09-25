@@ -9,6 +9,9 @@ import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
 import org.kie.api.builder.KieModule;
+import org.kie.internal.utils.KieHelper;
+import org.kie.api.builder.ReleaseId;
+import org.kie.api.io.ResourceType;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.rule.AgendaFilter;
@@ -19,6 +22,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -47,6 +51,7 @@ public class DroolsRulesService {
     private final RuleDefinitionRepository ruleRepository;
 
     private KieContainer kieContainer;
+    private ReleaseId activeReleaseId;
     private boolean droolsEnabled = false;
 
     /** Number of DB DRL rules skipped at the last reload because they did not compile. Surfaced so a
@@ -78,17 +83,15 @@ public class DroolsRulesService {
         logger.info("Initializing/Reloading Drools Rules Engine...");
         try {
             KieServices kieServices = KieServices.Factory.get();
+            disposeActiveContainer(kieServices);
             KieFileSystem kfs = kieServices.newKieFileSystem();
             boolean rulesFound = false;
 
-            // 1. Try to load DRL from classpath (Static Fallback)
-            try {
-                kfs.write("src/main/resources/rules/aml-rules.drl",
-                        kieServices.getResources().newClassPathResource("rules/aml-rules.drl"));
+            // 1. Try to load DRL from classpath (static fallback). Inline bytes — do not store a lazy
+            // ClassPathResource in the KieFileSystem or buildAll() fails when the resource is absent
+            // or not visible to Drools' classloader (seen in CI surefire forks).
+            if (loadStaticClasspathRules(kieServices, kfs)) {
                 rulesFound = true;
-                logger.debug("Loaded static rules from classpath.");
-            } catch (Exception e) {
-                logger.debug("No static DRL file found on classpath (this is expected if fully dynamic).");
             }
             
             // 2. Load Dynamic Rules from Database
@@ -132,7 +135,8 @@ public class DroolsRulesService {
                     droolsEnabled = false;
                 } else {
                     KieModule kieModule = kieBuilder.getKieModule();
-                    this.kieContainer = kieServices.newKieContainer(kieModule.getReleaseId());
+                    activeReleaseId = kieModule.getReleaseId();
+                    this.kieContainer = kieServices.newKieContainer(activeReleaseId);
                     droolsEnabled = true;
                     logger.info("Drools Rules Engine initialized successfully.");
                 }
@@ -259,17 +263,49 @@ public class DroolsRulesService {
         }
     }
 
+    /**
+     * Loads bundled static DRL from the application classpath into the KieFileSystem.
+     *
+     * @return true when {@code rules/aml-rules.drl} was found and written
+     */
+    private boolean loadStaticClasspathRules(KieServices kieServices, KieFileSystem kfs) {
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("rules/aml-rules.drl")) {
+            if (in == null) {
+                logger.debug("No static DRL file found on classpath (this is expected if fully dynamic).");
+                return false;
+            }
+            byte[] content = in.readAllBytes();
+            kfs.write("src/main/resources/rules/aml-rules.drl",
+                    kieServices.getResources().newByteArrayResource(content));
+            logger.debug("Loaded static rules from classpath.");
+            return true;
+        } catch (Exception e) {
+            logger.debug("No static DRL file found on classpath (this is expected if fully dynamic): {}",
+                    e.getMessage());
+            return false;
+        }
+    }
+
     /** True if a single DRL compiles cleanly on its own. Used to exclude a malformed rule from the
      *  shared build so it cannot disable the whole engine. */
     private boolean drlCompiles(KieServices kieServices, String drlContent) {
         try {
-            KieFileSystem probe = kieServices.newKieFileSystem();
-            probe.write("src/main/resources/rules/probe/probe.drl",
-                    kieServices.getResources().newByteArrayResource(drlContent.getBytes()));
-            KieBuilder kieBuilder = kieServices.newKieBuilder(probe).buildAll();
-            return !kieBuilder.getResults().hasMessages(org.kie.api.builder.Message.Level.ERROR);
+            KieHelper helper = new KieHelper();
+            helper.addContent(drlContent, ResourceType.DRL);
+            return !helper.verify().hasMessages(org.kie.api.builder.Message.Level.ERROR);
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private void disposeActiveContainer(KieServices kieServices) {
+        if (kieContainer != null) {
+            kieContainer.dispose();
+            kieContainer = null;
+        }
+        if (activeReleaseId != null) {
+            kieServices.getRepository().removeKieModule(activeReleaseId);
+            activeReleaseId = null;
         }
     }
 

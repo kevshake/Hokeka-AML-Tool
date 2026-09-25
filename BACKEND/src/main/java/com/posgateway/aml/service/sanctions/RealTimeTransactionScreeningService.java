@@ -43,6 +43,9 @@ public class RealTimeTransactionScreeningService {
     @Value("${screening.realtime.screen-counterparty:false}")
     private boolean screenCounterparty;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+
     @Autowired
     public RealTimeTransactionScreeningService(
             AerospikeSanctionsScreeningService aerospikeScreeningService,
@@ -128,6 +131,22 @@ public class RealTimeTransactionScreeningService {
         if (result.hasMatches()) {
             logger.warn("Transaction {} screened: {} matches found, blocking={}",
                     transaction.getTxnId(), matches.size(), result.shouldBlock());
+            if (jevEngineAdvisor != null && !result.shouldBlock()) {
+                java.util.Map<String, Object> features = new java.util.HashMap<>();
+                features.put("matchCount", matches.size());
+                features.put("matches", matches.stream()
+                        .map(m -> m.getScreenedName() + ":" + m.getEntityType())
+                        .toList());
+                jevEngineAdvisor.adviseAsync(
+                        com.posgateway.aml.service.jev.JevEngineType.SANCTIONS_DISAMBIGUATION,
+                        transaction.getPspId(),
+                        "REVIEW",
+                        features,
+                        transaction.getTxnId(),
+                        null,
+                        null,
+                        null);
+            }
         }
 
         return result;
