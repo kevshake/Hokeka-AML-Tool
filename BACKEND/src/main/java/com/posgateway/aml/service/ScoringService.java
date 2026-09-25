@@ -28,8 +28,17 @@ public class ScoringService {
     private final com.posgateway.aml.service.deeplearning.DL4JAnomalyService dl4jAnomalyService;
     private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+
     @Value("${scoring.service.enabled:true}")
     private boolean scoringEnabled;
+
+    @Value("${jev.fraud-scoring.borderline-low:0.35}")
+    private double fraudScoringBorderlineLow;
+
+    @Value("${jev.fraud-scoring.borderline-high:0.70}")
+    private double fraudScoringBorderlineHigh;
 
     @Value("${scoring.service.url:http://localhost:8000}")
     private String scoringServiceUrl;
@@ -113,6 +122,7 @@ public class ScoringService {
                             rulesExecutionService.evaluateRules(txnId, features, cachedScore);
                     applyRuleResultToScore(ruleResult, riskDetails);
                     cachedScore = resolveScoreAfterRules(cachedScore, ruleResult);
+                    maybeConsultJevForFraudScoring(txnId, cachedScore, features, riskDetails);
                     return new ScoringResult(txnId, cachedScore, resp.processingTimeMs(), riskDetails);
                 }
             } catch (Exception e) {
@@ -244,6 +254,7 @@ public class ScoringService {
                 }
 
                 logger.info("Transaction {} scored: score={}, latency={}ms", txnId, score, latencyMs);
+                maybeConsultJevForFraudScoring(txnId, score, features, riskDetails);
                 return new ScoringResult(txnId, score, latencyMs, riskDetails);
             }
 
@@ -335,6 +346,48 @@ public class ScoringService {
         // Persist the summed rule score_impact so it is recorded on the transaction and available to
         // the decision/reporting layers (it was previously computed and thrown away).
         riskDetails.put("rule_score_total", ruleResult.getScoreImpact());
+    }
+
+    private void maybeConsultJevForFraudScoring(Long txnId,
+                                                Double score,
+                                                Map<String, Object> features,
+                                                Map<String, Object> riskDetails) {
+        if (jevEngineAdvisor == null || score == null || txnId == null) {
+            return;
+        }
+        if (score < fraudScoringBorderlineLow || score >= fraudScoringBorderlineHigh) {
+            return;
+        }
+        Map<String, Object> jevFeatures = new HashMap<>();
+        jevFeatures.put("score", score);
+        jevFeatures.put("borderlineBand", fraudScoringBorderlineLow + "-" + fraudScoringBorderlineHigh);
+        if (features != null) {
+            jevFeatures.putAll(features);
+        }
+        if (riskDetails != null) {
+            jevFeatures.put("rule_decision", riskDetails.get("rule_decision"));
+            jevFeatures.put("rules_triggered", riskDetails.get("rules_triggered"));
+            jevFeatures.put("ml_score", riskDetails.get("ml_score"));
+            jevFeatures.put("source", riskDetails.get("source"));
+            jevFeatures.put("cache_layer", riskDetails.get("cache_layer"));
+        }
+        Long pspId = null;
+        Object rawPspId = features != null ? features.getOrDefault("pspId", features.get("psp_id")) : null;
+        if (rawPspId instanceof Number pspNum) {
+            pspId = pspNum.longValue();
+        }
+        String baseline = riskDetails != null && riskDetails.get("rule_decision") != null
+                ? String.valueOf(riskDetails.get("rule_decision"))
+                : "REVIEW";
+        jevEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.jev.JevEngineType.FRAUD_SCORING,
+                pspId,
+                baseline,
+                jevFeatures,
+                txnId,
+                null,
+                null,
+                null);
     }
 
     private double resolveScoreAfterRules(double score, com.posgateway.aml.rules.RuleEvaluationResult ruleResult) {

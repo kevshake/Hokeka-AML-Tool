@@ -40,6 +40,9 @@ public class CaseCreationService {
     private final CaseEnrichmentService enrichmentService;
     private final RuleDefinitionRepository ruleDefinitionRepository;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+
     @Autowired
     public CaseCreationService(ComplianceCaseRepository complianceCaseRepository,
                                ObjectMapper objectMapper,
@@ -268,6 +271,24 @@ public class CaseCreationService {
 
         cCase.setUpdatedAt(LocalDateTime.now());
         complianceCaseRepository.save(cCase);
+
+        if (jevEngineAdvisor != null) {
+            Map<String, Object> caseFeatures = new HashMap<>();
+            caseFeatures.put("alertType", alertType);
+            caseFeatures.put("ruleName", ruleName);
+            caseFeatures.put("score", score);
+            caseFeatures.put("description", description);
+            caseFeatures.put("priority", cCase.getPriority() != null ? cCase.getPriority().name() : null);
+            jevEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.jev.JevEngineType.CASE_TRIAGE,
+                    cCase.getPspId(),
+                    cCase.getStatus() != null ? cCase.getStatus().name() : "NEW",
+                    caseFeatures,
+                    tx != null ? tx.getTxnId() : null,
+                    null,
+                    cCase.getId(),
+                    merchantId);
+        }
 
         // 5. Enrich Case (Async link creation)
         try {

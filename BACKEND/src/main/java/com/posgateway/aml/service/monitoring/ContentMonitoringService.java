@@ -33,6 +33,9 @@ public class ContentMonitoringService {
     private final G2ContentScanEventRepository scanEventRepository;
     private final RestTemplate restTemplate;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+
     public ContentMonitoringService(MerchantRepository merchantRepository,
                                     ComplianceCaseService caseService,
                                     G2ContentScanEventRepository scanEventRepository,
@@ -104,7 +107,23 @@ public class ContentMonitoringService {
         } else {
             result = executeWebsiteScan(merchant);
         }
-        return persistScanEvent(merchant, result, scannedBy);
+        G2ScanResult persisted = persistScanEvent(merchant, result, scannedBy);
+        if (jevEngineAdvisor != null && "MATCH".equalsIgnoreCase(persisted.status())) {
+            java.util.Map<String, Object> features = new java.util.LinkedHashMap<>();
+            features.put("website", persisted.website());
+            features.put("matchedKeyword", persisted.matchedKeyword());
+            features.put("message", persisted.message());
+            jevEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.jev.JevEngineType.G2_CONTENT,
+                    merchant.getPsp() != null ? merchant.getPsp().getPspId() : null,
+                    "REVIEW",
+                    features,
+                    null,
+                    null,
+                    null,
+                    merchant.getMerchantId());
+        }
+        return persisted;
     }
 
     private G2ScanResult executeWebsiteScan(Merchant merchant) {

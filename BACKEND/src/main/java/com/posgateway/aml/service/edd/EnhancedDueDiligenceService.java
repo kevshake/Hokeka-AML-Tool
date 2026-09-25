@@ -23,6 +23,9 @@ public class EnhancedDueDiligenceService {
     private final EnhancedDueDiligenceRequestRepository eddRepository;
     private final EddEvidenceEventRepository eventRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+
     public EnhancedDueDiligenceService(MerchantRepository merchantRepository,
                                        EnhancedDueDiligenceRequestRepository eddRepository,
                                        EddEvidenceEventRepository eventRepository) {
@@ -72,6 +75,23 @@ public class EnhancedDueDiligenceService {
         req = eddRepository.save(req);
         appendEvent(req, "INITIATED", null, true, actor, notes);
         log.info("EDD initiated for merchant {} by {}", merchantId, actor);
+        if (jevEngineAdvisor != null) {
+            java.util.Map<String, Object> features = new java.util.LinkedHashMap<>();
+            features.put("status", req.getStatus());
+            features.put("siteVisitRequired", siteVisitRequired);
+            features.put("notes", notes);
+            Merchant merchant = merchantRepository.findById(merchantId).orElse(null);
+            Long pspId = merchant != null && merchant.getPsp() != null ? merchant.getPsp().getPspId() : null;
+            jevEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.jev.JevEngineType.KYC_EDD,
+                    pspId,
+                    "IN_PROGRESS",
+                    features,
+                    null,
+                    null,
+                    null,
+                    merchantId);
+        }
         return toView(req, events(req));
     }
 

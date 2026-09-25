@@ -78,6 +78,27 @@ KAFKA_BOOTSTRAP_SERVERS=kafka-prod:29092
 
 `CORS_ALLOWED_ORIGINS` must include every Console origin ([02-console-dashboard.md](02-console-dashboard.md)).
 
+### JEV AI decision layer (Control Plane only)
+
+OpenRouter credentials live **only** on the Control Plane VPS — never on Edge Nodes or in the Console bundle.
+
+```bash
+OPENROUTER_API_KEY=<secret>          # required to enable JEV
+JEV_MODEL=<openrouter-model-id>      # required; no hardcoded default — unset = JEV disabled, rules-only fallback
+JEV_FALLBACK_MODEL=                  # optional secondary model
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+JEV_TIMEOUT=15s
+JEV_INLINE_TIMEOUT=500ms
+JEV_MAX_TOKENS=1024
+JEV_TEMPERATURE=0.2
+JEV_DAILY_CALL_BUDGET_PER_PSP=0      # 0 = unlimited
+JEV_DAILY_SPEND_CAP_USD_PER_PSP=0    # 0 = unlimited
+```
+
+Health/status (no key exposure): `GET /api/v1/jev/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → JEV AI.
+
+Legacy rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) now routes through the same JEV gateway when enabled.
+
 ### Fixed inside compose (not from `.env`)
 
 - `DATABASE_URL=jdbc:postgresql://postgres-prod:5432/fraud_detector`

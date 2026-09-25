@@ -16,7 +16,7 @@ export function normalizeRole(role?: string | null): string {
   return (role ?? "").replaceAll(" ", "_").toUpperCase();
 }
 
-type UserAccessContext = {
+export type UserAccessContext = {
   role?: { name?: string; permissions?: string[] };
   pspId?: number;
   psp?: { pspCode?: string; code?: string } | null;
