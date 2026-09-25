@@ -66,7 +66,7 @@ export default function RecordDetailPage() {
         {record.recordType === "TRANSACTION" && (
           <AiVerdictPanel
             auditPath={`jev/audit/transaction/${record.recordId}`}
-            title="Transaction risk AI verdict"
+            title="Hokeka AI recommendation"
           />
         )}
         <section><h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Link2 size={16} className="text-gold"/> Related records</h2><div className="divide-y divide-white/8 border border-white/10">{record.relatedRecords.map((link, index) => <RecordAnchor key={`${link.recordType}-${link.recordId}-${index}`} link={link} />)}{!record.relatedRecords.length && <p className="px-4 py-8 text-center text-sm text-white/45">No related records are available.</p>}</div></section><section><h2 className="mb-3 text-sm font-semibold">Occurrences</h2><div className="divide-y divide-white/8 border border-white/10">{record.occurrences.map((occurrence, index) => <div key={`${occurrence.occurrenceType}-${index}`} className="p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-semibold text-gold">{occurrence.occurrenceType.replace(/_/g, " ")}</span><span className="text-xs text-white/40">{date(occurrence.occurredAt)}</span></div><p className="mt-2 text-sm text-white/75">{occurrence.description || "Record occurrence"}</p>{occurrence.source && <div className="mt-3"><RecordAnchor link={occurrence.source}/></div>}</div>)}{!record.occurrences.length && <p className="px-4 py-8 text-center text-sm text-white/45">No occurrences recorded.</p>}</div></section></aside>

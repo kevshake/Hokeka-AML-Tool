@@ -546,7 +546,7 @@ export default function RulesGenerationPage() {
                     <Box sx={{ mt: 2 }}>
                       <AiVerdictPanel
                         auditId={aiPreview.jevAuditId}
-                        title="AI rule suggestion verdict"
+                        title="Hokeka AI recommendation"
                       />
                     </Box>
                   ) : null}

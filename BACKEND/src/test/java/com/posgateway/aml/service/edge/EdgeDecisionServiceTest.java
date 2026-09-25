@@ -5,6 +5,7 @@ import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.service.jev.JevAiDisclosureSanitizer;
 import com.posgateway.aml.service.jev.JevDecisionGateway;
 import com.posgateway.aml.service.jev.JevDecisionOutcome;
 import com.posgateway.aml.service.jev.JevRecommendation;
@@ -74,5 +75,29 @@ class EdgeDecisionServiceTest {
         assertTrue(response.fallback());
         verify(gateway).decideAsync(any());
         verify(gateway, never()).decide(any(), any());
+        JevAiDisclosureSanitizer.assertPspSafe("edge inline-off fallback",
+                response.fallbackReason());
+    }
+
+    @Test
+    void edgeResponseSanitizesInternalFallbackReasons() {
+        EdgeNode node = new EdgeNode();
+        node.setEdgeId("edge-1");
+        node.setPspId(10L);
+
+        Psp psp = new Psp();
+        psp.setAiInlineMode(true);
+        psp.setAiInlineBudgetMs(500);
+        when(pspRepository.findById(10L)).thenReturn(Optional.of(psp));
+
+        JevDecisionOutcome outcome = JevDecisionOutcome.fallback("ALERT",
+                "OpenRouter error: TimeoutException");
+        when(gateway.decide(any(), any())).thenReturn(outcome);
+
+        EdgeDecisionResponse response = service.handle(node,
+                new EdgeDecisionRequest("TRANSACTION_RISK", "ALERT", Map.of(), false));
+
+        JevAiDisclosureSanitizer.assertPspSafe("edge decision fallback", response.fallbackReason());
+        assertFalse(response.fallbackReason().toLowerCase().contains("openrouter"));
     }
 }

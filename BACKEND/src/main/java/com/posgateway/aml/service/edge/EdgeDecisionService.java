@@ -5,6 +5,7 @@ import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.service.jev.JevAiDisclosureSanitizer;
 import com.posgateway.aml.service.jev.JevDecisionContext;
 import com.posgateway.aml.service.jev.JevDecisionGateway;
 import com.posgateway.aml.service.jev.JevDecisionOutcome;
@@ -61,7 +62,7 @@ public class EdgeDecisionService {
             JevDecisionOutcome outcome = gateway.decide(ctx, Duration.ofMillis(inlineBudgetMs));
             return toResponse(baseline, outcome, true);
         } catch (Exception e) {
-            log.warn("Inline JEV decision failed for edge {}: {}", node.getEdgeId(), e.getMessage());
+            log.warn("Inline Hokeka AI decision failed for edge {}: {}", node.getEdgeId(), e.getMessage());
             return toResponse(baseline, JevDecisionOutcome.fallback(baseline, "inline timeout/error"), true);
         }
     }
@@ -89,7 +90,7 @@ public class EdgeDecisionService {
                 outcome.getAuditId(),
                 outcome.isAiApplied(),
                 outcome.isFallback(),
-                outcome.getFallbackReason(),
+                JevAiDisclosureSanitizer.sanitizeFallbackReason(outcome.getFallbackReason()),
                 advisory
         );
     }

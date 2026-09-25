@@ -27,7 +27,7 @@ public class EdgeController {
     private final EdgeEngine engine;
     private final EdgeMetricsAggregator metrics;
     private final EdgeFeatureStore featureStore;
-    private final com.hokeka.edge.channel.JevDecisionClient jevDecisionClient;
+    private final com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient;
 
     @Value("${featurestore.fail-closed:true}")
     private boolean failClosedOnStoreUnavailable;
@@ -35,11 +35,11 @@ public class EdgeController {
     public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics,
                           EdgeFeatureStore featureStore,
                           @org.springframework.beans.factory.annotation.Autowired(required = false)
-                          com.hokeka.edge.channel.JevDecisionClient jevDecisionClient) {
+                          com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient) {
         this.engine = engine;
         this.metrics = metrics;
         this.featureStore = featureStore;
-        this.jevDecisionClient = jevDecisionClient;
+        this.aiDecisionClient = aiDecisionClient;
     }
 
     /**
@@ -100,8 +100,8 @@ public class EdgeController {
 
         EdgeRuleInterpreter.Decision decision = engine.evaluate(enriched);
 
-        if (jevDecisionClient != null) {
-            decision = jevDecisionClient.enrichBorderline(decision, enriched);
+        if (aiDecisionClient != null) {
+            decision = aiDecisionClient.enrichBorderline(decision, enriched);
         }
 
         // Record AFTER evaluating, so a transaction never inflates its own velocity counters.

@@ -160,7 +160,7 @@ export default function ScreeningPage() {
               <div className="mt-4">
                 <AiVerdictPanel
                   auditPath={`jev/audit/screening/${result.jevScreeningHitId}`}
-                  title="Sanctions disambiguation AI verdict"
+                  title="Hokeka Intelligence"
                   pollUntilFound
                 />
               </div>

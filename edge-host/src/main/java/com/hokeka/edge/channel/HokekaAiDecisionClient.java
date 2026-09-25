@@ -15,26 +15,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Edge → Control Plane JEV decision client. The edge never holds an OpenRouter key;
- * all AI calls are proxied through the Control Plane over mTLS.
+ * Edge → Control Plane Hokeka AI advisory client. The edge never holds vendor credentials;
+ * all AI decisioning is proxied through the Control Plane over mTLS.
  */
 @Component
 @ConditionalOnProperty(prefix = "hokeka.controlplane", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class JevDecisionClient {
+public class HokekaAiDecisionClient {
 
-    private static final Logger log = LoggerFactory.getLogger(JevDecisionClient.class);
+    private static final Logger log = LoggerFactory.getLogger(HokekaAiDecisionClient.class);
 
     private final SecureChannel channel;
     private final ActivationService activation;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public JevDecisionClient(SecureChannel channel, ActivationService activation) {
+    public HokekaAiDecisionClient(SecureChannel channel, ActivationService activation) {
         this.channel = channel;
         this.activation = activation;
     }
 
     /**
-     * Request JEV advisory for a borderline edge decision. Never throws — returns the baseline on failure.
+     * Request Hokeka AI advisory for a borderline edge decision. Never throws — returns the baseline on failure.
      */
     public EdgeRuleInterpreter.Decision enrichBorderline(EdgeRuleInterpreter.Decision baseline,
                                                          Map<String, Object> features) {
@@ -66,7 +66,7 @@ public class JevDecisionClient {
             List<String> aiReasons = extractStringList(node.path("reasons"));
             List<String> mergedReasons = new java.util.ArrayList<>(baseline.reasons());
             if (node.path("aiRecommendation").isTextual()) {
-                mergedReasons.add("JEV recommendation: " + node.path("aiRecommendation").asText()
+                mergedReasons.add("Hokeka AI recommendation: " + node.path("aiRecommendation").asText()
                         + (node.path("confidence").isNumber()
                         ? " (confidence=" + node.path("confidence").asDouble() + ")" : ""));
             }
@@ -79,7 +79,7 @@ public class JevDecisionClient {
                     baseline.triggeredRuleIds(),
                     mergedReasons);
         } catch (Exception e) {
-            log.debug("JEV edge decision unavailable, using rules baseline: {}", e.getMessage());
+            log.debug("Hokeka AI advisory unavailable, using rules baseline: {}", e.getMessage());
             return baseline;
         }
     }

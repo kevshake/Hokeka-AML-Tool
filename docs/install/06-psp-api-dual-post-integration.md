@@ -13,12 +13,12 @@
 | Path | Endpoint | Cloud txn persisted? | Alerts / cases / SAR? | Webhooks? |
 |------|----------|------------------------|----------------------|-----------|
 | **Edge (pre-auth)** | `POST /edge/evaluate` | No | No | No |
-| **Edge JEV advisory** | `POST /api/v1/edge/decision` (mTLS, optional) | Audit row only | Async when inline off | No |
+| **Edge Hokeka AI advisory** | `POST /api/v1/edge/decision` (mTLS, optional) | Audit row only | Async when inline off | No |
 | **Cloud (post-auth)** | `POST /api/v1/transactions/ingest` | Yes | Yes | Yes (durable outbox) |
 
 Edge alone gives **fast local decisions** with data staying on-prem. Cloud ingest runs the **full compliance pipeline** operators see in Console.
 
-**JEV AI:** Edge Nodes never call OpenRouter. Borderline edge decisions may request a JEV advisory through the Control Plane (`POST /edge/decision`). With `aiInlineMode` off (default), pre-auth stays rules-only on the edge; JEV runs asynchronously on the Control Plane. With `aiInlineMode` on, the edge waits up to `aiInlineBudgetMs` then falls back to rules.
+**Hokeka AI decisioning:** Edge Nodes never call external AI vendors directly. Borderline edge decisions may request a Hokeka AI advisory through the Control Plane (`POST /edge/decision`). With `aiInlineMode` off (default), pre-auth stays rules-only on the edge; Hokeka AI runs asynchronously on the Control Plane. With `aiInlineMode` on, the edge waits up to `aiInlineBudgetMs` then falls back to rules. Responses expose only verdict, confidence, reasons, and advisory status.
 
 > Installing Edge without dual-post means Console will show **no alerts or cases** for those transactions.
 

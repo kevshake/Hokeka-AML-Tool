@@ -1,5 +1,8 @@
 package com.posgateway.aml.service.jev;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.posgateway.aml.dto.jev.JevOperatorAuditDto;
+import com.posgateway.aml.dto.jev.JevTenantAdvisoryDto;
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
@@ -14,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 /**
@@ -25,6 +27,7 @@ import java.util.Map;
 public class JevAuditAccessService {
 
     private final JevAuditService auditService;
+    private final ObjectMapper objectMapper;
     private final PspIsolationService pspIsolationService;
     private final TransactionRepository transactionRepository;
     private final AlertRepository alertRepository;
@@ -32,12 +35,14 @@ public class JevAuditAccessService {
     private final MerchantRepository merchantRepository;
 
     public JevAuditAccessService(JevAuditService auditService,
+                                 ObjectMapper objectMapper,
                                  PspIsolationService pspIsolationService,
                                  TransactionRepository transactionRepository,
                                  AlertRepository alertRepository,
                                  ComplianceCaseRepository complianceCaseRepository,
                                  MerchantRepository merchantRepository) {
         this.auditService = auditService;
+        this.objectMapper = objectMapper;
         this.pspIsolationService = pspIsolationService;
         this.transactionRepository = transactionRepository;
         this.alertRepository = alertRepository;
@@ -113,33 +118,14 @@ public class JevAuditAccessService {
 
     private void assertAuditTenantAccess(JevDecisionAudit audit) {
         if (!callerMayViewAudit(audit)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access JEV audit outside your tenant");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access AI audit outside your tenant");
         }
     }
 
     private Map<String, Object> toResponseDto(JevDecisionAudit audit) {
         if (pspIsolationService.isPlatformAdministrator()) {
-            return auditService.toDto(audit);
+            return JevOperatorAuditDto.from(audit, objectMapper);
         }
-        return toTenantAdvisoryDto(audit);
-    }
-
-    /** Advisory fields only — no model id, spend, tokens, or raw model payloads. */
-    static Map<String, Object> toTenantAdvisoryDto(JevDecisionAudit audit) {
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("id", audit.getId());
-        dto.put("engineCode", audit.getEngineCode());
-        dto.put("recommendation", audit.getRecommendation());
-        dto.put("riskScore", audit.getRiskScore());
-        dto.put("confidence", audit.getConfidence());
-        dto.put("reasons", audit.getReasons());
-        dto.put("citedSignals", audit.getCitedSignals());
-        dto.put("fallbackReason", audit.getFallbackReason());
-        dto.put("aiApplied", audit.isAiApplied());
-        dto.put("baselineDecision", audit.getBaselineDecision());
-        dto.put("finalDecision", audit.getFinalDecision());
-        dto.put("createdAt", audit.getCreatedAt());
-        dto.put("advisoryOnly", true);
-        return dto;
+        return JevTenantAdvisoryDto.from(audit).toMap();
     }
 }
