@@ -7,6 +7,7 @@ import com.posgateway.aml.model.ScreeningResult;
 import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
 import com.posgateway.aml.service.jev.JevEngineAdvisor;
 import com.posgateway.aml.service.jev.JevEngineType;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,9 @@ public class SanctionsScreeningController {
 
     @Autowired(required = false)
     private JevEngineAdvisor jevEngineAdvisor;
+
+    @Autowired
+    private PspIsolationService pspIsolationService;
 
     /**
      * Screen a name against the sanctions database via aml-microservice.
@@ -172,9 +176,20 @@ public class SanctionsScreeningController {
                         "similarityScore", m.similarityScore(),
                         "pepLevel", m.pepLevel() != null ? m.pepLevel() : ""))
                 .toList());
+        Long pspId = null;
+        try {
+            if (pspIsolationService.getCurrentUser() != null) {
+                Long resolved = pspIsolationService.getCurrentUserPspId();
+                if (resolved != null && resolved > 0) {
+                    pspId = resolved;
+                }
+            }
+        } catch (SecurityException ignored) {
+            // Platform operator without tenant binding — audit remains operator-visible only.
+        }
         jevEngineAdvisor.adviseAsync(
                 JevEngineType.SANCTIONS_DISAMBIGUATION,
-                null,
+                pspId,
                 "REVIEW",
                 features,
                 null,

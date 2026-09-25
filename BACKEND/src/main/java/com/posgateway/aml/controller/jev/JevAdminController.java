@@ -4,7 +4,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.jev.JevEngineSetting;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
-import com.posgateway.aml.service.jev.JevAuditService;
+import com.posgateway.aml.service.jev.JevAuditAccessService;
 import com.posgateway.aml.service.jev.JevEngineConfigService;
 import com.posgateway.aml.service.jev.JevStatusService;
 import org.springframework.http.ResponseEntity;
@@ -22,33 +22,33 @@ public class JevAdminController {
 
     private final JevStatusService statusService;
     private final JevEngineConfigService engineConfigService;
-    private final JevAuditService auditService;
+    private final JevAuditAccessService auditAccessService;
     private final PspRepository pspRepository;
 
     public JevAdminController(JevStatusService statusService,
                               JevEngineConfigService engineConfigService,
-                              JevAuditService auditService,
+                              JevAuditAccessService auditAccessService,
                               PspRepository pspRepository) {
         this.statusService = statusService;
         this.engineConfigService = engineConfigService;
-        this.auditService = auditService;
+        this.auditAccessService = auditAccessService;
         this.pspRepository = pspRepository;
     }
 
     @GetMapping("/status")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'SUPER_ADMIN', 'PSP_ADMIN')")
+    @PreAuthorize("@jevOperatorAuth.isPlatformOperator()")
     public ResponseEntity<Map<String, Object>> status() {
         return ResponseEntity.ok(statusService.status());
     }
 
     @GetMapping("/engines")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("@jevOperatorAuth.isPlatformOperator()")
     public ResponseEntity<List<JevEngineSetting>> engines() {
         return ResponseEntity.ok(engineConfigService.listAll());
     }
 
     @PutMapping("/engines/{engineCode}")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("@jevOperatorAuth.isPlatformOperator()")
     public ResponseEntity<JevEngineSetting> updateEngine(
             @PathVariable String engineCode,
             @RequestBody Map<String, Object> body,
@@ -61,7 +61,7 @@ public class JevAdminController {
     }
 
     @GetMapping("/psps/{pspId}/ai-settings")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("@jevOperatorAuth.isPlatformOperator()")
     public ResponseEntity<Map<String, Object>> pspAiSettings(@PathVariable Long pspId) {
         Psp psp = pspRepository.findById(pspId).orElseThrow();
         Map<String, Object> out = new LinkedHashMap<>();
@@ -72,7 +72,7 @@ public class JevAdminController {
     }
 
     @PutMapping("/psps/{pspId}/ai-settings")
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("@jevOperatorAuth.isPlatformOperator()")
     public ResponseEntity<Map<String, Object>> updatePspAiSettings(
             @PathVariable Long pspId,
             @RequestBody Map<String, Object> body) {
@@ -94,22 +94,19 @@ public class JevAdminController {
     @GetMapping("/audit/transaction/{transactionId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Map<String, Object>>> auditForTransaction(@PathVariable Long transactionId) {
-        return ResponseEntity.ok(auditService.forTransaction(transactionId).stream()
-                .map(auditService::toDto).toList());
+        return ResponseEntity.ok(auditAccessService.forTransaction(transactionId));
     }
 
     @GetMapping("/audit/alert/{alertId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Map<String, Object>>> auditForAlert(@PathVariable Long alertId) {
-        return ResponseEntity.ok(auditService.forAlert(alertId).stream()
-                .map(auditService::toDto).toList());
+        return ResponseEntity.ok(auditAccessService.forAlert(alertId));
     }
 
     @GetMapping("/audit/case/{caseId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Map<String, Object>>> auditForCase(@PathVariable Long caseId) {
-        return ResponseEntity.ok(auditService.forCase(caseId).stream()
-                .map(auditService::toDto).toList());
+        return ResponseEntity.ok(auditAccessService.forCase(caseId));
     }
 
     @GetMapping("/audit/merchant/{merchantId}")
@@ -117,23 +114,19 @@ public class JevAdminController {
     public ResponseEntity<List<Map<String, Object>>> auditForMerchant(
             @PathVariable Long merchantId,
             @RequestParam(required = false) String engine) {
-        return ResponseEntity.ok(auditService.forMerchant(merchantId, engine).stream()
-                .map(auditService::toDto).toList());
+        return ResponseEntity.ok(auditAccessService.forMerchant(merchantId, engine));
     }
 
     @GetMapping("/audit/id/{auditId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Map<String, Object>>> auditById(@PathVariable Long auditId) {
-        return auditService.byId(auditId)
-                .map(a -> ResponseEntity.ok(List.of(auditService.toDto(a))))
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(auditAccessService.byId(auditId));
     }
 
     @GetMapping("/audit/screening/{screeningHitId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Map<String, Object>>> auditForScreeningHit(
             @PathVariable String screeningHitId) {
-        return ResponseEntity.ok(auditService.forScreeningHit(screeningHitId).stream()
-                .map(auditService::toDto).toList());
+        return ResponseEntity.ok(auditAccessService.forScreeningHit(screeningHitId));
     }
 }

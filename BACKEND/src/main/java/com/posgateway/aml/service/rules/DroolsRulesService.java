@@ -9,6 +9,9 @@ import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
 import org.kie.api.builder.KieModule;
+import org.kie.internal.utils.KieHelper;
+import org.kie.api.builder.ReleaseId;
+import org.kie.api.io.ResourceType;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.rule.AgendaFilter;
@@ -47,6 +50,7 @@ public class DroolsRulesService {
     private final RuleDefinitionRepository ruleRepository;
 
     private KieContainer kieContainer;
+    private ReleaseId activeReleaseId;
     private boolean droolsEnabled = false;
 
     /** Number of DB DRL rules skipped at the last reload because they did not compile. Surfaced so a
@@ -78,6 +82,7 @@ public class DroolsRulesService {
         logger.info("Initializing/Reloading Drools Rules Engine...");
         try {
             KieServices kieServices = KieServices.Factory.get();
+            disposeActiveContainer(kieServices);
             KieFileSystem kfs = kieServices.newKieFileSystem();
             boolean rulesFound = false;
 
@@ -132,7 +137,8 @@ public class DroolsRulesService {
                     droolsEnabled = false;
                 } else {
                     KieModule kieModule = kieBuilder.getKieModule();
-                    this.kieContainer = kieServices.newKieContainer(kieModule.getReleaseId());
+                    activeReleaseId = kieModule.getReleaseId();
+                    this.kieContainer = kieServices.newKieContainer(activeReleaseId);
                     droolsEnabled = true;
                     logger.info("Drools Rules Engine initialized successfully.");
                 }
@@ -263,13 +269,22 @@ public class DroolsRulesService {
      *  shared build so it cannot disable the whole engine. */
     private boolean drlCompiles(KieServices kieServices, String drlContent) {
         try {
-            KieFileSystem probe = kieServices.newKieFileSystem();
-            probe.write("src/main/resources/rules/probe/probe.drl",
-                    kieServices.getResources().newByteArrayResource(drlContent.getBytes()));
-            KieBuilder kieBuilder = kieServices.newKieBuilder(probe).buildAll();
-            return !kieBuilder.getResults().hasMessages(org.kie.api.builder.Message.Level.ERROR);
+            KieHelper helper = new KieHelper();
+            helper.addContent(drlContent, ResourceType.DRL);
+            return !helper.verify().hasMessages(org.kie.api.builder.Message.Level.ERROR);
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private void disposeActiveContainer(KieServices kieServices) {
+        if (kieContainer != null) {
+            kieContainer.dispose();
+            kieContainer = null;
+        }
+        if (activeReleaseId != null) {
+            kieServices.getRepository().removeKieModule(activeReleaseId);
+            activeReleaseId = null;
         }
     }
 

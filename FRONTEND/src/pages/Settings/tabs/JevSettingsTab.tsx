@@ -14,6 +14,8 @@ import { BrainCircuit, Gauge, Settings2 } from "lucide-react";
 import { useState } from "react";
 import GlassCard from "../../../components/Common/GlassCard";
 import { apiClient } from "../../../lib/apiClient";
+import { useAuth } from "../../../contexts/AuthContext";
+import { canAccessJevSettingsTab } from "../../../lib/settingsTabs";
 
 interface JevStatus {
   configured: boolean;
@@ -53,10 +55,14 @@ function Metric({ label, value }: { label: string; value: string | number | unde
 }
 
 export default function JevSettingsTab() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const allowed = canAccessJevSettingsTab(user);
+
   const { data: status, isLoading } = useQuery<JevStatus>({
     queryKey: ["jev", "status"],
     queryFn: () => apiClient.get<JevStatus>("jev/status"),
+    enabled: allowed,
   });
 
   const { data: psps } = useQuery<PspOption[]>({
@@ -88,6 +94,14 @@ export default function JevSettingsTab() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jev", "psp-ai", selectedPspId] }),
   });
+
+  if (!allowed) {
+    return (
+      <Typography variant="body2" sx={{ color: "var(--ink-muted)" }}>
+        JEV operator settings are restricted to platform operators.
+      </Typography>
+    );
+  }
 
   if (isLoading) {
     return (
