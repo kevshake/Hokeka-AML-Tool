@@ -22,6 +22,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -86,14 +87,11 @@ public class DroolsRulesService {
             KieFileSystem kfs = kieServices.newKieFileSystem();
             boolean rulesFound = false;
 
-            // 1. Try to load DRL from classpath (Static Fallback)
-            try {
-                kfs.write("src/main/resources/rules/aml-rules.drl",
-                        kieServices.getResources().newClassPathResource("rules/aml-rules.drl"));
+            // 1. Try to load DRL from classpath (static fallback). Inline bytes — do not store a lazy
+            // ClassPathResource in the KieFileSystem or buildAll() fails when the resource is absent
+            // or not visible to Drools' classloader (seen in CI surefire forks).
+            if (loadStaticClasspathRules(kieServices, kfs)) {
                 rulesFound = true;
-                logger.debug("Loaded static rules from classpath.");
-            } catch (Exception e) {
-                logger.debug("No static DRL file found on classpath (this is expected if fully dynamic).");
             }
             
             // 2. Load Dynamic Rules from Database
@@ -262,6 +260,29 @@ public class DroolsRulesService {
             // independently by DecisionEngine, so decisioning is not lost.
             logger.debug("No compiled DRL rules loaded; relying on DB dynamic rules (no programmatic fallback).");
             return 0;
+        }
+    }
+
+    /**
+     * Loads bundled static DRL from the application classpath into the KieFileSystem.
+     *
+     * @return true when {@code rules/aml-rules.drl} was found and written
+     */
+    private boolean loadStaticClasspathRules(KieServices kieServices, KieFileSystem kfs) {
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("rules/aml-rules.drl")) {
+            if (in == null) {
+                logger.debug("No static DRL file found on classpath (this is expected if fully dynamic).");
+                return false;
+            }
+            byte[] content = in.readAllBytes();
+            kfs.write("src/main/resources/rules/aml-rules.drl",
+                    kieServices.getResources().newByteArrayResource(content));
+            logger.debug("Loaded static rules from classpath.");
+            return true;
+        } catch (Exception e) {
+            logger.debug("No static DRL file found on classpath (this is expected if fully dynamic): {}",
+                    e.getMessage());
+            return false;
         }
     }
 
