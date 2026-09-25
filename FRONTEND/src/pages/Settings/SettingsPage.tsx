@@ -23,6 +23,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
 import PlatformAdminTab from "./tabs/PlatformAdminTab";
+import JevSettingsTab from "./tabs/JevSettingsTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import GlassCard from "../../components/Common/GlassCard";
 import SettingsTabBar, { type SettingsTabItem } from "../../components/Settings/SettingsTabBar";
@@ -180,6 +181,7 @@ export default function SettingsPage() {
         { id: "theme", label: "PSP Theme" },
         ...(isSuperAdmin ? [{ id: "system", label: "System Settings" } as SettingsTabItem] : []),
         ...(isSuperAdmin ? [{ id: "platform-admin", label: "Platform Admin" } as SettingsTabItem] : []),
+        ...(isSuperAdmin ? [{ id: "jev", label: "JEV AI" } as SettingsTabItem] : []),
       ];
 
   // System Settings Interface
@@ -590,6 +592,12 @@ export default function SettingsPage() {
       {!isPspUser && isSuperAdmin && (
         <TabPanel value={tabValue} index={2} tabId="platform-admin">
           <PlatformAdminTab />
+        </TabPanel>
+      )}
+
+      {!isPspUser && isSuperAdmin && (
+        <TabPanel value={tabValue} index={3} tabId="jev">
+          <JevSettingsTab />
         </TabPanel>
       )}
 

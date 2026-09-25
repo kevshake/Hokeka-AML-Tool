@@ -20,8 +20,9 @@ Operators use Console to:
 - View alerts and cases
 - Enroll and approve **Edge Nodes** (Setup Wizard generates install commands for clients)
 - Configure rules, limits, and reporting
+- **JEV AI** — Platform Admin status, per-engine toggles, PSP inline mode, and AI verdict panels on alert/case/screening/KYC detail views (advisory recommendations with audit trail)
 
-Console does **not** evaluate transactions and does **not** replace Edge Node or dual-post API wiring.
+Console does **not** evaluate transactions and does **not** replace Edge Node or dual-post API wiring. Console never holds the OpenRouter API key.
 
 ---
 

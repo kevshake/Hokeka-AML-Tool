@@ -185,6 +185,17 @@ Field names are **`snake_case`** — see [`docs/edge-transaction-evaluation.md`]
 
 Complete [06 — PSP API dual-post integration](06-psp-api-dual-post-integration.md) so cloud alerts/cases exist.
 
+### JEV AI (Edge → Control Plane only)
+
+Edge Nodes **never** hold `OPENROUTER_API_KEY` or call OpenRouter. Borderline pre-auth decisions (`ALERT`/`HOLD`) may request a JEV advisory via `POST /api/v1/edge/decision` over the existing mTLS channel.
+
+| Mode | Behaviour |
+|------|-----------|
+| `aiInlineMode` **OFF** (default) | Edge returns deterministic rules immediately; Control Plane runs JEV asynchronously for alerts/cases |
+| `aiInlineMode` **ON** | Edge waits up to `aiInlineBudgetMs` (PSP setting, default 500ms) for JEV; falls back to rules on timeout/error |
+
+Configure inline mode per PSP in Console → Settings → JEV AI (Platform Admin).
+
 ---
 
 ## Operations

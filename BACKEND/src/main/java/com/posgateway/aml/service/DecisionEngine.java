@@ -165,9 +165,47 @@ public class DecisionEngine {
 
         checkAmlRules(transaction, features, decision, reasons);
         saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs);
+        maybeConsultJev(transaction, score, features, decision);
         logger.info("Decision for transaction {}: {} (score={})",
             transaction.getTxnId(), decision.getAction(), score);
         return decision;
+    }
+
+    private void maybeConsultJev(TransactionEntity transaction, Double score,
+                                 Map<String, Object> features, DecisionResult decision) {
+        if (jevEngineAdvisor == null || score == null) {
+            return;
+        }
+        Double holdThreshold = configService.getFraudHoldThreshold();
+        Double blockThreshold = configService.getFraudBlockThreshold();
+        boolean borderline = jevEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
+                || "ALERT".equals(decision.getAction())
+                || "REVIEW".equals(decision.getAction());
+        if (!borderline) {
+            return;
+        }
+        Map<String, Object> jevFeatures = new HashMap<>();
+        jevFeatures.put("score", score);
+        jevFeatures.put("action", decision.getAction());
+        jevFeatures.put("reasons", decision.getReasons());
+        if (features != null) {
+            jevFeatures.putAll(features);
+        }
+        if (transaction.getAmountCents() != null) {
+            jevFeatures.put("amount_cents", transaction.getAmountCents());
+        }
+        if (transaction.getCurrency() != null) {
+            jevFeatures.put("currency", transaction.getCurrency());
+        }
+        jevEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.jev.JevEngineType.TRANSACTION_RISK,
+                transaction.getPspId(),
+                decision.getAction(),
+                jevFeatures,
+                transaction.getTxnId(),
+                null,
+                null,
+                null);
     }
 
     private DecisionResult applyRuleEngineDecision(TransactionEntity transaction, Double score,
@@ -304,6 +342,9 @@ public class DecisionEngine {
      */
     @Autowired(required = false)
     private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
@@ -490,6 +531,23 @@ public class DecisionEngine {
         Alert saved = alertRepository.save(alert);
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
+
+        if (jevEngineAdvisor != null) {
+            Map<String, Object> alertFeatures = new HashMap<>();
+            alertFeatures.put("action", action);
+            alertFeatures.put("reason", reason);
+            alertFeatures.put("score", score);
+            alertFeatures.put("severity", saved.getSeverity());
+            jevEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.jev.JevEngineType.ALERT_TRIAGE,
+                    transaction.getPspId(),
+                    action,
+                    alertFeatures,
+                    transaction.getTxnId(),
+                    saved.getAlertId(),
+                    null,
+                    null);
+        }
 
         // The alert and its event are committed atomically through the outbox.
         publishAlertGeneratedEvent(saved, transaction);

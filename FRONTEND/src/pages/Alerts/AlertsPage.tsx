@@ -12,6 +12,7 @@ import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
+import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
 import {
   CheckCheck,
   ChevronDown,
@@ -315,6 +316,9 @@ export default function AlertsPage() {
                 </div>
               )}
             </div>
+            {viewAlert.id ? (
+              <AiVerdictPanel auditPath={`jev/audit/alert/${viewAlert.id}`} />
+            ) : null}
           </div>
         )}
       </GlassModal>

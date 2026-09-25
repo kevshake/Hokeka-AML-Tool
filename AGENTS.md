@@ -84,6 +84,9 @@ Production hardening (when running under the `production` profile, not `testenv`
 ### Cross-service contract
 FRONTEND assumes `/api/v1/*` lives on the Control Plane (port 2637 in dev). Edge Nodes pull rule bundles and POST metrics to the same API host; PSP transaction **dual-post** (edge pre-auth + cloud ingest) is documented in `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`. The `aml-microservice` is internal to the cloud stack — not proxied through Vite.
 
+### JEV AI decision layer
+All OpenRouter calls go through **JEV** (`JevDecisionGateway`) on the Control Plane only — env: `OPENROUTER_API_KEY`, `JEV_MODEL`. Edge uses `POST /edge/decision` over mTLS; never holds the key. AI is advisory on regulated paths (sanctions, SAR); rules fallback on timeout/error/disabled.
+
 ## Working with this repo
 
 - **`BACKEND/` is noisy.** The directory contains many committed `*.log`, `compile_*.txt`, `cookies*.txt`, `debug_output*.txt`, and one-off `*.md` migration reports. Treat them as scratch artefacts — don't rely on them as documentation, and don't add more.
