@@ -1,0 +1,210 @@
+{
+  "config_id": "hokeka-jev-questions",
+  "version": "v1-draft-2026-09-25",
+  "model_pin": "typesafe/jev-1.13",
+  "expected_snapshot_prefix": "typesafe/jev-1.13-",
+  "note": "Thresholds deliberately absent: they are set per PSP from a labeled sample and stored alongside this version + the snapshot.",
+  "decision_points": {
+    "DP1_tm_alert_triage": {
+      "trigger": "DecisionEngine.createAlert (every alert) and the borderline ALLOW path in DecisionEngine.maybeConsultJev",
+      "state_fields": [
+        "alert",
+        "subject",
+        "activity_window_7d"
+      ],
+      "questions": {
+        "laundering_suspicion": {
+          "type": "noul",
+          "instructions": "Using alert, subject and activity_window_7d, does this activity show indicators that give reasonable grounds to suspect money laundering or terrorist financing, as opposed to ordinary legitimate trade or pure card fraud against the merchant?",
+          "criteria": {
+            "true": "The combination of facts matches one or more recognised laundering or terrorist-financing indicators (e.g. structuring below a threshold, funnel or pass-through movement, volume far beyond the declared profile, use of new or unrelated destinations) that is not explained by the declared business.",
+            "false": "The facts are adequately explained by the subject's declared business, history and normal seasonality, or they indicate only fraud against the subject rather than movement of illicit funds through it."
+          }
+        },
+        "typology": {
+          "type": "choice",
+          "instructions": "Which single typology best describes the dominant pattern in alert.rules_triggered and activity_window_7d?",
+          "criteria": {
+            "structuring": "Repeated amounts deliberately kept just below a reporting or monitoring threshold, without a dominant pass-through to a single destination.",
+            "funnel_or_pass_through": "Funds from many sources are collected and moved on quickly (high pass-through ratio, short dwell time) to one or a few destinations, with or without sub-threshold amounts.",
+            "profile_volume_anomaly": "Volume or value far above the declared profile, without a clear structuring or pass-through pattern.",
+            "high_risk_geography": "The main risk comes from exposure to high-risk or sanctioned jurisdictions or cross-border corridors.",
+            "fraud_not_laundering": "The pattern is primarily card, account-takeover or merchant fraud against the subject or its customers rather than laundering through the subject.",
+            "no_suspicious_pattern": "The activity is consistent with the declared business and history; no typology applies.",
+            "other_or_unclear": "A different typology, or the facts are insufficient to assign one of the above."
+          }
+        },
+        "activity_risk": {
+          "type": "score",
+          "instructions": "How serious is the money-laundering risk indicated by this alert, considering alert, subject and activity_window_7d together?",
+          "criteria": [
+            "Negligible: consistent with the declared profile; nothing to investigate",
+            "Low: minor deviation with a plausible legitimate explanation",
+            "Moderate: unexplained deviation that warrants analyst review",
+            "High: multiple corroborating laundering indicators; likely reportable after review",
+            "Severe: strong, corroborated indicators needing immediate hold or MLRO attention"
+          ]
+        },
+        "profile_consistent": {
+          "type": "noul",
+          "instructions": "Is the activity in activity_window_7d plausibly explained by subject.declared_business, subject.declared_expected_monthly_volume_kes and the subject's history?",
+          "criteria": {
+            "true": "Volumes, counterparties, timing and money flow are in line with what the declared business and its history would produce.",
+            "false": "Volumes, counterparties, timing or money flow materially depart from what the declared business and its history would produce."
+          }
+        },
+        "evidence_sufficient": {
+          "type": "noul",
+          "instructions": "Does the state contain enough information for an analyst to reach a disposition without first requesting more information from the customer or the PSP (RFI or EDD)?",
+          "criteria": {
+            "true": "The facts provided are sufficient to decide whether the activity is suspicious.",
+            "false": "Key facts are missing (e.g. source of funds, relationship to the outbound destination, business documentation) and an RFI or EDD is needed before a disposition."
+          }
+        },
+        "review_priority": {
+          "type": "score",
+          "instructions": "How quickly should a human analyst review this alert?",
+          "criteria": [
+            "Routine: standard queue order",
+            "Elevated: review within the current business day",
+            "Urgent: review within hours, before further funds move",
+            "Immediate: MLRO attention now; consider holding outbound funds"
+          ]
+        },
+        "owning_queue": {
+          "type": "choice",
+          "instructions": "Which human team should own this alert?",
+          "criteria": {
+            "aml_investigations": "Suspected laundering or terrorist-financing patterns that need an AML analyst investigation.",
+            "fraud_operations": "Primarily card, account-takeover or merchant fraud with no laundering pattern.",
+            "sanctions_screening": "The main issue is a sanctions, PEP or watch-list match.",
+            "mlro_direct": "Severe, time-critical laundering indicators needing the MLRO's direct decision (e.g. imminent further movement of suspected illicit funds).",
+            "kyc_refresh": "No suspicious pattern, but the customer's profile data is stale or incomplete and should be refreshed."
+          }
+        }
+      }
+    },
+    "DP2_screening_match_disambiguation": {
+      "trigger": "Every POTENTIAL_MATCH/MATCH from RealTimeTransactionScreeningService, PeriodicSanctionsScreeningService and onboarding screening, INCLUDING matches that already block",
+      "state_fields": [
+        "screened_party_attributes",
+        "list_entry_attributes",
+        "match_features"
+      ],
+      "questions": {
+        "same_entity": {
+          "type": "noul",
+          "instructions": "Using screened_party_attributes, list_entry_attributes and match_features, is the screened party the same person or organisation as the list entry?",
+          "criteria": {
+            "true": "Identifying attributes (e.g. date or year of birth, nationality, registration number, entity type, strong full-name or alias agreement) agree and none contradict.",
+            "false": "At least one reliable identifying attribute contradicts the list entry (e.g. different date of birth, different entity type, different registration number), or the agreement is limited to a common name."
+          }
+        },
+        "match_basis": {
+          "type": "choice",
+          "instructions": "Which description best fits the evidence behind this match?",
+          "criteria": {
+            "identifier_confirmed": "A unique identifier (registration number, passport or national ID number, exact date of birth plus full name) agrees.",
+            "name_plus_corroboration": "Full name or alias agrees and at least one secondary attribute (nationality, year of birth, location, entity type) agrees, with no contradiction.",
+            "name_only": "Only the name or a phonetic or fuzzy variant agrees; no secondary attribute is available.",
+            "contradicted": "The name agrees but at least one reliable identifying attribute contradicts the list entry.",
+            "insufficient_data": "Too little information on either side to judge the match."
+          }
+        }
+      }
+    },
+    "DP3_case_triage_and_str": {
+      "trigger": "ComplianceCase created/updated (CaseCreationService) and before an analyst proposes closure",
+      "state_fields": [
+        "case_summary",
+        "alerts_summary",
+        "subject",
+        "investigation_facts"
+      ],
+      "questions": {
+        "str_grounds": {
+          "type": "noul",
+          "instructions": "Do case_summary, alerts_summary and investigation_facts together give reasonable grounds to suspect that funds are the proceeds of crime or linked to terrorist financing, so that an STR/SAR should be considered by the MLRO?",
+          "criteria": {
+            "true": "Documented facts support a reasonable suspicion that is not dispelled by any explanation recorded in investigation_facts.",
+            "false": "The recorded facts, including any customer explanation or documentation, dispel the suspicion or never established one."
+          }
+        },
+        "next_step": {
+          "type": "choice",
+          "instructions": "Which next step best fits the current state of the case?",
+          "criteria": {
+            "mlro_str_review": "Suspicion is established; the MLRO should decide on filing an STR/SAR.",
+            "request_information": "A specific missing fact (source of funds, counterparty relationship, business documents) blocks a decision; send an RFI or start EDD.",
+            "continue_monitoring": "No suspicion yet, but open risk indicators justify a monitoring period before closing.",
+            "close_no_suspicion": "The facts dispel the suspicion; an analyst may propose closure for four-eyes approval.",
+            "other": "None of the above fits."
+          }
+        },
+        "case_priority": {
+          "type": "score",
+          "instructions": "How urgent is this case?",
+          "criteria": [
+            "Routine: within normal SLA",
+            "Elevated: ahead of routine work",
+            "Urgent: same day, funds may still be moving",
+            "Critical: MLRO now; consider freezing or holding funds"
+          ]
+        },
+        "evidence_sufficient": {
+          "type": "noul",
+          "instructions": "Does the state contain enough information for an analyst to reach a disposition without first requesting more information from the customer or the PSP (RFI or EDD)?",
+          "criteria": {
+            "true": "The facts provided are sufficient to decide whether the activity is suspicious.",
+            "false": "Key facts are missing (e.g. source of funds, relationship to the outbound destination, business documentation) and an RFI or EDD is needed before a disposition."
+          }
+        }
+      }
+    },
+    "DP4_customer_risk_and_edd": {
+      "trigger": "Periodic re-rating (rescreening schedule) and on trigger events (large txn, new UBO, adverse alert)",
+      "state_fields": [
+        "customer_profile",
+        "risk_components",
+        "history_summary"
+      ],
+      "questions": {
+        "risk_tier": {
+          "type": "score",
+          "instructions": "What customer risk tier does customer_profile, risk_components and history_summary indicate?",
+          "criteria": [
+            "Low: standard due diligence",
+            "Medium: standard due diligence with closer monitoring",
+            "High: enhanced due diligence required",
+            "Unacceptable: relationship should be reviewed for exit"
+          ]
+        },
+        "edd_required": {
+          "type": "noul",
+          "instructions": "Should enhanced due diligence be opened for this customer now?",
+          "criteria": {
+            "true": "Risk factors (PEP exposure, high-risk geography or sector, activity far beyond profile, adverse history) are present and not already covered by a current EDD.",
+            "false": "No such risk factors are present, or a current, complete EDD already covers them."
+          }
+        }
+      }
+    },
+    "DP5_sar_narrative_verification": {
+      "trigger": "After a chat LLM drafts an SAR/STR narrative from case facts (verified cascade). Jev never writes the narrative.",
+      "state_fields": [
+        "case_facts",
+        "draft_narrative"
+      ],
+      "questions": {
+        "narrative_supported": {
+          "type": "noul",
+          "instructions": "Is every factual claim in draft_narrative supported by case_facts?",
+          "criteria": {
+            "true": "All amounts, dates, parties and patterns in draft_narrative appear in case_facts.",
+            "false": "draft_narrative contains at least one claim that is absent from or contradicts case_facts."
+          }
+        }
+      }
+    }
+  }
+}

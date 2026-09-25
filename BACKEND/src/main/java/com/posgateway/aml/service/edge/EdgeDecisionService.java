@@ -37,7 +37,7 @@ public class EdgeDecisionService {
 
     public EdgeDecisionResponse handle(EdgeNode node, EdgeDecisionRequest request) {
         JevEngineType engine = parseEngine(request.engine());
-        String baseline = request.baselineDecision() != null ? request.baselineDecision() : "ALLOW";
+        String baseline = request.baselineDecision() != null ? request.baselineDecision() : "REVIEW";
         Long pspId = node.getPspId();
 
         Psp psp = pspRepository.findById(pspId).orElse(null);
@@ -54,7 +54,7 @@ public class EdgeDecisionService {
 
         if (request.async() || !inlineMode) {
             gateway.decideAsync(ctx);
-            return toResponse(baseline, JevDecisionOutcome.fallback(baseline,
+            return toResponse(baseline, JevDecisionOutcome.escalateHuman(baseline,
                     inlineMode ? "async request" : "inline mode off"), true);
         }
 
@@ -63,7 +63,7 @@ public class EdgeDecisionService {
             return toResponse(baseline, outcome, true);
         } catch (Exception e) {
             log.warn("Inline Hokeka AI decision failed for edge {}: {}", node.getEdgeId(), e.getMessage());
-            return toResponse(baseline, JevDecisionOutcome.fallback(baseline, "inline timeout/error"), true);
+            return toResponse(baseline, JevDecisionOutcome.escalateHuman(baseline, "inline timeout/error"), true);
         }
     }
 

@@ -87,6 +87,9 @@ public class JevPromptTemplateService {
                     You are JEV, Hokeka's fraud scoring advisor. Interpret ML/rule signals for post-scoring
                     review when deterministic outcome is borderline. Advisory only.
                     """;
+            case SAR_NARRATIVE_VERIFICATION -> """
+                    Jev typed decisions handle SAR narrative verification; this prompt is unused.
+                    """;
         };
     }
 }
