@@ -94,13 +94,30 @@ public class RulesController {
         if (rule != null) {
             // Preview-only response — DO NOT persist. The FE shows the preview and the
             // operator clicks Save (POST /rules) to commit.
-            return ResponseEntity.ok(rule);
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("id", rule.getId());
+            body.put("name", rule.getName());
+            body.put("description", rule.getDescription());
+            body.put("ruleType", rule.getRuleType());
+            body.put("ruleExpression", rule.getRuleExpression());
+            body.put("action", rule.getAction());
+            body.put("score", rule.getScore());
+            body.put("priority", rule.getPriority());
+            body.put("enabled", rule.isEnabled());
+            body.put("ruleJson", rule.getRuleJson());
+            body.put("drlContent", rule.getDrlContent());
+            body.put("pendingAdminApproval", true);
+            Long auditId = aiService.getLastAuditId();
+            if (auditId != null) {
+                body.put("jevAuditId", auditId);
+            }
+            return ResponseEntity.ok(body);
         }
         if (!aiService.isEnabled()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of(
                             "error", "AI rule generation not configured",
-                            "hint", "set AI_RULE_GENERATOR_ENABLED=true and ANTHROPIC_API_KEY"
+                            "hint", "set AI_RULE_GENERATOR_ENABLED=true and configure JEV (OPENROUTER_API_KEY, JEV_MODEL)"
                     ));
         }
         String detail = aiService.getLastErrorDetail();

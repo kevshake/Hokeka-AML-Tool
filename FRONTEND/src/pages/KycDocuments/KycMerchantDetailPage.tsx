@@ -20,6 +20,7 @@ import {
   type UnderwritingOutcome,
 } from "../../features/api/queries";
 import { useRunG2WebsiteScan, useRunMerchantVerification } from "../../features/api/mutations";
+import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
 
 type Tab = "overview" | "ownership" | "intelligence" | "verification" | "edd" | "documents" | "network";
 
@@ -226,6 +227,7 @@ export default function KycMerchantDetailPage() {
           )}
           {tab === "intelligence" && (
             <IntelligenceTab
+              merchantId={id}
               checks={intelligenceQuery.data || []}
               loading={intelligenceQuery.isLoading}
               canRun={canScreen}
@@ -235,6 +237,7 @@ export default function KycMerchantDetailPage() {
           )}
           {tab === "verification" && (
             <VerificationTab
+              merchantId={id}
               signals={verificationSignalsQuery.data || []}
               g2Scans={g2ScansQuery.data || []}
               g2Rules={g2StatusQuery.data?.transactionLaunderingRules || []}
@@ -274,6 +277,14 @@ export default function KycMerchantDetailPage() {
               {canManage && <textarea value={eddNotes} onChange={(event) => setEddNotes(event.target.value)} placeholder="Evidence note or revocation reason" maxLength={4000} className="mb-5 min-h-20 w-full rounded-lg border border-white/10 bg-[var(--surface-3)] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-burgundy-700" />}
               <h3 className="mb-2 text-sm font-semibold text-white">Evidence history</h3>
               <div className="overflow-auto border border-white/10"><table className="w-full text-left text-sm"><thead className="bg-[var(--surface-2)] text-xs uppercase text-glass-muted"><tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Actor</th><th className="px-3 py-2">Time</th><th className="px-3 py-2">Notes</th></tr></thead><tbody className="divide-y divide-white/10">{edd?.events.map((event) => <tr key={event.id}><td className="px-3 py-2 text-white">{event.itemCode.replaceAll("_", " ")}</td><td className="px-3 py-2"><TwBadge variant={event.newValue ? "success" : "warning"}>{event.newValue ? "Complete" : "Open"}</TwBadge></td><td className="px-3 py-2 text-glass-muted">{event.performedBy}</td><td className="px-3 py-2 text-glass-muted">{new Date(event.occurredAt).toLocaleString()}</td><td className="px-3 py-2 text-glass-muted">{event.notes || ""}</td></tr>)}</tbody></table>{!edd?.events.length && <p className="p-4 text-sm text-glass-muted">No EDD evidence events yet.</p>}</div>
+              {edd && edd.status !== "NOT_STARTED" ? (
+                <div className="mt-4">
+                  <AiVerdictPanel
+                    auditPath={`jev/audit/merchant/${id}?engine=KYC_EDD`}
+                    title="KYC / EDD AI verdict"
+                  />
+                </div>
+              ) : null}
             </section>
           )}
           {tab === "documents" && <DocumentsTab documents={documentsQuery.data || []} loading={documentsQuery.isLoading} merchantId={id} />}
@@ -287,7 +298,8 @@ export default function KycMerchantDetailPage() {
   );
 }
 
-function VerificationTab({ signals, g2Scans, g2Rules, loading, lastOutcome, g2Enabled, canRun, pending, onRunVerification, onRunG2Scan }: {
+function VerificationTab({ merchantId, signals, g2Scans, g2Rules, loading, lastOutcome, g2Enabled, canRun, pending, onRunVerification, onRunG2Scan }: {
+  merchantId: number;
   signals: MerchantVerificationSignal[];
   g2Scans: G2ScanEvent[];
   g2Rules: string[];
@@ -347,6 +359,12 @@ function VerificationTab({ signals, g2Scans, g2Rules, loading, lastOutcome, g2En
       {!latestSignals.length && <Empty icon={<ShieldCheck size={34} />} text="No verification signals yet. Run underwriting from onboarding or use Run underwriting above." />}
     </div>
     {g2Rules.length > 0 && <div className="mt-6"><h3 className="mb-2 text-sm font-semibold text-white">G2 transaction-laundering rules (Easy Rules engine)</h3><div className="flex flex-wrap gap-2">{g2Rules.map((rule) => <TwBadge key={rule} variant="info">{rule.replaceAll("_", " ")}</TwBadge>)}</div></div>}
+    <div className="mt-6">
+      <AiVerdictPanel
+        auditPath={`jev/audit/merchant/${merchantId}?engine=G2_CONTENT`}
+        title="G2 content monitoring AI verdict"
+      />
+    </div>
     <h3 className="mb-2 mt-6 text-sm font-semibold text-white">G2 website scan history</h3>
     <div className="overflow-auto border border-white/10">
       <table className="w-full text-left text-sm">
@@ -360,7 +378,8 @@ function VerificationTab({ signals, g2Scans, g2Rules, loading, lastOutcome, g2En
   </section>;
 }
 
-function IntelligenceTab({ checks, loading, canRun, pending, onRun }: {
+function IntelligenceTab({ merchantId, checks, loading, canRun, pending, onRun }: {
+  merchantId: number;
   checks: CorporateIntelligenceCheck[]; loading: boolean; canRun: boolean; pending: boolean; onRun: () => void;
 }) {
   if (loading) return <Loading />;
@@ -431,6 +450,14 @@ function IntelligenceTab({ checks, loading, canRun, pending, onRun }: {
       })}
       {!checks.length && <Empty icon={<Search size={34} />} text="No corporate-intelligence evidence has been collected yet." />}
     </div>
+    {checks.some((c) => c.adverseMediaStatus === "HITS") ? (
+      <div className="mt-6">
+        <AiVerdictPanel
+          auditPath={`jev/audit/merchant/${merchantId}?engine=ADVERSE_MEDIA`}
+          title="Adverse media AI verdict"
+        />
+      </div>
+    ) : null}
   </section>;
 }
 

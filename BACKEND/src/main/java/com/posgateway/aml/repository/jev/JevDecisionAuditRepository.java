@@ -21,6 +21,11 @@ public interface JevDecisionAuditRepository extends JpaRepository<JevDecisionAud
 
     List<JevDecisionAudit> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 
+    List<JevDecisionAudit> findByMerchantIdAndEngineCodeOrderByCreatedAtDesc(
+            Long merchantId, String engineCode);
+
+    List<JevDecisionAudit> findByScreeningHitIdOrderByCreatedAtDesc(String screeningHitId);
+
     Page<JevDecisionAudit> findByPspIdOrderByCreatedAtDesc(Long pspId, Pageable pageable);
 
     @Query("""

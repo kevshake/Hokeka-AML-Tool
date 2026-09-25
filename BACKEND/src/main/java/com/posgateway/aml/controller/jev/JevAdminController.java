@@ -114,8 +114,26 @@ public class JevAdminController {
 
     @GetMapping("/audit/merchant/{merchantId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<Map<String, Object>>> auditForMerchant(@PathVariable Long merchantId) {
-        return ResponseEntity.ok(auditService.forMerchant(merchantId).stream()
+    public ResponseEntity<List<Map<String, Object>>> auditForMerchant(
+            @PathVariable Long merchantId,
+            @RequestParam(required = false) String engine) {
+        return ResponseEntity.ok(auditService.forMerchant(merchantId, engine).stream()
+                .map(auditService::toDto).toList());
+    }
+
+    @GetMapping("/audit/id/{auditId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<Map<String, Object>>> auditById(@PathVariable Long auditId) {
+        return auditService.byId(auditId)
+                .map(a -> ResponseEntity.ok(List.of(auditService.toDto(a))))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/audit/screening/{screeningHitId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<Map<String, Object>>> auditForScreeningHit(
+            @PathVariable String screeningHitId) {
+        return ResponseEntity.ok(auditService.forScreeningHit(screeningHitId).stream()
                 .map(auditService::toDto).toList());
     }
 }

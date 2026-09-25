@@ -58,6 +58,18 @@ public class JevEngineAdvisor {
                             Long alertId,
                             Long caseId,
                             Long merchantId) {
+        adviseAsync(engine, pspId, baselineDecision, features, transactionId, alertId, caseId, merchantId, null);
+    }
+
+    public void adviseAsync(JevEngineType engine,
+                            Long pspId,
+                            String baselineDecision,
+                            Map<String, Object> features,
+                            Long transactionId,
+                            Long alertId,
+                            Long caseId,
+                            Long merchantId,
+                            String screeningHitId) {
         JevDecisionContext ctx = JevDecisionContext.builder(engine)
                 .pspId(pspId)
                 .baselineDecision(baselineDecision)
@@ -66,6 +78,7 @@ public class JevEngineAdvisor {
                 .alertId(alertId)
                 .caseId(caseId)
                 .merchantId(merchantId)
+                .screeningHitId(screeningHitId)
                 .advisoryOnly(true)
                 .build();
         gateway.decideAsync(ctx);

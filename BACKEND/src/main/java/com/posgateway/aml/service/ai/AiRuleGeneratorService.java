@@ -65,13 +65,19 @@ public class AiRuleGeneratorService {
     }
 
     private volatile String lastErrorDetail;
+    private volatile Long lastAuditId;
 
     public String getLastErrorDetail() {
         return lastErrorDetail;
     }
 
+    public Long getLastAuditId() {
+        return lastAuditId;
+    }
+
     public RuleDefinition generateRuleFromText(String prompt) {
         lastErrorDetail = null;
+        lastAuditId = null;
 
         if (!enabled) {
             log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure JEV (OPENROUTER_API_KEY, JEV_MODEL)");
@@ -95,6 +101,7 @@ public class AiRuleGeneratorService {
                 .build();
 
         JevDecisionOutcome outcome = jevGateway.decide(ctx);
+        lastAuditId = outcome.getAuditId();
         if (outcome.isFallback()) {
             lastErrorDetail = outcome.getFallbackReason();
             log.error("AI rule generator: JEV fallback — {}", lastErrorDetail);

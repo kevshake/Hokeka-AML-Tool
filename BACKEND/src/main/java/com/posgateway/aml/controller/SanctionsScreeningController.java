@@ -5,6 +5,8 @@ import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScree
 import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScreenResponse;
 import com.posgateway.aml.model.ScreeningResult;
 import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
+import com.posgateway.aml.service.jev.JevEngineAdvisor;
+import com.posgateway.aml.service.jev.JevEngineType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
@@ -43,6 +46,9 @@ public class SanctionsScreeningController {
 
     @Autowired
     private AerospikeSanctionsScreeningService screeningService;
+
+    @Autowired(required = false)
+    private JevEngineAdvisor jevEngineAdvisor;
 
     /**
      * Screen a name against the sanctions database via aml-microservice.
@@ -77,6 +83,7 @@ public class SanctionsScreeningController {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
             }
 
+            maybeConsultJevForAdHocScreen(name, type, resp, body);
             return ResponseEntity.ok(body);
 
         } catch (Exception e) {
@@ -143,6 +150,39 @@ public class SanctionsScreeningController {
         response.put("hits", hitsList);
         response.put("pepMatchFound", matchesList.stream().anyMatch(m -> Boolean.TRUE.equals(m.get("isPep"))));
         return response;
+    }
+
+    private void maybeConsultJevForAdHocScreen(String name,
+                                                 String type,
+                                                 BackendSanctionsScreenResponse resp,
+                                                 Map<String, Object> body) {
+        if (jevEngineAdvisor == null || resp.matches() == null || resp.matches().isEmpty()) {
+            return;
+        }
+        String screeningHitId = "adhoc-" + UUID.randomUUID();
+        Map<String, Object> features = new HashMap<>();
+        features.put("screenedName", name);
+        features.put("entityType", type != null ? type : "PERSON");
+        features.put("matchCount", resp.matches().size());
+        features.put("topScore", resp.matches().get(0).similarityScore());
+        features.put("matches", resp.matches().stream()
+                .map(m -> Map.of(
+                        "matchedName", m.matchedName() != null ? m.matchedName() : "",
+                        "listName", m.listName() != null ? m.listName() : "",
+                        "similarityScore", m.similarityScore(),
+                        "pepLevel", m.pepLevel() != null ? m.pepLevel() : ""))
+                .toList());
+        jevEngineAdvisor.adviseAsync(
+                JevEngineType.SANCTIONS_DISAMBIGUATION,
+                null,
+                "REVIEW",
+                features,
+                null,
+                null,
+                null,
+                null,
+                screeningHitId);
+        body.put("jevScreeningHitId", screeningHitId);
     }
 
     /**

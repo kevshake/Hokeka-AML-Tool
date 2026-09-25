@@ -73,6 +73,7 @@ import {
   type GenerateRuleError,
 } from "../../features/api/mutations";
 import type { AmlRule, VelocityRule, RiskThreshold, RuleVersion } from "../../types/rules";
+import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
 import { withAlpha } from "../../theme/tokens"
 
 export default function RulesGenerationPage() {
@@ -498,7 +499,7 @@ export default function RulesGenerationPage() {
               <Card sx={{ mt: 2, border: "1px solid var(--gold)" }}>
                 <CardContent>
                   <Typography variant="overline" sx={{ color: "var(--gold)", fontWeight: 600 }}>
-                    Preview (not saved)
+                    Preview (not saved — pending admin approval)
                   </Typography>
                   <Typography variant="h6" sx={{ color: "text.primary", mt: 0.5 }}>
                     {aiPreview.name}
@@ -541,6 +542,14 @@ export default function RulesGenerationPage() {
                       Use This Rule
                     </Button>
                   </Box>
+                  {aiPreview.jevAuditId ? (
+                    <Box sx={{ mt: 2 }}>
+                      <AiVerdictPanel
+                        auditId={aiPreview.jevAuditId}
+                        title="AI rule suggestion verdict"
+                      />
+                    </Box>
+                  ) : null}
                 </CardContent>
               </Card>
             )}

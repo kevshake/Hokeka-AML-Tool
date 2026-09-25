@@ -82,6 +82,28 @@ public class JevAuditService {
         return repository.findByMerchantIdOrderByCreatedAtDesc(merchantId);
     }
 
+    public List<JevDecisionAudit> forMerchant(Long merchantId, String engineCode) {
+        if (engineCode == null || engineCode.isBlank()) {
+            return forMerchant(merchantId);
+        }
+        return repository.findByMerchantIdAndEngineCodeOrderByCreatedAtDesc(
+                merchantId, engineCode.trim().toUpperCase());
+    }
+
+    public List<JevDecisionAudit> forScreeningHit(String screeningHitId) {
+        if (screeningHitId == null || screeningHitId.isBlank()) {
+            return List.of();
+        }
+        return repository.findByScreeningHitIdOrderByCreatedAtDesc(screeningHitId.trim());
+    }
+
+    public java.util.Optional<JevDecisionAudit> byId(Long auditId) {
+        if (auditId == null) {
+            return java.util.Optional.empty();
+        }
+        return repository.findById(auditId);
+    }
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> toDto(JevDecisionAudit audit) {
         return objectMapper.convertValue(audit, Map.class);
