@@ -101,6 +101,41 @@ public class JevDecisionAudit {
     @Column(name = "edge_id", length = 128)
     private String edgeId;
 
+    @Column(name = "decision_point", length = 64)
+    private String decisionPoint;
+
+    @Column(name = "question_config_version", length = 64)
+    private String questionConfigVersion;
+
+    @Column(name = "openrouter_request_id", length = 128)
+    private String openrouterRequestId;
+
+    @Column(name = "model_snapshot", length = 128)
+    private String modelSnapshot;
+
+    @Column(name = "state_hash", length = 64)
+    private String stateHash;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "answers_json", columnDefinition = "jsonb")
+    private Map<String, Object> answersJson;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "thresholds_json", columnDefinition = "jsonb")
+    private Map<String, Object> thresholdsJson;
+
+    @Column(name = "branch_taken", length = 64)
+    private String branchTaken;
+
+    @Column(name = "shadow_mode", nullable = false)
+    private boolean shadowMode = true;
+
+    @Column(name = "would_apply", nullable = false)
+    private boolean wouldApply;
+
+    @Column(name = "usage_cost_usd", precision = 12, scale = 6)
+    private BigDecimal usageCostUsd;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -318,6 +353,94 @@ public class JevDecisionAudit {
 
     public void setEdgeId(String edgeId) {
         this.edgeId = edgeId;
+    }
+
+    public String getDecisionPoint() {
+        return decisionPoint;
+    }
+
+    public void setDecisionPoint(String decisionPoint) {
+        this.decisionPoint = decisionPoint;
+    }
+
+    public String getQuestionConfigVersion() {
+        return questionConfigVersion;
+    }
+
+    public void setQuestionConfigVersion(String questionConfigVersion) {
+        this.questionConfigVersion = questionConfigVersion;
+    }
+
+    public String getOpenrouterRequestId() {
+        return openrouterRequestId;
+    }
+
+    public void setOpenrouterRequestId(String openrouterRequestId) {
+        this.openrouterRequestId = openrouterRequestId;
+    }
+
+    public String getModelSnapshot() {
+        return modelSnapshot;
+    }
+
+    public void setModelSnapshot(String modelSnapshot) {
+        this.modelSnapshot = modelSnapshot;
+    }
+
+    public String getStateHash() {
+        return stateHash;
+    }
+
+    public void setStateHash(String stateHash) {
+        this.stateHash = stateHash;
+    }
+
+    public Map<String, Object> getAnswersJson() {
+        return answersJson;
+    }
+
+    public void setAnswersJson(Map<String, Object> answersJson) {
+        this.answersJson = answersJson;
+    }
+
+    public Map<String, Object> getThresholdsJson() {
+        return thresholdsJson;
+    }
+
+    public void setThresholdsJson(Map<String, Object> thresholdsJson) {
+        this.thresholdsJson = thresholdsJson;
+    }
+
+    public String getBranchTaken() {
+        return branchTaken;
+    }
+
+    public void setBranchTaken(String branchTaken) {
+        this.branchTaken = branchTaken;
+    }
+
+    public boolean isShadowMode() {
+        return shadowMode;
+    }
+
+    public void setShadowMode(boolean shadowMode) {
+        this.shadowMode = shadowMode;
+    }
+
+    public boolean isWouldApply() {
+        return wouldApply;
+    }
+
+    public void setWouldApply(boolean wouldApply) {
+        this.wouldApply = wouldApply;
+    }
+
+    public BigDecimal getUsageCostUsd() {
+        return usageCostUsd;
+    }
+
+    public void setUsageCostUsd(BigDecimal usageCostUsd) {
+        this.usageCostUsd = usageCostUsd;
     }
 
     public Instant getCreatedAt() {

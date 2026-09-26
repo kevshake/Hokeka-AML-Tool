@@ -1,149 +1,296 @@
 package com.posgateway.aml.service.jev;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.config.jev.JevProperties;
 import com.posgateway.aml.entity.jev.JevDecisionAudit;
-import com.posgateway.aml.repository.jev.JevDailySpendRepository;
 import com.posgateway.aml.repository.jev.JevDecisionAuditRepository;
-import com.posgateway.aml.repository.jev.JevEngineSettingRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class JevDecisionGatewayTest {
 
-    @Mock private OpenRouterClient openRouterClient;
-    @Mock private JevFeatureMaskingService maskingService;
-    @Mock private JevPromptTemplateService promptTemplateService;
-    @Mock private JevEngineConfigService engineConfigService;
-    @Mock private JevBudgetService budgetService;
-    @Mock private JevAuditService auditService;
     @Mock private JevDecisionAuditRepository auditRepository;
-    @Mock private JevEngineSettingRepository engineSettingRepository;
-    @Mock private JevDailySpendRepository dailySpendRepository;
+    @Mock private com.posgateway.aml.repository.jev.JevEngineSettingRepository engineSettingRepository;
+    @Mock private com.posgateway.aml.repository.jev.JevDailySpendRepository dailySpendRepository;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private MockDecisionsServer mockServer;
     private JevProperties properties;
     private JevDecisionGateway gateway;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
+        mockServer = new MockDecisionsServer();
+        mockServer.start();
+
         properties = new JevProperties();
         properties.setApiKey("test-key");
-        properties.setModel("test/model");
+        properties.setDecisionsBaseUrl(mockServer.baseUrl());
+        properties.setShadowMode(true);
+        properties.setPromoted(false);
 
-        when(maskingService.maskFeatures(any())).thenAnswer(i -> i.getArgument(0));
-        when(promptTemplateService.resolveSystemPrompt(any(), anyString())).thenReturn("system");
-        when(engineConfigService.isEngineEnabled(any())).thenReturn(true);
-        when(engineConfigService.isAdvisoryOnly(any())).thenReturn(true);
-        when(engineConfigService.promptVersion(any())).thenReturn("v1");
-        when(budgetService.isBudgetExceeded(any())).thenReturn(false);
-
-        JevAuditService realAudit = new JevAuditService(auditRepository, objectMapper);
-        when(auditRepository.save(any())).thenAnswer(i -> {
-            JevDecisionAudit a = i.getArgument(0);
-            a.setId(42L);
-            return a;
+        when(auditRepository.save(any())).thenAnswer(inv -> {
+            JevDecisionAudit audit = inv.getArgument(0);
+            audit.setId(99L);
+            return audit;
         });
 
+        JevQuestionConfigService questionConfig = new JevQuestionConfigService(objectMapper);
+        JevStateBuilderService stateBuilder = new JevStateBuilderService();
+        JevBandsService bandsService = new JevBandsService(properties);
+        JevBranchEvaluator branchEvaluator = new JevBranchEvaluator(bandsService);
+        JevDecisionsClient decisionsClient = new JevDecisionsClient(properties, objectMapper);
+        JevBudgetService budgetService = new JevBudgetService(properties, dailySpendRepository);
+        JevEngineConfigService engineConfig = new JevEngineConfigService(engineSettingRepository);
+        when(engineSettingRepository.findById(any())).thenReturn(java.util.Optional.empty());
+        JevAuditService auditService = new JevAuditService(auditRepository, objectMapper);
+
         gateway = new JevDecisionGateway(
-                properties, openRouterClient, maskingService, promptTemplateService,
-                engineConfigService, budgetService, realAudit, objectMapper);
+                properties,
+                decisionsClient,
+                questionConfig,
+                stateBuilder,
+                branchEvaluator,
+                new JevTightenOnlyAuthority(),
+                engineConfig,
+                budgetService,
+                auditService,
+                objectMapper);
+    }
+
+    @AfterEach
+    void tearDown() {
+        mockServer.stop();
     }
 
     @Test
-    void disabledWhenNoModel() {
-        properties.setModel("");
+    void disabledWhenNoApiKey() {
+        properties.setApiKey("");
         JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertTrue(outcome.isFallback());
-        assertEquals("JEV not configured (missing OPENROUTER_API_KEY or JEV_MODEL)", outcome.getFallbackReason());
-        verifyNoInteractions(openRouterClient);
+        assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
+        assertEquals("JEV not configured (missing OPENROUTER_API_KEY)", outcome.getFallbackReason());
+        assertEquals("ALLOW", outcome.getFinalDecision());
     }
 
     @Test
-    void successParsesRecommendation() throws Exception {
-        when(openRouterClient.chatCompletion(anyString(), anyString(), anyString(), any()))
-                .thenReturn(new OpenRouterClient.OpenRouterResponse(
-                        "{\"recommendation\":\"REVIEW\",\"riskScore\":55,\"confidence\":0.8,"
-                                + "\"reasons\":[\"velocity spike\"],\"citedSignals\":[\"pan_velocity_1h\"]}",
-                        "test/model", 100, 50, 0.001, 120));
+    void nullBaselineFailsClosedToReview() {
+        properties.setApiKey("");
+        JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.ALERT_TRIAGE)
+                .baselineDecision(null)
+                .build();
+        JevDecisionOutcome outcome = gateway.decide(ctx);
+        assertEquals("REVIEW", outcome.getFinalDecision());
+    }
+
+    @Test
+    void happyPathParsesDp1Answers() throws Exception {
+        mockServer.setResponse(200, loadResource("/jev/test/smoke_response.json"));
 
         JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertFalse(outcome.isFallback());
-        assertEquals(JevRecommendation.REVIEW, outcome.getRecommendation());
-        assertEquals(55.0, outcome.getRiskScore());
+        assertEquals(JevBranch.ESCALATE_UP, outcome.getBranch());
+        assertEquals("gen-dec-1790353126-R935rN0YT2flXe74SiEJ", outcome.getRequestId());
+        assertTrue(outcome.getModelSnapshot().startsWith(JevPinnedModel.SNAPSHOT_PREFIX));
+        assertEquals("ALLOW", outcome.getFinalDecision());
+        assertFalse(outcome.isAiApplied());
+        assertTrue(outcome.isShadowMode());
+        assertNotNull(outcome.getAnswers().get("laundering_suspicion"));
+        assertEquals("noul", outcome.getAnswers().get("laundering_suspicion").path("type").asText());
+    }
+
+    @Test
+    void unauthorizedEscalatesHuman() {
+        mockServer.setResponse(401, "{\"error\":\"bad key\"}");
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+        assertTrue(outcome.isFallback());
+        assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
+        assertEquals("ALLOW", outcome.getFinalDecision());
+    }
+
+    @Test
+    void serverErrorRetriesThenEscalates() {
+        mockServer.setSequentialResponses(
+                response(500, "error"),
+                response(500, "error"));
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+        assertTrue(outcome.isFallback());
+        assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
+        assertTrue(mockServer.requestCount() >= 2);
+    }
+
+    @Test
+    void malformedBodyEscalatesHuman() {
+        mockServer.setResponse(200, "{\"model\":\"typesafe/jev-1.13-20260917\",\"answers\":{}}");
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+        assertTrue(outcome.isFallback());
+        assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
+    }
+
+    @Test
+    void wrongModelSnapshotEscalatesHuman() {
+        mockServer.setResponse(200, "{\"model\":\"other/model-1\",\"answers\":{\"laundering_suspicion\":{\"type\":\"noul\",\"noul\":0.5}}}");
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+        assertTrue(outcome.isFallback());
+    }
+
+    @Test
+    void shadowModeNeverMutatesDecisionEvenWhenPromoted() throws Exception {
+        mockServer.setResponse(200, loadResource("/jev/test/smoke_response.json"));
+        properties.setPromoted(true);
+        properties.setShadowMode(true);
+
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertEquals("ALLOW", outcome.getFinalDecision());
         assertFalse(outcome.isAiApplied());
     }
 
     @Test
-    void malformedJsonFallsBack() throws Exception {
-        when(openRouterClient.chatCompletion(anyString(), anyString(), anyString(), any()))
-                .thenReturn(new OpenRouterClient.OpenRouterResponse(
-                        "not json", "test/model", 10, 5, null, 50));
+    void promotedNonShadowWouldApplyButStillRespectsTightenOnly() throws Exception {
+        mockServer.setResponse(200, loadResource("/jev/test/smoke_response.json"));
+        properties.setPromoted(true);
+        properties.setShadowMode(false);
 
-        JevDecisionOutcome outcome = gateway.decide(sampleContext());
-        assertTrue(outcome.isFallback());
-        assertEquals("Invalid JSON from model", outcome.getFallbackReason());
+        JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.ALERT_TRIAGE)
+                .pspId(1L)
+                .baselineDecision("BLOCK")
+                .feature("severity", "CRITICAL")
+                .feature("score", 0.95)
+                .build();
+        JevDecisionOutcome outcome = gateway.decide(ctx);
+        assertEquals("BLOCK", outcome.getFinalDecision());
+        assertFalse(outcome.isAiApplied());
     }
 
     @Test
-    void openRouterErrorFallsBack() throws Exception {
-        when(openRouterClient.chatCompletion(anyString(), anyString(), anyString(), any()))
-                .thenThrow(new RuntimeException("timeout"));
-
-        JevDecisionOutcome outcome = gateway.decide(sampleContext());
-        assertTrue(outcome.isFallback());
-        assertTrue(outcome.getFallbackReason().contains("OpenRouter error"));
+    void allowlistStripsForbiddenFields() throws Exception {
+        mockServer.setResponse(200, loadResource("/jev/test/smoke_response.json"));
+        JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.ALERT_TRIAGE)
+                .pspId(1L)
+                .baselineDecision("ALLOW")
+                .feature("pan_hash", "secret-hash")
+                .feature("terminal_id", "term-1")
+                .feature("description", "free text about customer John Doe")
+                .feature("score", 0.62)
+                .build();
+        gateway.decide(ctx);
+        String body = mockServer.lastRequestBody();
+        assertNotNull(body);
+        assertFalse(body.contains("secret-hash"));
+        assertFalse(body.contains("term-1"));
+        assertFalse(body.contains("John Doe"));
+        assertFalse(body.contains("pan_hash"));
     }
 
     @Test
-    void budgetExceededFallsBack() {
-        when(budgetService.isBudgetExceeded(1L)).thenReturn(true);
-        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+    void nonDecisionEngineEscalatesWithoutCallingApi() {
+        JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.RULE_SUGGESTION)
+                .baselineDecision("PREVIEW")
+                .build();
+        JevDecisionOutcome outcome = gateway.decide(ctx);
         assertTrue(outcome.isFallback());
-        assertEquals("Daily budget exceeded", outcome.getFallbackReason());
-    }
-
-    @Test
-    void apiKeyNeverInAuditFeatures() throws Exception {
-        when(openRouterClient.chatCompletion(anyString(), anyString(), anyString(), any()))
-                .thenReturn(new OpenRouterClient.OpenRouterResponse(
-                        "{\"recommendation\":\"APPROVE\",\"riskScore\":10,\"confidence\":0.9,"
-                                + "\"reasons\":[],\"citedSignals\":[]}",
-                        "test/model", 10, 10, null, 30));
-
-        gateway.decide(sampleContext());
-
-        ArgumentCaptor<JevDecisionAudit> captor = ArgumentCaptor.forClass(JevDecisionAudit.class);
-        verify(auditRepository).save(captor.capture());
-        String serialized = captor.getValue().getRawResponse();
-        assertNotNull(serialized);
-        assertFalse(serialized.contains("test-key"));
+        assertEquals(0, mockServer.requestCount());
     }
 
     private static JevDecisionContext sampleContext() {
-        return JevDecisionContext.builder(JevEngineType.TRANSACTION_RISK)
+        return JevDecisionContext.builder(JevEngineType.ALERT_TRIAGE)
                 .pspId(1L)
                 .baselineDecision("ALLOW")
                 .feature("score", 0.62)
+                .feature("severity", "MEDIUM")
                 .transactionId(99L)
                 .advisoryOnly(true)
                 .build();
+    }
+
+    private String loadResource(String path) throws IOException {
+        try (var in = getClass().getResourceAsStream(path)) {
+            assertNotNull(in, path);
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static MockResponse response(int status, String body) {
+        return new MockResponse(status, body);
+    }
+
+    private record MockResponse(int status, String body) {}
+
+    static final class MockDecisionsServer {
+        private HttpServer server;
+        private volatile MockResponse next = response(200, "{}");
+        private java.util.Queue<MockResponse> queue;
+        private volatile String lastBody;
+        private final AtomicInteger requests = new AtomicInteger();
+
+        void start() throws IOException {
+            server = HttpServer.create(new InetSocketAddress(0), 0);
+            server.createContext("/api/alpha/decisions", this::handle);
+            server.start();
+        }
+
+        void stop() {
+            if (server != null) {
+                server.stop(0);
+            }
+        }
+
+        String baseUrl() {
+            return "http://127.0.0.1:" + server.getAddress().getPort() + "/api/alpha";
+        }
+
+        void setResponse(int status, String body) {
+            this.next = response(status, body);
+            this.queue = null;
+        }
+
+        void setSequentialResponses(MockResponse... responses) {
+            this.queue = new java.util.ArrayDeque<>(java.util.Arrays.asList(responses));
+        }
+
+        int requestCount() {
+            return requests.get();
+        }
+
+        String lastRequestBody() {
+            return lastBody;
+        }
+
+        private void handle(HttpExchange exchange) throws IOException {
+            requests.incrementAndGet();
+            lastBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            MockResponse response = queue != null && !queue.isEmpty() ? queue.poll() : next;
+            byte[] bytes = response.body().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(response.status(), bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        }
     }
 }
