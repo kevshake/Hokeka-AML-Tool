@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, FileText, Link2, LoaderCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { apiClient } from "../../lib/apiClient";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 
 interface RecordLink {
   recordType: string;
@@ -65,7 +65,7 @@ export default function RecordDetailPage() {
       <aside className="space-y-6">
         {record.recordType === "TRANSACTION" && (
           <AiVerdictPanel
-            auditPath={`jev/audit/transaction/${record.recordId}`}
+            auditPath={`ai/audit/transaction/${record.recordId}`}
             title="Hokeka AI recommendation"
           />
         )}

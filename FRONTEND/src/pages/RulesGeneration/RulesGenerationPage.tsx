@@ -73,7 +73,7 @@ import {
   type GenerateRuleError,
 } from "../../features/api/mutations";
 import type { AmlRule, VelocityRule, RiskThreshold, RuleVersion } from "../../types/rules";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import { withAlpha } from "../../theme/tokens"
 
 export default function RulesGenerationPage() {
