@@ -7,7 +7,7 @@ const FORBIDDEN = /openrouter|\bjev\b|\blaya\b|typesafe|anthropic|openai|\bpromp
 describe("PSP-facing AI disclosure guards", () => {
   it("AiVerdictPanel uses generic Hokeka branding and hides vendor fields from tenants", () => {
     const source = readFileSync(
-      resolve(__dirname, "../components/Jev/AiVerdictPanel.tsx"),
+      resolve(__dirname, "../components/Ai/AiVerdictPanel.tsx"),
       "utf8"
     );
     expect(source).toContain('const PRODUCT_TITLE = "Hokeka AI recommendation"');

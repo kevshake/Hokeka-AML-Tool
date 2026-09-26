@@ -5,8 +5,8 @@ import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScree
 import com.posgateway.aml.client.aml.SanctionsScreenClient.BackendSanctionsScreenResponse;
 import com.posgateway.aml.model.ScreeningResult;
 import com.posgateway.aml.service.aml.AerospikeSanctionsScreeningService;
-import com.posgateway.aml.service.jev.JevEngineAdvisor;
-import com.posgateway.aml.service.jev.JevEngineType;
+import com.posgateway.aml.service.ai.decision.AiEngineAdvisor;
+import com.posgateway.aml.service.ai.decision.AiEngineType;
 import com.posgateway.aml.service.security.PspIsolationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,7 @@ public class SanctionsScreeningController {
     private AerospikeSanctionsScreeningService screeningService;
 
     @Autowired(required = false)
-    private JevEngineAdvisor jevEngineAdvisor;
+    private AiEngineAdvisor aiEngineAdvisor;
 
     @Autowired
     private PspIsolationService pspIsolationService;
@@ -87,7 +87,7 @@ public class SanctionsScreeningController {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
             }
 
-            maybeConsultJevForAdHocScreen(name, type, resp, body);
+            maybeConsultAiForAdHocScreen(name, type, resp, body);
             return ResponseEntity.ok(body);
 
         } catch (Exception e) {
@@ -156,11 +156,11 @@ public class SanctionsScreeningController {
         return response;
     }
 
-    private void maybeConsultJevForAdHocScreen(String name,
+    private void maybeConsultAiForAdHocScreen(String name,
                                                  String type,
                                                  BackendSanctionsScreenResponse resp,
                                                  Map<String, Object> body) {
-        if (jevEngineAdvisor == null || resp.matches() == null || resp.matches().isEmpty()) {
+        if (aiEngineAdvisor == null || resp.matches() == null || resp.matches().isEmpty()) {
             return;
         }
         String screeningHitId = "adhoc-" + UUID.randomUUID();
@@ -187,8 +187,8 @@ public class SanctionsScreeningController {
         } catch (SecurityException ignored) {
             // Platform operator without tenant binding — audit remains operator-visible only.
         }
-        jevEngineAdvisor.adviseAsync(
-                JevEngineType.SANCTIONS_DISAMBIGUATION,
+        aiEngineAdvisor.adviseAsync(
+                AiEngineType.SANCTIONS_DISAMBIGUATION,
                 pspId,
                 "REVIEW",
                 features,
@@ -197,7 +197,7 @@ public class SanctionsScreeningController {
                 null,
                 null,
                 screeningHitId);
-        body.put("jevScreeningHitId", screeningHitId);
+        body.put("aiScreeningHitId", screeningHitId);
     }
 
     /**

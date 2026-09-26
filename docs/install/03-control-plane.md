@@ -97,10 +97,9 @@ HOKEKA_AI_PROMOTED=false             # both promoted + shadow off required to ap
 HOKEKA_AI_INLINE_TIMEOUT=500ms
 HOKEKA_AI_DAILY_CALL_BUDGET_PER_PSP=0
 LAYA_DAILY_INPUT_TOKEN_CAP_PER_PSP=0 # 0 = unlimited input tokens / day / PSP
-LAYA_SWISS_DATA_RESIDENCY=false      # optional Swiss-only routing
 ```
 
-Health/status (no key exposure): `GET /api/v1/jev/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → Hokeka AI.
+Health/status (no key exposure): `GET /api/v1/ai/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → Hokeka AI.
 
 Optional rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) uses Laya `/v1/ask` on the Control Plane when enabled.
 

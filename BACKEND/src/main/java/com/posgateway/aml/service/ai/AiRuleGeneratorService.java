@@ -3,10 +3,10 @@ package com.posgateway.aml.service.ai;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.posgateway.aml.config.jev.JevProperties;
+import com.posgateway.aml.config.ai.AiDecisionProperties;
 import com.posgateway.aml.entity.rules.RuleDefinition;
-import com.posgateway.aml.service.jev.JevPromptTemplateService;
-import com.posgateway.aml.service.jev.LayaAskClient;
+import com.posgateway.aml.service.ai.decision.AiPromptTemplateService;
+import com.posgateway.aml.service.ai.decision.LayaAskClient;
 import com.posgateway.aml.service.rules.DynamicRuleConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,8 +36,8 @@ public class AiRuleGeneratorService {
     private static final Set<String> ALLOWED_SEVERITIES = Set.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
 
     private final LayaAskClient askClient;
-    private final JevPromptTemplateService promptTemplateService;
-    private final JevProperties jevProperties;
+    private final AiPromptTemplateService promptTemplateService;
+    private final AiDecisionProperties aiDecisionProperties;
     private final ObjectMapper objectMapper;
     private final SpelExpressionParser spelParser = new SpelExpressionParser();
     @SuppressWarnings("unused")
@@ -48,14 +48,14 @@ public class AiRuleGeneratorService {
     @Autowired
     public AiRuleGeneratorService(
             LayaAskClient askClient,
-            JevPromptTemplateService promptTemplateService,
-            JevProperties jevProperties,
+            AiPromptTemplateService promptTemplateService,
+            AiDecisionProperties aiDecisionProperties,
             DynamicRuleConverter converter,
             ObjectMapper objectMapper,
             @Value("${ai.rule-generator.enabled:false}") boolean enabled) {
         this.askClient = askClient;
         this.promptTemplateService = promptTemplateService;
-        this.jevProperties = jevProperties;
+        this.aiDecisionProperties = aiDecisionProperties;
         this.converter = converter;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -84,7 +84,7 @@ public class AiRuleGeneratorService {
             log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure LAYA_API_KEY");
             return null;
         }
-        if (!jevProperties.isConfigured()) {
+        if (!aiDecisionProperties.isConfigured()) {
             lastErrorDetail = "Laya not configured (LAYA_API_KEY required)";
             log.error("AI rule generator enabled but {}", lastErrorDetail);
             return null;
@@ -96,10 +96,10 @@ public class AiRuleGeneratorService {
         }
 
         String systemPrompt = promptTemplateService.resolveSystemPrompt(
-                com.posgateway.aml.service.jev.JevEngineType.RULE_SUGGESTION, "v1");
+                com.posgateway.aml.service.ai.decision.AiEngineType.RULE_SUGGESTION, "v1");
         String combined = systemPrompt + "\n\nOperator request:\n" + prompt;
         try {
-            LayaAskClient.AskResponse response = askClient.ask(combined, jevProperties.getAskTimeout());
+            LayaAskClient.AskResponse response = askClient.ask(combined, aiDecisionProperties.getAskTimeout());
             Map<String, Object> parsed = parseJsonResponse(response.reply());
             JsonNode tree = objectMapper.valueToTree(parsed);
             return validateAndMap(tree, prompt);

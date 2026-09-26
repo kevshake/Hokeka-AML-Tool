@@ -20,11 +20,11 @@ export function getSettingsTabsForUser(user: UserAccessContext): SettingsTabDef[
     { id: "theme", label: "PSP Theme" },
     ...(platformOperator ? [{ id: "system", label: "System Settings" }] : []),
     ...(platformOperator ? [{ id: "platform-admin", label: "Platform Admin" }] : []),
-    ...(platformOperator ? [{ id: "jev", label: "Hokeka AI" }] : []),
+    ...(platformOperator ? [{ id: "ai", label: "Hokeka AI" }] : []),
   ];
 }
 
-export function canAccessJevSettingsTab(user: UserAccessContext): boolean {
+export function canAccessAiSettingsTab(user: UserAccessContext): boolean {
   return isPlatformAdmin(user);
 }
 

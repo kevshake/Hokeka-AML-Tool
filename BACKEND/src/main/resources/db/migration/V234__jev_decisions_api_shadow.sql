@@ -1,9 +1,9 @@
 -- Jev Decisions API audit extensions and provisional per-PSP bands
 
-ALTER TABLE jev_decision_audit
+ALTER TABLE ai_decision_audit
     ADD COLUMN IF NOT EXISTS decision_point VARCHAR(64),
     ADD COLUMN IF NOT EXISTS question_config_version VARCHAR(64),
-    ADD COLUMN IF NOT EXISTS openrouter_request_id VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS provider_request_id VARCHAR(128),
     ADD COLUMN IF NOT EXISTS model_snapshot VARCHAR(128),
     ADD COLUMN IF NOT EXISTS state_hash VARCHAR(64),
     ADD COLUMN IF NOT EXISTS answers_json JSONB,
@@ -14,9 +14,9 @@ ALTER TABLE jev_decision_audit
     ADD COLUMN IF NOT EXISTS usage_cost_usd NUMERIC(12, 6);
 
 CREATE INDEX IF NOT EXISTS idx_jev_audit_branch_created
-    ON jev_decision_audit (branch_taken, created_at DESC);
+    ON ai_decision_audit (branch_taken, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS jev_bands (
+CREATE TABLE IF NOT EXISTS ai_bands (
     psp_id           BIGINT       NOT NULL,
     decision_point   VARCHAR(64)  NOT NULL,
     bands_version    VARCHAR(32)  NOT NULL DEFAULT 'provisional-v1',
@@ -26,9 +26,9 @@ CREATE TABLE IF NOT EXISTS jev_bands (
     PRIMARY KEY (psp_id, decision_point)
 );
 
-COMMENT ON TABLE jev_bands IS 'Per-PSP provisional Jev band thresholds; replace with labeled-sample tuning (DESIGN.md §7).';
-COMMENT ON COLUMN jev_decision_audit.shadow_mode IS 'When true, Jev output was logged only and did not mutate decisions.';
+COMMENT ON TABLE ai_bands IS 'Per-PSP provisional Jev band thresholds; replace with labeled-sample tuning (DESIGN.md §7).';
+COMMENT ON COLUMN ai_decision_audit.shadow_mode IS 'When true, Jev output was logged only and did not mutate decisions.';
 
-INSERT INTO jev_engine_settings (engine_code, enabled, advisory_only, prompt_version) VALUES
+INSERT INTO ai_engine_settings (engine_code, enabled, advisory_only, prompt_version) VALUES
     ('SAR_NARRATIVE_VERIFICATION', TRUE, TRUE, 'v1')
 ON CONFLICT (engine_code) DO NOTHING;
