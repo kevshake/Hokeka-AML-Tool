@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import HokekaLayout from "./layouts/HokekaLayout";
 import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
+import { LEGACY_CONSOLE_ROUTE_ALIASES } from "./lib/documentedConsoleRoutes";
 
 import LoginPage from "./pages/Auth/LoginPage";
 import SignupPage from "./pages/Auth/SignupPage";
@@ -117,6 +118,16 @@ function App() {
                             <Route path="reports" element={<ReportsCenterPage />} />
                             <Route path="chargebacks" element={<ChargebacksPage />} />
                             <Route path="reports-center" element={<Navigate to="/reports" replace />} />
+                            {LEGACY_CONSOLE_ROUTE_ALIASES.map(({ from, to }) => {
+                              const legacySegment = from.replace(/^\//, "");
+                              return (
+                                <Route
+                                  key={from}
+                                  path={legacySegment}
+                                  element={<Navigate to={to} replace />}
+                                />
+                              );
+                            })}
                             <Route path="audit" element={<AuditLogsPage />} />
                             <Route path="runtime-errors" element={<RuntimeErrorsPage />} />
                             <Route path="rules-generation" element={<RulesGenerationPage />} />
