@@ -364,7 +364,7 @@ export default function CasesAllCases() {
               />
             )}
             <div className="sm:col-span-2">
-              <AiVerdictPanel auditPath={`jev/audit/case/${viewCase.id}`} title="Hokeka Intelligence" />
+              <AiVerdictPanel auditPath={`jev/audit/case/${viewCase.id}`} />
             </div>
           </div>
         )}

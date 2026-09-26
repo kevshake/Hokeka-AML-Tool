@@ -99,22 +99,6 @@
   background-attachment: scroll, scroll, fixed;
 }
 
-/* Dashboard route: neutral SaaS field under the glass header (no aurora plate). */
-.hokeka-dashboard-main--saas {
-  background-color: #f4f5f7;
-  background-image: none;
-}
-
-.hokeka-dashboard-main--saas > header {
-  /* Keep chrome dark against the light content field */
-  background-color: rgba(12, 14, 13, 0.96);
-  color: #f5f2eb;
-}
-
-.hokeka-dashboard-main--saas > .hokeka-dashboard-content {
-  color: #101828;
-}
-
 /* ============================ Utilities ================================== */
 
 @layer utilities {

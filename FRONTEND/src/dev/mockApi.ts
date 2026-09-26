@@ -146,10 +146,14 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       ])
     }
     if (path.includes('sparklines')) {
+      const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const series = [12, 18, 14, 22, 19, 24, 28]
       return jsonResponse({
-        transactions: [12, 18, 14, 22, 19, 24, 28],
-        alerts: [2, 3, 1, 4, 2, 5, 3],
-        cases: [1, 1, 2, 1, 0, 2, 1],
+        transactionVolume: { labels, data: series },
+        alertTrends: { labels, data: [2, 3, 1, 4, 2, 5, 3] },
+        caseTrends: { labels, data: [1, 1, 2, 1, 0, 2, 1] },
+        screeningMatchTrends: { labels, data: [0, 1, 0, 2, 1, 1, 0] },
+        highRiskTrends: { labels, data: [4, 5, 4, 6, 5, 7, 6] },
       })
     }
     if (path.includes('trends') || path.includes('transaction-volume')) {
@@ -168,11 +172,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return jsonResponse({})
   }
 
-  if (path.startsWith('cases') && path.includes('/network')) {
+  if (path.includes('/network')) {
     return jsonResponse(MOCK_NETWORK_GRAPH)
   }
 
-  if (path.startsWith('cases')) {
+  if (path.startsWith('compliance/cases')) {
     return jsonResponse(
       page([
         {
@@ -182,8 +186,19 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           priority: 'HIGH',
           createdAt: new Date().toISOString(),
         },
+        {
+          id: 88,
+          title: 'Linked merchant review',
+          status: 'ASSIGNED',
+          priority: 'MEDIUM',
+          createdAt: new Date().toISOString(),
+        },
       ]),
     )
+  }
+
+  if (path.startsWith('cases')) {
+    return jsonResponse(MOCK_NETWORK_GRAPH)
   }
 
   if (path.includes('edge/nodes') || path.includes('edge-nodes')) {
@@ -213,12 +228,20 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     ])
   }
 
-  if (path.includes('billing')) {
+  if (path.includes('billing/revenue/summary')) {
     return jsonResponse({
-      mrrUsd: 12400,
-      activePsps: 6,
-      invoicesPending: 2,
+      currentMonthRevenuePaid: 124_500,
+      currentMonthRevenueExpected: 138_200,
+      overdueAmount: 12_400,
+      activeSubscriptions: 6,
+      paidInvoicesThisMonth: 14,
+      overdueInvoicesCount: 2,
+      currency: 'USD',
     })
+  }
+
+  if (path.includes('billing')) {
+    return jsonResponse({})
   }
 
   if (path.includes('settings/psps')) {

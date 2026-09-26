@@ -22,7 +22,7 @@ function alertIconFor(type: string | undefined): { icon: LucideIcon; className: 
   if (t.includes('VELOCITY')) return { icon: Activity, className: 'bg-[var(--db-warning-soft)] text-[var(--db-warning)]' }
   if (t.includes('COUNTRY') || t.includes('GEO')) return { icon: Globe, className: 'bg-[var(--db-info-soft)] text-[var(--db-info)]' }
   if (t.includes('CASH') || t.includes('DEPOSIT')) return { icon: Banknote, className: 'bg-[var(--db-danger-soft)] text-[var(--db-danger)]' }
-  return { icon: Bell, className: 'bg-[#f2f4f7] text-[var(--db-text-secondary)]' }
+  return { icon: Bell, className: 'bg-[var(--surface-3)] text-[var(--db-text-secondary)]' }
 }
 
 function timeAgo(iso?: string) {

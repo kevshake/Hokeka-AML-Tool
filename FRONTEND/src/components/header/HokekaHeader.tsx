@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, LogOut, UserRound } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
 import NotificationBellMenu from './NotificationBellMenu'
 import { useNavigate } from 'react-router-dom'
 import GlassInput from '../Common/GlassInput'
@@ -9,6 +9,8 @@ import { useAuth } from '../../contexts/AuthContext'
 interface HokekaHeaderProps {
   userName?: string
   notificationCount?: number
+  showMobileMenu?: boolean
+  onOpenMobileMenu?: () => void
 }
 
 function formatTime(d: Date) {
@@ -21,6 +23,8 @@ function formatTime(d: Date) {
 export default function HokekaHeader({
   userName = 'Admin',
   notificationCount,
+  showMobileMenu = false,
+  onOpenMobileMenu,
 }: HokekaHeaderProps) {
   const [now, setNow] = useState(() => formatTime(new Date()))
   const [menuOpen, setMenuOpen] = useState(false)
@@ -46,13 +50,25 @@ export default function HokekaHeader({
 
   return (
     <header className="sticky top-0 z-10 flex h-[72px] flex-shrink-0 items-center justify-between gap-4 border-b border-glass-border bg-glass-panel/92 px-5 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-glass">
-      <div className="min-w-0 flex-shrink">
+      <div className="flex min-w-0 flex-shrink items-center gap-3">
+        {showMobileMenu ? (
+          <button
+            type="button"
+            aria-label="Open navigation menu"
+            onClick={onOpenMobileMenu}
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-glass-border bg-glass-panel text-white/85 hover:border-glass-border-hover hover:bg-burgundy-800 md:hidden"
+          >
+            <Menu size={18} />
+          </button>
+        ) : null}
+        <div className="min-w-0">
         <h1 className="truncate text-[1.2rem] font-semibold tracking-tight text-white leading-tight">
           Welcome back, {userName}
         </h1>
         <p className="mt-0.5 truncate text-xs leading-relaxed text-glass-muted">
           Here&apos;s what&apos;s happening in your compliance environment today.
         </p>
+        </div>
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-2.5">

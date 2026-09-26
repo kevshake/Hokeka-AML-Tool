@@ -28,7 +28,7 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 
 | Feature / flow | Console route / component | Docs reference | Status |
 |----------------|---------------------------|----------------|--------|
-| Dashboard home | `/dashboard` → `DashboardPage` | 02-console-dashboard | implemented+aligned |
+| Dashboard home | `/dashboard` → `DashboardPage` (dark glass KPI + panels) | 02-console-dashboard | implemented+aligned |
 | Alerts & triage | `/alerts` → `AlertsPage` | Gap register §3; matrix | implemented+aligned |
 | Cases | `/cases/*` → `CasesPage` | Gap register §3 | implemented+aligned |
 | Merchants / KYB | `/merchants` | Gap register §2 | implemented+aligned |
