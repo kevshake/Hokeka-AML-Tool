@@ -7,6 +7,7 @@ import MonitoringAlertsPanel from "../../components/monitoring/MonitoringAlertsP
 import { useSanctionsDownloadStatus, useSanctionsHealth, useSanctionsListVersions } from "../../features/api/queries";
 import { useTriggerSanctionsDownload } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
+import { isPlatformAdmin } from "../../lib/userAccess";
 import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
 
 export default function ScreeningPage() {
@@ -19,6 +20,7 @@ export default function ScreeningPage() {
   const { data: listVersions = [] } = useSanctionsListVersions();
   const { data: downloadStatus } = useSanctionsDownloadStatus();
   const triggerDownload = useTriggerSanctionsDownload();
+  const isOperator = isPlatformAdmin(user);
   const canManageIngest = ["SUPER_ADMIN", "ADMIN", "COMPLIANCE_OFFICER", "MLRO"].includes(user?.role?.name?.toUpperCase() || "");
 
   const handleScreening = async () => {
@@ -50,29 +52,43 @@ export default function ScreeningPage() {
           <div>
             <p className="font-medium">Screening engine degraded</p>
             <p className="mt-1 text-amber-200/90">{health.message}</p>
-            <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded (`sanctions.download.enabled=true`).</p>
+            {isOperator ? (
+              <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded.</p>
+            ) : null}
           </div>
         </div>
       )}
       {downloadStatus && (
         <div className="mb-4 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3 text-xs text-glass-muted">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
-              <p className="mt-1">PEP tags applied at ingest ({downloadStatus.pepClassificationAtIngest ? "role.pep / role.rca" : "off"}).
-                {downloadStatus.lastSuccessfulUpdate ? ` Last success: ${downloadStatus.lastSuccessfulUpdate}.` : " No successful ingest recorded."}</p>
-              {!downloadStatus.enabled && <p className="mt-1 text-amber-200">Set SANCTIONS_DOWNLOAD_ENABLED=true and sanctions.opensanctions.url for live watchlist data.</p>}
+          {isOperator ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
+                <p className="mt-1">
+                  PEP tags applied at ingest ({downloadStatus.pepClassificationAtIngest ? "role.pep / role.rca" : "off"}).
+                  {downloadStatus.lastSuccessfulUpdate ? ` Last success: ${downloadStatus.lastSuccessfulUpdate}.` : " No successful ingest recorded."}
+                </p>
+                {!downloadStatus.enabled && (
+                  <p className="mt-1 text-amber-200">Enable sanctions download in Control Plane configuration for live watchlist data.</p>
+                )}
+              </div>
+              {canManageIngest && downloadStatus.enabled && (
+                <button
+                  onClick={() => triggerDownload.mutate()}
+                  disabled={triggerDownload.isPending}
+                  className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50"
+                >
+                  {triggerDownload.isPending ? "Triggering..." : "Trigger ingest"}
+                </button>
+              )}
             </div>
-            {canManageIngest && downloadStatus.enabled && (
-              <button
-                onClick={() => triggerDownload.mutate()}
-                disabled={triggerDownload.isPending}
-                className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50"
-              >
-                {triggerDownload.isPending ? "Triggering..." : "Trigger ingest"}
-              </button>
-            )}
-          </div>
+          ) : (
+            <p className="text-sm text-white/90">
+              Watchlist status:{" "}
+              <span className="font-medium">{downloadStatus.enabled ? "Available" : "Unavailable"}</span>
+              {downloadStatus.lastSuccessfulUpdate ? ` · Last updated ${downloadStatus.lastSuccessfulUpdate}` : ""}
+            </p>
+          )}
         </div>
       )}
       {listVersions.length > 0 && (
@@ -160,7 +176,6 @@ export default function ScreeningPage() {
               <div className="mt-4">
                 <AiVerdictPanel
                   auditPath={`jev/audit/screening/${result.jevScreeningHitId}`}
-                  title="Hokeka Intelligence"
                   pollUntilFound
                 />
               </div>
