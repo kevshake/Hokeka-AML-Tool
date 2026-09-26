@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect } from "react";
+import { fitGraphViewport } from "./caseNetworkGraphViewport";
 import {
   Box,
   Paper,
@@ -198,14 +199,41 @@ interface GraphCanvasProps {
   edges: NetworkEdge[];
   selectedId: string | null;
   onSelectNode: (id: string | null) => void;
+  fitKey: string | number;
 }
 
-function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProps) {
+function GraphCanvas({ nodes, edges, selectedId, onSelectNode, fitKey }: GraphCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 });
+
+  const applyFit = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || nodes.length === 0) return;
+    const { panX, panY, zoom: nextZoom } = fitGraphViewport(
+      nodes,
+      el.clientWidth,
+      el.clientHeight,
+      NODE_RADIUS,
+    );
+    setPan({ x: panX, y: panY });
+    setZoom(nextZoom);
+  }, [nodes]);
+
+  useLayoutEffect(() => {
+    applyFit();
+  }, [applyFit, fitKey]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => applyFit());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [applyFit]);
 
   const nodeById = new Map<string, SimNode>();
   nodes.forEach((n) => nodeById.set(n.id, n));
@@ -234,13 +262,13 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
 
   const handleZoomIn  = () => setZoom((z) => Math.min(3, z * 1.25));
   const handleZoomOut = () => setZoom((z) => Math.max(0.25, z / 1.25));
-  const handleReset   = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+  const handleReset   = () => applyFit();
 
   // Build unique arrow marker ids per edge type
   const edgeTypes = [...new Set(edges.map((e) => e.type))];
 
   return (
-    <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
+    <Box ref={containerRef} sx={{ position: "relative", width: "100%", height: "100%" }}>
       {/* Zoom controls */}
       <Stack
         direction="column"
@@ -343,8 +371,7 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
           {nodes.map((node) => {
             const colors = NODE_COLORS[node.type] ?? { fill: "var(--ink)", stroke: "#aaa", text: "#555" };
             const isSelected = node.id === selectedId;
-            // Truncate label to ~12 chars for display inside circle
-            const displayLabel = node.label.length > 12 ? node.label.slice(0, 10) + "…" : node.label;
+            const displayLabel = node.label.length > 22 ? node.label.slice(0, 20) + "…" : node.label;
             return (
               <g
                 key={node.id}
@@ -360,32 +387,42 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
                   strokeWidth={isSelected ? 3 : 1.5}
                   filter={isSelected ? "drop-shadow(0 2px 6px color-mix(in srgb, var(--gold) 40%, transparent))" : undefined}
                 />
+                <foreignObject
+                  x={-NODE_RADIUS}
+                  y={-NODE_RADIUS}
+                  width={NODE_RADIUS * 2}
+                  height={NODE_RADIUS * 2}
+                  style={{ pointerEvents: "none" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                      height: "100%",
+                      color: colors.text,
+                    }}
+                  >
+                    {nodeIcon(node.type)}
+                  </div>
+                </foreignObject>
                 <text
                   textAnchor="middle"
-                  dominantBaseline="central"
-                  y={-7}
-                  fontSize={9.5}
+                  y={NODE_RADIUS + 14}
+                  fontSize={11}
                   fontWeight={600}
-                  fill={colors.text}
+                  fill="var(--ink)"
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
                   {displayLabel}
                 </text>
-                {/* Type badge at bottom */}
-                <rect
-                  x={-20}
-                  y={12}
-                  width={40}
-                  height={13}
-                  rx={4}
-                  fill={colors.stroke}
-                  fillOpacity={0.15}
-                />
                 <text
                   textAnchor="middle"
-                  y={21}
-                  fontSize={7.5}
+                  y={NODE_RADIUS + 28}
+                  fontSize={9}
                   fontWeight={700}
+                  letterSpacing="0.04em"
                   fill={colors.stroke}
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
@@ -577,6 +614,7 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
         edges={graphData.edges ?? []}
         selectedId={selectedId}
         onSelectNode={setSelectedId}
+        fitKey={caseId}
       />
       <DetailPanel
         node={selectedNode}

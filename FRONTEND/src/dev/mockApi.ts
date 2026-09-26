@@ -81,6 +81,15 @@ export function isDevMockEnabled(): boolean {
   return import.meta.env.DEV && import.meta.env.VITE_DEV_MOCK_API === 'true'
 }
 
+/** Runtime override for screenshots (sessionStorage) or build-time env. */
+export function isMockGraphAnalysisEnabled(): boolean {
+  if (import.meta.env.VITE_DEV_MOCK_GRAPH_ANALYSIS === 'false') return false
+  if (typeof globalThis.sessionStorage !== 'undefined') {
+    if (globalThis.sessionStorage.getItem('devMockGraphAnalysis') === 'false') return false
+  }
+  return true
+}
+
 export function getMockSessionUser() {
   return MOCK_USER
 }
@@ -173,7 +182,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   }
 
   if (path.startsWith('network/graph-analysis/status')) {
-    const mockEnabled = import.meta.env.VITE_DEV_MOCK_GRAPH_ANALYSIS !== 'false'
+    const mockEnabled = isMockGraphAnalysisEnabled()
     return jsonResponse({
       enabled: mockEnabled,
       available: mockEnabled,
@@ -184,7 +193,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   }
 
   if (/^cases\/\d+\/network/.test(path)) {
-    if (import.meta.env.VITE_DEV_MOCK_GRAPH_ANALYSIS === 'false') {
+    if (!isMockGraphAnalysisEnabled()) {
       return jsonResponse({ nodes: [], edges: [] })
     }
     return jsonResponse(MOCK_NETWORK_GRAPH)
