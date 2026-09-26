@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Health/status for JEV without exposing the API key.
+ * Health/status for the Hokeka AI (Laya) layer without exposing the API key.
  */
 @Service
 public class JevStatusService {
@@ -39,22 +39,26 @@ public class JevStatusService {
     public Map<String, Object> status() {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("configured", properties.isConfigured());
-        status.put("pinnedModel", properties.isConfigured() ? JevPinnedModel.MODEL_ID : null);
+        status.put("provider", "laya");
+        status.put("model", properties.isConfigured() ? configuredModelLabel() : null);
+        status.put("pinnedModel", properties.isConfigured() ? configuredModelLabel() : null);
         status.put("questionConfigVersion", questionConfigService.getVersion());
         status.put("shadowMode", properties.isShadowMode());
         status.put("promoted", properties.isPromoted());
         status.put("active", properties.isActive());
-        status.put("decisionsBaseUrl", properties.getDecisionsBaseUrl());
+        status.put("apiBaseUrl", properties.getApiBaseUrl());
+        status.put("decisionsBaseUrl", properties.getApiBaseUrl());
         status.put("decisionsTimeoutMs", properties.getDecisionsTimeout().toMillis());
-        status.put("chatModel", blankToNull(properties.getChatModel()));
-        status.put("chatBaseUrl", properties.getChatBaseUrl());
-        status.put("timeoutMs", properties.getTimeout().toMillis());
         status.put("inlineTimeoutMs", properties.getInlineTimeout().toMillis());
+        status.put("minConfidenceToApply", properties.getMinConfidenceToApply());
+        status.put("minConfidenceToAutoAct", properties.getMinConfidenceToAutoAct());
+        status.put("lang", blankToNull(properties.getLang()));
+        status.put("swissDataResidency", properties.isSwissDataResidency());
         status.put("dailyCallBudgetPerPsp", properties.getDailyCallBudgetPerPsp());
-        status.put("dailySpendCapUsdPerPsp", properties.getDailySpendCapUsdPerPsp());
+        status.put("dailyInputTokenCapPerPsp", properties.getDailyInputTokenCapPerPsp());
         status.put("bandsVersion", properties.getBandsVersion());
 
-        CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("jevOpenRouter");
+        CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("layaSystemOne");
         status.put("circuitState", breaker.getState().name());
         status.put("circuitFailureRate", breaker.getMetrics().getFailureRate());
 
@@ -62,6 +66,7 @@ public class JevStatusService {
         status.put("callsLast24h", auditRepository.countCallsSince(since));
         status.put("fallbacksLast24h", auditRepository.countFallbacksSince(since));
         status.put("avgLatencyMsLast24h", auditRepository.averageLatencySince(since).orElse(null));
+        status.put("inputTokensLast24h", auditRepository.totalInputTokensSince(since).orElse(0L));
         status.put("spendLast24hUsd", auditRepository.totalSpendSince(since).orElse(BigDecimal.ZERO));
 
         status.put("engines", engineConfigService.listAll().stream().map(e -> {
@@ -74,6 +79,11 @@ public class JevStatusService {
         }).toList());
 
         return status;
+    }
+
+    private String configuredModelLabel() {
+        String pinned = properties.pinnedModel();
+        return pinned != null && !pinned.isBlank() ? pinned : "auto";
     }
 
     private static String blankToNull(String s) {

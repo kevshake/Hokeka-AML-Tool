@@ -14,6 +14,8 @@ public final class JevAiDisclosureSanitizer {
     private static final List<Pattern> FORBIDDEN_PATTERNS = List.of(
             Pattern.compile("openrouter", Pattern.CASE_INSENSITIVE),
             Pattern.compile("\\bjev\\b", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\blaya\\b", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("typesafe", Pattern.CASE_INSENSITIVE),
             Pattern.compile("anthropic", Pattern.CASE_INSENSITIVE),
             Pattern.compile("openai", Pattern.CASE_INSENSITIVE),
             Pattern.compile("\\bprompt\\b", Pattern.CASE_INSENSITIVE),
@@ -42,6 +44,9 @@ public final class JevAiDisclosureSanitizer {
         }
         if (lower.contains("engine disabled") || lower.contains("not configured")) {
             return "Hokeka AI advisory unavailable; rules baseline used";
+        }
+        if (lower.contains("low confidence")) {
+            return "Hokeka AI advisory inconclusive; rules baseline used";
         }
         return "Hokeka AI advisory unavailable; rules baseline used";
     }

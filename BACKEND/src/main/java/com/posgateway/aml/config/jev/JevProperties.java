@@ -1,5 +1,6 @@
 package com.posgateway.aml.config.jev;
 
+import com.posgateway.aml.service.jev.JevPinnedModel;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -7,13 +8,19 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "jev")
 public class JevProperties {
 
-    /** OpenRouter API key — never logged or exposed. */
+    /** Laya API key ({@code LAYA_API_KEY}) — never logged or exposed. */
     private String apiKey = "";
 
-    /** Decisions API base URL (alpha). Model is pinned separately. */
-    private String decisionsBaseUrl = "https://openrouter.ai/api/alpha";
+    /** Laya API base URL. */
+    private String apiBaseUrl = "https://api.laya.studio";
 
-    /** Async Jev call timeout. */
+    /** Optional Laya checkpoint pin: english, multilingual, typed-decisions (blank = auto). */
+    private String model = "";
+
+    /** Optional BCP-47 language hint (e.g. en, de-CH). */
+    private String lang = "";
+
+    /** Async Laya systemone call timeout. */
     private Duration decisionsTimeout = Duration.ofSeconds(3);
 
     /** Retries after the first attempt for 429/5xx only. */
@@ -28,30 +35,27 @@ public class JevProperties {
     /** Provisional bands version label persisted with each audit row. */
     private String bandsVersion = "provisional-v1";
 
-    /** Chat completions model for non-Jev generation tasks (rule suggestion, etc.). */
-    private String chatModel = "";
+    /** Minimum primary confidence to treat Laya output as actionable (else rules + human review). */
+    private double minConfidenceToApply = 0.55;
 
-    private String chatFallbackModel = "";
-
-    private String chatBaseUrl = "https://openrouter.ai/api/v1";
-
-    private Duration timeout = Duration.ofSeconds(15);
+    /** Minimum confidence to auto-apply when promoted (non-shadow); below → escalate human. */
+    private double minConfidenceToAutoAct = 0.72;
 
     private Duration inlineTimeout = Duration.ofMillis(500);
-
-    private int maxTokens = 1024;
-
-    private double temperature = 0.2;
-
-    private String httpReferer = "https://hokeka.com";
-
-    private String appTitle = "Hokeka";
 
     /** Per-tenant daily call budget (0 = unlimited). */
     private int dailyCallBudgetPerPsp = 0;
 
-    /** Per-tenant daily spend cap in USD (0 = unlimited). */
-    private double dailySpendCapUsdPerPsp = 0.0;
+    /**
+     * Per-tenant daily input-token budget (0 = unlimited). Replaces legacy USD spend cap for Laya metering.
+     */
+    private long dailyInputTokenCapPerPsp = 0;
+
+    /** Optional Swiss-only inference (Laya routes to Swiss-resident planner/model). */
+    private boolean swissDataResidency = false;
+
+    /** Generation / ask path timeout (rule suggestion). */
+    private Duration askTimeout = Duration.ofSeconds(30);
 
     public String getApiKey() {
         return apiKey;
@@ -61,12 +65,40 @@ public class JevProperties {
         this.apiKey = apiKey;
     }
 
-    public String getDecisionsBaseUrl() {
-        return decisionsBaseUrl;
+    public String getApiBaseUrl() {
+        return apiBaseUrl;
     }
 
+    public void setApiBaseUrl(String apiBaseUrl) {
+        this.apiBaseUrl = apiBaseUrl;
+    }
+
+    /** @deprecated use {@link #getApiBaseUrl()} */
+    @Deprecated
+    public String getDecisionsBaseUrl() {
+        return apiBaseUrl;
+    }
+
+    /** @deprecated use {@link #setApiBaseUrl(String)} */
+    @Deprecated
     public void setDecisionsBaseUrl(String decisionsBaseUrl) {
-        this.decisionsBaseUrl = decisionsBaseUrl;
+        this.apiBaseUrl = decisionsBaseUrl;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public String getLang() {
+        return lang;
+    }
+
+    public void setLang(String lang) {
+        this.lang = lang;
     }
 
     public Duration getDecisionsTimeout() {
@@ -109,36 +141,20 @@ public class JevProperties {
         this.bandsVersion = bandsVersion;
     }
 
-    public String getChatModel() {
-        return chatModel;
+    public double getMinConfidenceToApply() {
+        return minConfidenceToApply;
     }
 
-    public void setChatModel(String chatModel) {
-        this.chatModel = chatModel;
+    public void setMinConfidenceToApply(double minConfidenceToApply) {
+        this.minConfidenceToApply = minConfidenceToApply;
     }
 
-    public String getChatFallbackModel() {
-        return chatFallbackModel;
+    public double getMinConfidenceToAutoAct() {
+        return minConfidenceToAutoAct;
     }
 
-    public void setChatFallbackModel(String chatFallbackModel) {
-        this.chatFallbackModel = chatFallbackModel;
-    }
-
-    public String getChatBaseUrl() {
-        return chatBaseUrl;
-    }
-
-    public void setChatBaseUrl(String chatBaseUrl) {
-        this.chatBaseUrl = chatBaseUrl;
-    }
-
-    public Duration getTimeout() {
-        return timeout;
-    }
-
-    public void setTimeout(Duration timeout) {
-        this.timeout = timeout;
+    public void setMinConfidenceToAutoAct(double minConfidenceToAutoAct) {
+        this.minConfidenceToAutoAct = minConfidenceToAutoAct;
     }
 
     public Duration getInlineTimeout() {
@@ -149,38 +165,6 @@ public class JevProperties {
         this.inlineTimeout = inlineTimeout;
     }
 
-    public int getMaxTokens() {
-        return maxTokens;
-    }
-
-    public void setMaxTokens(int maxTokens) {
-        this.maxTokens = maxTokens;
-    }
-
-    public double getTemperature() {
-        return temperature;
-    }
-
-    public void setTemperature(double temperature) {
-        this.temperature = temperature;
-    }
-
-    public String getHttpReferer() {
-        return httpReferer;
-    }
-
-    public void setHttpReferer(String httpReferer) {
-        this.httpReferer = httpReferer;
-    }
-
-    public String getAppTitle() {
-        return appTitle;
-    }
-
-    public void setAppTitle(String appTitle) {
-        this.appTitle = appTitle;
-    }
-
     public int getDailyCallBudgetPerPsp() {
         return dailyCallBudgetPerPsp;
     }
@@ -189,27 +173,48 @@ public class JevProperties {
         this.dailyCallBudgetPerPsp = dailyCallBudgetPerPsp;
     }
 
+    public long getDailyInputTokenCapPerPsp() {
+        return dailyInputTokenCapPerPsp;
+    }
+
+    public void setDailyInputTokenCapPerPsp(long dailyInputTokenCapPerPsp) {
+        this.dailyInputTokenCapPerPsp = dailyInputTokenCapPerPsp;
+    }
+
+    /** @deprecated Laya bills input tokens; use {@link #getDailyInputTokenCapPerPsp()}. */
+    @Deprecated
     public double getDailySpendCapUsdPerPsp() {
-        return dailySpendCapUsdPerPsp;
+        return dailyInputTokenCapPerPsp > 0 ? dailyInputTokenCapPerPsp : 0;
     }
 
+    /** @deprecated use {@link #setDailyInputTokenCapPerPsp(long)} */
+    @Deprecated
     public void setDailySpendCapUsdPerPsp(double dailySpendCapUsdPerPsp) {
-        this.dailySpendCapUsdPerPsp = dailySpendCapUsdPerPsp;
+        this.dailyInputTokenCapPerPsp = dailySpendCapUsdPerPsp > 0 ? (long) dailySpendCapUsdPerPsp : 0;
     }
 
-    /** Jev Decisions API is configured when the OpenRouter key is present. */
+    public boolean isSwissDataResidency() {
+        return swissDataResidency;
+    }
+
+    public void setSwissDataResidency(boolean swissDataResidency) {
+        this.swissDataResidency = swissDataResidency;
+    }
+
+    public Duration getAskTimeout() {
+        return askTimeout;
+    }
+
+    public void setAskTimeout(Duration askTimeout) {
+        this.askTimeout = askTimeout;
+    }
+
     public boolean isConfigured() {
         return apiKey != null && !apiKey.isBlank();
     }
 
-    /** Chat LLM path for generation tasks (rule suggestion, narratives). */
-    public boolean isChatConfigured() {
-        return isConfigured() && chatModel != null && !chatModel.isBlank();
-    }
-
-    /** Pinned model id exposed for status endpoints. */
     public String pinnedModel() {
-        return com.posgateway.aml.service.jev.JevPinnedModel.MODEL_ID;
+        return JevPinnedModel.requestModel(model);
     }
 
     public boolean isActive() {

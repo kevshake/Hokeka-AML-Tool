@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Masks PII before features are sent to OpenRouter. Reuses HMAC hashing where applicable.
+ * Masks PII before features are sent to Laya. Reuses HMAC hashing where applicable.
  */
 @Service
 public class JevFeatureMaskingService {

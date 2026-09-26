@@ -16,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Single gateway for typed Jev decisions via OpenRouter's Decisions API.
+ * Single gateway for typed Hokeka AI decisions via Laya {@code /v1/systemone}.
  * Fail-closed: any error routes to {@link JevBranch#ESCALATE_HUMAN}; baseline stands.
  * Shadow mode (default) logs only — no production decision changes.
  */
@@ -63,14 +63,18 @@ public class JevDecisionGateway {
     }
 
     public String configuredModel() {
-        return properties.isConfigured() ? JevPinnedModel.MODEL_ID : null;
+        if (!properties.isConfigured()) {
+            return null;
+        }
+        String pinned = properties.pinnedModel();
+        return pinned != null && !pinned.isBlank() ? pinned : "auto";
     }
 
     public JevDecisionOutcome decide(JevDecisionContext context) {
         return decide(context, properties.getDecisionsTimeout());
     }
 
-    @CircuitBreaker(name = "jevOpenRouter", fallbackMethod = "decideFallback")
+    @CircuitBreaker(name = "layaSystemOne", fallbackMethod = "decideFallback")
     public JevDecisionOutcome decide(JevDecisionContext context, Duration timeout) {
         String baseline = context.getBaselineDecision() != null ? context.getBaselineDecision() : "REVIEW";
         JevDecisionPoint decisionPoint = JevDecisionPoint.fromEngine(context.getEngine());
@@ -84,7 +88,7 @@ public class JevDecisionGateway {
 
         if (!properties.isConfigured()) {
             return auditAndReturn(context, baseline,
-                    JevDecisionOutcome.escalateHuman(baseline, "JEV not configured (missing OPENROUTER_API_KEY)"),
+                    JevDecisionOutcome.escalateHuman(baseline, "Hokeka AI not configured (missing LAYA_API_KEY)"),
                     decisionPoint, null, null, null, null);
         }
         if (!engineConfigService.isEngineEnabled(context.getEngine())) {
@@ -109,15 +113,22 @@ public class JevDecisionGateway {
         JevDecisionsClient.DecisionsResponse apiResponse;
         try {
             apiResponse = decisionsClient.decide(
-                    new JevDecisionsClient.DecisionsRequest(
-                            JevPinnedModel.MODEL_ID, state, questions, sessionId, trace),
+                    new JevDecisionsClient.DecisionsRequest(state, questions, sessionId, trace),
                     expectedTypes,
                     timeout != null ? timeout : properties.getDecisionsTimeout());
         } catch (Exception e) {
-            log.warn("Jev Decisions API failed for {}: {}", decisionPoint, e.getClass().getSimpleName());
+            log.warn("Laya systemone failed for {}: {}", decisionPoint, e.getClass().getSimpleName());
             return auditAndReturn(context, baseline,
                     JevDecisionOutcome.escalateHuman(baseline, "Decisions API error: " + e.getClass().getSimpleName()),
                     decisionPoint, state, null, null, null);
+        }
+
+        Double primaryConfidence = extractPrimaryConfidence(apiResponse.answers(), decisionPoint);
+        if (primaryConfidence != null && primaryConfidence < properties.getMinConfidenceToApply()) {
+            return auditAndReturn(context, baseline,
+                    JevDecisionOutcome.escalateHuman(baseline,
+                            "Low confidence below apply threshold"),
+                    decisionPoint, state, null, apiResponse, null);
         }
 
         JevBranchEvaluator.EvaluationResult evaluation =
@@ -130,7 +141,10 @@ public class JevDecisionGateway {
         JevTightenOnlyAuthority.AuthorityResult authority = tightenOnlyAuthority.apply(
                 baseline, branch, context, properties.isShadowMode(), properties.isPromoted());
 
+        boolean confidenceOkForAuto = primaryConfidence == null
+                || primaryConfidence >= properties.getMinConfidenceToAutoAct();
         boolean aiApplied = authority.wouldApply() && properties.isActive()
+                && confidenceOkForAuto
                 && !authority.finalDecision().equals(baseline);
         String finalDecision = properties.isShadowMode() || !properties.isPromoted()
                 ? baseline

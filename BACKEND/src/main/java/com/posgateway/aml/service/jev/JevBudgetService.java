@@ -24,8 +24,8 @@ public class JevBudgetService {
             return false;
         }
         int callBudget = properties.getDailyCallBudgetPerPsp();
-        double spendCap = properties.getDailySpendCapUsdPerPsp();
-        if (callBudget <= 0 && spendCap <= 0) {
+        long tokenCap = properties.getDailyInputTokenCapPerPsp();
+        if (callBudget <= 0 && tokenCap <= 0) {
             return false;
         }
         return dailySpendRepository.findById(new com.posgateway.aml.entity.jev.JevDailySpendId(pspId, LocalDate.now()))
@@ -33,8 +33,7 @@ public class JevBudgetService {
                     if (callBudget > 0 && row.getCallCount() >= callBudget) {
                         return true;
                     }
-                    return spendCap > 0
-                            && row.getEstimatedUsd().compareTo(BigDecimal.valueOf(spendCap)) >= 0;
+                    return tokenCap > 0 && row.getTotalTokens() >= tokenCap;
                 })
                 .orElse(false);
     }

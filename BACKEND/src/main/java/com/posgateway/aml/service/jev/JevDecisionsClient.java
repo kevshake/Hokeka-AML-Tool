@@ -14,12 +14,11 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Thin client for OpenRouter's Jev Decisions API ({@code POST /api/alpha/decisions}).
- * Only {@link JevDecisionGateway} should call this for AML decisions.
+ * Laya Studio client for typed AML decisions ({@code POST /v1/systemone}).
+ * Only {@link JevDecisionGateway} should call this for production decisions.
  */
 @Component
 public class JevDecisionsClient {
@@ -28,7 +27,6 @@ public class JevDecisionsClient {
     private static final double PROBABILITY_SUM_TOLERANCE = 0.05;
 
     public record DecisionsRequest(
-            String model,
             Map<String, Object> state,
             Map<String, Object> questions,
             String sessionId,
@@ -53,7 +51,7 @@ public class JevDecisionsClient {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.webClient = WebClient.builder()
-                .baseUrl(normalizeDecisionsBaseUrl(properties.getDecisionsBaseUrl()))
+                .baseUrl(LayaAskClient.normalizeBaseUrl(properties.getApiBaseUrl()))
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
     }
@@ -62,19 +60,21 @@ public class JevDecisionsClient {
                                     Map<String, String> expectedQuestionTypes,
                                     Duration timeout) throws Exception {
         if (!properties.isConfigured()) {
-            throw new IllegalStateException("JEV not configured (missing OPENROUTER_API_KEY)");
+            throw new IllegalStateException("Hokeka AI not configured (missing LAYA_API_KEY)");
         }
 
+        Map<String, Object> state = LayaStateTrimmer.trim(request.state(), properties.getLang(), objectMapper);
+
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", JevPinnedModel.MODEL_ID);
-        body.put("state", request.state());
+        String model = JevPinnedModel.requestModel(properties.getModel());
+        if (model != null) {
+            body.put("model", model);
+        }
+        if (properties.getLang() != null && !properties.getLang().isBlank()) {
+            body.put("lang", properties.getLang().trim());
+        }
+        body.put("state", state);
         body.put("questions", request.questions());
-        if (request.sessionId() != null && !request.sessionId().isBlank()) {
-            body.put("session_id", request.sessionId());
-        }
-        if (request.trace() != null && !request.trace().isEmpty()) {
-            body.put("trace", request.trace());
-        }
 
         int maxAttempts = properties.getMaxRetries() + 1;
         Exception lastError = null;
@@ -95,7 +95,7 @@ public class JevDecisionsClient {
                 backoff(attempt);
             }
         }
-        throw lastError != null ? lastError : new IllegalStateException("Jev decisions call failed");
+        throw lastError != null ? lastError : new IllegalStateException("Laya systemone call failed");
     }
 
     private DecisionsResponse executeOnce(Map<String, Object> body,
@@ -105,28 +105,30 @@ public class JevDecisionsClient {
         JsonNode response;
         try {
             response = webClient.post()
-                    .uri("/decisions")
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getApiKey())
-                    .header("HTTP-Referer", properties.getHttpReferer())
-                    .header("X-Title", properties.getAppTitle())
+                    .uri("/v1/systemone")
+                    .headers(this::applyAuth)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .timeout(timeout)
                     .block();
         } catch (WebClientResponseException e) {
-            log.warn("OpenRouter Decisions HTTP {} (model={})", e.getStatusCode().value(), JevPinnedModel.MODEL_ID);
+            log.warn("Laya systemone HTTP {}", e.getStatusCode().value());
             throw e;
         }
         long latencyMs = System.currentTimeMillis() - start;
 
         if (response == null) {
-            throw new IllegalStateException("OpenRouter Decisions returned empty response");
+            throw new IllegalStateException("Laya systemone returned empty response");
         }
 
         String modelSnapshot = response.path("model").asText(null);
-        if (!JevPinnedModel.isValidSnapshot(modelSnapshot)) {
-            throw new IllegalStateException("Invalid model snapshot: " + modelSnapshot);
+        if (!JevPinnedModel.isValidResponseModel(modelSnapshot)) {
+            JsonNode routing = response.path("routing");
+            modelSnapshot = routing.path("model").asText(modelSnapshot);
+        }
+        if (!JevPinnedModel.isValidResponseModel(modelSnapshot)) {
+            throw new IllegalStateException("Missing model in Laya response");
         }
 
         JsonNode answersNode = response.path("answers");
@@ -136,12 +138,18 @@ public class JevDecisionsClient {
         answersNode.fields().forEachRemaining(entry -> answers.put(entry.getKey(), entry.getValue()));
 
         JsonNode usage = response.path("usage");
-        double cost = usage.path("cost").asDouble(0.0);
         int inputTokens = usage.path("input_tokens").asInt(0);
         int outputTokens = usage.path("output_tokens").asInt(0);
         String id = response.path("id").asText(null);
 
-        return new DecisionsResponse(id, modelSnapshot, answers, inputTokens, outputTokens, cost, latencyMs);
+        return new DecisionsResponse(id, modelSnapshot, answers, inputTokens, outputTokens, 0.0, latencyMs);
+    }
+
+    private void applyAuth(HttpHeaders headers) {
+        headers.setBearerAuth(properties.getApiKey());
+        if (properties.isSwissDataResidency()) {
+            headers.set("X-Laya-Swiss-Only", "true");
+        }
     }
 
     static void validateAnswers(JsonNode answersNode, Map<String, String> expectedQuestionTypes) {
@@ -226,10 +234,9 @@ public class JevDecisionsClient {
         }
     }
 
+    /** @deprecated use {@link LayaAskClient#normalizeBaseUrl(String)} */
+    @Deprecated
     static String normalizeDecisionsBaseUrl(String baseUrl) {
-        if (baseUrl == null || baseUrl.isBlank()) {
-            return "https://openrouter.ai/api/alpha";
-        }
-        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        return LayaAskClient.normalizeBaseUrl(baseUrl);
     }
 }

@@ -91,7 +91,7 @@ class EdgeDecisionServiceTest {
         when(pspRepository.findById(10L)).thenReturn(Optional.of(psp));
 
         JevDecisionOutcome outcome = JevDecisionOutcome.fallback("ALERT",
-                "OpenRouter error: TimeoutException");
+                "Laya error: TimeoutException");
         when(gateway.decide(any(), any())).thenReturn(outcome);
 
         EdgeDecisionResponse response = service.handle(node,

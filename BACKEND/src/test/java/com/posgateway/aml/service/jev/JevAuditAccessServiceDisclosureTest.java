@@ -99,7 +99,7 @@ class JevAuditAccessServiceDisclosureTest {
         audit.setRecommendation("REVIEW");
         audit.setConfidence(0.82);
         audit.setReasons(List.of("borderline velocity"));
-        audit.setFallbackReason("OpenRouter error: TimeoutException");
+        audit.setFallbackReason("Laya error: TimeoutException");
         audit.setInputTokens(120);
         audit.setOutputTokens(45);
         audit.setEstimatedCostUsd(BigDecimal.valueOf(0.002));

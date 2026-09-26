@@ -98,7 +98,7 @@ export default function JevSettingsTab() {
   if (!allowed) {
     return (
       <Typography variant="body2" sx={{ color: "var(--ink-muted)" }}>
-        JEV operator settings are restricted to platform operators.
+        Hokeka AI operator settings are restricted to platform operators.
       </Typography>
     );
   }
@@ -116,7 +116,7 @@ export default function JevSettingsTab() {
       <GlassCard className="p-4">
         <div className="mb-4 flex items-center gap-2">
           <BrainCircuit size={20} className="text-gold" />
-          <Typography variant="h6">JEV AI decision layer</Typography>
+          <Typography variant="h6">Hokeka AI decision layer</Typography>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label="Configured" value={status?.configured ? "Yes" : "No"} />
@@ -184,7 +184,7 @@ export default function JevSettingsTab() {
                   onChange={(e) => setInlineMode(e.target.checked)}
                 />
               }
-              label="aiInlineMode — edge waits for JEV on borderline pre-auth (falls back to rules on timeout)"
+              label="aiInlineMode — edge waits for Hokeka AI on borderline pre-auth (falls back to rules on timeout)"
             />
             <TextField
               label="Inline budget (ms)"

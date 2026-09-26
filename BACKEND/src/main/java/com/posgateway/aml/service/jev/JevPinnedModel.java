@@ -1,17 +1,24 @@
 package com.posgateway.aml.service.jev;
 
 /**
- * Pinned TypeSafe Jev model for the OpenRouter Decisions API. Not overridable to arbitrary chat models.
+ * Laya routing hints for {@code POST /v1/systemone}. Unknown legacy Jev ids are ignored by Laya.
  */
 public final class JevPinnedModel {
 
-    public static final String MODEL_ID = "typesafe/jev-1.13";
-    public static final String SNAPSHOT_PREFIX = "typesafe/jev-1.13-";
+    /** Automatic routing when unset (Laya picks English vs multilingual). */
+    public static final String AUTO_ROUTE = "";
 
     private JevPinnedModel() {
     }
 
-    public static boolean isValidSnapshot(String snapshot) {
-        return snapshot != null && snapshot.startsWith(SNAPSHOT_PREFIX);
+    public static String requestModel(String configuredModel) {
+        if (configuredModel == null || configuredModel.isBlank()) {
+            return null;
+        }
+        return configuredModel.trim();
+    }
+
+    public static boolean isValidResponseModel(String model) {
+        return model != null && !model.isBlank();
     }
 }

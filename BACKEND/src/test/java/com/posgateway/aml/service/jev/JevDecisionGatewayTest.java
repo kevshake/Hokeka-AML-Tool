@@ -50,7 +50,7 @@ class JevDecisionGatewayTest {
 
         properties = new JevProperties();
         properties.setApiKey("test-key");
-        properties.setDecisionsBaseUrl(mockServer.baseUrl());
+        properties.setApiBaseUrl(mockServer.baseUrl());
         properties.setShadowMode(true);
         properties.setPromoted(false);
 
@@ -94,7 +94,7 @@ class JevDecisionGatewayTest {
         JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertTrue(outcome.isFallback());
         assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
-        assertEquals("JEV not configured (missing OPENROUTER_API_KEY)", outcome.getFallbackReason());
+        assertEquals("Hokeka AI not configured (missing LAYA_API_KEY)", outcome.getFallbackReason());
         assertEquals("ALLOW", outcome.getFinalDecision());
     }
 
@@ -115,8 +115,8 @@ class JevDecisionGatewayTest {
         JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertFalse(outcome.isFallback());
         assertEquals(JevBranch.ESCALATE_UP, outcome.getBranch());
-        assertEquals("gen-dec-1790353126-R935rN0YT2flXe74SiEJ", outcome.getRequestId());
-        assertTrue(outcome.getModelSnapshot().startsWith(JevPinnedModel.SNAPSHOT_PREFIX));
+        assertEquals("lay-dec-1790353126-R935rN0YT2flXe74SiEJ", outcome.getRequestId());
+        assertEquals("english", outcome.getModelSnapshot());
         assertEquals("ALLOW", outcome.getFinalDecision());
         assertFalse(outcome.isAiApplied());
         assertTrue(outcome.isShadowMode());
@@ -146,7 +146,7 @@ class JevDecisionGatewayTest {
 
     @Test
     void malformedBodyEscalatesHuman() {
-        mockServer.setResponse(200, "{\"model\":\"typesafe/jev-1.13-20260917\",\"answers\":{}}");
+        mockServer.setResponse(200, "{\"model\":\"english\",\"answers\":{}}");
         JevDecisionOutcome outcome = gateway.decide(sampleContext());
         assertTrue(outcome.isFallback());
         assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
@@ -208,6 +208,18 @@ class JevDecisionGatewayTest {
     }
 
     @Test
+    void lowConfidenceFallsBackToRules() throws Exception {
+        mockServer.setResponse(200, loadResource("/jev/test/smoke_response.json"));
+        properties.setMinConfidenceToApply(1.1);
+
+        JevDecisionOutcome outcome = gateway.decide(sampleContext());
+        assertTrue(outcome.isFallback());
+        assertEquals(JevBranch.ESCALATE_HUMAN, outcome.getBranch());
+        assertEquals("ALLOW", outcome.getFinalDecision());
+        assertTrue(outcome.getFallbackReason().toLowerCase().contains("confidence"));
+    }
+
+    @Test
     void nonDecisionEngineEscalatesWithoutCallingApi() {
         JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.RULE_SUGGESTION)
                 .baselineDecision("PREVIEW")
@@ -250,7 +262,7 @@ class JevDecisionGatewayTest {
 
         void start() throws IOException {
             server = HttpServer.create(new InetSocketAddress(0), 0);
-            server.createContext("/api/alpha/decisions", this::handle);
+            server.createContext("/v1/systemone", this::handle);
             server.start();
         }
 
@@ -261,7 +273,7 @@ class JevDecisionGatewayTest {
         }
 
         String baseUrl() {
-            return "http://127.0.0.1:" + server.getAddress().getPort() + "/api/alpha";
+            return "http://127.0.0.1:" + server.getAddress().getPort();
         }
 
         void setResponse(int status, String body) {

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.config.jev.JevProperties;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.service.jev.JevPromptTemplateService;
-import com.posgateway.aml.service.jev.OpenRouterChatClient;
+import com.posgateway.aml.service.jev.LayaAskClient;
 import com.posgateway.aml.service.rules.DynamicRuleConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 
 /**
  * Generates a {@link RuleDefinition} from a natural-language operator prompt via
- * OpenRouter chat completions (not the Jev Decisions API).
+ * Laya {@code /v1/ask} (Control Plane only).
  */
 @Service
 public class AiRuleGeneratorService {
@@ -35,7 +35,7 @@ public class AiRuleGeneratorService {
     private static final Set<String> ALLOWED_ACTIONS = Set.of("BLOCK", "HOLD", "ALERT", "ALLOW");
     private static final Set<String> ALLOWED_SEVERITIES = Set.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
 
-    private final OpenRouterChatClient chatClient;
+    private final LayaAskClient askClient;
     private final JevPromptTemplateService promptTemplateService;
     private final JevProperties jevProperties;
     private final ObjectMapper objectMapper;
@@ -47,13 +47,13 @@ public class AiRuleGeneratorService {
 
     @Autowired
     public AiRuleGeneratorService(
-            OpenRouterChatClient chatClient,
+            LayaAskClient askClient,
             JevPromptTemplateService promptTemplateService,
             JevProperties jevProperties,
             DynamicRuleConverter converter,
             ObjectMapper objectMapper,
             @Value("${ai.rule-generator.enabled:false}") boolean enabled) {
-        this.chatClient = chatClient;
+        this.askClient = askClient;
         this.promptTemplateService = promptTemplateService;
         this.jevProperties = jevProperties;
         this.converter = converter;
@@ -81,11 +81,11 @@ public class AiRuleGeneratorService {
         lastAuditId = null;
 
         if (!enabled) {
-            log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure OPENROUTER_API_KEY + JEV_CHAT_MODEL");
+            log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure LAYA_API_KEY");
             return null;
         }
-        if (!jevProperties.isChatConfigured()) {
-            lastErrorDetail = "Chat LLM not configured (OPENROUTER_API_KEY and JEV_CHAT_MODEL required)";
+        if (!jevProperties.isConfigured()) {
+            lastErrorDetail = "Laya not configured (LAYA_API_KEY required)";
             log.error("AI rule generator enabled but {}", lastErrorDetail);
             return null;
         }
@@ -97,16 +97,14 @@ public class AiRuleGeneratorService {
 
         String systemPrompt = promptTemplateService.resolveSystemPrompt(
                 com.posgateway.aml.service.jev.JevEngineType.RULE_SUGGESTION, "v1");
+        String combined = systemPrompt + "\n\nOperator request:\n" + prompt;
         try {
-            OpenRouterChatClient.ChatResponse response = chatClient.chatCompletion(
-                    systemPrompt,
-                    prompt,
-                    jevProperties.getTimeout());
-            Map<String, Object> parsed = parseJsonResponse(response.content());
+            LayaAskClient.AskResponse response = askClient.ask(combined, jevProperties.getAskTimeout());
+            Map<String, Object> parsed = parseJsonResponse(response.reply());
             JsonNode tree = objectMapper.valueToTree(parsed);
             return validateAndMap(tree, prompt);
         } catch (Exception e) {
-            lastErrorDetail = "Chat LLM error: " + e.getClass().getSimpleName();
+            lastErrorDetail = "Laya ask error: " + e.getClass().getSimpleName();
             log.error("AI rule generator: {}", lastErrorDetail);
             return null;
         }

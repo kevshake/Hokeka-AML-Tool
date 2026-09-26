@@ -1,8 +1,8 @@
 {
   "config_id": "hokeka-jev-questions",
   "version": "v1-draft-2026-09-25",
-  "model_pin": "typesafe/jev-1.13",
-  "expected_snapshot_prefix": "typesafe/jev-1.13-",
+  "model_pin": "laya-auto",
+  "expected_snapshot_prefix": "english",
   "note": "Thresholds deliberately absent: they are set per PSP from a labeled sample and stored alongside this version + the snapshot.",
   "decision_points": {
     "DP1_tm_alert_triage": {

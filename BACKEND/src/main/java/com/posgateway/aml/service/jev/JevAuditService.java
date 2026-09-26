@@ -91,7 +91,7 @@ public class JevAuditService {
         return repository.save(audit);
     }
 
-    /** Legacy chat-path persistence retained for backward compatibility in tests. */
+    /** Legacy generation-path persistence retained for backward compatibility in tests. */
     @Transactional
     public JevDecisionAudit persist(JevDecisionContext context,
                                     String promptVersion,
@@ -100,7 +100,7 @@ public class JevAuditService {
                                     String rawResponse,
                                     Map<String, Object> parsed,
                                     JevDecisionOutcome outcome,
-                                    OpenRouterClient.OpenRouterResponse apiResponse) {
+                                    LayaAskClient.AskResponse apiResponse) {
         JevDecisionAudit audit = new JevDecisionAudit();
         audit.setPspId(context.getPspId());
         audit.setEngineCode(context.getEngine().name());
@@ -136,10 +136,8 @@ public class JevAuditService {
             audit.setLatencyMs(apiResponse.latencyMs());
             audit.setInputTokens(apiResponse.inputTokens());
             audit.setOutputTokens(apiResponse.outputTokens());
-            if (apiResponse.estimatedCostUsd() != null) {
-                audit.setEstimatedCostUsd(BigDecimal.valueOf(apiResponse.estimatedCostUsd()));
-                audit.setUsageCostUsd(BigDecimal.valueOf(apiResponse.estimatedCostUsd()));
-            }
+            audit.setEstimatedCostUsd(BigDecimal.ZERO);
+            audit.setUsageCostUsd(BigDecimal.ZERO);
         }
         return repository.save(audit);
     }

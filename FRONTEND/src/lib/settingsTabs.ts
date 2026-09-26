@@ -20,7 +20,7 @@ export function getSettingsTabsForUser(user: UserAccessContext): SettingsTabDef[
     { id: "theme", label: "PSP Theme" },
     ...(platformOperator ? [{ id: "system", label: "System Settings" }] : []),
     ...(platformOperator ? [{ id: "platform-admin", label: "Platform Admin" }] : []),
-    ...(platformOperator ? [{ id: "jev", label: "JEV AI" }] : []),
+    ...(platformOperator ? [{ id: "jev", label: "Hokeka AI" }] : []),
   ];
 }
 

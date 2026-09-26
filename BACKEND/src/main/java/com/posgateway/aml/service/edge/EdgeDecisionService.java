@@ -18,7 +18,7 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * Handles Edge → Control Plane JEV decision requests. Edge never calls OpenRouter directly.
+ * Handles Edge → Control Plane Hokeka AI decision requests. Edge never holds Laya credentials.
  */
 @Service
 public class EdgeDecisionService {

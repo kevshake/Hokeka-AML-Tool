@@ -22,7 +22,8 @@ class PspInstallDocsDisclosureTest {
     private static final List<Pattern> FORBIDDEN = List.of(
             Pattern.compile("openrouter", Pattern.CASE_INSENSITIVE),
             Pattern.compile("\\bjev\\b", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("JEV_MODEL|OPENROUTER_API_KEY", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("JEV_MODEL|OPENROUTER_API_KEY|LAYA_API_KEY", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\blaya\\b", Pattern.CASE_INSENSITIVE),
             Pattern.compile("anthropic|openai|claude|gpt-", Pattern.CASE_INSENSITIVE),
             Pattern.compile("promptVersion|maxTokens|inputTokens|estimatedCost", Pattern.CASE_INSENSITIVE));
 

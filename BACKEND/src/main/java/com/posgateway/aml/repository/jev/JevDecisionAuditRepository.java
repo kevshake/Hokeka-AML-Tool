@@ -51,4 +51,10 @@ public interface JevDecisionAuditRepository extends JpaRepository<JevDecisionAud
             WHERE a.createdAt >= :since
             """)
     Optional<java.math.BigDecimal> totalSpendSince(@Param("since") Instant since);
+
+    @Query("""
+            SELECT COALESCE(SUM(a.inputTokens), 0) FROM JevDecisionAudit a
+            WHERE a.createdAt >= :since
+            """)
+    Optional<Long> totalInputTokensSince(@Param("since") Instant since);
 }
