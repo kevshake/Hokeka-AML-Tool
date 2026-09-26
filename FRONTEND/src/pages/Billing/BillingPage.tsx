@@ -83,7 +83,8 @@ import type { Invoice, Subscription, SubscriptionRequest } from "../../types/bil
 import type { Psp } from "../../types";
 import { getApiUrl } from "../../config/api";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
-import { withAlpha } from "../../theme/tokens"
+import { withAlpha } from "../../theme/tokens";
+import { glassPanelSx, glassTableContainerSx } from "../../theme/muiGlass";
 
 const ACCENT = "var(--gold)";
 
@@ -143,7 +144,7 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, icon, color, subtitle }: KpiCardProps) {
   return (
-    <Card sx={{ border: "1px solid var(--line-control)", borderRadius: 2, flex: 1 }}>
+    <Card sx={{ border: "1px solid var(--glass-border)", borderRadius: "var(--radius)", flex: 1 }}>
       <CardContent sx={{ pb: "16px !important" }}>
         <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box>
@@ -227,7 +228,7 @@ function RevenueTab() {
       </Box>
 
       {/* Revenue Chart */}
-      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, p: 2, mb: 3 }}>
+      <Paper sx={{ ...glassPanelSx, p: 2, mb: 3 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
           Current Month Revenue Breakdown
         </Typography>
@@ -244,7 +245,7 @@ function RevenueTab() {
 
       {/* Overdue Invoices Alert */}
       {overdue.length > 0 && (
-        <Paper sx={{ border: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)", borderRadius: 2, p: 2 }}>
+        <Paper sx={{ ...glassPanelSx, border: "1px solid color-mix(in srgb, var(--danger) 28%, var(--glass-border))", p: 2 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "var(--danger)" }}>
             Overdue Invoices ({overdue.length})
           </Typography>
@@ -405,7 +406,7 @@ function SubscriptionsTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load subscriptions.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={glassTableContainerSx}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -804,7 +805,7 @@ function InvoicesTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load invoices.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={glassTableContainerSx}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1042,7 +1043,7 @@ function RosterTab() {
   }
 
   return (
-    <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+    <TableContainer component={Paper} sx={glassTableContainerSx}>
       <Table size="small">
         <TableHead>
           <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1195,7 +1196,7 @@ function UsageTab() {
 
           {/* Breakdown Table */}
           {usage.breakdown && usage.breakdown.length > 0 && (
-            <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+            <TableContainer component={Paper} sx={glassTableContainerSx}>
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1238,7 +1239,7 @@ export default function BillingPage() {
   return (
     <HokekaPageShell title="Billing" subtitle="Revenue, subscriptions, invoices, and usage management" noCard>
     <Box>
-      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, mb: 0 }}>
+      <Paper sx={{ ...glassPanelSx, mb: 0 }}>
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
