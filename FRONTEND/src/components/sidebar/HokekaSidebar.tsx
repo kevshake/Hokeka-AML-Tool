@@ -27,6 +27,7 @@ import {
   LogOut,
   UserRound,
   Landmark,
+  Mail,
   type LucideIcon,
 } from 'lucide-react'
 import HokekaLogo from '../branding/HokekaLogo'
@@ -50,6 +51,7 @@ interface NavGroup {
 interface HokekaSidebarProps {
   alertCount?: number
   caseCount?: number
+  messageUnreadCount?: number
   userName?: string
   userEmail?: string
   userRole?: string
@@ -75,6 +77,7 @@ function sectionBadgeTotal(group: NavGroup): number {
 export default function HokekaSidebar({
   alertCount,
   caseCount,
+  messageUnreadCount,
   userName = 'Super Admin',
   userEmail,
   userRole = 'SUPER ADMIN',
@@ -111,6 +114,15 @@ export default function HokekaSidebar({
             icon: Briefcase,
             to: '/cases',
             badge: caseCount !== undefined && caseCount > 0 ? caseCount : undefined,
+          },
+          {
+            label: 'Messages',
+            icon: Mail,
+            to: '/messages',
+            badge:
+              messageUnreadCount !== undefined && messageUnreadCount > 0
+                ? messageUnreadCount
+                : undefined,
           },
         ],
       },
@@ -151,7 +163,7 @@ export default function HokekaSidebar({
             ],
       },
     ],
-    [alertCount, caseCount, canManagePspUsers, isPspUser],
+    [alertCount, caseCount, messageUnreadCount, canManagePspUsers, isPspUser],
   )
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
