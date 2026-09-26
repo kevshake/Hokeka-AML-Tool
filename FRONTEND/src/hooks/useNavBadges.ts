@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiClient } from '../lib/apiClient'
 import {
@@ -10,6 +10,7 @@ import {
 export interface NavBadgeCounts {
   alertCount: number | undefined
   caseCount: number | undefined
+  messageUnreadCount: number | undefined
   isLoading: boolean
 }
 
@@ -38,9 +39,19 @@ export function useNavBadges(): NavBadgeCounts {
   const data = stats.data as DashboardStats | undefined
   const isLoading = stats.isLoading && !data
 
+  const unreadMessages = useQuery({
+    queryKey: ['messages', 'unread-count'],
+    queryFn: () => apiClient.get<{ count: number }>('messages/unread/count'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+
   return {
     alertCount: isLoading ? undefined : (data?.openAlertsCount ?? 0),
     caseCount: isLoading ? undefined : (data?.openCases ?? 0),
+    messageUnreadCount: unreadMessages.isLoading
+      ? undefined
+      : (unreadMessages.data?.count ?? 0),
     isLoading,
   }
 }

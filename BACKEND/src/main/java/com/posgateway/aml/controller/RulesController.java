@@ -117,7 +117,7 @@ public class RulesController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of(
                             "error", "AI rule generation not configured",
-                            "hint", "set AI_RULE_GENERATOR_ENABLED=true and configure JEV (OPENROUTER_API_KEY, JEV_MODEL)"
+                            "hint", "set AI_RULE_GENERATOR_ENABLED=true and configure OPENROUTER_API_KEY + JEV_CHAT_MODEL"
                     ));
         }
         String detail = aiService.getLastErrorDetail();

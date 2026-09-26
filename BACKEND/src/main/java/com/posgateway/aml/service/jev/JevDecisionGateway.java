@@ -1,6 +1,5 @@
 package com.posgateway.aml.service.jev;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.config.jev.JevProperties;
@@ -13,44 +12,46 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * Single gateway for all JEV/OpenRouter AI decisions on the Control Plane.
- * On any failure, callers receive a fallback outcome using the deterministic baseline.
+ * Single gateway for typed Jev decisions via OpenRouter's Decisions API.
+ * Fail-closed: any error routes to {@link JevBranch#ESCALATE_HUMAN}; baseline stands.
+ * Shadow mode (default) logs only — no production decision changes.
  */
 @Service
 public class JevDecisionGateway {
 
     private static final Logger log = LoggerFactory.getLogger(JevDecisionGateway.class);
-    private static final Pattern CODE_FENCE = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
 
     private final JevProperties properties;
-    private final OpenRouterClient openRouterClient;
-    private final JevFeatureMaskingService maskingService;
-    private final JevPromptTemplateService promptTemplateService;
+    private final JevDecisionsClient decisionsClient;
+    private final JevQuestionConfigService questionConfigService;
+    private final JevStateBuilderService stateBuilderService;
+    private final JevBranchEvaluator branchEvaluator;
+    private final JevTightenOnlyAuthority tightenOnlyAuthority;
     private final JevEngineConfigService engineConfigService;
     private final JevBudgetService budgetService;
     private final JevAuditService auditService;
     private final ObjectMapper objectMapper;
 
     public JevDecisionGateway(JevProperties properties,
-                              OpenRouterClient openRouterClient,
-                              JevFeatureMaskingService maskingService,
-                              JevPromptTemplateService promptTemplateService,
+                              JevDecisionsClient decisionsClient,
+                              JevQuestionConfigService questionConfigService,
+                              JevStateBuilderService stateBuilderService,
+                              JevBranchEvaluator branchEvaluator,
+                              JevTightenOnlyAuthority tightenOnlyAuthority,
                               JevEngineConfigService engineConfigService,
                               JevBudgetService budgetService,
                               JevAuditService auditService,
                               ObjectMapper objectMapper) {
         this.properties = properties;
-        this.openRouterClient = openRouterClient;
-        this.maskingService = maskingService;
-        this.promptTemplateService = promptTemplateService;
+        this.decisionsClient = decisionsClient;
+        this.questionConfigService = questionConfigService;
+        this.stateBuilderService = stateBuilderService;
+        this.branchEvaluator = branchEvaluator;
+        this.tightenOnlyAuthority = tightenOnlyAuthority;
         this.engineConfigService = engineConfigService;
         this.budgetService = budgetService;
         this.auditService = auditService;
@@ -62,97 +63,114 @@ public class JevDecisionGateway {
     }
 
     public String configuredModel() {
-        return properties.isConfigured() ? properties.getModel() : null;
+        return properties.isConfigured() ? JevPinnedModel.MODEL_ID : null;
     }
 
-    /**
-     * Synchronous decision with default timeout.
-     */
     public JevDecisionOutcome decide(JevDecisionContext context) {
-        return decide(context, properties.getTimeout());
+        return decide(context, properties.getDecisionsTimeout());
     }
 
-    /**
-     * Synchronous decision with custom timeout (inline edge mode).
-     */
     @CircuitBreaker(name = "jevOpenRouter", fallbackMethod = "decideFallback")
     public JevDecisionOutcome decide(JevDecisionContext context, Duration timeout) {
-        String baseline = context.getBaselineDecision() != null ? context.getBaselineDecision() : "ALLOW";
+        String baseline = context.getBaselineDecision() != null ? context.getBaselineDecision() : "REVIEW";
+        JevDecisionPoint decisionPoint = JevDecisionPoint.fromEngine(context.getEngine());
+
+        if (decisionPoint == null) {
+            return auditAndReturn(context, baseline,
+                    JevDecisionOutcome.escalateHuman(baseline,
+                            "Engine " + context.getEngine() + " is not a Jev decision point (use chat LLM path)"),
+                    null, null, null, null, null);
+        }
 
         if (!properties.isConfigured()) {
             return auditAndReturn(context, baseline,
-                    JevDecisionOutcome.fallback(baseline, "JEV not configured (missing OPENROUTER_API_KEY or JEV_MODEL)"),
-                    null, null, null, null);
+                    JevDecisionOutcome.escalateHuman(baseline, "JEV not configured (missing OPENROUTER_API_KEY)"),
+                    decisionPoint, null, null, null, null);
         }
         if (!engineConfigService.isEngineEnabled(context.getEngine())) {
             return auditAndReturn(context, baseline,
-                    JevDecisionOutcome.fallback(baseline, "Engine disabled"),
-                    null, null, null, null);
+                    JevDecisionOutcome.escalateHuman(baseline, "Engine disabled"),
+                    decisionPoint, null, null, null, null);
         }
         if (context.getPspId() != null && budgetService.isBudgetExceeded(context.getPspId())) {
             return auditAndReturn(context, baseline,
-                    JevDecisionOutcome.fallback(baseline, "Daily budget exceeded"),
-                    null, null, null, null);
+                    JevDecisionOutcome.escalateHuman(baseline, "Daily budget exceeded"),
+                    decisionPoint, null, null, null, null);
         }
 
-        String promptVersion = engineConfigService.promptVersion(context.getEngine());
-        String systemPrompt = promptTemplateService.resolveSystemPrompt(context.getEngine(), promptVersion);
-        Map<String, Object> masked = maskingService.maskFeatures(context.getFeatures());
-        String userPrompt = buildUserPrompt(context, masked);
+        Map<String, Object> state = stateBuilderService.buildState(decisionPoint, context);
+        Map<String, Object> questions = questionConfigService.questionsFor(decisionPoint);
+        Map<String, String> expectedTypes = questionConfigService.questionTypesFor(decisionPoint);
+        String sessionId = buildSessionId(context);
+        Map<String, Object> trace = Map.of(
+                "trace_name", decisionPoint.getTraceName(),
+                "generation_name", decisionPoint.name().toLowerCase());
 
-        OpenRouterClient.OpenRouterResponse apiResponse = null;
-        String raw = null;
+        JevDecisionsClient.DecisionsResponse apiResponse;
         try {
-            apiResponse = openRouterClient.chatCompletion(properties.getModel(), systemPrompt, userPrompt, timeout);
-            raw = apiResponse.content();
-        } catch (Exception primary) {
-            if (properties.getFallbackModel() != null && !properties.getFallbackModel().isBlank()) {
-                try {
-                    apiResponse = openRouterClient.chatCompletion(
-                            properties.getFallbackModel(), systemPrompt, userPrompt, timeout);
-                    raw = apiResponse.content();
-                } catch (Exception fallbackEx) {
-                    log.warn("JEV OpenRouter failed for engine {}: {}",
-                            context.getEngine(), fallbackEx.getClass().getSimpleName());
-                    return auditAndReturn(context, baseline,
-                            JevDecisionOutcome.fallback(baseline, "OpenRouter error: " + fallbackEx.getClass().getSimpleName()),
-                            null, null, promptVersion, null);
-                }
-            } else {
-                log.warn("JEV OpenRouter failed for engine {}: {}",
-                        context.getEngine(), primary.getClass().getSimpleName());
-                return auditAndReturn(context, baseline,
-                        JevDecisionOutcome.fallback(baseline, "OpenRouter error: " + primary.getClass().getSimpleName()),
-                        null, null, promptVersion, null);
-            }
-        }
-
-        Map<String, Object> parsed;
-        try {
-            parsed = parseJsonResponse(raw);
+            apiResponse = decisionsClient.decide(
+                    new JevDecisionsClient.DecisionsRequest(
+                            JevPinnedModel.MODEL_ID, state, questions, sessionId, trace),
+                    expectedTypes,
+                    timeout != null ? timeout : properties.getDecisionsTimeout());
         } catch (Exception e) {
-            log.warn("JEV invalid JSON for engine {}: {}", context.getEngine(), e.getMessage());
+            log.warn("Jev Decisions API failed for {}: {}", decisionPoint, e.getClass().getSimpleName());
             return auditAndReturn(context, baseline,
-                    JevDecisionOutcome.fallback(baseline, "Invalid JSON from model"),
-                    raw, null, promptVersion, apiResponse);
+                    JevDecisionOutcome.escalateHuman(baseline, "Decisions API error: " + e.getClass().getSimpleName()),
+                    decisionPoint, state, null, null, null);
         }
 
-        JevDecisionOutcome outcome = mapParsedToOutcome(parsed, baseline, context);
-        if (context.getPspId() != null && apiResponse != null) {
-            long tokens = (long) apiResponse.inputTokens() + apiResponse.outputTokens();
-            BigDecimal cost = apiResponse.estimatedCostUsd() != null
-                    ? BigDecimal.valueOf(apiResponse.estimatedCostUsd()) : BigDecimal.ZERO;
-            budgetService.recordSpend(context.getPspId(), tokens, cost);
+        JevBranchEvaluator.EvaluationResult evaluation =
+                branchEvaluator.evaluate(decisionPoint, context.getPspId(), apiResponse.answers(), context);
+        JevBranch branch = evaluation.branch();
+        if (branch != JevBranch.ESCALATE_HUMAN) {
+            branch = enforceTightenOnlyBranch(branch, baseline, context);
         }
-        return auditAndReturn(context, baseline, outcome, raw, parsed, promptVersion, apiResponse);
+
+        JevTightenOnlyAuthority.AuthorityResult authority = tightenOnlyAuthority.apply(
+                baseline, branch, context, properties.isShadowMode(), properties.isPromoted());
+
+        boolean aiApplied = authority.wouldApply() && properties.isActive()
+                && !authority.finalDecision().equals(baseline);
+        String finalDecision = properties.isShadowMode() || !properties.isPromoted()
+                ? baseline
+                : authority.finalDecision();
+
+        if (context.getPspId() != null) {
+            long tokens = (long) apiResponse.inputTokens() + apiResponse.outputTokens();
+            budgetService.recordSpend(context.getPspId(), tokens, BigDecimal.valueOf(apiResponse.costUsd()));
+        }
+
+        Map<String, Object> parsed = buildParsedSummary(apiResponse, evaluation);
+        JevDecisionOutcome outcome = JevDecisionOutcome.builder()
+                .fallback(false)
+                .decisionPoint(decisionPoint)
+                .branch(branch)
+                .shadowMode(properties.isShadowMode())
+                .wouldApply(authority.wouldApply())
+                .requestId(apiResponse.id())
+                .modelSnapshot(apiResponse.modelSnapshot())
+                .questionConfigVersion(questionConfigService.getVersion())
+                .answers(apiResponse.answers())
+                .recommendation(recommendationForBranch(branch))
+                .riskScore(extractPrimaryScore(apiResponse.answers(), decisionPoint))
+                .confidence(extractPrimaryConfidence(apiResponse.answers(), decisionPoint))
+                .finalDecision(finalDecision)
+                .aiApplied(aiApplied)
+                .rawParsed(parsed)
+                .build();
+
+        return auditAndReturn(context, baseline, outcome, decisionPoint, state, evaluation,
+                apiResponse, parsed);
     }
 
     @SuppressWarnings("unused")
     private JevDecisionOutcome decideFallback(JevDecisionContext context, Duration timeout, Throwable t) {
-        String baseline = context.getBaselineDecision() != null ? context.getBaselineDecision() : "ALLOW";
+        String baseline = context.getBaselineDecision() != null ? context.getBaselineDecision() : "REVIEW";
+        JevDecisionPoint dp = JevDecisionPoint.fromEngine(context.getEngine());
         return auditAndReturn(context, baseline,
-                JevDecisionOutcome.fallback(baseline, "Circuit breaker open"),
-                null, null, engineConfigService.promptVersion(context.getEngine()), null);
+                JevDecisionOutcome.escalateHuman(baseline, "Circuit breaker open"),
+                dp, null, null, null, null);
     }
 
     @Async
@@ -160,69 +178,88 @@ public class JevDecisionGateway {
         decide(context);
     }
 
-    private JevDecisionOutcome mapParsedToOutcome(Map<String, Object> parsed, String baseline,
-                                                  JevDecisionContext context) {
-        JevRecommendation rec = JevRecommendation.fromString(stringVal(parsed, "recommendation"));
-        if (rec == null) {
-            return JevDecisionOutcome.fallback(baseline, "Missing recommendation");
+    private JevBranch enforceTightenOnlyBranch(JevBranch branch, String baseline, JevDecisionContext context) {
+        if (branch == JevBranch.LOW_RISK_CANDIDATE && JevTightenOnlyAuthority.isHardBaseline(baseline)) {
+            return JevBranch.DEFAULT;
         }
-
-        Double riskScore = numberVal(parsed, "riskScore");
-        Double confidence = numberVal(parsed, "confidence");
-        List<String> reasons = listVal(parsed, "reasons");
-        List<String> signals = listVal(parsed, "citedSignals");
-
-        boolean advisory = context.isAdvisoryOnly() || engineConfigService.isAdvisoryOnly(context.getEngine());
-        String finalDecision = baseline;
-        boolean aiApplied = false;
-
-        // AI is advisory for regulated paths — never override baseline on sanctions/hard blocks
-        if (!advisory && !isHardBaseline(baseline)) {
-            finalDecision = mapRecommendationToAction(rec);
-            aiApplied = !finalDecision.equals(baseline);
+        if (branch == JevBranch.PROPOSE_CLOSURE && JevTightenOnlyAuthority.isHardBaseline(baseline)) {
+            return JevBranch.DEFAULT;
         }
-
-        return JevDecisionOutcome.builder()
-                .fallback(false)
-                .recommendation(rec)
-                .riskScore(riskScore)
-                .confidence(confidence)
-                .reasons(reasons)
-                .citedSignals(signals)
-                .finalDecision(finalDecision)
-                .aiApplied(aiApplied)
-                .rawParsed(parsed)
-                .build();
+        if (branch == JevBranch.LIKELY_FALSE_POSITIVE) {
+            return JevBranch.DEFAULT;
+        }
+        return branch;
     }
 
-    private static boolean isHardBaseline(String baseline) {
-        if (baseline == null) return false;
-        return switch (baseline.toUpperCase()) {
-            case "BLOCK", "HOLD", "SANCTIONS_MATCH" -> true;
-            default -> false;
+    private static JevRecommendation recommendationForBranch(JevBranch branch) {
+        return switch (branch) {
+            case ESCALATE_UP, ESCALATE_HUMAN, RAISE_RISK_TIER -> JevRecommendation.ESCALATE;
+            case LOW_RISK_CANDIDATE, PROPOSE_CLOSURE -> JevRecommendation.REVIEW;
+            case LIKELY_FALSE_POSITIVE -> JevRecommendation.REVIEW;
+            case DEFAULT -> JevRecommendation.REVIEW;
         };
     }
 
-    private static String mapRecommendationToAction(JevRecommendation rec) {
-        return switch (rec) {
-            case APPROVE -> "ALLOW";
-            case REVIEW -> "ALERT";
-            case DECLINE -> "BLOCK";
-            case ESCALATE -> "HOLD";
+    private static Double extractPrimaryScore(Map<String, JsonNode> answers, JevDecisionPoint dp) {
+        String key = switch (dp) {
+            case DP1_TM_ALERT_TRIAGE -> "activity_risk";
+            case DP3_CASE_TRIAGE -> "case_priority";
+            case DP4_CUSTOMER_RISK -> "risk_tier";
+            default -> null;
         };
+        if (key == null || !answers.containsKey(key)) {
+            JsonNode laundering = answers.get("laundering_suspicion");
+            if (laundering != null) {
+                return laundering.path("noul").asDouble() * 100.0;
+            }
+            JsonNode sameEntity = answers.get("same_entity");
+            if (sameEntity != null) {
+                return sameEntity.path("noul").asDouble() * 100.0;
+            }
+            return null;
+        }
+        return answers.get(key).path("score").asDouble();
+    }
+
+    private static Double extractPrimaryConfidence(Map<String, JsonNode> answers, JevDecisionPoint dp) {
+        for (JsonNode answer : answers.values()) {
+            if (answer.has("confidence")) {
+                return answer.path("confidence").asDouble();
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> buildParsedSummary(JevDecisionsClient.DecisionsResponse response,
+                                                   JevBranchEvaluator.EvaluationResult evaluation) {
+        Map<String, Object> parsed = new LinkedHashMap<>();
+        parsed.put("requestId", response.id());
+        parsed.put("branch", evaluation.branch().name());
+        parsed.put("thresholds", evaluation.thresholds().values());
+        parsed.put("diagnostics", evaluation.diagnostics());
+        parsed.put("answers", objectMapper.convertValue(response.answers(), Map.class));
+        return parsed;
     }
 
     private JevDecisionOutcome auditAndReturn(JevDecisionContext context,
                                               String baseline,
                                               JevDecisionOutcome outcome,
-                                              String raw,
-                                              Map<String, Object> parsed,
-                                              String promptVersion,
-                                              OpenRouterClient.OpenRouterResponse apiResponse) {
-        Map<String, Object> masked = maskingService.maskFeatures(context.getFeatures());
-        String model = apiResponse != null ? apiResponse.modelUsed() : properties.getModel();
-        JevDecisionAudit persisted = auditService.persist(
-                context, promptVersion, model, masked, raw, parsed, outcome, apiResponse);
+                                              JevDecisionPoint decisionPoint,
+                                              Map<String, Object> state,
+                                              JevBranchEvaluator.EvaluationResult evaluation,
+                                              JevDecisionsClient.DecisionsResponse apiResponse,
+                                              Map<String, Object> parsed) {
+        String stateHash = state != null ? stateBuilderService.hashState(state) : null;
+        JevDecisionAudit persisted = auditService.persistDecisions(
+                context,
+                decisionPoint,
+                questionConfigService.getVersion(),
+                state,
+                stateHash,
+                evaluation,
+                outcome,
+                apiResponse,
+                properties.isShadowMode());
         return JevDecisionOutcome.builder()
                 .fallback(outcome.isFallback())
                 .fallbackReason(outcome.getFallbackReason())
@@ -234,75 +271,35 @@ public class JevDecisionGateway {
                 .finalDecision(outcome.getFinalDecision() != null ? outcome.getFinalDecision() : baseline)
                 .aiApplied(outcome.isAiApplied())
                 .auditId(persisted.getId())
-                .rawParsed(outcome.getRawParsed())
+                .rawParsed(outcome.getRawParsed() != null && !outcome.getRawParsed().isEmpty()
+                        ? outcome.getRawParsed() : parsed)
+                .decisionPoint(decisionPoint)
+                .branch(outcome.getBranch())
+                .shadowMode(outcome.isShadowMode())
+                .wouldApply(outcome.isWouldApply())
+                .requestId(outcome.getRequestId())
+                .modelSnapshot(outcome.getModelSnapshot())
+                .questionConfigVersion(outcome.getQuestionConfigVersion())
+                .answers(outcome.getAnswers())
                 .build();
     }
 
-    private String buildUserPrompt(JevDecisionContext context, Map<String, Object> masked) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("engine", context.getEngine().name());
-        payload.put("baselineDecision", context.getBaselineDecision());
-        payload.put("features", masked);
-        try {
-            return objectMapper.writeValueAsString(payload);
-        } catch (Exception e) {
-            return masked.toString();
+    private static String buildSessionId(JevDecisionContext context) {
+        if (context.getAlertId() != null) {
+            return "hokeka-alert-" + context.getAlertId();
         }
-    }
-
-    private Map<String, Object> parseJsonResponse(String raw) throws Exception {
-        if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("empty response");
+        if (context.getCaseId() != null) {
+            return "hokeka-case-" + context.getCaseId();
         }
-        String json = stripCodeFences(raw.trim());
-        return objectMapper.readValue(json, new TypeReference<>() {});
-    }
-
-    private static String stripCodeFences(String s) {
-        Matcher m = CODE_FENCE.matcher(s);
-        if (m.find()) {
-            return m.group(1);
+        if (context.getTransactionId() != null) {
+            return "hokeka-txn-" + context.getTransactionId();
         }
-        int first = s.indexOf('{');
-        int last = s.lastIndexOf('}');
-        if (first >= 0 && last > first) {
-            return s.substring(first, last + 1);
+        if (context.getScreeningHitId() != null) {
+            return "hokeka-screen-" + context.getScreeningHitId();
         }
-        return s;
-    }
-
-    private static String stringVal(Map<String, Object> map, String key) {
-        Object v = map.get(key);
-        return v == null ? null : String.valueOf(v);
-    }
-
-    private static Double numberVal(Map<String, Object> map, String key) {
-        Object v = map.get(key);
-        if (v instanceof Number n) {
-            return n.doubleValue();
+        if (context.getEdgeId() != null) {
+            return "hokeka-edge-" + context.getEdgeId();
         }
-        if (v != null) {
-            try {
-                return Double.parseDouble(String.valueOf(v));
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> listVal(Map<String, Object> map, String key) {
-        Object v = map.get(key);
-        if (v instanceof List<?> list) {
-            List<String> out = new ArrayList<>();
-            for (Object item : list) {
-                if (item != null) {
-                    out.add(String.valueOf(item));
-                }
-            }
-            return out;
-        }
-        return List.of();
+        return "hokeka-jev-" + context.getEngine().name().toLowerCase();
     }
 }

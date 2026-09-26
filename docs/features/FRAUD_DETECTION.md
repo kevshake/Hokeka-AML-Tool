@@ -56,7 +56,7 @@ AI Rule Generation
 
 Natural-language rule creation via AI:
 ```
-User prompt → AiRuleGeneratorService → Anthropic Claude → RuleDefinition
+User prompt → AiRuleGeneratorService → Hokeka AI (Control Plane) → RuleDefinition
 ```
 
 Available via the **RulesGeneration** page with preview before save.

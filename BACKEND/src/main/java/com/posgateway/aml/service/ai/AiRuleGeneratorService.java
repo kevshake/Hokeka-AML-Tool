@@ -1,12 +1,12 @@
 package com.posgateway.aml.service.ai;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.posgateway.aml.config.jev.JevProperties;
 import com.posgateway.aml.entity.rules.RuleDefinition;
-import com.posgateway.aml.service.jev.JevDecisionContext;
-import com.posgateway.aml.service.jev.JevDecisionGateway;
-import com.posgateway.aml.service.jev.JevDecisionOutcome;
-import com.posgateway.aml.service.jev.JevEngineType;
+import com.posgateway.aml.service.jev.JevPromptTemplateService;
+import com.posgateway.aml.service.jev.OpenRouterChatClient;
 import com.posgateway.aml.service.rules.DynamicRuleConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,29 +18,26 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Generates a {@link RuleDefinition} from a natural-language operator prompt via the
- * central {@link JevDecisionGateway} (OpenRouter). Replaces the previous direct Anthropic client.
- *
- * <p>Robustness rules:
- * <ul>
- *   <li>When {@code ai.rule-generator.enabled=false}, return null.</li>
- *   <li>On API timeout / error / invalid JSON, return null + structured ERROR log.</li>
- *   <li>SpEL expressions are test-parsed before returning.</li>
- *   <li>Generated rules are preview-only (enabled=false) until admin approval.</li>
- * </ul>
+ * Generates a {@link RuleDefinition} from a natural-language operator prompt via
+ * OpenRouter chat completions (not the Jev Decisions API).
  */
 @Service
 public class AiRuleGeneratorService {
 
     private static final Logger log = LoggerFactory.getLogger(AiRuleGeneratorService.class);
+    private static final Pattern CODE_FENCE = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
 
     private static final Set<String> ALLOWED_RULE_TYPES = Set.of("DROOLS_DRL", "SPEL", "JAVA_BEAN");
     private static final Set<String> ALLOWED_ACTIONS = Set.of("BLOCK", "HOLD", "ALERT", "ALLOW");
     private static final Set<String> ALLOWED_SEVERITIES = Set.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
 
-    private final JevDecisionGateway jevGateway;
+    private final OpenRouterChatClient chatClient;
+    private final JevPromptTemplateService promptTemplateService;
+    private final JevProperties jevProperties;
     private final ObjectMapper objectMapper;
     private final SpelExpressionParser spelParser = new SpelExpressionParser();
     @SuppressWarnings("unused")
@@ -50,11 +47,15 @@ public class AiRuleGeneratorService {
 
     @Autowired
     public AiRuleGeneratorService(
-            JevDecisionGateway jevGateway,
+            OpenRouterChatClient chatClient,
+            JevPromptTemplateService promptTemplateService,
+            JevProperties jevProperties,
             DynamicRuleConverter converter,
             ObjectMapper objectMapper,
             @Value("${ai.rule-generator.enabled:false}") boolean enabled) {
-        this.jevGateway = jevGateway;
+        this.chatClient = chatClient;
+        this.promptTemplateService = promptTemplateService;
+        this.jevProperties = jevProperties;
         this.converter = converter;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -80,11 +81,11 @@ public class AiRuleGeneratorService {
         lastAuditId = null;
 
         if (!enabled) {
-            log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure JEV (OPENROUTER_API_KEY, JEV_MODEL)");
+            log.info("AI rule generator disabled — set AI_RULE_GENERATOR_ENABLED=true and configure OPENROUTER_API_KEY + JEV_CHAT_MODEL");
             return null;
         }
-        if (!jevGateway.isConfigured()) {
-            lastErrorDetail = "JEV not configured (OPENROUTER_API_KEY and JEV_MODEL required)";
+        if (!jevProperties.isChatConfigured()) {
+            lastErrorDetail = "Chat LLM not configured (OPENROUTER_API_KEY and JEV_CHAT_MODEL required)";
             log.error("AI rule generator enabled but {}", lastErrorDetail);
             return null;
         }
@@ -94,35 +95,42 @@ public class AiRuleGeneratorService {
             return null;
         }
 
-        JevDecisionContext ctx = JevDecisionContext.builder(JevEngineType.RULE_SUGGESTION)
-                .baselineDecision("PREVIEW")
-                .feature("operatorPrompt", prompt)
-                .advisoryOnly(true)
-                .build();
-
-        JevDecisionOutcome outcome = jevGateway.decide(ctx);
-        lastAuditId = outcome.getAuditId();
-        if (outcome.isFallback()) {
-            lastErrorDetail = outcome.getFallbackReason();
-            log.error("AI rule generator: JEV fallback — {}", lastErrorDetail);
-            return null;
-        }
-
-        Map<String, Object> parsed = outcome.getRawParsed();
-        if (parsed == null || parsed.isEmpty()) {
-            lastErrorDetail = "JEV returned empty rule payload";
+        String systemPrompt = promptTemplateService.resolveSystemPrompt(
+                com.posgateway.aml.service.jev.JevEngineType.RULE_SUGGESTION, "v1");
+        try {
+            OpenRouterChatClient.ChatResponse response = chatClient.chatCompletion(
+                    systemPrompt,
+                    prompt,
+                    jevProperties.getTimeout());
+            Map<String, Object> parsed = parseJsonResponse(response.content());
+            JsonNode tree = objectMapper.valueToTree(parsed);
+            return validateAndMap(tree, prompt);
+        } catch (Exception e) {
+            lastErrorDetail = "Chat LLM error: " + e.getClass().getSimpleName();
             log.error("AI rule generator: {}", lastErrorDetail);
             return null;
         }
+    }
 
-        try {
-            JsonNode tree = objectMapper.valueToTree(parsed);
-            return validateAndMap(tree, prompt);
-        } catch (IllegalArgumentException e) {
-            lastErrorDetail = "Schema validation failed: " + e.getMessage();
-            log.error("AI rule generator: schema validation failed. detail={}", e.getMessage());
-            return null;
+    private Map<String, Object> parseJsonResponse(String raw) throws Exception {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("empty response");
         }
+        String json = stripCodeFences(raw.trim());
+        return objectMapper.readValue(json, new TypeReference<>() {});
+    }
+
+    private static String stripCodeFences(String s) {
+        Matcher m = CODE_FENCE.matcher(s);
+        if (m.find()) {
+            return m.group(1);
+        }
+        int first = s.indexOf('{');
+        int last = s.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+            return s.substring(first, last + 1);
+        }
+        return s;
     }
 
     private RuleDefinition validateAndMap(JsonNode tree, String originalPrompt) {

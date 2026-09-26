@@ -5,23 +5,10 @@
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap');
+@import '../../design-tokens/tokens.css';
 
 :root {
-  color-scheme: dark;
-  --bg: #080909;
-  --bg-2: #0c0e0d;
-  --ink: #f5f2eb;
-  --muted: #a8aba8;
-  --muted-2: #858986;
-  --gold: #d3b371;
-  --gold-bright: #e1c684;
-  --gold-deep: #74511e;
-  --teal: #75b7ab;
-  --amber: #e2b25d;
-  --line: #ffffff1f;
-  --radius: 3px;
-  --ease: cubic-bezier(.22, 1, .36, 1);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--ink);
   font-synthesis: none;

@@ -26,6 +26,7 @@ export default function HokekaLayout({ children }: HokekaLayoutProps) {
       <HokekaSidebar
         alertCount={badges.alertCount}
         caseCount={badges.caseCount}
+        messageUnreadCount={badges.messageUnreadCount}
         userName={displayName}
         userEmail={user?.email}
         userRole={user?.role?.name ?? 'SUPER ADMIN'}
@@ -38,7 +39,7 @@ export default function HokekaLayout({ children }: HokekaLayoutProps) {
       >
         <HokekaHeader
           userName={displayName}
-          notificationCount={badges.alertCount ?? 0}
+          notificationCount={badges.messageUnreadCount}
         />
         <div className="hokeka-dashboard-content flex flex-1 overflow-hidden px-5 pb-6 pt-1">
           <div className="min-w-0 flex-1 overflow-auto pr-1">{children}</div>
