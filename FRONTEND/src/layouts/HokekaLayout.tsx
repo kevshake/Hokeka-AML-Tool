@@ -4,7 +4,6 @@ import HokekaSidebar from '../components/sidebar/HokekaSidebar'
 import HokekaHeader from '../components/header/HokekaHeader'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavBadges } from '../hooks/useNavBadges'
-import { useUnreadMessages } from '../hooks/useUnreadMessages'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 
 interface HokekaLayoutProps {
@@ -14,7 +13,6 @@ interface HokekaLayoutProps {
 export default function HokekaLayout({ children }: HokekaLayoutProps) {
   const { user } = useAuth()
   const badges = useNavBadges()
-  const unreadMessages = useUnreadMessages()
   const isMobileNav = useMediaQuery('(max-width: 767px)')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -28,6 +26,7 @@ export default function HokekaLayout({ children }: HokekaLayoutProps) {
       <HokekaSidebar
         alertCount={badges.alertCount}
         caseCount={badges.caseCount}
+        messageUnreadCount={badges.messageUnreadCount}
         userName={displayName}
         userEmail={user?.email}
         userRole={user?.role?.name ?? 'SUPER ADMIN'}
@@ -46,7 +45,7 @@ export default function HokekaLayout({ children }: HokekaLayoutProps) {
       <div className="hokeka-dashboard-main flex min-w-0 flex-1 flex-col overflow-hidden">
         <HokekaHeader
           userName={displayName}
-          notificationCount={unreadMessages.data ?? 0}
+          notificationCount={badges.messageUnreadCount}
           showMobileMenu={isMobileNav}
           onOpenMobileMenu={() => setMobileNavOpen(true)}
         />

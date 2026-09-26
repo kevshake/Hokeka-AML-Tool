@@ -35,10 +35,25 @@ for (const { path, name, screening } of desktopRoutes) {
   await page.screenshot({ path: `${outDir}/${name}.png`, fullPage: false })
 }
 
-await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
-await page.getByLabel('Notifications').click()
-await page.waitForTimeout(600)
+await page.goto(`${base}/messages`, { waitUntil: 'networkidle' })
+await page.waitForTimeout(800)
 await page.screenshot({ path: `${outDir}/wave2-notifications-desktop.png`, fullPage: false })
+
+await page.route('**/api/v1/network/graph-analysis/status', (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      enabled: false,
+      available: false,
+      reason: 'Graph analysis is disabled on this Control Plane (neo4j.enabled=false).',
+    }),
+  }),
+)
+await page.goto(`${base}/network`, { waitUntil: 'networkidle' })
+await page.waitForTimeout(800)
+await page.screenshot({ path: `${outDir}/wave2-network-disabled-desktop.png`, fullPage: false })
+await page.unroute('**/api/v1/network/graph-analysis/status')
 
 const mobileViews = [
   { path: '/dashboard', name: 'wave2-dashboard-mobile' },

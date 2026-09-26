@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
-import NotificationBellMenu from './NotificationBellMenu'
+import { Bell, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import GlassInput from '../Common/GlassInput'
 import GlobalSearchDialog from '../search/GlobalSearchDialog'
@@ -96,7 +95,19 @@ export default function HokekaHeader({
           </span>
         </div>
 
-        <NotificationBellMenu unreadCount={notificationCount} />
+        <button
+          type="button"
+          onClick={() => navigate('/messages')}
+          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-glass-border bg-glass-panel text-white/85 transition-all hover:border-glass-border-hover hover:bg-burgundy-800 hover:text-white hover:shadow-glass-glow"
+          aria-label="In-app messages"
+        >
+          <Bell size={18} />
+          {notificationCount !== undefined && notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-charcoal">
+              {notificationCount}
+            </span>
+          )}
+        </button>
 
         <div className="relative">
           <button

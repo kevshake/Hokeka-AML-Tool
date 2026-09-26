@@ -172,33 +172,51 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return jsonResponse({})
   }
 
-  if (path.includes('/network')) {
+  if (path.startsWith('network/graph-analysis/status')) {
+    const mockEnabled = import.meta.env.VITE_DEV_MOCK_GRAPH_ANALYSIS !== 'false'
+    return jsonResponse({
+      enabled: mockEnabled,
+      available: mockEnabled,
+      reason: mockEnabled
+        ? null
+        : 'Graph analysis is disabled on this Control Plane (neo4j.enabled=false).',
+    })
+  }
+
+  if (/^cases\/\d+\/network/.test(path)) {
+    if (import.meta.env.VITE_DEV_MOCK_GRAPH_ANALYSIS === 'false') {
+      return jsonResponse({ nodes: [], edges: [] })
+    }
     return jsonResponse(MOCK_NETWORK_GRAPH)
   }
 
   if (path.startsWith('compliance/cases')) {
+    const now = new Date().toISOString()
+    const mockUser = { id: 1, username: 'admin', email: 'admin@sys.com' }
     return jsonResponse(
       page([
         {
           id: 101,
-          title: 'Structuring pattern',
+          caseReference: 'CASE-2026-0101',
+          description: 'Structuring pattern across linked merchants',
           status: 'INVESTIGATING',
           priority: 'HIGH',
-          createdAt: new Date().toISOString(),
+          createdBy: mockUser,
+          createdAt: now,
+          updatedAt: now,
         },
         {
           id: 88,
-          title: 'Linked merchant review',
+          caseReference: 'CASE-2026-0088',
+          description: 'Linked merchant review',
           status: 'ASSIGNED',
           priority: 'MEDIUM',
-          createdAt: new Date().toISOString(),
+          createdBy: mockUser,
+          createdAt: now,
+          updatedAt: now,
         },
       ]),
     )
-  }
-
-  if (path.startsWith('cases')) {
-    return jsonResponse(MOCK_NETWORK_GRAPH)
   }
 
   if (path.includes('edge/nodes') || path.includes('edge-nodes')) {

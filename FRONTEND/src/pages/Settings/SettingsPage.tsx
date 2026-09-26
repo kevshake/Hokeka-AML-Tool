@@ -629,7 +629,7 @@ export default function SettingsPage() {
         canAccessJevSettingsTab(user) ? (
           <JevSettingsTab />
         ) : (
-          <Alert severity="error">You do not have permission to view JEV operator settings.</Alert>
+          <Alert severity="error">You do not have permission to view Hokeka AI operator settings.</Alert>
         ),
       )}
 

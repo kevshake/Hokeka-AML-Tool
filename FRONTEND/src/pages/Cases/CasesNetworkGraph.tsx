@@ -28,8 +28,12 @@ import {
   Store as MerchantIcon,
   HelpOutline as UnknownIcon,
 } from "@mui/icons-material";
-import { useCases, useCaseNetwork } from "../../features/api/queries";
+import { useCases, useCaseNetwork, useGraphAnalysisStatus } from "../../features/api/queries";
 import type { Case, CaseStatus } from "../../types";
+import {
+  NetworkGraphAnalysisDisabledState,
+  NetworkGraphAnalysisEmptyState,
+} from "../Network/NetworkGraphAnalysisState";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -592,6 +596,10 @@ export default function CasesNetworkGraph() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
+  const graphStatus = useGraphAnalysisStatus();
+  const graphReady =
+    graphStatus.data?.enabled === true && graphStatus.data?.available === true;
+
   const { data: casesPage, isLoading, isError } = useCases({
     page,
     size: PAGE_SIZE,
@@ -600,12 +608,13 @@ export default function CasesNetworkGraph() {
 
   const cases = useMemo(() => casesPage?.content ?? [], [casesPage?.content]);
 
-  // Auto-select first case when data arrives
+  // Auto-select first case when graph analysis is ready and data arrives
   useEffect(() => {
+    if (!graphReady) return;
     if (!selectedCase && cases.length > 0) {
       setSelectedCase(cases[0]);
     }
-  }, [cases, selectedCase]);
+  }, [cases, selectedCase, graphReady]);
 
   // Reset selected case when filter changes
   const handleStatusChange = (newStatus: string) => {
@@ -616,6 +625,40 @@ export default function CasesNetworkGraph() {
 
   const totalCases = casesPage?.totalElements ?? 0;
   const totalPages = casesPage?.totalPages ?? 0;
+
+  if (graphStatus.isLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+        <CircularProgress size={32} sx={{ color: "var(--gold)" }} />
+      </Box>
+    );
+  }
+
+  if (graphStatus.isError || !graphStatus.data) {
+    return (
+      <NetworkGraphAnalysisDisabledState
+        status={{
+          enabled: false,
+          available: false,
+          reason: "Could not determine graph analysis status from the Control Plane.",
+        }}
+      />
+    );
+  }
+
+  if (!graphStatus.data.enabled) {
+    return <NetworkGraphAnalysisDisabledState status={graphStatus.data} variant="disabled" />;
+  }
+
+  if (!graphStatus.data.available) {
+    return (
+      <NetworkGraphAnalysisDisabledState status={graphStatus.data} variant="unavailable" />
+    );
+  }
+
+  if (!isLoading && !isError && totalCases === 0) {
+    return <NetworkGraphAnalysisEmptyState />;
+  }
 
   return (
     <Box sx={{ mt: 1 }}>

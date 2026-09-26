@@ -38,7 +38,7 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 | Risk analytics | `/risk-analytics` | Gap register §4 | implemented+aligned |
 | Regulatory / SAR | `/reports`, `/regulatory-reports` | Gap register §6 | implemented+aligned |
 | KYC documents | `/kyc-documents` | Gap register §2 | implemented+aligned |
-| Network graph (case-linked) | `/network` → `NetworkAnalysisPage` | Gap register §4 graph (case API) | implemented+aligned |
+| Network graph (Neo4j) | `/network` → honest disabled / empty / live graph via `GET /network/graph-analysis/status` | Neo4j projection (off by default) | implemented+aligned |
 | Platform billing (revenue) | `/billing` → `BillingPage` | Platform Admin billing rates | implemented+aligned |
 | PSP billing (tenant) | `/settings` → Billing tab / `Psps` → Billing | 02-console | implemented+aligned |
 | Webhooks | `/settings` → Webhooks | 06 dual-post | implemented+aligned |
@@ -49,7 +49,7 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 | Audit logs | `/audit` | Gap register §6 | implemented+aligned |
 | Chargebacks | `/chargebacks` | `docs/chargeback/*` | implemented+aligned |
 | Crypto / VASP | *(backend module)* | features docs | blocker: no Console surface; backend-only module |
-| Notification bell | `NotificationBellMenu` in `HokekaHeader` | `/messages` API | implemented+aligned |
+| Notification bell | Header bell → `/messages` + unread badge (`useNavBadges` / `GET /messages/unread/count`) | Messages API | implemented+aligned |
 | Hokeka AI recommendation (PSP-facing) | `AiVerdictPanel`, screening flows | 06 (no vendor names) | implemented+aligned |
 | JEV operator settings | `/settings` → JEV AI (platform only) | Hidden from docs-site PSP build | implemented+aligned |
 
