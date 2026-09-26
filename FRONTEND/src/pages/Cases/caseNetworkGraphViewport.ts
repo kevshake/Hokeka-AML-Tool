@@ -9,8 +9,8 @@ export function fitGraphViewport(
   containerWidth: number,
   containerHeight: number,
   nodeRadius: number,
-  labelBand = 36,
-  padding = 56,
+  labelBand = 44,
+  padding = 64,
 ): { panX: number; panY: number; zoom: number } {
   if (nodes.length === 0 || containerWidth <= 0 || containerHeight <= 0) {
     return { panX: 0, panY: 0, zoom: 1 }
@@ -40,10 +40,10 @@ export function fitGraphViewport(
   )
 
   const clampedZoom = Math.max(0.35, zoom)
-  // GraphCanvas group uses translate(pan) then scale(zoom) → screen = (coord + pan) * zoom
+  // SVG transform="translate(pan) scale(zoom)" applies scale first → screen = zoom * coord + pan
   return {
-    panX: containerWidth / (2 * clampedZoom) - cx,
-    panY: containerHeight / (2 * clampedZoom) - cy,
+    panX: containerWidth / 2 - cx * clampedZoom,
+    panY: containerHeight / 2 - cy * clampedZoom,
     zoom: clampedZoom,
   }
 }

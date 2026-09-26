@@ -90,8 +90,23 @@ export function isMockGraphAnalysisEnabled(): boolean {
   return true
 }
 
-export function getMockSessionUser() {
+function resolveMockUser() {
+  if (typeof globalThis.sessionStorage !== 'undefined') {
+    const role = globalThis.sessionStorage.getItem('devMockUserRole')
+    if (role === 'PSP_USER') {
+      return {
+        ...MOCK_USER,
+        role: { id: 2, name: 'PSP_USER', permissions: ['PSP_USER'] },
+        pspId: 2,
+        psp: { pspId: 2, code: 'TECHFLOW_PSP', name: 'TechFlow Inc.' },
+      }
+    }
+  }
   return MOCK_USER
+}
+
+export function getMockSessionUser() {
+  return resolveMockUser()
 }
 
 export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -100,11 +115,11 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   const path = pathOf(url)
 
   if (path === 'auth/me' && method === 'GET') {
-    return jsonResponse(MOCK_USER)
+    return jsonResponse(resolveMockUser())
   }
 
   if (path === 'auth/login' && method === 'POST') {
-    return jsonResponse(MOCK_USER)
+    return jsonResponse(resolveMockUser())
   }
 
   if (path.startsWith('messages/unread/count')) {

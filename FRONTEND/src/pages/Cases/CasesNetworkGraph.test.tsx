@@ -43,6 +43,8 @@ describe('CasesNetworkGraph', () => {
   it('shows disabled copy and no graph nodes when graph analysis is off', () => {
     renderGraph()
     expect(screen.getByRole('heading', { name: /Graph analysis is turned off/i })).toBeTruthy()
+    expect(screen.getByText(/Relationship graphs are not available/i)).toBeTruthy()
+    expect(screen.queryByText(/neo4j/i)).toBeNull()
     expect(document.querySelector('.graph-node')).toBeNull()
     expect(screen.queryByText(/Select Case/i)).toBeNull()
   })

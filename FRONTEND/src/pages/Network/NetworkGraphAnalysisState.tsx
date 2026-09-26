@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { operatorDocUrl } from '../../lib/operatorDocs'
 import { isPlatformAdmin } from '../../lib/userAccess'
 import type { GraphAnalysisStatus } from '../../features/api/queries'
+import { graphAnalysisDisabledCopy } from './graphAnalysisDisabledCopy'
 
 interface NetworkGraphAnalysisStateProps {
   status: GraphAnalysisStatus
@@ -18,13 +19,7 @@ export function NetworkGraphAnalysisDisabledState({
   const operator = isPlatformAdmin(user)
   const controlPlaneDoc = operator ? operatorDocUrl('controlPlane') : null
 
-  const title =
-    variant === 'unavailable' ? 'Graph analysis unavailable' : 'Graph analysis is turned off'
-  const body =
-    status.reason ??
-    (variant === 'unavailable'
-      ? 'Neo4j graph analysis is enabled in configuration but the database is not reachable. No relationship graph is shown until connectivity is restored.'
-      : 'Case network graphs use the Neo4j graph projection on the Control Plane. This feature is disabled by default and is not simulating sample nodes.')
+  const { title, body } = graphAnalysisDisabledCopy(status, operator, variant)
 
   return (
     <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-glass-border bg-glass-panel/60 px-8 py-12 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -33,7 +28,7 @@ export function NetworkGraphAnalysisDisabledState({
       </div>
       <h2 className="text-lg font-semibold text-ink">{title}</h2>
       <p className="mt-2 max-w-lg text-sm leading-relaxed text-ink-muted">{body}</p>
-      {operator && controlPlaneDoc ? (
+      {operator && controlPlaneDoc && variant === 'disabled' ? (
         <a
           href={controlPlaneDoc}
           target="_blank"
@@ -43,11 +38,11 @@ export function NetworkGraphAnalysisDisabledState({
           Enable graph analysis (Control Plane stack)
           <ExternalLink size={14} aria-hidden />
         </a>
-      ) : (
+      ) : !operator ? (
         <p className="mt-6 text-xs text-ink-subtle">
-          Contact your platform operator to enable Neo4j graph analysis for this environment.
+          Contact your platform operator if you need graph analysis for investigations.
         </p>
-      )}
+      ) : null}
     </div>
   )
 }
