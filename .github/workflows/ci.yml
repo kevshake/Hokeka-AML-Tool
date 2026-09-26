@@ -239,8 +239,49 @@ jobs:
       - name: Lint (zero-warning policy)
         working-directory: FRONTEND
         run: npm run lint
+      - name: Unit tests (vitest)
+        working-directory: FRONTEND
+        run: npm test
+      - name: UI coverage matrix vs gap register (P0 routes)
+        run: node scripts/verify-ui-coverage-matrix.mjs
       - name: Build
         working-directory: FRONTEND
+        run: npm run build
+
+  docs-site:
+    name: Install docs site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Install
+        working-directory: docs-site
+        run: npm ci
+      - name: Build
+        working-directory: docs-site
+        run: npm run build
+
+  website:
+    name: Marketing site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install
+        working-directory: website
+        run: npm ci
+      - name: Build
+        working-directory: website
         run: npm run build
 
   deploy-scripts:

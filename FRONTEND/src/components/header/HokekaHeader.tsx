@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Bell, ChevronDown, LogOut, UserRound } from 'lucide-react'
+import { ChevronDown, LogOut, UserRound } from 'lucide-react'
+import NotificationBellMenu from './NotificationBellMenu'
 import { useNavigate } from 'react-router-dom'
 import GlassInput from '../Common/GlassInput'
 import GlobalSearchDialog from '../search/GlobalSearchDialog'
@@ -79,19 +80,7 @@ export default function HokekaHeader({
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigate('/alerts')}
-          className="relative flex h-10 w-10 items-center justify-center rounded-full border border-glass-border bg-glass-panel text-white/85 transition-all hover:border-glass-border-hover hover:bg-burgundy-800 hover:text-white hover:shadow-glass-glow"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-          {notificationCount !== undefined && notificationCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-charcoal">
-              {notificationCount}
-            </span>
-          )}
-        </button>
+        <NotificationBellMenu unreadCount={notificationCount} />
 
         <div className="relative">
           <button

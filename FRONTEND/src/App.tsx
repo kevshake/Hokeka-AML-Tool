@@ -43,6 +43,7 @@ const MarketSurveillancePage = lazy(() => import("./pages/MarketSurveillance/Mar
 const MobileMoneyPage = lazy(() => import("./pages/MobileMoney/MobileMoneyPage"));
 const WalletIntelligencePage = lazy(() => import("./pages/WalletIntelligence/WalletIntelligencePage"));
 const RecordDetailPage = lazy(() => import("./pages/RecordDetail/RecordDetailPage"));
+const NetworkAnalysisPage = lazy(() => import("./pages/Network/NetworkAnalysisPage"));
 
 /**
  * `/billing` is the PLATFORM revenue console (cross-tenant totals, admin-only endpoints). A PSP user
@@ -108,6 +109,7 @@ function App() {
                             <Route path="market-surveillance" element={<MarketSurveillancePage />} />
                             <Route path="mobile-money" element={<MobileMoneyPage />} />
                             <Route path="wallet-intelligence" element={<WalletIntelligencePage />} />
+                            <Route path="network" element={<NetworkAnalysisPage />} />
                             <Route path="records/:recordType/:recordId" element={<RecordDetailPage />} />
                             <Route path="screening" element={<ScreeningPage />} />
                             <Route path="profile" element={<ProfilePage />} />

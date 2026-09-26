@@ -648,8 +648,8 @@ export default function CasesNetworkGraph() {
             label="Filter by Status"
             sx={{
               color: "text.primary",
-              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.15)" },
-              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.3)" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "var(--line-control)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "var(--glass-border-hover)" },
             }}
           >
             <MenuItem value="">All Statuses</MenuItem>

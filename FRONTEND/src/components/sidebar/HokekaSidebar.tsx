@@ -27,6 +27,7 @@ import {
   LogOut,
   UserRound,
   Landmark,
+  Share2,
   type LucideIcon,
 } from 'lucide-react'
 import HokekaLogo from '../branding/HokekaLogo'
@@ -112,6 +113,7 @@ export default function HokekaSidebar({
             to: '/cases',
             badge: caseCount !== undefined && caseCount > 0 ? caseCount : undefined,
           },
+          { label: 'Network', icon: Share2, to: '/network' },
         ],
       },
       {
