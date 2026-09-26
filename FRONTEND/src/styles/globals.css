@@ -99,22 +99,6 @@
   background-attachment: scroll, scroll, fixed;
 }
 
-/* Dashboard route: neutral SaaS field under the glass header (no aurora plate). */
-.hokeka-dashboard-main--saas {
-  background-color: #f4f5f7;
-  background-image: none;
-}
-
-.hokeka-dashboard-main--saas > header {
-  /* Keep chrome dark against the light content field */
-  background-color: rgba(12, 14, 13, 0.96);
-  color: #f5f2eb;
-}
-
-.hokeka-dashboard-main--saas > .hokeka-dashboard-content {
-  color: #101828;
-}
-
 /* ============================ Utilities ================================== */
 
 @layer utilities {
@@ -406,6 +390,27 @@
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--surface-2);
+  }
+
+  .hokeka-mui-table-shell {
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--glass-surface);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+  }
+
+  .hokeka-mui-table-shell .MuiTablePagination-root {
+    border-top: 1px solid var(--line);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hokeka-table tbody tr,
+    .hokeka-mui-table-shell .MuiTableRow-root {
+      transition: none;
+    }
   }
 
   /* --- Form fields ------------------------------------------------------ */

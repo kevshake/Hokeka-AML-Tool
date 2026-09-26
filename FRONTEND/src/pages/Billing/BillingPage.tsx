@@ -83,6 +83,7 @@ import type { Invoice, Subscription, SubscriptionRequest } from "../../types/bil
 import type { Psp } from "../../types";
 import { getApiUrl } from "../../config/api";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import { formatCount, formatCurrency } from "../../lib/formatDisplay";
 import { withAlpha } from "../../theme/tokens";
 import { glassPanelSx, glassTableContainerSx } from "../../theme/muiGlass";
 
@@ -123,8 +124,8 @@ function StatusChip({ status, colorMap }: { status: string; colorMap: Record<str
   );
 }
 
-function fmt(amount: number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+function fmt(amount: number | null | undefined, currency = "USD") {
+  return formatCurrency(amount, currency);
 }
 
 function fmtDate(iso?: string) {
@@ -204,7 +205,7 @@ function RevenueTab() {
           value={fmt(summary.currentMonthRevenuePaid, currency)}
           icon={<MoneyIcon />}
           color="var(--success)"
-          subtitle={`${summary.paidInvoicesThisMonth} invoices paid`}
+          subtitle={`${formatCount(summary.paidInvoicesThisMonth)} invoices paid`}
         />
         <KpiCard
           title="Expected Revenue"
@@ -217,11 +218,11 @@ function RevenueTab() {
           value={fmt(summary.overdueAmount, currency)}
           icon={<WarningIcon />}
           color="var(--danger)"
-          subtitle={`${summary.overdueInvoicesCount} overdue invoices`}
+          subtitle={`${formatCount(summary.overdueInvoicesCount)} overdue invoices`}
         />
         <KpiCard
           title="Active Subscriptions"
-          value={String(summary.activeSubscriptions)}
+          value={formatCount(summary.activeSubscriptions)}
           icon={<CreditCardIcon />}
           color={ACCENT}
         />
@@ -232,15 +233,21 @@ function RevenueTab() {
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
           Current Month Revenue Breakdown
         </Typography>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--line-control)" />
-            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-            <RechartsTooltip formatter={(v) => typeof v === "number" ? fmt(v, currency) : "—"} />
-            <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {chartData.every((row) => !Number(row.value)) ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: "center" }}>
+            No revenue recorded for the current month yet.
+          </Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line-control)" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`} />
+              <RechartsTooltip formatter={(v) => typeof v === "number" ? fmt(v, currency) : "—"} />
+              <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Paper>
 
       {/* Overdue Invoices Alert */}

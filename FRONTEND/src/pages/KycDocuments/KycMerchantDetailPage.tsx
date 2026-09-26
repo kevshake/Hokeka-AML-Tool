@@ -281,7 +281,6 @@ export default function KycMerchantDetailPage() {
                 <div className="mt-4">
                   <AiVerdictPanel
                     auditPath={`jev/audit/merchant/${id}?engine=KYC_EDD`}
-                    title="Hokeka Intelligence"
                   />
                 </div>
               ) : null}
@@ -362,7 +361,6 @@ function VerificationTab({ merchantId, signals, g2Scans, g2Rules, loading, lastO
     <div className="mt-6">
       <AiVerdictPanel
         auditPath={`jev/audit/merchant/${merchantId}?engine=G2_CONTENT`}
-        title="Hokeka Intelligence"
       />
     </div>
     <h3 className="mb-2 mt-6 text-sm font-semibold text-white">G2 website scan history</h3>
@@ -454,7 +452,6 @@ function IntelligenceTab({ merchantId, checks, loading, canRun, pending, onRun }
       <div className="mt-6">
         <AiVerdictPanel
           auditPath={`jev/audit/merchant/${merchantId}?engine=ADVERSE_MEDIA`}
-          title="Hokeka Intelligence"
         />
       </div>
     ) : null}

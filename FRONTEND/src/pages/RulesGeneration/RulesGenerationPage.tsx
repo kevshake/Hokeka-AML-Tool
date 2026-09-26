@@ -577,7 +577,7 @@ export default function RulesGenerationPage() {
             </Box>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -748,7 +748,7 @@ export default function RulesGenerationPage() {
             </Typography>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -891,7 +891,7 @@ export default function RulesGenerationPage() {
             </Typography>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -1006,7 +1006,7 @@ export default function RulesGenerationPage() {
 
       {tab === 3 && (
         <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-          <TableContainer>
+          <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>

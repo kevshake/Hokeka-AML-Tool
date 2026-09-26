@@ -4,6 +4,7 @@ import {
   Box,
   Paper,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -73,6 +74,7 @@ export default function ChargebacksPage() {
         ) : sorted.length === 0 ? (
           <Typography color="text.secondary">No chargeback disputes recorded yet.</Typography>
         ) : (
+          <TableContainer className="hokeka-mui-table-shell">
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -133,6 +135,7 @@ export default function ChargebacksPage() {
               ))}
             </TableBody>
           </Table>
+          </TableContainer>
         )}
       </Paper>
 

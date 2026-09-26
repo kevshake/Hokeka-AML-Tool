@@ -453,6 +453,18 @@ function createHokekaTheme(brand: ResolvedBrand): Theme {
             },
 
             /* --- Data display ----------------------------------------------- */
+            MuiTableContainer: {
+                styleOverrides: {
+                    root: {
+                        backgroundColor: "var(--glass-surface)",
+                        backdropFilter: "var(--glass-blur)",
+                        WebkitBackdropFilter: "var(--glass-blur)",
+                        borderRadius: radii.base,
+                        border: "1px solid var(--glass-border)",
+                        boxShadow: "var(--glass-shadow)",
+                    },
+                },
+            },
             MuiTable: {
                 styleOverrides: { root: { borderCollapse: "separate", borderSpacing: 0 } },
             },

@@ -28,6 +28,7 @@ import {
   UserRound,
   Landmark,
   Mail,
+  Share2,
   type LucideIcon,
 } from 'lucide-react'
 import HokekaLogo from '../branding/HokekaLogo'
@@ -55,6 +56,9 @@ interface HokekaSidebarProps {
   userName?: string
   userEmail?: string
   userRole?: string
+  isMobile?: boolean
+  mobileOpen?: boolean
+  onMobileClose?: () => void
 }
 
 function isRouteActive(pathname: string, to: string): boolean {
@@ -81,6 +85,9 @@ export default function HokekaSidebar({
   userName = 'Super Admin',
   userEmail,
   userRole = 'SUPER ADMIN',
+  isMobile = false,
+  mobileOpen = false,
+  onMobileClose,
 }: HokekaSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -124,6 +131,7 @@ export default function HokekaSidebar({
                 ? messageUnreadCount
                 : undefined,
           },
+          { label: 'Network', icon: Share2, to: '/network' },
         ],
       },
       {
@@ -190,38 +198,52 @@ export default function HokekaSidebar({
     })
   }
 
+  const sidebarCollapsed = isMobile ? false : collapsed
+
   return (
     <aside
       className={cn(
-        'relative z-10 flex h-full flex-shrink-0 flex-col border-r border-glass-border bg-glass-panel/98 shadow-[8px_0_28px_rgba(0,0,0,0.35)] backdrop-blur-glass transition-[width] duration-200',
-        collapsed ? 'w-[72px] min-w-[72px]' : 'w-[280px] min-w-[280px]',
+        'flex h-full flex-shrink-0 flex-col border-r border-glass-border bg-glass-panel/98 shadow-[8px_0_28px_rgba(0,0,0,0.35)] backdrop-blur-glass transition-[width,transform] duration-200',
+        isMobile
+          ? cn(
+              'fixed inset-y-0 left-0 z-50 w-[min(280px,88vw)]',
+              mobileOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
+            )
+          : cn(
+              'relative z-10',
+              sidebarCollapsed ? 'w-[72px] min-w-[72px]' : 'w-[280px] min-w-[280px]',
+            ),
       )}
+      aria-hidden={isMobile && !mobileOpen}
     >
       <div
         className={cn(
           'flex h-[72px] flex-shrink-0 border-b border-glass-border bg-charcoal-alt',
-          collapsed
+          sidebarCollapsed
             ? 'flex-col items-center justify-center gap-1 px-2'
             : 'items-center justify-between gap-3 px-3',
         )}
       >
-        <HokekaLogo variant="header" collapsed={collapsed} />
-        <button
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={cn(
-            'flex flex-shrink-0 items-center justify-center rounded-lg border border-glass-border bg-burgundy-850 text-ink-muted transition-all hover:border-gold/50 hover:bg-burgundy-800 hover:text-ink',
-            collapsed ? 'h-8 w-8' : 'h-9 w-9',
-          )}
-        >
-          <Menu size={18} strokeWidth={2} />
-        </button>
+        <HokekaLogo variant="header" collapsed={sidebarCollapsed} />
+        {!isMobile ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'flex flex-shrink-0 items-center justify-center rounded-lg border border-glass-border bg-burgundy-850 text-ink-muted transition-all hover:border-gold/50 hover:bg-burgundy-800 hover:text-ink',
+              sidebarCollapsed ? 'h-8 w-8' : 'h-9 w-9',
+            )}
+          >
+            <Menu size={18} strokeWidth={2} />
+          </button>
+        ) : null}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3" aria-label="Main navigation">
         {groups.map((group) => {
-          const isExpanded = collapsed || expandedSections.has(group.label)
+          const isExpanded = sidebarCollapsed ? false : expandedSections.has(group.label)
+          const isExpandedMobile = isMobile ? true : isExpanded
           const badgeTotal = sectionBadgeTotal(group)
           const sectionHasActive = group.items.some((item) =>
             isRouteActive(location.pathname, item.to),
@@ -229,11 +251,11 @@ export default function HokekaSidebar({
 
           return (
             <div key={group.label} className="mb-0.5">
-              {!collapsed && (
+              {!sidebarCollapsed && (
                 <button
                   type="button"
                   onClick={() => toggleSection(group.label)}
-                  aria-expanded={isExpanded}
+                  aria-expanded={isExpandedMobile}
                   className={cn(
                     'hokeka-nav-section-trigger',
                     sectionHasActive && 'text-gold',
@@ -266,13 +288,13 @@ export default function HokekaSidebar({
               <div
                 className={cn(
                   'grid transition-all duration-200 ease-editorial',
-                  isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                  isExpandedMobile ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
                 )}
               >
                 <div className="overflow-hidden">
                   <div
                     className={cn(
-                      collapsed ? 'flex flex-col px-1.5 pb-1' : 'hokeka-nav-tree pb-1',
+                      sidebarCollapsed ? 'flex flex-col px-1.5 pb-1' : 'hokeka-nav-tree pb-1',
                     )}
                   >
                     {group.items.map((item) => {
@@ -281,22 +303,25 @@ export default function HokekaSidebar({
                         <NavLink
                           key={item.to}
                           to={item.to}
-                          title={collapsed ? item.label : undefined}
+                          title={sidebarCollapsed ? item.label : undefined}
+                          onClick={() => {
+                            if (isMobile) onMobileClose?.()
+                          }}
                           className={({ isActive }) =>
                             cn(
-                              collapsed
+                              sidebarCollapsed
                                 ? 'relative my-0.5 flex h-10 items-center justify-center rounded-xl px-0 text-sm transition-all'
                                 : 'hokeka-nav-item',
                               isActive
                                 ? 'hokeka-nav-active font-medium'
-                                : collapsed
+                                : sidebarCollapsed
                                   ? 'text-ink-muted hover:bg-burgundy-850/65 hover:text-ink'
                                   : undefined,
                             )
                           }
                         >
                           <Icon size={18} className="flex-shrink-0" aria-hidden />
-                          {!collapsed && (
+                          {!sidebarCollapsed && (
                             <>
                               <span className="flex-1 truncate">{item.label}</span>
                               {typeof item.badge === 'number' && item.badge > 0 && (
@@ -309,7 +334,7 @@ export default function HokekaSidebar({
                               )}
                             </>
                           )}
-                          {collapsed && typeof item.badge === 'number' && item.badge > 0 && (
+                          {sidebarCollapsed && typeof item.badge === 'number' && item.badge > 0 && (
                             <span
                               className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold leading-none text-charcoal"
                               style={{ backgroundColor: BADGE_ALERT }}
@@ -333,7 +358,7 @@ export default function HokekaSidebar({
           <div
             className={cn(
               'absolute bottom-[68px] z-30 rounded-lg border border-glass-border bg-burgundy-850 p-1 shadow-editorial',
-              collapsed ? 'left-2 w-48' : 'left-3 right-3',
+              sidebarCollapsed ? 'left-2 w-48' : 'left-3 right-3',
             )}
           >
             <button
@@ -364,16 +389,16 @@ export default function HokekaSidebar({
           aria-label="Open account menu"
           aria-expanded={accountMenuOpen}
           onClick={() => setAccountMenuOpen((open) => !open)}
-          title={collapsed ? userName : undefined}
+          title={sidebarCollapsed ? userName : undefined}
           className={cn(
             'flex w-full items-center rounded-xl py-2 text-left transition-colors hover:bg-burgundy-850/65',
-            collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+            sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
           )}
         >
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gold/40 bg-burgundy-800 text-sm font-semibold text-gold">
             {userName.charAt(0).toUpperCase()}
           </div>
-          {!collapsed && (
+          {!sidebarCollapsed && (
             <>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium leading-tight text-ink">{userName}</div>

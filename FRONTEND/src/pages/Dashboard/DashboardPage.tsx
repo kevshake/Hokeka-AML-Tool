@@ -70,7 +70,7 @@ const KpiRow = memo(function KpiRow() {
 
   return (
     <div
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
       role="region"
       aria-label="Key performance indicators"
     >
