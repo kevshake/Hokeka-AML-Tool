@@ -19,15 +19,18 @@ import java.util.Map;
 public class JevStatusService {
 
     private final JevProperties properties;
+    private final JevQuestionConfigService questionConfigService;
     private final JevDecisionAuditRepository auditRepository;
     private final JevEngineConfigService engineConfigService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     public JevStatusService(JevProperties properties,
+                            JevQuestionConfigService questionConfigService,
                             JevDecisionAuditRepository auditRepository,
                             JevEngineConfigService engineConfigService,
                             CircuitBreakerRegistry circuitBreakerRegistry) {
         this.properties = properties;
+        this.questionConfigService = questionConfigService;
         this.auditRepository = auditRepository;
         this.engineConfigService = engineConfigService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
@@ -36,13 +39,20 @@ public class JevStatusService {
     public Map<String, Object> status() {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("configured", properties.isConfigured());
-        status.put("model", properties.isConfigured() ? properties.getModel() : null);
-        status.put("fallbackModel", blankToNull(properties.getFallbackModel()));
-        status.put("baseUrl", properties.getBaseUrl());
+        status.put("pinnedModel", properties.isConfigured() ? JevPinnedModel.MODEL_ID : null);
+        status.put("questionConfigVersion", questionConfigService.getVersion());
+        status.put("shadowMode", properties.isShadowMode());
+        status.put("promoted", properties.isPromoted());
+        status.put("active", properties.isActive());
+        status.put("decisionsBaseUrl", properties.getDecisionsBaseUrl());
+        status.put("decisionsTimeoutMs", properties.getDecisionsTimeout().toMillis());
+        status.put("chatModel", blankToNull(properties.getChatModel()));
+        status.put("chatBaseUrl", properties.getChatBaseUrl());
         status.put("timeoutMs", properties.getTimeout().toMillis());
         status.put("inlineTimeoutMs", properties.getInlineTimeout().toMillis());
         status.put("dailyCallBudgetPerPsp", properties.getDailyCallBudgetPerPsp());
         status.put("dailySpendCapUsdPerPsp", properties.getDailySpendCapUsdPerPsp());
+        status.put("bandsVersion", properties.getBandsVersion());
 
         CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("jevOpenRouter");
         status.put("circuitState", breaker.getState().name());

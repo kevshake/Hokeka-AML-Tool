@@ -10,12 +10,30 @@ public class JevProperties {
     /** OpenRouter API key — never logged or exposed. */
     private String apiKey = "";
 
-    /** OpenRouter model id. No hardcoded real default — unset means disabled. */
-    private String model = "";
+    /** Decisions API base URL (alpha). Model is pinned separately. */
+    private String decisionsBaseUrl = "https://openrouter.ai/api/alpha";
 
-    private String fallbackModel = "";
+    /** Async Jev call timeout. */
+    private Duration decisionsTimeout = Duration.ofSeconds(3);
 
-    private String baseUrl = "https://openrouter.ai/api/v1";
+    /** Retries after the first attempt for 429/5xx only. */
+    private int maxRetries = 2;
+
+    /** Shadow mode: log-only, no decision/queue/priority mutations (default). */
+    private boolean shadowMode = true;
+
+    /** Explicit promotion flag; both this and {@link #shadowMode=false} are required to apply mutations. */
+    private boolean promoted = false;
+
+    /** Provisional bands version label persisted with each audit row. */
+    private String bandsVersion = "provisional-v1";
+
+    /** Chat completions model for non-Jev generation tasks (rule suggestion, etc.). */
+    private String chatModel = "";
+
+    private String chatFallbackModel = "";
+
+    private String chatBaseUrl = "https://openrouter.ai/api/v1";
 
     private Duration timeout = Duration.ofSeconds(15);
 
@@ -43,28 +61,76 @@ public class JevProperties {
         this.apiKey = apiKey;
     }
 
-    public String getModel() {
-        return model;
+    public String getDecisionsBaseUrl() {
+        return decisionsBaseUrl;
     }
 
-    public void setModel(String model) {
-        this.model = model;
+    public void setDecisionsBaseUrl(String decisionsBaseUrl) {
+        this.decisionsBaseUrl = decisionsBaseUrl;
     }
 
-    public String getFallbackModel() {
-        return fallbackModel;
+    public Duration getDecisionsTimeout() {
+        return decisionsTimeout;
     }
 
-    public void setFallbackModel(String fallbackModel) {
-        this.fallbackModel = fallbackModel;
+    public void setDecisionsTimeout(Duration decisionsTimeout) {
+        this.decisionsTimeout = decisionsTimeout;
     }
 
-    public String getBaseUrl() {
-        return baseUrl;
+    public int getMaxRetries() {
+        return maxRetries;
     }
 
-    public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl;
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
+    public boolean isShadowMode() {
+        return shadowMode;
+    }
+
+    public void setShadowMode(boolean shadowMode) {
+        this.shadowMode = shadowMode;
+    }
+
+    public boolean isPromoted() {
+        return promoted;
+    }
+
+    public void setPromoted(boolean promoted) {
+        this.promoted = promoted;
+    }
+
+    public String getBandsVersion() {
+        return bandsVersion;
+    }
+
+    public void setBandsVersion(String bandsVersion) {
+        this.bandsVersion = bandsVersion;
+    }
+
+    public String getChatModel() {
+        return chatModel;
+    }
+
+    public void setChatModel(String chatModel) {
+        this.chatModel = chatModel;
+    }
+
+    public String getChatFallbackModel() {
+        return chatFallbackModel;
+    }
+
+    public void setChatFallbackModel(String chatFallbackModel) {
+        this.chatFallbackModel = chatFallbackModel;
+    }
+
+    public String getChatBaseUrl() {
+        return chatBaseUrl;
+    }
+
+    public void setChatBaseUrl(String chatBaseUrl) {
+        this.chatBaseUrl = chatBaseUrl;
     }
 
     public Duration getTimeout() {
@@ -131,8 +197,22 @@ public class JevProperties {
         this.dailySpendCapUsdPerPsp = dailySpendCapUsdPerPsp;
     }
 
+    /** Jev Decisions API is configured when the OpenRouter key is present. */
     public boolean isConfigured() {
-        return apiKey != null && !apiKey.isBlank()
-                && model != null && !model.isBlank();
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    /** Chat LLM path for generation tasks (rule suggestion, narratives). */
+    public boolean isChatConfigured() {
+        return isConfigured() && chatModel != null && !chatModel.isBlank();
+    }
+
+    /** Pinned model id exposed for status endpoints. */
+    public String pinnedModel() {
+        return com.posgateway.aml.service.jev.JevPinnedModel.MODEL_ID;
+    }
+
+    public boolean isActive() {
+        return isConfigured() && promoted && !shadowMode;
     }
 }

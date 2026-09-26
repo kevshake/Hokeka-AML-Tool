@@ -245,12 +245,12 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
 
                 // --- AI Rule Generator (JEV / OpenRouter via Control Plane) ---
                 EnvVarSpec.requiredWhen("OPENROUTER_API_KEY", aiRuleGeneratorEnabled,
-                        "OpenRouter API key for JEV (AI rule generator and decision layer). " +
+                        "OpenRouter API key for JEV decisions and chat LLM generation paths. " +
                                 "Required when ai.rule-generator.enabled=true. " +
                                 "Without it, POST /api/v1/rules/generate returns 503."),
-                EnvVarSpec.requiredWhen("JEV_MODEL", aiRuleGeneratorEnabled,
-                        "OpenRouter model id for JEV (e.g. anthropic/claude-3.5-sonnet). " +
-                                "Required when ai.rule-generator.enabled=true."),
+                EnvVarSpec.requiredWhen("JEV_CHAT_MODEL", aiRuleGeneratorEnabled,
+                        "OpenRouter chat model id for rule generation (e.g. anthropic/claude-3.5-sonnet). " +
+                                "Required when ai.rule-generator.enabled=true. Jev decisions use pinned typesafe/jev-1.13."),
 
                 // --- Visa/Verifi inbound authentication ---
                 EnvVarSpec.requiredWhen("VERIFI_RDR_WEBHOOK_SECRET", verifiHs256Enabled,

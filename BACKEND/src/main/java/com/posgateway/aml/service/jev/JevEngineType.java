@@ -12,5 +12,7 @@ public enum JevEngineType {
     G2_CONTENT,
     ADVERSE_MEDIA,
     RULE_SUGGESTION,
-    FRAUD_SCORING
+    FRAUD_SCORING,
+    /** DP5: verifies a chat-model SAR/STR draft against case facts; Jev never generates text. */
+    SAR_NARRATIVE_VERIFICATION
 }

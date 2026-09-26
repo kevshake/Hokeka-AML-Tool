@@ -118,6 +118,8 @@ jobs:
       # EdgeBundleServiceTest seals a real rule-IR bundle and writes edge-engine/test-vectors/.
       - name: Regenerate the HSE-1 interop vector from Java
         working-directory: BACKEND
+        env:
+          HSE_REGENERATE_INTEROP_VECTOR: "true"
         run: mvn -B --no-transfer-progress test -Dtest=EdgeBundleServiceTest -DfailIfNoSpecifiedTests=false
 
       - name: Fail if the vector was not regenerated
