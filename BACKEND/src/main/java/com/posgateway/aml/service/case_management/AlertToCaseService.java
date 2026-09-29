@@ -118,6 +118,10 @@ public class AlertToCaseService {
                             .slaDeadline(slaDeadline)
                             .daysOpen(0)
                             .build();
+                    newCase.setSuspicionFormedAt(alert.getSuspicionFormedAt() != null
+                            ? alert.getSuspicionFormedAt()
+                            : LocalDateTime.now());
+                    newCase.setAlerts(new java.util.ArrayList<>());
                     ComplianceCase saved = caseRepository.save(newCase);
                     log.info("Created compliance case {} from alert #{} (disposition={})",
                             saved.getCaseReference(), alertId, disposition);

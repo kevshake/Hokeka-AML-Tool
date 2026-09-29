@@ -90,6 +90,15 @@ public class Alert {
     @Column(name = "disposed_at")
     private LocalDateTime disposedAt;
 
+    @Column(name = "suspicion_formed_at")
+    private LocalDateTime suspicionFormedAt;
+
+    @Column(name = "investigation_started_at")
+    private LocalDateTime investigationStartedAt;
+
+    @Column(name = "mlro_notified_at")
+    private LocalDateTime mlroNotifiedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -230,6 +239,30 @@ public class Alert {
 
     public void setDisposedAt(LocalDateTime disposedAt) {
         this.disposedAt = disposedAt;
+    }
+
+    public LocalDateTime getSuspicionFormedAt() {
+        return suspicionFormedAt;
+    }
+
+    public void setSuspicionFormedAt(LocalDateTime suspicionFormedAt) {
+        this.suspicionFormedAt = suspicionFormedAt;
+    }
+
+    public LocalDateTime getInvestigationStartedAt() {
+        return investigationStartedAt;
+    }
+
+    public void setInvestigationStartedAt(LocalDateTime investigationStartedAt) {
+        this.investigationStartedAt = investigationStartedAt;
+    }
+
+    public LocalDateTime getMlroNotifiedAt() {
+        return mlroNotifiedAt;
+    }
+
+    public void setMlroNotifiedAt(LocalDateTime mlroNotifiedAt) {
+        this.mlroNotifiedAt = mlroNotifiedAt;
     }
 
     // ── API aliases ──────────────────────────────────────────────────────────────────────────────

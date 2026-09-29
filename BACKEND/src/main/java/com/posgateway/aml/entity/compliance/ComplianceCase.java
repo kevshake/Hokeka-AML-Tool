@@ -153,6 +153,15 @@ public class ComplianceCase {
     @Column(name = "archive_reference")
     private String archiveReference; // Pointer to cold storage (e.g. S3 path/ARN)
 
+    @Column(name = "suspicion_formed_at")
+    private LocalDateTime suspicionFormedAt;
+
+    @Column(name = "investigation_started_at")
+    private LocalDateTime investigationStartedAt;
+
+    @Column(name = "mlro_notified_at")
+    private LocalDateTime mlroNotifiedAt;
+
     public ComplianceCase() {
     }
 
@@ -427,6 +436,30 @@ public class ComplianceCase {
 
     public void setArchiveReference(String archiveReference) {
         this.archiveReference = archiveReference;
+    }
+
+    public LocalDateTime getSuspicionFormedAt() {
+        return suspicionFormedAt;
+    }
+
+    public void setSuspicionFormedAt(LocalDateTime suspicionFormedAt) {
+        this.suspicionFormedAt = suspicionFormedAt;
+    }
+
+    public LocalDateTime getInvestigationStartedAt() {
+        return investigationStartedAt;
+    }
+
+    public void setInvestigationStartedAt(LocalDateTime investigationStartedAt) {
+        this.investigationStartedAt = investigationStartedAt;
+    }
+
+    public LocalDateTime getMlroNotifiedAt() {
+        return mlroNotifiedAt;
+    }
+
+    public void setMlroNotifiedAt(LocalDateTime mlroNotifiedAt) {
+        this.mlroNotifiedAt = mlroNotifiedAt;
     }
 
     @PrePersist

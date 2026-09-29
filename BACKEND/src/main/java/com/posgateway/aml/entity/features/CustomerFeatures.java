@@ -30,6 +30,8 @@ public class CustomerFeatures {
 
     // ========== Velocity Features (Rolling Windows) ==========
 
+    private Integer txCount1m = 0;
+    private Integer txCount5m = 0;
     private Integer txCount1h = 0;
     private Integer txCount24h = 0;
     private Integer txCount7d = 0;
@@ -110,6 +112,12 @@ public class CustomerFeatures {
 
     public String getCustomerId() { return customerId; }
     public void setCustomerId(String customerId) { this.customerId = customerId; }
+
+    public Integer getTxCount1m() { return txCount1m; }
+    public void setTxCount1m(Integer txCount1m) { this.txCount1m = txCount1m; }
+
+    public Integer getTxCount5m() { return txCount5m; }
+    public void setTxCount5m(Integer txCount5m) { this.txCount5m = txCount5m; }
 
     public Integer getTxCount1h() { return txCount1h; }
     public void setTxCount1h(Integer txCount1h) { this.txCount1h = txCount1h; }

@@ -80,6 +80,12 @@ public class Transaction {
     @Column(name = "country_code", length = 2)
     private String countryCode;
 
+    @Transient
+    private java.math.BigDecimal latitude;
+
+    @Transient
+    private java.math.BigDecimal longitude;
+
     @Column(name = "cash_transaction", nullable = false)
     private boolean cashTransaction;
 
@@ -246,6 +252,22 @@ public class Transaction {
 
     public void setCountryCode(String countryCode) {
         this.countryCode = countryCode;
+    }
+
+    public java.math.BigDecimal getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(java.math.BigDecimal latitude) {
+        this.latitude = latitude;
+    }
+
+    public java.math.BigDecimal getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(java.math.BigDecimal longitude) {
+        this.longitude = longitude;
     }
 
     public boolean isCashTransaction() {

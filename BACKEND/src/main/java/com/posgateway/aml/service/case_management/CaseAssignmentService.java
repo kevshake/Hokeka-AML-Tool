@@ -127,6 +127,9 @@ public class CaseAssignmentService {
         cCase.setAssignedTo(user);
         cCase.setAssignedBy(assignerId != null ? assignerId : 0L); // 0 = System
         cCase.setAssignedAt(LocalDateTime.now());
+        if (cCase.getInvestigationStartedAt() == null) {
+            cCase.setInvestigationStartedAt(LocalDateTime.now());
+        }
         cCase.setStatus(CaseStatus.ASSIGNED);
         cCase.setUpdatedAt(LocalDateTime.now());
 

@@ -100,6 +100,7 @@ public class RuleFeatureEnrichmentService {
         if (transaction.getCra() != null) features.put("cra_score", transaction.getCra());
 
         enrichVelocityAndHistory(transaction, features, now, merchantId, panHash, amountCents);
+        enrichZscoreAmount(transaction, features, now, panHash, amountCents);
         enrichAdvancedVelocityRatios(transaction, features, now, panHash, merchantId);
         enrichStructuringSignals(transaction, features);
         enrichFanInFanOut(transaction, features, now, panHash, merchantId);
@@ -144,6 +145,12 @@ public class RuleFeatureEnrichmentService {
         LocalDateTime thirtyDaysAgo = now.minus(30, ChronoUnit.DAYS);
 
         if (panHash != null) {
+            LocalDateTime oneMinuteAgo = now.minus(1, ChronoUnit.MINUTES);
+            LocalDateTime fiveMinutesAgo = now.minus(5, ChronoUnit.MINUTES);
+            Long panCount1m = transactionRepository.countByPanInTimeWindow(panHash, oneMinuteAgo, now);
+            features.putIfAbsent("pan_txn_count_1m", panCount1m != null ? panCount1m : 0L);
+            Long panCount5m = transactionRepository.countByPanInTimeWindow(panHash, fiveMinutesAgo, now);
+            features.putIfAbsent("pan_txn_count_5m", panCount5m != null ? panCount5m : 0L);
             Long panCount1h = transactionRepository.countByPanInTimeWindow(panHash, oneHourAgo, now);
             features.putIfAbsent("pan_txn_count_1h", panCount1h != null ? panCount1h : 0L);
 
@@ -216,6 +223,31 @@ public class RuleFeatureEnrichmentService {
             Long merchantSum24h = transactionRepository.sumAmountByMerchantInTimeWindow(merchantId, oneDayAgo, now);
             features.put("merchant_amount_sum_24h", merchantSum24h != null ? merchantSum24h / 100.0 : 0.0);
         }
+    }
+
+    private void enrichZscoreAmount(TransactionEntity transaction, Map<String, Object> features,
+                                    LocalDateTime now, String panHash, Long amountCents) {
+        if (features.containsKey("zscore_amount_vs_pan_history") || panHash == null) {
+            return;
+        }
+        LocalDateTime thirtyDaysAgo = now.minus(30, ChronoUnit.DAYS);
+        List<Long> historicalAmounts = transactionRepository.findRecentAmountsByPanBefore(
+                panHash, thirtyDaysAgo, now, org.springframework.data.domain.PageRequest.of(0, 1_000));
+        if (historicalAmounts == null || historicalAmounts.isEmpty() || amountCents == null) {
+            features.putIfAbsent("zscore_amount_vs_pan_history", 0.0);
+            return;
+        }
+        double mean = historicalAmounts.stream().mapToLong(Long::longValue).average().orElse(0.0);
+        double variance = historicalAmounts.stream()
+                .mapToDouble(amount -> {
+                    double difference = amount - mean;
+                    return difference * difference;
+                })
+                .average()
+                .orElse(0.0);
+        double stddev = Math.sqrt(variance);
+        double zScore = stddev > 0 ? (amountCents - mean) / stddev : 0.0;
+        features.put("zscore_amount_vs_pan_history", zScore);
     }
 
     private void enrichAdvancedVelocityRatios(TransactionEntity transaction, Map<String, Object> features,

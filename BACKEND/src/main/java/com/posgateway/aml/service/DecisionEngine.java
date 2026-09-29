@@ -527,6 +527,7 @@ public class DecisionEngine {
         alert.setSarRequired(transaction.isSarRequired());
         alert.setCtrRequired(transaction.isCtrRequired());
         alert.setTriggeredRules(transaction.getTriggeredRules());
+        alert.setSuspicionFormedAt(LocalDateTime.now());
 
         Alert saved = alertRepository.save(alert);
         logger.info("Created alert for transaction {}: {} - {}",

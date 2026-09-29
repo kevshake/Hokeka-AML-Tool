@@ -76,12 +76,14 @@ public class CaseEscalationService {
                 .orElseThrow(() -> new IllegalArgumentException("Case not found"));
 
         User escalationTarget = determineEscalationTarget(complianceCase);
+        User actor = escalatedBy == null ? null : userRepository.findById(escalatedBy)
+                .orElseThrow(() -> new IllegalArgumentException("Escalating user not found"));
 
         caseWorkflowService.escalateCase(
                 caseId,
                 escalationTarget.getId(),
                 reason,
-                userRepository.findById(escalatedBy).orElseThrow());
+                actor);
 
         caseActivityService.logEscalation(
                 caseId,

@@ -11,6 +11,8 @@ import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
 
 import LoginPage from "./pages/Auth/LoginPage";
 import SignupPage from "./pages/Auth/SignupPage";
+import ForgotPasswordPage from "./pages/Auth/ForgotPasswordPage";
+import PasswordResetConfirmPage from "./pages/Auth/PasswordResetConfirmPage";
 
 const DashboardPage = lazy(() => import("./pages/Dashboard/DashboardPage"));
 const CasesPage = lazy(() => import("./pages/Cases/CasesPage"));
@@ -88,6 +90,9 @@ function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
+              <Route path="/password-reset.html" element={<PasswordResetConfirmPage />} />
               <Route
                 path="/*"
                 element={

@@ -67,16 +67,24 @@ public class SarWorkflowService {
         Long pspId = userPspId(creator);
         sar.setPspId(pspId);
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime caseSuspicion = sar.getComplianceCase() != null
+                ? sar.getComplianceCase().getSuspicionFormedAt()
+                : null;
         LocalDateTime suspicionAroseAt = sar.getSuspicionAroseAt() != null
                 ? sar.getSuspicionAroseAt()
-                : now;
+                : (caseSuspicion != null ? caseSuspicion : now);
         if (suspicionAroseAt.isAfter(now.plusMinutes(1))) {
             throw new IllegalArgumentException("Suspicion arose timestamp cannot be in the future");
         }
         sar.setSuspicionAroseAt(suspicionAroseAt);
         if (sar.getSuspicionTimestampSource() == null || sar.getSuspicionTimestampSource().isBlank()) {
-            sar.setSuspicionTimestampSource(sar.getSuspicionAroseAt().equals(now)
-                    ? "REPORT_CREATED" : "OPERATOR_RECORDED");
+            if (sar.getSuspicionAroseAt().equals(now)) {
+                sar.setSuspicionTimestampSource("REPORT_CREATED");
+            } else if (caseSuspicion != null && sar.getSuspicionAroseAt().equals(caseSuspicion)) {
+                sar.setSuspicionTimestampSource("CASE_SUSPICION_FORMED");
+            } else {
+                sar.setSuspicionTimestampSource("OPERATOR_RECORDED");
+            }
         }
         RegulatoryDeadlineService.DeadlineCalculation deadline = regulatoryDeadlineService.calculate(
                 RegulatoryDeadlineService.SAR_STR, sar.getJurisdiction(), pspId, suspicionAroseAt);

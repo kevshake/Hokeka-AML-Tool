@@ -12,6 +12,7 @@ import GlassButton from "../../components/Common/GlassButton";
 import { TwSelect } from "../../components/Common/TwInput";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../lib/apiClient";
+import { requestPasswordReset } from "../../features/api/passwordReset";
 import {
   canManageUsers,
   filterPspsForUser,
@@ -129,8 +130,7 @@ export default function UsersTab() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async (identifier: string) =>
-      apiClient.post("auth/password-reset/request", { identifier }),
+    mutationFn: (identifier: string) => requestPasswordReset(identifier),
     onSuccess: () => {
       setSnackbar({ open: true, message: "Password reset link sent.", severity: "success" });
     },

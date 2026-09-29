@@ -67,6 +67,8 @@ public class FraudDetectionService {
     private static final int SCORE_COUNTRY_HIGH       = 20;
     private static final int SCORE_COUNTRY_CRITICAL   = 35;
     private static final int SCORE_GEO_HOPPING        = 15;  // >3 unique countries in 24h
+    private static final int SCORE_IMPOSSIBLE_TRAVEL  = 45;
+    private static final double IMPOSSIBLE_SPEED_KPH  = 500.0;
     private static final int SCORE_VELOCITY_LOW       = 10;
     private static final int SCORE_VELOCITY_MEDIUM    = 20;
     private static final int SCORE_VELOCITY_HIGH      = 30;
@@ -366,7 +368,56 @@ public class FraudDetectionService {
             logger.warn("IP risk check failed for txn={}: {}", transaction.getTransactionId(), e.getMessage());
         }
 
+        score += assessImpossibleTravel(transaction, riskFactors);
         return score;
+    }
+
+    private int assessImpossibleTravel(Transaction transaction, List<String> riskFactors) {
+        java.math.BigDecimal lat = transaction.getLatitude();
+        java.math.BigDecimal lon = transaction.getLongitude();
+        if (lat == null || lon == null) {
+            return 0;
+        }
+        String customerId = transaction.getAccountNumber();
+        LocalDateTime occurredAt = transaction.getTransactionTimestamp() != null
+                ? transaction.getTransactionTimestamp() : LocalDateTime.now();
+        int score = 0;
+        try {
+            java.util.Optional<FeatureCacheService.GeoPoint> previous =
+                    featureCacheService.getLastLocation(customerId);
+            if (previous.isPresent()) {
+                FeatureCacheService.GeoPoint prior = previous.get();
+                long seconds = java.time.Duration.between(prior.recordedAt(), occurredAt).getSeconds();
+                if (seconds >= 60) {
+                    double distance = distanceKm(prior.latitude(), prior.longitude(),
+                            lat.doubleValue(), lon.doubleValue());
+                    double speed = distance / (seconds / 3600.0);
+                    if (speed > IMPOSSIBLE_SPEED_KPH) {
+                        score = SCORE_IMPOSSIBLE_TRAVEL;
+                        riskFactors.add("impossible travel: implied "
+                                + Math.round(speed) + " kph between consecutive card events");
+                    }
+                }
+            }
+            featureCacheService.recordLastLocation(customerId, lat.doubleValue(), lon.doubleValue(),
+                    occurredAt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        } catch (RuntimeException e) {
+            logger.debug("Impossible-travel check skipped for txn={}: {}",
+                    transaction.getTransactionId(), e.getMessage());
+        }
+        return score;
+    }
+
+    private static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadius = 6371.0088;
+        double firstLat = Math.toRadians(lat1);
+        double secondLat = Math.toRadians(lat2);
+        double latDelta = secondLat - firstLat;
+        double lonDelta = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDelta / 2) * Math.sin(latDelta / 2)
+                + Math.cos(firstLat) * Math.cos(secondLat)
+                * Math.sin(lonDelta / 2) * Math.sin(lonDelta / 2);
+        return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

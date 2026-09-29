@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 @Service
 public class CaseNetworkService {
 
-    @SuppressWarnings("unused")
     private static final Logger logger = LoggerFactory.getLogger(CaseNetworkService.class);
 
     private final ComplianceCaseRepository caseRepository;
@@ -35,18 +34,21 @@ public class CaseNetworkService {
     private final SuspiciousActivityReportRepository sarRepository;
     @SuppressWarnings("unused")
     private final UserRepository userRepository;
+    private final com.posgateway.aml.service.graph.Neo4jGdsService neo4jGdsService;
 
     @Autowired
     public CaseNetworkService(ComplianceCaseRepository caseRepository,
                               CaseTransactionRepository caseTransactionRepository,
                               TransactionRepository transactionRepository,
                               SuspiciousActivityReportRepository sarRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              @Autowired(required = false) com.posgateway.aml.service.graph.Neo4jGdsService neo4jGdsService) {
         this.caseRepository = caseRepository;
         this.caseTransactionRepository = caseTransactionRepository;
         this.transactionRepository = transactionRepository;
         this.sarRepository = sarRepository;
         this.userRepository = userRepository;
+        this.neo4jGdsService = neo4jGdsService;
     }
 
     /**
@@ -122,7 +124,35 @@ public class CaseNetworkService {
                     .build());
         }
 
+        attachNeo4jMetrics(graph, rootCase);
         return graph;
+    }
+
+    private void attachNeo4jMetrics(NetworkGraphDTO graph, ComplianceCase rootCase) {
+        if (neo4jGdsService == null || rootCase.getMerchantId() == null) {
+            return;
+        }
+        try {
+            String merchantId = String.valueOf(rootCase.getMerchantId());
+            Map<String, Object> metrics = new LinkedHashMap<>();
+            Map<String, Object> trail = neo4jGdsService.findMoneyTrail(merchantId, merchantId);
+            if (trail != null) {
+                metrics.putAll(trail);
+            }
+            Map<String, Object> cycles = neo4jGdsService.detectCycles(merchantId);
+            if (cycles != null) {
+                metrics.putAll(cycles);
+            }
+            Map<String, Object> mule = neo4jGdsService.detectMuleProximity(merchantId);
+            if (mule != null) {
+                metrics.putAll(mule);
+            }
+            if (!metrics.isEmpty()) {
+                graph.setNeo4jMetrics(metrics);
+            }
+        } catch (RuntimeException e) {
+            logger.warn("Neo4j GDS metrics skipped for case {}: {}", rootCase.getId(), e.getMessage());
+        }
     }
 
     /**
@@ -283,6 +313,7 @@ public class CaseNetworkService {
     public static class NetworkGraphDTO {
         private List<NetworkNode> nodes = new ArrayList<>();
         private List<NetworkEdge> edges = new ArrayList<>();
+        private Map<String, Object> neo4jMetrics;
 
         public void addNode(NetworkNode node) {
             if (nodes.stream().noneMatch(n -> n.getId().equals(node.getId()))) {
@@ -302,6 +333,14 @@ public class CaseNetworkService {
 
         public List<NetworkEdge> getEdges() {
             return edges;
+        }
+
+        public Map<String, Object> getNeo4jMetrics() {
+            return neo4jMetrics;
+        }
+
+        public void setNeo4jMetrics(Map<String, Object> neo4jMetrics) {
+            this.neo4jMetrics = neo4jMetrics;
         }
     }
 
