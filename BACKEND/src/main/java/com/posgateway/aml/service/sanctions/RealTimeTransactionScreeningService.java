@@ -44,7 +44,7 @@ public class RealTimeTransactionScreeningService {
     private boolean screenCounterparty;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     @Autowired
     public RealTimeTransactionScreeningService(
@@ -131,12 +131,12 @@ public class RealTimeTransactionScreeningService {
         if (result.hasMatches()) {
             logger.warn("Transaction {} screened: {} matches found, blocking={}",
                     transaction.getTxnId(), matches.size(), result.shouldBlock());
-            if (jevEngineAdvisor != null) {
+            if (aiEngineAdvisor != null) {
                 ScreeningMatch primary = matches.get(0);
-                java.util.Map<String, Object> features = buildSanctionsJevFeatures(primary, matches.size());
+                java.util.Map<String, Object> features = buildSanctionsAiFeatures(primary, matches.size());
                 String baseline = result.shouldBlock() ? "BLOCK" : "REVIEW";
-                jevEngineAdvisor.adviseAsync(
-                        com.posgateway.aml.service.jev.JevEngineType.SANCTIONS_DISAMBIGUATION,
+                aiEngineAdvisor.adviseAsync(
+                        com.posgateway.aml.service.ai.decision.AiEngineType.SANCTIONS_DISAMBIGUATION,
                         transaction.getPspId(),
                         baseline,
                         features,
@@ -150,7 +150,7 @@ public class RealTimeTransactionScreeningService {
         return result;
     }
 
-    private static java.util.Map<String, Object> buildSanctionsJevFeatures(ScreeningMatch primary, int matchCount) {
+    private static java.util.Map<String, Object> buildSanctionsAiFeatures(ScreeningMatch primary, int matchCount) {
         java.util.Map<String, Object> features = new java.util.HashMap<>();
         features.put("match_count", matchCount);
         features.put("screened_entity_type", primary.getEntityType());

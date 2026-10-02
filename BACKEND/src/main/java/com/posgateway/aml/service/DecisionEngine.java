@@ -165,43 +165,43 @@ public class DecisionEngine {
 
         checkAmlRules(transaction, features, decision, reasons);
         saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs);
-        maybeConsultJev(transaction, score, features, decision);
+        maybeConsultAi(transaction, score, features, decision);
         logger.info("Decision for transaction {}: {} (score={})",
             transaction.getTxnId(), decision.getAction(), score);
         return decision;
     }
 
-    private void maybeConsultJev(TransactionEntity transaction, Double score,
+    private void maybeConsultAi(TransactionEntity transaction, Double score,
                                  Map<String, Object> features, DecisionResult decision) {
-        if (jevEngineAdvisor == null || score == null) {
+        if (aiEngineAdvisor == null || score == null) {
             return;
         }
         Double holdThreshold = configService.getFraudHoldThreshold();
         Double blockThreshold = configService.getFraudBlockThreshold();
-        boolean borderline = jevEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
+        boolean borderline = aiEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
                 || "ALERT".equals(decision.getAction())
                 || "REVIEW".equals(decision.getAction());
         if (!borderline) {
             return;
         }
-        Map<String, Object> jevFeatures = new HashMap<>();
-        jevFeatures.put("score", score);
-        jevFeatures.put("action", decision.getAction());
-        jevFeatures.put("reasons", decision.getReasons());
+        Map<String, Object> aiFeatures = new HashMap<>();
+        aiFeatures.put("score", score);
+        aiFeatures.put("action", decision.getAction());
+        aiFeatures.put("reasons", decision.getReasons());
         if (features != null) {
-            jevFeatures.putAll(features);
+            aiFeatures.putAll(features);
         }
         if (transaction.getAmountCents() != null) {
-            jevFeatures.put("amount_cents", transaction.getAmountCents());
+            aiFeatures.put("amount_cents", transaction.getAmountCents());
         }
         if (transaction.getCurrency() != null) {
-            jevFeatures.put("currency", transaction.getCurrency());
+            aiFeatures.put("currency", transaction.getCurrency());
         }
-        jevEngineAdvisor.adviseAsync(
-                com.posgateway.aml.service.jev.JevEngineType.TRANSACTION_RISK,
+        aiEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.ai.decision.AiEngineType.TRANSACTION_RISK,
                 transaction.getPspId(),
                 decision.getAction(),
-                jevFeatures,
+                aiFeatures,
                 transaction.getTxnId(),
                 null,
                 null,
@@ -344,7 +344,7 @@ public class DecisionEngine {
     private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
@@ -532,14 +532,14 @@ public class DecisionEngine {
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
 
-        if (jevEngineAdvisor != null) {
+        if (aiEngineAdvisor != null) {
             Map<String, Object> alertFeatures = new HashMap<>();
             alertFeatures.put("action", action);
             alertFeatures.put("reason", reason);
             alertFeatures.put("score", score);
             alertFeatures.put("severity", saved.getSeverity());
-            jevEngineAdvisor.adviseAsync(
-                    com.posgateway.aml.service.jev.JevEngineType.ALERT_TRIAGE,
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.ALERT_TRIAGE,
                     transaction.getPspId(),
                     action,
                     alertFeatures,

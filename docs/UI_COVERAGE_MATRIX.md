@@ -51,7 +51,7 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 | Crypto / VASP | *(backend module)* | features docs | blocker: no Console surface; backend-only module |
 | Notification bell | Header bell → `/messages` + unread badge (`useNavBadges` / `GET /messages/unread/count`) | Messages API | implemented+aligned |
 | Hokeka AI recommendation (PSP-facing) | `AiVerdictPanel`, screening flows | 06 (no vendor names) | implemented+aligned |
-| JEV operator settings | `/settings` → JEV AI (platform only) | Hidden from docs-site PSP build | implemented+aligned |
+| Hokeka AI operator settings | `/settings` → Hokeka AI (platform only) | Hidden from docs-site PSP build | implemented+aligned |
 
 ## Summary counts
 

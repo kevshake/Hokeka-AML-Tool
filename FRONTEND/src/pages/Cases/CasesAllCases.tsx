@@ -11,7 +11,7 @@ import TwPagination from "../../components/Common/TwPagination";
 import GlassModal from "../../components/Common/GlassModal";
 import GlassButton from "../../components/Common/GlassButton";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 
 const statusVariant = (status: string): "info" | "warning" | "success" | "danger" | "default" => {
   if (status === "NEW" || status === "ASSIGNED") return "info";
@@ -364,7 +364,7 @@ export default function CasesAllCases() {
               />
             )}
             <div className="sm:col-span-2">
-              <AiVerdictPanel auditPath={`jev/audit/case/${viewCase.id}`} />
+              <AiVerdictPanel auditPath={`ai/audit/case/${viewCase.id}`} />
             </div>
           </div>
         )}

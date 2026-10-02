@@ -244,7 +244,7 @@ public class EdgeDistributionController {
 
     /**
      * Edge → Control Plane JEV decision path. Authenticated via mTLS + ACTIVE node state.
-     * OpenRouter is called only here on the Control Plane — never on the Edge Node.
+     * Laya is called only here on the Control Plane — never on the Edge Node.
      */
     @PostMapping(path = "/decision", consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)

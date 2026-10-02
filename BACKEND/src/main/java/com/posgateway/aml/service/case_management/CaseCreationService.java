@@ -41,7 +41,7 @@ public class CaseCreationService {
     private final RuleDefinitionRepository ruleDefinitionRepository;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     @Autowired
     public CaseCreationService(ComplianceCaseRepository complianceCaseRepository,
@@ -272,15 +272,15 @@ public class CaseCreationService {
         cCase.setUpdatedAt(LocalDateTime.now());
         complianceCaseRepository.save(cCase);
 
-        if (jevEngineAdvisor != null) {
+        if (aiEngineAdvisor != null) {
             Map<String, Object> caseFeatures = new HashMap<>();
             caseFeatures.put("alertType", alertType);
             caseFeatures.put("ruleName", ruleName);
             caseFeatures.put("score", score);
             caseFeatures.put("description", description);
             caseFeatures.put("priority", cCase.getPriority() != null ? cCase.getPriority().name() : null);
-            jevEngineAdvisor.adviseAsync(
-                    com.posgateway.aml.service.jev.JevEngineType.CASE_TRIAGE,
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.CASE_TRIAGE,
                     cCase.getPspId(),
                     cCase.getStatus() != null ? cCase.getStatus().name() : "NEW",
                     caseFeatures,
