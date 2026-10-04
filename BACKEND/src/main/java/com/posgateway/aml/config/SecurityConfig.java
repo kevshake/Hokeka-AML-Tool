@@ -168,9 +168,10 @@ public class SecurityConfig {
                                                 // normal user chain and its @PreAuthorize rules.
                                                 .requestMatchers(
                                                                 "/edge/enroll", "/edge/bundle", "/edge/metrics",
-                                                                "/edge/decision",
+                                                                "/edge/decision", "/edge/assessments",
                                                                 "/api/v1/edge/enroll", "/api/v1/edge/bundle",
-                                                                "/api/v1/edge/metrics", "/api/v1/edge/decision")
+                                                                "/api/v1/edge/metrics", "/api/v1/edge/decision",
+                                                                "/api/v1/edge/assessments")
                                                 .permitAll()
                                                 .requestMatchers("/edge/**", "/api/v1/edge/**").authenticated()
                                                 // On-prem PSP service auth (client credentials in body; no user session).

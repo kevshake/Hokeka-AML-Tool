@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  * - aml:customer:{customerId}:velocity:5m     - Rolling 5m velocity counter
  * - aml:customer:{customerId}:velocity:1h     - Rolling 1h velocity counter
  * - aml:customer:{customerId}:countries       - Recent countries (sorted set)
- * - aml:blacklist:{type}                      - Blacklist entries (set)
+ * - aml:blacklist:{psp|platform}:{type}       - Tenant-scoped blacklist entries (set)
  *
  * Performance: target &lt; 1ms for feature retrieval.
  */
@@ -46,7 +46,7 @@ public class FeatureCacheService {
     private static final String KEY_FEATURES = KEY_PREFIX + "customer:%s:features";
     private static final String KEY_TX_TIMESTAMPS = KEY_PREFIX + "customer:%s:tx:timestamps";
     private static final String KEY_COUNTRIES = KEY_PREFIX + "customer:%s:countries";
-    private static final String KEY_BLACKLIST = KEY_PREFIX + "blacklist:%s";
+    private static final String KEY_BLACKLIST = KEY_PREFIX + "blacklist:%s:%s";
     private static final String KEY_VELOCITY = KEY_PREFIX + "customer:%s:velocity:%s";
     private static final String KEY_LAST_GEO = KEY_PREFIX + "customer:%s:last-geo";
 
@@ -273,35 +273,57 @@ public class FeatureCacheService {
 
     // ========== Blacklist / Whitelist ==========
 
-    /** Check if value is in blacklist. */
-    public boolean isBlacklisted(String type, String value) {
+    private static String blacklistPspSegment(Long pspId) {
+        return pspId == null ? "platform" : String.valueOf(pspId);
+    }
+
+    /** Check if value is in the tenant (or platform) blacklist set. */
+    public boolean isBlacklisted(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             return Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(key, value));
         } catch (Exception e) {
-            logger.error("Error checking blacklist: {}:{}", type, value, e);
+            logger.error("Error checking blacklist: psp={} {}:{}", pspId, type, value, e);
             return false;
         }
     }
 
-    /** Add to blacklist. */
-    public void addToBlacklist(String type, String value) {
+    /** @deprecated Prefer {@link #isBlacklisted(Long, String, String)}. */
+    @Deprecated
+    public boolean isBlacklisted(String type, String value) {
+        return isBlacklisted(null, type, value);
+    }
+
+    /** Add to the tenant (or platform) blacklist set. */
+    public void addToBlacklist(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             stringRedisTemplate.opsForSet().add(key, value);
         } catch (Exception e) {
-            logger.error("Error adding to blacklist: {}:{}", type, value, e);
+            logger.error("Error adding to blacklist: psp={} {}:{}", pspId, type, value, e);
         }
     }
 
-    /** Remove from blacklist. */
-    public void removeFromBlacklist(String type, String value) {
+    /** @deprecated Prefer {@link #addToBlacklist(Long, String, String)}. */
+    @Deprecated
+    public void addToBlacklist(String type, String value) {
+        addToBlacklist(null, type, value);
+    }
+
+    /** Remove from the tenant (or platform) blacklist set. */
+    public void removeFromBlacklist(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             stringRedisTemplate.opsForSet().remove(key, value);
         } catch (Exception e) {
-            logger.error("Error removing from blacklist: {}:{}", type, value, e);
+            logger.error("Error removing from blacklist: psp={} {}:{}", pspId, type, value, e);
         }
+    }
+
+    /** @deprecated Prefer {@link #removeFromBlacklist(Long, String, String)}. */
+    @Deprecated
+    public void removeFromBlacklist(String type, String value) {
+        removeFromBlacklist(null, type, value);
     }
 
     // ========== Country Tracking ==========

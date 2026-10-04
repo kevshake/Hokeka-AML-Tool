@@ -295,15 +295,15 @@ public class DecisionEngine {
         List<String> reasons = new ArrayList<>();
         if (configService.isBlacklistEnabled()) {
             String panHash = transaction.getPanHash();
-            if (panHash != null && paymentBlacklistService.isBlacklisted("pan", panHash)) {
+            if (panHash != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "pan", panHash)) {
                 reasons.add("BLACKLIST: PAN hash is blacklisted");
             }
             String terminalId = transaction.getTerminalId();
-            if (terminalId != null && paymentBlacklistService.isBlacklisted("terminal", terminalId)) {
+            if (terminalId != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "terminal", terminalId)) {
                 reasons.add("BLACKLIST: Terminal is blacklisted");
             }
             String ip = transaction.getIpAddress();
-            if (ip != null && paymentBlacklistService.isBlacklisted("ip", ip)) {
+            if (ip != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "ip", ip)) {
                 reasons.add("BLACKLIST: IP address is blacklisted");
             }
         }
@@ -342,6 +342,9 @@ public class DecisionEngine {
      */
     @Autowired(required = false)
     private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.assessment.FindingRecorder findingRecorder;
 
     @Autowired(required = false)
     private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
@@ -498,7 +501,7 @@ public class DecisionEngine {
         // Idempotent and best-effort — never breaks the decline path; a repeat DNH extends the window.
         String panHash = transaction.getPanHash();
         if (panHash != null && !panHash.isBlank()) {
-            paymentBlacklistService.addToBlacklist("pan", panHash,
+            paymentBlacklistService.addToBlacklist(transaction.getPspId(), "pan", panHash,
                     "Do Not Honour — auto-declined by DecisionEngine: " + String.join("; ", reasons),
                     null, LocalDateTime.now().plusDays(dnhBlockDays));
         }
@@ -675,6 +678,14 @@ public class DecisionEngine {
             transaction.setDecision(decision.getAction());
             transaction.setRiskLevel(resolveFinalRiskLevel(decision.getAction(), transaction.getRiskLevel()));
             transactionRepository.save(transaction);
+            if (findingRecorder != null) {
+                findingRecorder.recordDecision(
+                        transaction,
+                        decision.getAction(),
+                        score,
+                        latencyMs,
+                        toFindingDrafts(decision));
+            }
 
             TransactionFeatures txnFeatures = new TransactionFeatures();
             txnFeatures.setTxnId(transaction.getTxnId());

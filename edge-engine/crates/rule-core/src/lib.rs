@@ -61,7 +61,9 @@ pub enum Condition {
 pub enum Action {
     Allow,
     Alert,
+    Flag,
     Hold,
+    Suspend,
     Block,
 }
 
@@ -70,8 +72,10 @@ impl Action {
         match self {
             Action::Allow => 0,
             Action::Alert => 1,
-            Action::Hold => 2,
-            Action::Block => 3,
+            Action::Flag => 2,
+            Action::Hold => 3,
+            Action::Suspend => 4,
+            Action::Block => 5,
         }
     }
     /// The stronger of two actions.
@@ -96,6 +100,9 @@ pub struct Rule {
     pub score: i32,
     #[serde(default)]
     pub priority: i32,
+    /// Control-plane rule_versions.id when the bundle carried one. Absent on older bundles.
+    #[serde(default)]
+    pub rule_version_id: Option<u64>,
 }
 
 /// A versioned, per-PSP bundle of rules — the plaintext inside an HSE-1 envelope.
@@ -103,6 +110,9 @@ pub struct Rule {
 pub struct RuleBundle {
     pub version: u64,
     pub psp_id: i64,
+    /// Content hash of the rule-version manifest. Empty on bundles sealed before WP-04.
+    #[serde(default)]
+    pub manifest_hash: String,
     pub rules: Vec<Rule>,
 }
 
@@ -118,6 +128,9 @@ pub struct Decision {
     pub action: Action,
     pub score: i32,
     pub triggered_rule_ids: Vec<u64>,
+    /// Parallel to triggered_rule_ids. None when that rule had no version id in the bundle.
+    #[serde(default)]
+    pub triggered_rule_version_ids: Vec<Option<u64>>,
     pub reasons: Vec<String>,
 }
 
@@ -129,6 +142,7 @@ pub fn evaluate(bundle: &RuleBundle, features: &Features) -> Decision {
     let mut action = Action::Allow;
     let mut score: i32 = 0;
     let mut triggered = Vec::new();
+    let mut triggered_versions = Vec::new();
     let mut reasons = Vec::new();
 
     for rule in &bundle.rules {
@@ -136,6 +150,7 @@ pub fn evaluate(bundle: &RuleBundle, features: &Features) -> Decision {
             action = action.max(rule.action);
             score = score.saturating_add(rule.score);
             triggered.push(rule.id);
+            triggered_versions.push(rule.rule_version_id);
             reasons.push(match &rule.description {
                 Some(d) if !d.is_empty() => d.clone(),
                 _ => rule.name.clone(),
@@ -147,6 +162,7 @@ pub fn evaluate(bundle: &RuleBundle, features: &Features) -> Decision {
         action,
         score,
         triggered_rule_ids: triggered,
+        triggered_rule_version_ids: triggered_versions,
         reasons,
     }
 }
@@ -229,6 +245,7 @@ mod tests {
         RuleBundle {
             version: 1,
             psp_id: 42,
+            manifest_hash: String::new(),
             rules,
         }
     }
@@ -247,6 +264,7 @@ mod tests {
             action: Action::Block,
             score: 50,
             priority: 10,
+            rule_version_id: None,
         }]);
         let d = evaluate(&b, &features(&[("amount", Value::Num(25000.0))]));
         assert_eq!(d.action, Action::Block);
@@ -269,6 +287,7 @@ mod tests {
                 action: Action::Alert,
                 score: 20,
                 priority: 1,
+            rule_version_id: None,
             },
             Rule {
                 id: 2,
@@ -282,6 +301,7 @@ mod tests {
                 action: Action::Hold,
                 score: 30,
                 priority: 1,
+            rule_version_id: None,
             },
         ]);
         let d = evaluate(
@@ -337,6 +357,7 @@ mod tests {
             action: Action::Hold,
             score: 40,
             priority: 5,
+            rule_version_id: None,
         }]);
 
         let hit = evaluate(
@@ -377,6 +398,7 @@ mod tests {
             action: Action::Block,
             score: 99,
             priority: 1,
+            rule_version_id: None,
         }]);
         let d = evaluate(&b, &features(&[("amount", Value::Num(5.0))]));
         assert_eq!(d.action, Action::Allow);
@@ -400,5 +422,31 @@ mod tests {
         assert_eq!(d.action, Action::Hold);
         assert_eq!(d.score, 25);
         assert_eq!(d.triggered_rule_ids, vec![100]);
+        assert_eq!(d.triggered_rule_version_ids, vec![None]);
+    }
+
+    #[test]
+    fn hit_carries_rule_version_id_and_flag_suspend_stay_distinct() {
+        let json = br#"{
+          "version": 3,
+          "psp_id": 42,
+          "manifest_hash": "sha256:abc",
+          "rules": [
+            {"id": 1, "name": "flag", "rule_version_id": 11,
+             "condition": {"type":"cmp","field":"amount","op":"GT","value": 1},
+             "action": "FLAG", "score": 5, "priority": 1},
+            {"id": 2, "name": "suspend", "rule_version_id": 22,
+             "condition": {"type":"cmp","field":"amount","op":"GT","value": 10},
+             "action": "SUSPEND", "score": 9, "priority": 1}
+          ]
+        }"#;
+        let b = RuleBundle::from_json(json).expect("bundle");
+        let flag_only = evaluate(&b, &features(&[("amount", Value::Num(5.0))]));
+        assert_eq!(flag_only.action, Action::Flag);
+        assert_eq!(flag_only.triggered_rule_version_ids, vec![Some(11)]);
+        let both = evaluate(&b, &features(&[("amount", Value::Num(20.0))]));
+        assert_eq!(both.action, Action::Suspend);
+        assert_eq!(both.triggered_rule_ids, vec![1, 2]);
+        assert_eq!(both.triggered_rule_version_ids, vec![Some(11), Some(22)]);
     }
 }

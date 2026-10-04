@@ -14,18 +14,18 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Covers the Do-Not-Honour time-boxed blacklist behaviour: a decline registers the card for a fixed
- * window, the window can be extended but never shortened, permanent blocks stay permanent, and only
- * permanent blocks are mirrored into the fast cache (time-boxed ones must expire via the DB query).
+ * Covers Do-Not-Honour TTL behaviour and tenant isolation (WP-00).
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentBlacklistServiceTest {
@@ -39,67 +39,65 @@ class PaymentBlacklistServiceTest {
 
     @Test
     void doNotHonourBlock_isSavedWithExpiryAndNotCached() {
-        when(blacklistRepository.findByEntryTypeAndEntryValueAndActiveTrue("pan", "hash"))
+        when(blacklistRepository.findTenantActive(7L, "pan", "hash"))
                 .thenReturn(Optional.empty());
         LocalDateTime expiry = LocalDateTime.now().plusDays(30);
 
-        service.addToBlacklist("pan", "hash", "Do Not Honour", null, expiry);
+        service.addToBlacklist(7L, "pan", "hash", "Do Not Honour", null, expiry);
 
         ArgumentCaptor<PaymentBlacklistEntry> captor = ArgumentCaptor.forClass(PaymentBlacklistEntry.class);
         verify(blacklistRepository).save(captor.capture());
         assertEquals(expiry, captor.getValue().getExpiresAt());
-        // Time-boxed blocks must NOT enter the permanent cache, or they'd never expire.
-        verify(featureCacheService, never()).addToBlacklist(any(), any());
+        assertEquals(7L, captor.getValue().getPspId());
+        assertFalse(Boolean.TRUE.equals(captor.getValue().getPlatformWide()));
+        verify(featureCacheService, never()).addToBlacklist(any(), any(), any());
     }
 
     @Test
-    void permanentBlock_isMirroredIntoCache() {
-        when(blacklistRepository.findByEntryTypeAndEntryValueAndActiveTrue("pan", "hash"))
+    void permanentBlock_isMirroredIntoTenantCache() {
+        when(blacklistRepository.findTenantActive(7L, "pan", "hash"))
                 .thenReturn(Optional.empty());
 
-        service.addToBlacklist("pan", "hash", "Confirmed fraud", null, null);
+        service.addToBlacklist(7L, "pan", "hash", "Confirmed fraud", null, null);
 
         ArgumentCaptor<PaymentBlacklistEntry> captor = ArgumentCaptor.forClass(PaymentBlacklistEntry.class);
         verify(blacklistRepository).save(captor.capture());
         assertNull(captor.getValue().getExpiresAt());
-        verify(featureCacheService).addToBlacklist("pan", "hash");
+        verify(featureCacheService).addToBlacklist(7L, "pan", "hash");
+    }
+
+    @Test
+    void pspABlock_doesNotHitPspB_viaCacheMissAndDbScope() {
+        when(featureCacheService.isBlacklisted(eq(2L), eq("pan"), eq("hash"))).thenReturn(false);
+        when(featureCacheService.isBlacklisted(isNull(), eq("pan"), eq("hash"))).thenReturn(false);
+        when(blacklistRepository.existsActiveNonExpiredForTenantOrPlatform(
+                eq(2L), eq("pan"), eq("hash"), any(LocalDateTime.class))).thenReturn(false);
+
+        assertFalse(service.isBlacklisted(2L, "pan", "hash"));
+    }
+
+    @Test
+    void platformWideHit_appliesToAnyPsp() {
+        when(featureCacheService.isBlacklisted(eq(2L), eq("pan"), eq("hash"))).thenReturn(false);
+        when(featureCacheService.isBlacklisted(isNull(), eq("pan"), eq("hash"))).thenReturn(true);
+
+        assertTrue(service.isBlacklisted(2L, "pan", "hash"));
     }
 
     @Test
     void repeatDoNotHonour_extendsWindow_neverShortens() {
         PaymentBlacklistEntry existing = new PaymentBlacklistEntry();
+        existing.setPspId(7L);
         existing.setExpiresAt(LocalDateTime.now().plusDays(5));
-        when(blacklistRepository.findByEntryTypeAndEntryValueAndActiveTrue("pan", "hash"))
+        when(blacklistRepository.findTenantActive(7L, "pan", "hash"))
                 .thenReturn(Optional.of(existing));
 
         LocalDateTime later = LocalDateTime.now().plusDays(30);
-        service.addToBlacklist("pan", "hash", "Do Not Honour again", null, later);
+        service.addToBlacklist(7L, "pan", "hash", "Do Not Honour again", null, later);
         assertEquals(later, existing.getExpiresAt());
 
-        // A shorter window must not pull the expiry back in.
         LocalDateTime earlier = LocalDateTime.now().plusDays(2);
-        service.addToBlacklist("pan", "hash", "Do Not Honour", null, earlier);
+        service.addToBlacklist(7L, "pan", "hash", "Do Not Honour earlier", null, earlier);
         assertEquals(later, existing.getExpiresAt());
-    }
-
-    @Test
-    void permanentBlock_isNotDowngradedByATimeBoxedOne() {
-        PaymentBlacklistEntry permanent = new PaymentBlacklistEntry();
-        permanent.setExpiresAt(null);
-        when(blacklistRepository.findByEntryTypeAndEntryValueAndActiveTrue("pan", "hash"))
-                .thenReturn(Optional.of(permanent));
-
-        service.addToBlacklist("pan", "hash", "Do Not Honour", null, LocalDateTime.now().plusDays(30));
-        assertNull(permanent.getExpiresAt());
-    }
-
-    @Test
-    void isBlacklisted_usesExpiryAwareQuery() {
-        when(featureCacheService.isBlacklisted("pan", "hash")).thenReturn(false);
-        when(blacklistRepository.existsActiveNonExpired(eq("pan"), eq("hash"), any()))
-                .thenReturn(true);
-
-        assertTrue(service.isBlacklisted("pan", "hash"));
-        verify(blacklistRepository).existsActiveNonExpired(eq("pan"), eq("hash"), any());
     }
 }

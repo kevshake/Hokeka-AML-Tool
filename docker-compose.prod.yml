@@ -247,6 +247,20 @@ services:
       DOCUMENT_ANTIVIRUS_REQUIRED: "true"
       DOCUMENT_ANTIVIRUS_HOST: clamav-prod
       DOCUMENT_ANTIVIRUS_PORT: 3310
+      # JEV AI decision layer (Control Plane only — never set these on Edge Nodes).
+      # Empty OPENROUTER_API_KEY or JEV_MODEL = JEV disabled; rules-only fallback.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      JEV_MODEL: ${JEV_MODEL:-}
+      JEV_FALLBACK_MODEL: ${JEV_FALLBACK_MODEL:-}
+      JEV_TIMEOUT: ${JEV_TIMEOUT:-15s}
+      JEV_INLINE_TIMEOUT: ${JEV_INLINE_TIMEOUT:-500ms}
+      JEV_MAX_TOKENS: ${JEV_MAX_TOKENS:-1024}
+      JEV_TEMPERATURE: ${JEV_TEMPERATURE:-0.2}
+      JEV_HTTP_REFERER: ${JEV_HTTP_REFERER:-https://hokeka.com}
+      JEV_APP_TITLE: ${JEV_APP_TITLE:-Hokeka}
+      JEV_DAILY_CALL_BUDGET_PER_PSP: ${JEV_DAILY_CALL_BUDGET_PER_PSP:-0}
+      JEV_DAILY_SPEND_CAP_USD_PER_PSP: ${JEV_DAILY_SPEND_CAP_USD_PER_PSP:-0}
       # JVM optimization for production
       JAVA_OPTS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom"
     # Exposed for host nginx proxy

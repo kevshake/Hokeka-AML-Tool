@@ -96,8 +96,9 @@ export default function WebhooksTab() {
             Webhook subscriptions
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Get notified in real time instead of polling. Only <strong>RISK_ALERT</strong> is currently
-            delivered — other event types can be subscribed to, but nothing emits them yet.
+            Get notified in real time instead of polling. Delivered events are{" "}
+            <strong>RISK_ALERT</strong>, <strong>CASE_UPDATE</strong>, and{" "}
+            <strong>MERCHANT_STATUS_CHANGE</strong>.
           </Typography>
         </div>
       </div>

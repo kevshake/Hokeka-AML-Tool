@@ -43,6 +43,9 @@ public class TransactionRequestDTO {
     @Size(max = 200, message = "Client reference must not exceed 200 characters")
     private String clientReference;
 
+    @Size(max = 128, message = "Edge assessment id must not exceed 128 characters")
+    private String edgeAssessmentId;
+
     @Size(max = 255, message = "Customer account reference must not exceed 255 characters")
     private String customerAccountReference;
     @Email(message = "Customer email must be a valid email address")
@@ -150,5 +153,7 @@ public class TransactionRequestDTO {
     }
     public String getCustomerEmail() { return customerEmail; }
     public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+    public String getEdgeAssessmentId() { return edgeAssessmentId; }
+    public void setEdgeAssessmentId(String edgeAssessmentId) { this.edgeAssessmentId = edgeAssessmentId; }
 }
 

@@ -29,7 +29,7 @@ import java.time.Duration;
  * - aml:customer:{customerId}:features - Main feature object
  * - aml:customer:{customerId}:tx:1h     - Rolling 1h counter (sorted set)
  * - aml:customer:{customerId}:velocity  - Velocity tracking
- * - aml:blacklist:{type}                - Blacklist entries (no expiry)
+ * - aml:blacklist:{psp|platform}:{type} - Tenant-scoped blacklist entries (no expiry)
  * - graph:* / kyc_*: / screening_*: ... - per-feature namespaces (see callers)
  *
  * Performance Targets:

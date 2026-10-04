@@ -30,7 +30,7 @@ Built assets land in `docs-site/dist/`. Deploy that folder to any static host (n
 
 ## Features
 
-- **Live markdown** — all pages under `docs/install/*.md` (README + processes 01–06)
+- **Live markdown** — all pages under `docs/install/*.md` (README + processes 01–07). Process 07 is operator-only (`VITE_INCLUDE_OPERATOR_DOCS=true`), same as Console and Control Plane.
 - **Full-text search** — client-side FlexSearch index across titles and body text
 - **Catalog** — sort by install order, title, or audience; filter by audience and tag
 - **Illustrations** — hero images in `public/illustrations/` on matching pages and the overview

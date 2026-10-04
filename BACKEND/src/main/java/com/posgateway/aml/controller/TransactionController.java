@@ -26,6 +26,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 import com.posgateway.aml.service.security.PspIsolationService;
+import com.posgateway.aml.service.edge.EdgeAssessmentConflictException;
+import com.posgateway.aml.service.edge.EdgeAssessmentService;
 
 import com.posgateway.aml.mapper.FraudDetectionMapper;
 import com.posgateway.aml.repository.TransactionRepository;
@@ -57,6 +59,7 @@ public class TransactionController {
     private final RequestRateLimiter rateLimiter;
     private final ConnectionCleanupService cleanupService;
     private final PspIsolationService pspIsolationService;
+    private final EdgeAssessmentService edgeAssessments;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -80,7 +83,8 @@ public class TransactionController {
             ConnectionCleanupService cleanupService,
             TransactionRepository transactionRepository,
             FraudDetectionMapper fraudMapper,
-            PspIsolationService pspIsolationService) {
+            PspIsolationService pspIsolationService,
+            EdgeAssessmentService edgeAssessments) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -92,6 +96,7 @@ public class TransactionController {
         this.transactionRepository = transactionRepository;
         this.fraudMapper = fraudMapper;
         this.pspIsolationService = pspIsolationService;
+        this.edgeAssessments = edgeAssessments;
     }
 
     /**
@@ -125,6 +130,20 @@ public class TransactionController {
 
             // Step 1: Ingest transaction (store in database)
             TransactionEntity transaction = ingestionService.ingestTransaction(request);
+
+            if (requestDTO.getEdgeAssessmentId() != null && !requestDTO.getEdgeAssessmentId().isBlank()) {
+                try {
+                    FraudDetectionResult adopted = edgeAssessments
+                            .adopt(transaction, requestDTO.getEdgeAssessmentId())
+                            .orElseThrow(() -> new IllegalStateException("edge assessment id was present"));
+                    return CompletableFuture.completedFuture(
+                            ResponseEntity.ok(fraudMapper.toResponse(adopted)));
+                } catch (EdgeAssessmentConflictException conflict) {
+                    return CompletableFuture.completedFuture(
+                            ResponseEntity.status(HttpStatus.CONFLICT)
+                                    .body(createErrorResponse(conflict.getMessage())));
+                }
+            }
 
             // Check concurrent request limit
             int current = currentConcurrentRequests.incrementAndGet();

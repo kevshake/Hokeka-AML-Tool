@@ -16,7 +16,7 @@ Deep technical reference (secrets, compose internals, release pipeline details):
 |------|----------|-------|-------------|
 | **PSP / client infrastructure engineer** | **Edge Node** — local transaction evaluation + Aerospike feature store | PSP on-premises servers | [01 — Client Edge Node](01-client-edge-node.md) |
 | **PSP / client integration engineer** | **Dual-post API wiring** — `/edge/evaluate` + cloud ingest (not a server) | PSP API / payment nodes | [06 — PSP API dual-post](06-psp-api-dual-post-integration.md) |
-| **Hokeka platform ops** | **Control Plane** — API, Postgres, Kafka, aml-microservice, etc. | Hokeka Hostinger VPS | [03 — Control Plane](03-control-plane.md) |
+| **Hokeka platform ops** | **Control Plane** — API, Postgres, Kafka, aml-microservice, **JEV AI** (OpenRouter), etc. | Hokeka Hostinger VPS | [03 — Control Plane](03-control-plane.md) · [07 — AI & client install](07-ai-decision-layer-client-install.md) |
 | **Hokeka platform ops** | **Console** — operator SPA (alerts, cases, edge fleet, rules) | Same VPS as Control Plane (via `frontend-prod`) | [02 — Console](02-console-dashboard.md) |
 | **Hokeka release ops** | **Edge artifact CDN** — packages.hokeka.com, signing, release workflow | Separate Hostinger VPS (or shared docroot) | [04 — Packages CDN & edge release](04-packages-cdn-and-edge-release.md) |
 | **Hokeka engineer** | **Local full stack** — BACKEND + Console + infra for development | Developer laptop / CI | [05 — Local developer stack](05-local-developer-stack.md) |
@@ -36,6 +36,7 @@ Follow these in order for a **new PSP go-live**:
 | 3 | [04 — Packages CDN](04-packages-cdn-and-edge-release.md) | Hokeka publishes signed Edge artifacts clients download |
 | 4 | [01 — Client Edge Node](01-client-edge-node.md) | PSP installs on-prem evaluation node; enroll from Console |
 | 5 | [06 — PSP API dual-post](06-psp-api-dual-post-integration.md) | PSP wires API nodes: pre-auth edge + post-auth cloud ingest |
+| — | [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md) | Enable JEV/Hokeka AI on Control Plane; do **not** embed AI into Edge `install.sh` |
 
 For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-developer-stack.md) instead of steps 1–2 on a laptop.
 
@@ -51,6 +52,7 @@ For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-d
 | [04-packages-cdn-and-edge-release.md](04-packages-cdn-and-edge-release.md) | Hokeka release ops | packages.hokeka.com layout, GPG signing, GitHub release workflow |
 | [05-local-developer-stack.md](05-local-developer-stack.md) | Hokeka engineers | Java 21, Postgres, BACKEND dev profile, FRONTEND Vite |
 | [06-psp-api-dual-post-integration.md](06-psp-api-dual-post-integration.md) | PSP integration | Wire evaluate + ingest; webhooks; enrollment from Console |
+| [07-ai-decision-layer-client-install.md](07-ai-decision-layer-client-install.md) | Product / platform | JEV / Hokeka AI vs “Laya AI”; why Edge Linux installer does **not** ship AI; Control Plane enablement |
 
 ---
 

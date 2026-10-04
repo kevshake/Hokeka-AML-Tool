@@ -148,11 +148,8 @@ public class TransactionIngestionService {
         transaction.setAcquirerResponse(transactionRequest.getAcquirerResponse());
         transaction.setDirection(transactionRequest.getDirection()); // Store Direction
 
-        // Calculate and store riskLevel and decision for pagination performance
-        String riskLevel = calculateRiskLevel(transaction);
-        String decision = calculateDecision(riskLevel);
-        transaction.setRiskLevel(riskLevel);
-        transaction.setDecision(decision);
+        // TRS stays as data. DecisionEngine owns the decision; do not pre-decide from TRS.
+        transaction.setRiskLevel(calculateRiskLevel(transaction));
 
         TransactionEntity saved = transactionRepository.save(transaction);
 
@@ -167,7 +164,7 @@ public class TransactionIngestionService {
                 saved.getTerminalId());
 
         logger.info("Transaction ingested successfully: txnId={}, merchantId={}, riskLevel={}, decision={}",
-                saved.getTxnId(), saved.getMerchantId(), riskLevel, decision);
+                saved.getTxnId(), saved.getMerchantId(), saved.getRiskLevel(), saved.getDecision());
 
         return saved;
     }
@@ -246,13 +243,6 @@ public class TransactionIngestionService {
         if (score >= 51) return "HIGH";
         if (score >= 26) return "MEDIUM";
         return "LOW";
-    }
-
-    /**
-     * Calculate decision based on risk level
-     */
-    private String calculateDecision(String riskLevel) {
-        return com.posgateway.aml.model.TransactionDecision.fromRiskLevel(riskLevel).name();
     }
 
     /**

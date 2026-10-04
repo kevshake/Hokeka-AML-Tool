@@ -58,6 +58,10 @@ public final class EdgeMetricsAggregator {
             case ALERT -> alerted.increment();
             case HOLD -> held.increment();
             case BLOCK -> blocked.increment();
+            case FLAG, SUSPEND -> {
+                // The shipped metrics report still has only the four historical buckets.
+                // FLAG and SUSPEND stay in totalEvaluated; they are not folded into ALERT or BLOCK.
+            }
         }
         for (Long ruleId : decision.triggeredRuleIds()) {
             ruleHits.computeIfAbsent(ruleId, k -> new LongAdder()).increment();

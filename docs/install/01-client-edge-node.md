@@ -187,6 +187,8 @@ Complete [06 — PSP API dual-post integration](06-psp-api-dual-post-integration
 
 ### Hokeka AI decisioning (Edge → Control Plane only)
 
+> The Linux Edge installer (`install.sh`) does **not** install a local AI/Laya service — by design. See [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md).
+
 Edge Nodes **never** hold AI vendor credentials. Borderline pre-auth decisions (`ALERT`/`HOLD`) may request a **Hokeka AI** advisory via `POST /api/v1/edge/decision` over the existing mTLS channel. The Control Plane performs all AI decisioning; responses contain only verdict, confidence, reasons, and advisory status.
 
 | Mode | Behaviour |

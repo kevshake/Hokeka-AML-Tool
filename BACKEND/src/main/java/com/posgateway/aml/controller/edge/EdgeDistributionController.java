@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.config.edge.EdgeControlPlaneKeys;
 import com.posgateway.aml.config.edge.EdgeProperties;
+import com.posgateway.aml.dto.edge.EdgeAssessmentIngestRequest;
+import com.posgateway.aml.dto.edge.EdgeAssessmentIngestResponse;
 import com.posgateway.aml.dto.edge.EdgeDecisionRequest;
 import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.dto.edge.EdgeEnrollRequest;
 import com.posgateway.aml.dto.edge.EdgeEnrollResponse;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
 import com.posgateway.aml.entity.edge.EdgeNode;
+import com.posgateway.aml.service.edge.EdgeAssessmentConflictException;
+import com.posgateway.aml.service.edge.EdgeAssessmentService;
 import com.posgateway.aml.service.edge.EdgeBundleDistributionService;
 import com.posgateway.aml.service.edge.EdgeDecisionService;
 import com.posgateway.aml.service.edge.EdgeEnrollmentException;
@@ -70,6 +74,7 @@ public class EdgeDistributionController {
     private final EdgeBundleDistributionService distributionService;
     private final EdgeMetricsIngestService metricsIngestService;
     private final EdgeDecisionService edgeDecisionService;
+    private final EdgeAssessmentService edgeAssessmentService;
     private final EdgeReplayGuard replayGuard;
     private final EdgeControlPlaneKeys controlPlaneKeys;
     private final EdgeProperties properties;
@@ -81,6 +86,7 @@ public class EdgeDistributionController {
                                       EdgeBundleDistributionService distributionService,
                                       EdgeMetricsIngestService metricsIngestService,
                                       EdgeDecisionService edgeDecisionService,
+                                      EdgeAssessmentService edgeAssessmentService,
                                       EdgeReplayGuard replayGuard,
                                       EdgeControlPlaneKeys controlPlaneKeys,
                                       EdgeProperties properties,
@@ -90,6 +96,7 @@ public class EdgeDistributionController {
         this.distributionService = distributionService;
         this.metricsIngestService = metricsIngestService;
         this.edgeDecisionService = edgeDecisionService;
+        this.edgeAssessmentService = edgeAssessmentService;
         this.replayGuard = replayGuard;
         this.controlPlaneKeys = controlPlaneKeys;
         this.properties = properties;
@@ -258,6 +265,30 @@ public class EdgeDistributionController {
         EdgeDecisionResponse response = edgeDecisionService.handle(node, body);
         enrollmentService.recordSeen(node.getId(), identityResolver.agentVersion(request));
         return ResponseEntity.ok(response);
+    }
+
+
+    /**
+     * Accept an edge assessment envelope. Same mTLS identity and ACTIVE-node check as
+     * {@code /edge/metrics} and {@code /edge/decision}. Idempotent on {@code edgeAssessmentId}.
+     */
+    @PostMapping(path = "/assessments", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> assessments(HttpServletRequest request,
+                                         @RequestBody EdgeAssessmentIngestRequest body) {
+        Optional<EdgeNode> authorized = authorize(request);
+        if (authorized.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        try {
+            EdgeAssessmentIngestResponse recorded = edgeAssessmentService.record(authorized.get(), body);
+            enrollmentService.recordSeen(authorized.get().getId(), identityResolver.agentVersion(request));
+            return ResponseEntity.ok(recorded);
+        } catch (EdgeAssessmentConflictException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ── internals ────────────────────────────────────────────────────────────────────────────────

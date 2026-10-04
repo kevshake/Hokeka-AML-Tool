@@ -40,21 +40,45 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
   ]);
 
   const fields = [
-    'amount', 'currency', 'country', 'merchantId', 'deviceFingerprint',
-    'ipAddress', 'velocityScore', 'roundAmount', 'levenshteinDistance'
+    'amount', 'currency', 'country_code', 'merchant_id', 'mcc', 'channel',
+    'pan_hash', 'ml_score', 'page_rank', 'connection_count', 'pan_txn_count_1h',
+    'krs', 'cra', 'trs'
   ];
+  const operatorNames: Record<string, string> = {
+    '>=': 'GREATER_THAN_OR_EQUAL',
+    '<=': 'LESS_THAN_OR_EQUAL',
+    '>': 'GREATER_THAN',
+    '<': 'LESS_THAN',
+    '==': 'EQUALS',
+    '!=': 'NOT_EQUALS',
+    contains: 'CONTAINS',
+    in: 'IN'
+  };
 
   const operators = ['>=', '<=', '>', '<', '==', '!=', 'contains', 'in'];
 
   const updateExpression = (newGroups: RuleGroup[]) => {
     let expression = '';
-    const json = { groups: newGroups };
+    const clauses = newGroups.map((group) => {
+      const leaves = group.conditions.map((cond) => {
+        const numeric = cond.value.trim() !== '' && !Number.isNaN(Number(cond.value));
+        return {
+          field: cond.field,
+          operator: operatorNames[cond.operator] ?? cond.operator,
+          value: numeric ? Number(cond.value) : cond.value
+        };
+      });
+      return group.logic === 'OR' ? { any: leaves } : { all: leaves };
+    });
+    const json = {
+      conditions: clauses.length === 1 ? clauses[0] : { all: clauses }
+    };
 
     newGroups.forEach((group, gIndex) => {
       if (gIndex > 0) expression += ` ${group.logic} `;
       expression += '(';
       group.conditions.forEach((cond, cIndex) => {
-        if (cIndex > 0) expression += ' AND ';
+        if (cIndex > 0) expression += ` ${group.logic} `;
         expression += `#tx.${cond.field} ${cond.operator} ${cond.value}`;
       });
       expression += ')';
@@ -131,6 +155,9 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
       <Typography variant="h6" gutterBottom>
         Visual Rule Builder
       </Typography>
+      <Typography variant="body2" sx={{ mb: 2, color: '#aaa' }}>
+        Only Edge fields are listed. Save rejects a rule the Edge cannot run.
+      </Typography>
 
       {groups.map((group, index) => (
         <Box key={group.id} sx={{ mb: 3, p: 2, border: '1px solid #444', borderRadius: 1 }}>
@@ -196,16 +223,31 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
       {onSave && (
         <Button
           variant="contained"
-          onClick={() =>
+          onClick={() => {
+            const clauses = groups.map((group) => {
+              const leaves = group.conditions.map((cond) => {
+                const numeric = cond.value.trim() !== '' && !Number.isNaN(Number(cond.value));
+                return {
+                  field: cond.field,
+                  operator: operatorNames[cond.operator] ?? cond.operator,
+                  value: numeric ? Number(cond.value) : cond.value
+                };
+              });
+              return group.logic === 'OR' ? { any: leaves } : { all: leaves };
+            });
+            const edgeIr = {
+              conditions: clauses.length === 1 ? clauses[0] : { all: clauses }
+            };
             onSave({
               ruleName: "Visual Rule",
               ruleExpression: groups
-                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`)
+                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(` ${g.logic} `)})`)
                 .join(` ${groups[0]?.logic ?? "OR"} `),
               ruleType: "SPEL",
-              ruleJson: JSON.stringify({ groups }),
-            })
-          }
+              ruleJson: JSON.stringify(edgeIr),
+              edgeDeployable: true,
+            });
+          }}
           sx={{ ml: 2 }}
         >
         Save Rule

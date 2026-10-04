@@ -232,7 +232,7 @@ SELECT
     ]'::jsonb,
     'created_at DESC',
     TRUE,
-    1,
+    NULL,
     NOW()
 FROM reports r WHERE r.report_code = 'SAR_001';
 
@@ -285,7 +285,7 @@ SELECT
     '["transaction_date"]'::jsonb,
     'transaction_date DESC',
     TRUE,
-    1,
+    NULL,
     NOW()
 FROM reports r WHERE r.report_code = 'TXN_001';
 
@@ -337,7 +337,7 @@ SELECT
     ]'::jsonb,
     'alert_count DESC',
     TRUE,
-    1,
+    NULL,
     NOW()
 FROM reports r WHERE r.report_code = 'ALC_006';
 
@@ -407,7 +407,7 @@ SELECT
     ]'::jsonb,
     'created_at DESC',
     TRUE,
-    1,
+    NULL,
     NOW()
 FROM reports r WHERE r.report_code = 'REG_001';
 
@@ -470,7 +470,7 @@ SELECT
     ]'::jsonb,
     'created_at DESC',
     TRUE,
-    1,
+    NULL,
     NOW()
 FROM reports r WHERE r.report_code = 'DQL_001';
 

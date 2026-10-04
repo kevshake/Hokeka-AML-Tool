@@ -33,13 +33,25 @@ public class EdgeBundleService {
 
     /** A single compiled rule in edge-IR form. `condition` is an already-built IR condition tree. */
     public record CompiledRule(long id, String name, String description, ObjectNode condition,
-                               String action, int score, int priority) {}
+                               String action, int score, int priority, Long ruleVersionId) {
+        public CompiledRule(long id, String name, String description, ObjectNode condition,
+                            String action, int score, int priority) {
+            this(id, name, description, condition, action, score, priority, null);
+        }
+    }
 
     /** Build the Rule IR bundle JSON for a PSP (the plaintext that goes inside the envelope). */
     public byte[] buildBundleJson(long version, long pspId, List<CompiledRule> rules) {
+        return buildBundleJson(version, pspId, rules, null);
+    }
+
+    public byte[] buildBundleJson(long version, long pspId, List<CompiledRule> rules, String manifestHash) {
         ObjectNode root = mapper.createObjectNode();
         root.put("version", version);
         root.put("psp_id", pspId);
+        if (manifestHash != null && !manifestHash.isBlank()) {
+            root.put("manifest_hash", manifestHash);
+        }
         ArrayNode arr = root.putArray("rules");
         for (CompiledRule r : rules) {
             ObjectNode rn = arr.addObject();
@@ -52,6 +64,9 @@ public class EdgeBundleService {
             rn.put("action", r.action());
             rn.put("score", r.score());
             rn.put("priority", r.priority());
+            if (r.ruleVersionId() != null) {
+                rn.put("rule_version_id", r.ruleVersionId());
+            }
         }
         try {
             return mapper.writeValueAsBytes(root);

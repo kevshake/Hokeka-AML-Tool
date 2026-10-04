@@ -81,6 +81,9 @@ KAFKA_BOOTSTRAP_SERVERS=kafka-prod:29092
 ### JEV AI decision layer (Control Plane only)
 
 OpenRouter credentials live **only** on the Control Plane VPS — never on Edge Nodes or in the Console bundle.
+(`docker-compose.prod.yml` forwards these into `backend-prod`; empty key/model = JEV disabled.)
+
+> **“Laya AI”:** that name does not appear in this repo. Operator/code name is **JEV**; tenant brand is **Hokeka AI**. See [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md) for why the client Linux Edge installer must not ship AI.
 
 ```bash
 OPENROUTER_API_KEY=<secret>          # required to enable JEV
@@ -91,6 +94,8 @@ JEV_TIMEOUT=15s
 JEV_INLINE_TIMEOUT=500ms
 JEV_MAX_TOKENS=1024
 JEV_TEMPERATURE=0.2
+JEV_HTTP_REFERER=https://hokeka.com  # optional; sent as HTTP-Referer
+JEV_APP_TITLE=Hokeka                  # optional; sent as X-Title
 JEV_DAILY_CALL_BUDGET_PER_PSP=0      # 0 = unlimited
 JEV_DAILY_SPEND_CAP_USD_PER_PSP=0    # 0 = unlimited
 ```

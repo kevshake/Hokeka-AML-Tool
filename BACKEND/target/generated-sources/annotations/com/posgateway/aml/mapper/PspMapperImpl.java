@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-04-13T13:05:31+0000",
-    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 17.0.18 (Ubuntu)"
+    date = "2026-10-04T20:42:34+0300",
+    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 21.0.12.1 (Microsoft)"
 )
 @Component
 public class PspMapperImpl implements PspMapper {
@@ -22,16 +22,38 @@ public class PspMapperImpl implements PspMapper {
             return null;
         }
 
-        PspResponse.PspResponseBuilder pspResponse = PspResponse.builder();
+        PspResponse pspResponse = new PspResponse();
 
-        pspResponse.id( psp.getPspId() );
-        pspResponse.pspCode( psp.getPspCode() );
-        pspResponse.legalName( psp.getLegalName() );
-        pspResponse.status( psp.getStatus() );
-        pspResponse.billingPlan( psp.getBillingPlan() );
-        pspResponse.brandingTheme( psp.getBrandingTheme() );
+        pspResponse.setId( psp.getPspId() );
+        pspResponse.setIsTestMode( psp.getIsTestMode() );
+        pspResponse.setPspCode( psp.getPspCode() );
+        pspResponse.setLegalName( psp.getLegalName() );
+        pspResponse.setTradingName( psp.getTradingName() );
+        pspResponse.setCountry( psp.getCountry() );
+        pspResponse.setContactEmail( psp.getContactEmail() );
+        pspResponse.setContactPhone( psp.getContactPhone() );
+        pspResponse.setContactAddress( psp.getContactAddress() );
+        pspResponse.setRegistrationNumber( psp.getRegistrationNumber() );
+        pspResponse.setTaxId( psp.getTaxId() );
+        pspResponse.setStatus( psp.getStatus() );
+        pspResponse.setKycEnabled( psp.getKycEnabled() );
+        pspResponse.setBillingPlan( psp.getBillingPlan() );
+        pspResponse.setBillingCycle( psp.getBillingCycle() );
+        pspResponse.setCurrency( psp.getCurrency() );
+        pspResponse.setPaymentTerms( psp.getPaymentTerms() );
+        pspResponse.setCbkReportingEnabled( psp.getCbkReportingEnabled() );
+        pspResponse.setCbkEnvironment( psp.getCbkEnvironment() );
+        pspResponse.setLogoUrl( psp.getLogoUrl() );
+        pspResponse.setPrimaryColor( psp.getPrimaryColor() );
+        pspResponse.setSecondaryColor( psp.getSecondaryColor() );
+        pspResponse.setAccentColor( psp.getAccentColor() );
+        pspResponse.setFontFamily( psp.getFontFamily() );
+        pspResponse.setBrandingTheme( psp.getBrandingTheme() );
+        pspResponse.setCreatedAt( psp.getCreatedAt() );
+        pspResponse.setUpdatedAt( psp.getUpdatedAt() );
+        pspResponse.setOnboardedAt( psp.getOnboardedAt() );
 
-        return pspResponse.build();
+        return pspResponse;
     }
 
     @Override

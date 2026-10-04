@@ -54,8 +54,8 @@ public class RiskScoringService {
     // ── Composite KRS weights ────────────────────────────────────────────────
     @Value("${risk.weights.krs.country-residence:0.5}")
     private double wCountryResidence;
-    @Value("${risk.weights.krs.nationality:0.3}")
-    private double wNationality;
+    @Value("${risk.weights.krs.mcc:0.3}")
+    private double wMcc;
     @Value("${risk.weights.krs.age:0.2}")
     private double wAge;
 
@@ -149,9 +149,9 @@ public class RiskScoringService {
         double scoreAge     = merchant.isNew() ? 60.0 : 20.0;
 
         double weightedSum = scoreCountry * wCountryResidence
-                           + scoreMcc     * wNationality
+                           + scoreMcc     * wMcc
                            + scoreAge     * wAge;
-        double sumWeights  = wCountryResidence + wNationality + wAge;
+        double sumWeights  = wCountryResidence + wMcc + wAge;
         double krs = weightedSum / sumWeights;
 
         meterRegistry.gauge("aml.risk.krs",
@@ -187,6 +187,7 @@ public class RiskScoringService {
         return newCra;
     }
 
+    /** Test-only blend. Not on the ingest path. */
     public Map<String, Object> calculateOverallRisk(String txnId, Map<String, Object> features, Map<String, Object> riskDetails) {
         // 1. Calculate KRS from the persisted merchant profile when merchant_id is present.
         double krsScore = resolveMerchant(features)
@@ -312,7 +313,7 @@ public class RiskScoringService {
                             int countryScore, int pepSancScore, int industryScore,
                             int volumeScore, int alertScore, int ageScore) {
         try {
-            merchant.setCra(cra / 100.0); // merchants.cra column stored as 0.0–1.0
+            merchant.setCra(cra); // merchants.cra is 0–100, same scale as ingest
             merchant.setRiskLevel(level);
             merchantRepository.save(merchant);
 
