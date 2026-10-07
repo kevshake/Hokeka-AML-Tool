@@ -165,3 +165,17 @@ Shared-settlement / bust-out / self-funding scenarios · richer expected-profile
 ---
 
 _Completed remediations: **Sumsub KYC vendor removed** (fabricated endpoints; screening now on the independent engine) and **temporary-limit control wired live** (#4). Both compile-verified._
+
+---
+
+## WP-01 (2026-10-07): Assessment + Finding ledger (shadow)
+
+| Gap IDs | Status | Note |
+|---|---|---|
+| K1 AssessmentContext | 🟡 Partial | `assessments` + ingest-scoped TXN assessments; full context snapshot / event triggers deferred to WP-07+ |
+| K2 Common Finding | 🟡 Partial | `findings` table + `FindingRecorder`; limits, list, screening, cross-PSP, rules, regulatory, risk (KRS/TRS/CRA), ML, AI shadow |
+| K3 Provenance / versions | 🟡 Partial | `versions` JSON on assessment; `rule_version_id` on `rule_execution_logs`; bundle manifest deferred WP-04 |
+| Q11 Explain per transaction | 🟡 Partial | `GET /transactions/{id}/assessment`, `GET /assessments/{id}`; Console panel deferred WP-01b |
+| E12 Rule execution provenance | 🟡 Partial | `rule_version_id` + `assessment_id` on execution logs |
+
+Decision engine behaviour unchanged (shadow). WP-02 blocked until compute-all orchestrator flips live.

@@ -1,6 +1,8 @@
 package com.posgateway.aml.dto;
 
 import java.util.List;
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -15,6 +17,7 @@ public class FraudDetectionResponseDTO {
     private List<String> reasons;
     private Long latencyMs;
     private java.util.Map<String, Object> riskDetails;
+    private UUID assessmentId;
 
     // Getters and Setters
     public Long getTxnId() {
@@ -56,5 +59,13 @@ public class FraudDetectionResponseDTO {
 
     public void setLatencyMs(Long latencyMs) {
         this.latencyMs = latencyMs;
+    }
+
+    public UUID getAssessmentId() {
+        return assessmentId;
+    }
+
+    public void setAssessmentId(UUID assessmentId) {
+        this.assessmentId = assessmentId;
     }
 }

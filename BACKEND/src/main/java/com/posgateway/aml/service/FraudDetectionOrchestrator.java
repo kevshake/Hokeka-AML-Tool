@@ -27,14 +27,17 @@ public class FraudDetectionOrchestrator {
     private final FeatureExtractionService featureExtractionService;
     private final ScoringService scoringService;
     private final DecisionEngine decisionEngine;
+    private final com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook;
 
     @Autowired
     public FraudDetectionOrchestrator(FeatureExtractionService featureExtractionService,
             ScoringService scoringService,
-            DecisionEngine decisionEngine) {
+            DecisionEngine decisionEngine,
+            com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook) {
         this.featureExtractionService = featureExtractionService;
         this.scoringService = scoringService;
         this.decisionEngine = decisionEngine;
+        this.assessmentHook = assessmentHook;
     }
 
     /**
@@ -49,6 +52,8 @@ public class FraudDetectionOrchestrator {
                 transaction.getTxnId());
 
         long startTime = System.currentTimeMillis();
+        com.posgateway.aml.service.assessment.AssessmentRecordingScope.Scope assessmentScope =
+                assessmentHook.begin(transaction);
 
         // Step 1: Extract features
         Map<String, Object> features = featureExtractionService.extractFeatures(transaction);
@@ -86,6 +91,7 @@ public class FraudDetectionOrchestrator {
         logger.info("Fraud detection completed for transaction {}: action={}, score={}, latency={}ms",
                 transaction.getTxnId(), decision.getAction(), score, latencyMs);
 
+        assessmentHook.finalizeResult(transaction, result, assessmentScope, latencyMs);
         return result;
     }
 
@@ -99,6 +105,7 @@ public class FraudDetectionOrchestrator {
         private java.util.List<String> reasons;
         private Long latencyMs;
         private java.util.Map<String, Object> riskDetails;
+        private java.util.UUID assessmentId;
 
         // Getters and Setters
         public Long getTxnId() {
@@ -147,6 +154,14 @@ public class FraudDetectionOrchestrator {
 
         public void setRiskDetails(java.util.Map<String, Object> riskDetails) {
             this.riskDetails = riskDetails;
+        }
+
+        public java.util.UUID getAssessmentId() {
+            return assessmentId;
+        }
+
+        public void setAssessmentId(java.util.UUID assessmentId) {
+            this.assessmentId = assessmentId;
         }
     }
 }

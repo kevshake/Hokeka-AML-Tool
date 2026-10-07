@@ -35,6 +35,7 @@ public class HighConcurrencyFraudOrchestrator {
     private final PrometheusMetricsService metricsService;
     private final PspRepository pspRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook;
 
     private static final String PSP_CODE_KEY_PREFIX = "psp:code:";
     private static final Duration PSP_CODE_TTL = Duration.ofHours(1);
@@ -49,13 +50,15 @@ public class HighConcurrencyFraudOrchestrator {
             DecisionEngine decisionEngine,
             PrometheusMetricsService metricsService,
             PspRepository pspRepository,
-            RedisTemplate<String, Object> redisTemplate) {
+            RedisTemplate<String, Object> redisTemplate,
+            com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook) {
         this.featureExtractionService = featureExtractionService;
         this.scoringService = scoringService;
         this.decisionEngine = decisionEngine;
         this.metricsService = metricsService;
         this.pspRepository = pspRepository;
         this.redisTemplate = redisTemplate;
+        this.assessmentHook = assessmentHook;
     }
 
     /**
@@ -68,6 +71,8 @@ public class HighConcurrencyFraudOrchestrator {
     @CircuitBreaker(name = "fraudDetection", fallbackMethod = "fallbackProcessTransaction")
     public CompletableFuture<FraudDetectionResult> processTransactionUltra(TransactionEntity transaction) {
         long startTime = System.currentTimeMillis();
+        com.posgateway.aml.service.assessment.AssessmentRecordingScope.Scope assessmentScope =
+                assessmentHook.begin(transaction);
 
         try {
             // Step 1: Extract features (parallel if enabled)
@@ -128,6 +133,10 @@ public class HighConcurrencyFraudOrchestrator {
             result.setAction(decision.getAction());
             result.setReasons(decision.getReasons());
             result.setLatencyMs(latencyMs);
+            if (assessmentScope != null) {
+                result.setAssessmentId(assessmentScope.assessmentId());
+                assessmentHook.finalize(assessmentScope.assessmentId(), decision.getAction(), latencyMs);
+            }
 
             return CompletableFuture.completedFuture(result);
 
@@ -266,6 +275,16 @@ public class HighConcurrencyFraudOrchestrator {
         public void setLatencyMs(Long latencyMs) {
             this.latencyMs = latencyMs;
         }
+
+        public java.util.UUID getAssessmentId() {
+            return assessmentId;
+        }
+
+        public void setAssessmentId(java.util.UUID assessmentId) {
+            this.assessmentId = assessmentId;
+        }
+
+        private java.util.UUID assessmentId;
     }
 }
 

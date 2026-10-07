@@ -36,6 +36,12 @@ public class AiDecisionGateway {
     private final AiAuditService auditService;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.posgateway.aml.repository.assessment.AssessmentRepository assessmentRepository;
+
     public AiDecisionGateway(AiDecisionProperties properties,
                               LayaSystemOneClient decisionsClient,
                               AiQuestionConfigService questionConfigService,
@@ -274,6 +280,7 @@ public class AiDecisionGateway {
                 outcome,
                 apiResponse,
                 properties.isShadowMode());
+        recordAiFinding(context, outcome);
         return AiDecisionOutcome.builder()
                 .fallback(outcome.isFallback())
                 .fallbackReason(outcome.getFallbackReason())
@@ -296,6 +303,38 @@ public class AiDecisionGateway {
                 .questionConfigVersion(outcome.getQuestionConfigVersion())
                 .answers(outcome.getAnswers())
                 .build();
+    }
+
+    private void recordAiFinding(AiDecisionContext context, AiDecisionOutcome outcome) {
+        if (assessmentEngineRecorder == null || context.getTransactionId() == null) {
+            return;
+        }
+        try {
+            com.posgateway.aml.service.assessment.AssessmentRecordingScope.Scope scope =
+                    com.posgateway.aml.service.assessment.AssessmentRecordingScope.current();
+            if (scope == null && assessmentRepository != null) {
+                assessmentRepository.findFirstByTxnIdOrderByCreatedAtDesc(context.getTransactionId())
+                        .ifPresent(assessment -> com.posgateway.aml.service.assessment.AssessmentRecordingScope.set(
+                                new com.posgateway.aml.service.assessment.AssessmentRecordingScope.Scope(
+                                        assessment.getId(),
+                                        assessment.getPspId(),
+                                        assessment.getTxnId(),
+                                        context.getMerchantId())));
+            }
+            String engineCode = context.getEngine() != null ? context.getEngine().name() : "AI";
+            String recommendation = outcome.getRecommendation() != null
+                    ? outcome.getRecommendation().name() : outcome.getFinalDecision();
+            assessmentEngineRecorder.recordAiShadow(
+                    context.getTransactionId(),
+                    engineCode,
+                    recommendation,
+                    outcome.getConfidence(),
+                    outcome.getRiskScore(),
+                    outcome.isShadowMode() || properties.isShadowMode());
+        } catch (Exception e) {
+            log.debug("AI finding ledger write skipped for txn {}: {}",
+                    context.getTransactionId(), e.getMessage());
+        }
     }
 
     private static String buildSessionId(AiDecisionContext context) {
