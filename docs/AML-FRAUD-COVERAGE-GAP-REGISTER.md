@@ -178,4 +178,4 @@ _Completed remediations: **Sumsub KYC vendor removed** (fabricated endpoints; sc
 | Q11 Explain per transaction | 🟡 Partial | `GET /transactions/{id}/assessment`, `GET /assessments/{id}`; Console panel deferred WP-01b |
 | E12 Rule execution provenance | 🟡 Partial | `rule_version_id` + `assessment_id` on execution logs |
 
-Decision engine behaviour unchanged (shadow). WP-02 blocked until compute-all orchestrator flips live.
+Decision engine behaviour unchanged (shadow). **WP-02 readiness (all blockers + unified fix plan):** [`docs/WP-02-READINESS-AND-BLOCKERS.md`](WP-02-READINESS-AND-BLOCKERS.md).
