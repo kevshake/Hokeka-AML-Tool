@@ -7,7 +7,6 @@ import { normalizeSparklineData } from '../kpi/Sparkline'
 export interface DashboardKpiTrend {
   value: number
   direction: 'up' | 'down' | 'flat'
-  /** When true, "up" is bad (e.g. more alerts). Flips success/danger colors. */
   invertSemantic?: boolean
   label?: string
 }
@@ -25,21 +24,21 @@ export interface DashboardKpiCardProps {
 }
 
 const TONE_ICON: Record<NonNullable<DashboardKpiCardProps['tone']>, string> = {
-  neutral: 'bg-[#f2f4f7] text-[var(--db-text-secondary)]',
-  danger: 'bg-[var(--db-danger-soft)] text-[var(--db-danger)]',
-  warning: 'bg-[var(--db-warning-soft)] text-[var(--db-warning)]',
-  success: 'bg-[var(--db-success-soft)] text-[var(--db-success)]',
-  accent: 'bg-[var(--db-accent-soft)] text-[var(--db-accent)]',
-  info: 'bg-[var(--db-info-soft)] text-[var(--db-info)]',
+  neutral: 'bg-[var(--surface-3)] text-[var(--muted)]',
+  danger: 'bg-[var(--danger-soft)] text-[var(--danger)]',
+  warning: 'bg-[var(--warning-soft)] text-[var(--warning)]',
+  success: 'bg-[var(--success-soft)] text-[var(--success)]',
+  accent: 'bg-[rgb(var(--brand-accent-rgb)/0.12)] text-[var(--gold)]',
+  info: 'bg-[var(--info-soft)] text-[var(--info)]',
 }
 
 const TONE_STROKE: Record<NonNullable<DashboardKpiCardProps['tone']>, string> = {
-  neutral: '#667085',
-  danger: '#d92d20',
-  warning: '#b54708',
-  success: '#079455',
-  accent: '#7a1f3d',
-  info: '#175cd3',
+  neutral: 'var(--muted)',
+  danger: 'var(--danger)',
+  warning: 'var(--warning)',
+  success: 'var(--success)',
+  accent: 'var(--gold)',
+  info: 'var(--info)',
 }
 
 function DashboardKpiCard({
@@ -67,40 +66,40 @@ function DashboardKpiCard({
         : 'text-[var(--db-danger)]'
 
   return (
-    <article className="db-kpi flex min-h-[96px] flex-col justify-between gap-2 p-3.5" aria-busy={loading}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-[var(--db-text-secondary)]">{title}</p>
-          <p className="text-[10px] text-[var(--db-text-muted)]">{subtitle}</p>
-        </div>
+    <article className="db-kpi flex min-h-[108px] flex-col gap-2.5 p-4" aria-busy={loading}>
+      <div className="flex items-start gap-2.5">
         <span
           className={cn(
-            'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md',
+            'mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md',
             TONE_ICON[tone],
           )}
           aria-hidden
         >
-          <Icon size={14} />
+          <Icon size={13} />
         </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold leading-snug text-[var(--db-text)]">{title}</p>
+          <p className="text-[10px] leading-snug text-[var(--db-text-muted)]">{subtitle}</p>
+        </div>
       </div>
 
-      <div className="flex items-end justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
           {loading ? (
-            <div className="db-skel h-7 w-16" />
+            <div className="db-skel h-7 w-20" />
           ) : error ? (
             <p className="text-xs text-[var(--db-danger)]" role="alert">
               Unavailable
             </p>
           ) : (
-            <p className="truncate text-[22px] font-semibold leading-none tracking-tight text-[var(--db-text)]">
+            <p className="text-[1.35rem] font-semibold leading-none tracking-tight text-[var(--db-text)]">
               {value === null || value === undefined || value === '' ? '—' : value}
             </p>
           )}
 
           <div className="mt-1.5 min-h-[14px]">
             {!loading && !error && trend ? (
-              <div className={cn('flex items-center gap-0.5 text-[10px] font-medium', trendClass)}>
+              <div className={cn('flex flex-wrap items-center gap-0.5 text-[10px] font-medium', trendClass)}>
                 {trendPositive && <ArrowUp size={10} aria-hidden />}
                 {trendNegative && <ArrowDown size={10} aria-hidden />}
                 <span>
@@ -116,7 +115,7 @@ function DashboardKpiCard({
         </div>
 
         {!loading && !error && chartData ? (
-          <div className="h-9 w-14 flex-shrink-0" aria-hidden>
+          <div className="h-10 w-16 flex-shrink-0" aria-hidden>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
                 <Line

@@ -43,6 +43,9 @@ public class RealTimeTransactionScreeningService {
     @Value("${screening.realtime.screen-counterparty:false}")
     private boolean screenCounterparty;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
+
     @Autowired
     public RealTimeTransactionScreeningService(
             AerospikeSanctionsScreeningService aerospikeScreeningService,
@@ -128,9 +131,53 @@ public class RealTimeTransactionScreeningService {
         if (result.hasMatches()) {
             logger.warn("Transaction {} screened: {} matches found, blocking={}",
                     transaction.getTxnId(), matches.size(), result.shouldBlock());
+            if (aiEngineAdvisor != null) {
+                ScreeningMatch primary = matches.get(0);
+                java.util.Map<String, Object> features = buildSanctionsAiFeatures(primary, matches.size());
+                String baseline = result.shouldBlock() ? "BLOCK" : "REVIEW";
+                aiEngineAdvisor.adviseAsync(
+                        com.posgateway.aml.service.ai.decision.AiEngineType.SANCTIONS_DISAMBIGUATION,
+                        transaction.getPspId(),
+                        baseline,
+                        features,
+                        transaction.getTxnId(),
+                        null,
+                        null,
+                        null);
+            }
         }
 
         return result;
+    }
+
+    private static java.util.Map<String, Object> buildSanctionsAiFeatures(ScreeningMatch primary, int matchCount) {
+        java.util.Map<String, Object> features = new java.util.HashMap<>();
+        features.put("match_count", matchCount);
+        features.put("screened_entity_type", primary.getEntityType());
+        com.posgateway.aml.model.ScreeningResult sr = primary.getScreeningResult();
+        if (sr != null) {
+            features.put("similarity_score", sr.getHighestMatchScore());
+            if (sr.getEntityType() != null) {
+                features.put("screened_entity_type", sr.getEntityType().name());
+            }
+            if (sr.hasMatches()) {
+                com.posgateway.aml.model.ScreeningResult.Match match = sr.getMatches().get(0);
+                features.put("match_type", match.getMatchType() != null ? match.getMatchType().name() : null);
+                features.put("list_type", match.getListName());
+                features.put("pep_level", match.getPepLevel());
+                features.put("alias_flag", match.getMatchType() == com.posgateway.aml.model.ScreeningResult.MatchType.ALIAS_MATCH);
+                features.put("dob_relation", deriveDobRelation(match));
+                features.put("nationality_relation", match.getNationality() != null ? "provided" : "unknown");
+            }
+        }
+        return features;
+    }
+
+    private static String deriveDobRelation(com.posgateway.aml.model.ScreeningResult.Match match) {
+        if (match.getDateOfBirth() != null) {
+            return "exact";
+        }
+        return "unknown";
     }
 
     /**

@@ -32,6 +32,9 @@ public class CorporateIntelligenceService {
     private final AlertRepository alertRepository;
     private final OpenCorporatesClient registryClient;
     private final GdeltAdverseMediaClient adverseMediaClient;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
     private final PspIsolationService isolationService;
     private final ObjectMapper objectMapper;
     private final JaroWinklerSimilarity similarity = new JaroWinklerSimilarity();
@@ -140,6 +143,21 @@ public class CorporateIntelligenceService {
         }
         merchantRepository.save(merchant);
         if (status != CorporateIntelligenceStatus.CLEAR) createAlert(check);
+        if (aiEngineAdvisor != null && mediaStatus == AdverseMediaStatus.HITS) {
+            java.util.Map<String, Object> features = new java.util.LinkedHashMap<>();
+            features.put("articleCount", adverse.articles().size());
+            features.put("query", adverse.query());
+            features.put("merchantId", merchant.getMerchantId());
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.ADVERSE_MEDIA,
+                    merchant.getPsp().getPspId(),
+                    mediaStatus.name(),
+                    features,
+                    null,
+                    null,
+                    null,
+                    merchant.getMerchantId());
+        }
         return check;
     }
 

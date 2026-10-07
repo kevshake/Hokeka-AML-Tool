@@ -16,7 +16,7 @@ class EdgeControllerFailClosedTest {
     void evaluateReturnsHoldWhenFeatureStoreUnavailableAndFailClosedEnabled() {
         EdgeEngine engine = mock(EdgeEngine.class);
         EdgeMetricsAggregator metrics = new EdgeMetricsAggregator("psp", "edge", 64, 1_000L);
-        EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore());
+        EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore(), null);
         ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", true);
 
         EdgeRuleInterpreter.Decision decision = controller.evaluate(
@@ -36,7 +36,7 @@ class EdgeControllerFailClosedTest {
                 .thenReturn(allow);
 
         EdgeMetricsAggregator metrics = new EdgeMetricsAggregator("psp", "edge", 64, 1_000L);
-        EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore());
+        EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore(), null);
         ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", false);
 
         EdgeRuleInterpreter.Decision decision = controller.evaluate(

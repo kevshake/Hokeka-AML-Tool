@@ -243,9 +243,9 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                 EnvVarSpec.recommended("MAIL_PASSWORD",
                         "SMTP password. Goes with MAIL_HOST."),
 
-                // --- AI Rule Generator (Anthropic Claude) ---
-                EnvVarSpec.requiredWhen("ANTHROPIC_API_KEY", aiRuleGeneratorEnabled,
-                        "Anthropic API key for the AI rule generator. " +
+                // --- AI Rule Generator (Laya via Control Plane) ---
+                EnvVarSpec.requiredWhen("LAYA_API_KEY", aiRuleGeneratorEnabled,
+                        "Laya Studio API key for Hokeka AI decisions and optional rule generation. " +
                                 "Required when ai.rule-generator.enabled=true. " +
                                 "Without it, POST /api/v1/rules/generate returns 503."),
 

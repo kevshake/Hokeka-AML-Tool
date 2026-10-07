@@ -137,9 +137,12 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 ## 9. Prioritized remediation
 
 **P0 — can produce a wrong AML outcome on a live path**
-1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds.
-2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`.
-3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill.
+
+_Console routes for P0 verification: see `docs/UI_COVERAGE_MATRIX.md` (`/screening`, `/transaction-monitoring`)._
+
+1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds. **Console:** `/screening`.
+2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`. **Console:** `/screening`.
+3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill. **Console:** `/transaction-monitoring`.
 
 **P1 — reachable stub / inert control ("dummy code")**
 4. ~~`TransactionLimitService.setTemporaryLimit` persisted nothing~~ ✅ **FIXED** (V200 + enforcement).

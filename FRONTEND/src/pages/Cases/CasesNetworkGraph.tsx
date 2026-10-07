@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect } from "react";
+import { fitGraphViewport } from "./caseNetworkGraphViewport";
 import {
   Box,
   Paper,
@@ -28,8 +29,12 @@ import {
   Store as MerchantIcon,
   HelpOutline as UnknownIcon,
 } from "@mui/icons-material";
-import { useCases, useCaseNetwork } from "../../features/api/queries";
+import { useCases, useCaseNetwork, useGraphAnalysisStatus } from "../../features/api/queries";
 import type { Case, CaseStatus } from "../../types";
+import {
+  NetworkGraphAnalysisDisabledState,
+  NetworkGraphAnalysisEmptyState,
+} from "../Network/NetworkGraphAnalysisState";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +59,11 @@ interface NetworkGraphDTO {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NODE_RADIUS = 28;
+/** Space below node center for name + type labels (must match fitGraphViewport label band). */
+const NODE_LABEL_BAND = 44;
+/** Visible graph column height within dashboard shell (header + page title + toolbar). */
+const GRAPH_VIEWPORT_HEIGHT = "calc(100dvh - 72px - 12rem)";
+const GRAPH_MIN_HEIGHT = 320;
 
 const NODE_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
   CASE:        { fill: "var(--ink)", stroke: "var(--gold)", text: "var(--gold)" },
@@ -167,7 +177,7 @@ function runForceLayout(
       n.y += n.vy;
       // Keep inside bounds with padding
       n.x = Math.max(NODE_RADIUS + 10, Math.min(width - NODE_RADIUS - 10, n.x));
-      n.y = Math.max(NODE_RADIUS + 10, Math.min(height - NODE_RADIUS - 10, n.y));
+      n.y = Math.max(NODE_RADIUS + 10, Math.min(height - NODE_RADIUS - NODE_LABEL_BAND - 10, n.y));
     });
   }
 
@@ -187,6 +197,27 @@ function nodeIcon(type: string) {
   }
 }
 
+function edgeLabelPosition(
+  src: SimNode,
+  tgt: SimNode,
+  midX: number,
+  midY: number,
+  dist: number,
+): { x: number; y: number } {
+  const nx = -(tgt.y - src.y) / dist;
+  const ny = (tgt.x - src.x) / dist;
+  let offset = 18;
+  const towardTarget = { x: midX + nx * offset, y: midY + ny * offset };
+  const towardSource = { x: midX - nx * offset, y: midY - ny * offset };
+  const labelBandY = NODE_RADIUS + NODE_LABEL_BAND;
+  const distToTgtLabel = Math.hypot(towardTarget.x - tgt.x, towardTarget.y - (tgt.y + labelBandY));
+  const distToSrcLabel = Math.hypot(towardSource.x - src.x, towardSource.y - (src.y + labelBandY));
+  if (distToTgtLabel < distToSrcLabel) {
+    offset = -offset;
+  }
+  return { x: midX + nx * offset, y: midY + ny * offset };
+}
+
 // ─── SVG Graph Canvas ─────────────────────────────────────────────────────────
 
 interface GraphCanvasProps {
@@ -194,14 +225,56 @@ interface GraphCanvasProps {
   edges: NetworkEdge[];
   selectedId: string | null;
   onSelectNode: (id: string | null) => void;
+  fitKey: string | number;
 }
 
-function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProps) {
+function GraphCanvas({ nodes, edges, selectedId, onSelectNode, fitKey }: GraphCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 });
+
+  const applyFit = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || nodes.length === 0) return;
+    const { panX, panY, zoom: nextZoom } = fitGraphViewport(
+      nodes,
+      el.clientWidth,
+      el.clientHeight,
+      NODE_RADIUS,
+      NODE_LABEL_BAND,
+    );
+    setPan({ x: panX, y: panY });
+    setZoom(nextZoom);
+  }, [nodes]);
+
+  useLayoutEffect(() => {
+    applyFit();
+  }, [applyFit, fitKey]);
+
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => applyFit());
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [applyFit, fitKey, nodes.length]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(() => applyFit());
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [applyFit]);
 
   const nodeById = new Map<string, SimNode>();
   nodes.forEach((n) => nodeById.set(n.id, n));
@@ -230,13 +303,13 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
 
   const handleZoomIn  = () => setZoom((z) => Math.min(3, z * 1.25));
   const handleZoomOut = () => setZoom((z) => Math.max(0.25, z / 1.25));
-  const handleReset   = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+  const handleReset   = () => applyFit();
 
   // Build unique arrow marker ids per edge type
   const edgeTypes = [...new Set(edges.map((e) => e.type))];
 
   return (
-    <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
+    <Box ref={containerRef} sx={{ position: "relative", width: "100%", height: "100%" }}>
       {/* Zoom controls */}
       <Stack
         direction="column"
@@ -310,6 +383,7 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
             const color = EDGE_COLORS[edge.type] ?? "#aaa";
             const midX = (x1 + x2) / 2;
             const midY = (y1 + y2) / 2;
+            const labelPos = edgeLabelPosition(src, tgt, midX, midY, dist);
             return (
               <g key={i}>
                 <line
@@ -319,14 +393,14 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
                   strokeOpacity={0.55}
                   markerEnd={`url(#arrow-${edge.type})`}
                 />
-                {/* Edge label */}
                 <text
-                  x={midX}
-                  y={midY - 4}
+                  x={labelPos.x}
+                  y={labelPos.y}
                   textAnchor="middle"
-                  fontSize={8}
+                  dominantBaseline="middle"
+                  fontSize={9}
                   fill={color}
-                  fillOpacity={0.8}
+                  fillOpacity={0.85}
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
                   {edge.label}
@@ -339,8 +413,7 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
           {nodes.map((node) => {
             const colors = NODE_COLORS[node.type] ?? { fill: "var(--ink)", stroke: "#aaa", text: "#555" };
             const isSelected = node.id === selectedId;
-            // Truncate label to ~12 chars for display inside circle
-            const displayLabel = node.label.length > 12 ? node.label.slice(0, 10) + "…" : node.label;
+            const displayLabel = node.label.length > 22 ? node.label.slice(0, 20) + "…" : node.label;
             return (
               <g
                 key={node.id}
@@ -356,32 +429,42 @@ function GraphCanvas({ nodes, edges, selectedId, onSelectNode }: GraphCanvasProp
                   strokeWidth={isSelected ? 3 : 1.5}
                   filter={isSelected ? "drop-shadow(0 2px 6px color-mix(in srgb, var(--gold) 40%, transparent))" : undefined}
                 />
+                <foreignObject
+                  x={-NODE_RADIUS}
+                  y={-NODE_RADIUS}
+                  width={NODE_RADIUS * 2}
+                  height={NODE_RADIUS * 2}
+                  style={{ pointerEvents: "none" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                      height: "100%",
+                      color: colors.text,
+                    }}
+                  >
+                    {nodeIcon(node.type)}
+                  </div>
+                </foreignObject>
                 <text
                   textAnchor="middle"
-                  dominantBaseline="central"
-                  y={-7}
-                  fontSize={9.5}
+                  y={NODE_RADIUS + 14}
+                  fontSize={11}
                   fontWeight={600}
-                  fill={colors.text}
+                  fill="var(--ink)"
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
                   {displayLabel}
                 </text>
-                {/* Type badge at bottom */}
-                <rect
-                  x={-20}
-                  y={12}
-                  width={40}
-                  height={13}
-                  rx={4}
-                  fill={colors.stroke}
-                  fillOpacity={0.15}
-                />
                 <text
                   textAnchor="middle"
-                  y={21}
-                  fontSize={7.5}
+                  y={NODE_RADIUS + 28}
+                  fontSize={9}
                   fontWeight={700}
+                  letterSpacing="0.04em"
                   fill={colors.stroke}
                   style={{ pointerEvents: "none", userSelect: "none" }}
                 >
@@ -514,15 +597,30 @@ interface CaseGraphInnerProps {
   caseId: number;
 }
 
-const CANVAS_W = 900;
-const CANVAS_H = 520;
-
 function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
   const { data, isLoading, isError } = useCaseNetwork(caseId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [simNodes, setSimNodes] = useState<SimNode[]>([]);
+  const [layoutSize, setLayoutSize] = useState({ w: 640, h: 360 });
+  const [fitGeneration, setFitGeneration] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   const graphData = data as NetworkGraphDTO | undefined;
+
+  useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => {
+      setLayoutSize({
+        w: Math.max(320, el.clientWidth),
+        h: Math.max(GRAPH_MIN_HEIGHT, el.clientHeight),
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!graphData?.nodes?.length) {
@@ -530,36 +628,47 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
       setSelectedId(null);
       return;
     }
-    const laid = runForceLayout(graphData.nodes, graphData.edges ?? [], CANVAS_W, CANVAS_H);
+    const laid = runForceLayout(
+      graphData.nodes,
+      graphData.edges ?? [],
+      layoutSize.w,
+      layoutSize.h,
+    );
     setSimNodes(laid);
     setSelectedId(null);
-  }, [graphData]);
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setFitGeneration((g) => g + 1));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [graphData, layoutSize.w, layoutSize.h]);
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: CANVAS_H }}>
+  const centerState = (
+    <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", minHeight: GRAPH_MIN_HEIGHT }}>
+      {isLoading ? (
         <CircularProgress size={32} sx={{ color: "var(--gold)" }} />
-      </Box>
-    );
-  }
-
-  if (isError) {
-    return (
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: CANVAS_H }}>
+      ) : isError ? (
         <MuiAlert severity="warning" sx={{ maxWidth: 400 }}>
           Could not load network graph for this case. The case may have no linked transactions or the network endpoint is unavailable.
         </MuiAlert>
-      </Box>
-    );
-  }
+      ) : (
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+          <CaseIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+          <Typography variant="body2" color="text.disabled">
+            No network data for this case yet.
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
 
-  if (!graphData?.nodes?.length) {
+  if (isLoading || isError || !graphData?.nodes?.length) {
     return (
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: CANVAS_H, gap: 1 }}>
-        <CaseIcon sx={{ fontSize: 40, color: "text.disabled" }} />
-        <Typography variant="body2" color="text.disabled">
-          No network data for this case yet.
-        </Typography>
+      <Box ref={viewportRef} sx={{ display: "flex", flex: 1, minHeight: 0, width: "100%" }}>
+        {centerState}
       </Box>
     );
   }
@@ -567,12 +676,13 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
   const selectedNode = simNodes.find((n) => n.id === selectedId) ?? null;
 
   return (
-    <Box sx={{ position: "relative", width: "100%", height: CANVAS_H }}>
+    <Box ref={viewportRef} sx={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
       <GraphCanvas
         nodes={simNodes}
         edges={graphData.edges ?? []}
         selectedId={selectedId}
         onSelectNode={setSelectedId}
+        fitKey={`${caseId}-${fitGeneration}-${layoutSize.w}x${layoutSize.h}`}
       />
       <DetailPanel
         node={selectedNode}
@@ -592,6 +702,10 @@ export default function CasesNetworkGraph() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
+  const graphStatus = useGraphAnalysisStatus();
+  const graphReady =
+    graphStatus.data?.enabled === true && graphStatus.data?.available === true;
+
   const { data: casesPage, isLoading, isError } = useCases({
     page,
     size: PAGE_SIZE,
@@ -600,12 +714,13 @@ export default function CasesNetworkGraph() {
 
   const cases = useMemo(() => casesPage?.content ?? [], [casesPage?.content]);
 
-  // Auto-select first case when data arrives
+  // Auto-select first case when graph analysis is ready and data arrives
   useEffect(() => {
+    if (!graphReady) return;
     if (!selectedCase && cases.length > 0) {
       setSelectedCase(cases[0]);
     }
-  }, [cases, selectedCase]);
+  }, [cases, selectedCase, graphReady]);
 
   // Reset selected case when filter changes
   const handleStatusChange = (newStatus: string) => {
@@ -616,6 +731,40 @@ export default function CasesNetworkGraph() {
 
   const totalCases = casesPage?.totalElements ?? 0;
   const totalPages = casesPage?.totalPages ?? 0;
+
+  if (graphStatus.isLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+        <CircularProgress size={32} sx={{ color: "var(--gold)" }} />
+      </Box>
+    );
+  }
+
+  if (graphStatus.isError || !graphStatus.data) {
+    return (
+      <NetworkGraphAnalysisDisabledState
+        status={{
+          enabled: false,
+          available: false,
+          reason: "Could not determine graph analysis status from the Control Plane.",
+        }}
+      />
+    );
+  }
+
+  if (!graphStatus.data.enabled) {
+    return <NetworkGraphAnalysisDisabledState status={graphStatus.data} variant="disabled" />;
+  }
+
+  if (!graphStatus.data.available) {
+    return (
+      <NetworkGraphAnalysisDisabledState status={graphStatus.data} variant="unavailable" />
+    );
+  }
+
+  if (!isLoading && !isError && totalCases === 0) {
+    return <NetworkGraphAnalysisEmptyState />;
+  }
 
   return (
     <Box sx={{ mt: 1 }}>
@@ -648,8 +797,8 @@ export default function CasesNetworkGraph() {
             label="Filter by Status"
             sx={{
               color: "text.primary",
-              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.15)" },
-              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.3)" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "var(--line-control)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "var(--glass-border-hover)" },
             }}
           >
             <MenuItem value="">All Statuses</MenuItem>
@@ -664,7 +813,16 @@ export default function CasesNetworkGraph() {
       </Box>
 
       {/* Main layout: case list (left) + graph canvas (right) */}
-      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          alignItems: "stretch",
+          height: GRAPH_VIEWPORT_HEIGHT,
+          minHeight: GRAPH_MIN_HEIGHT,
+          maxHeight: GRAPH_VIEWPORT_HEIGHT,
+        }}
+      >
         {/* Case selector panel */}
         <Paper
           sx={{
@@ -674,6 +832,9 @@ export default function CasesNetworkGraph() {
             borderColor: "divider",
             borderRadius: 2,
             overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            maxHeight: "100%",
           }}
         >
           <Box sx={{ px: 2, py: 1.5, backgroundColor: "var(--surface-3)", borderBottom: "1px solid", borderColor: "divider" }}>
@@ -696,7 +857,7 @@ export default function CasesNetworkGraph() {
             </Box>
           ) : (
             <>
-              <Box sx={{ maxHeight: 460, overflowY: "auto" }}>
+              <Box sx={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                 {cases.map((c) => {
                   const sc = STATUS_CONFIG[c.status];
                   const isActive = selectedCase?.id === c.id;
@@ -770,11 +931,15 @@ export default function CasesNetworkGraph() {
         <Paper
           sx={{
             flex: 1,
+            minWidth: 0,
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 2,
             overflow: "hidden",
             position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            maxHeight: "100%",
           }}
         >
           {/* Case header */}
@@ -825,7 +990,17 @@ export default function CasesNetworkGraph() {
           {selectedCase ? (
             <CaseGraphInner key={selectedCase.id} caseId={selectedCase.id} />
           ) : (
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: CANVAS_H, gap: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flex: 1,
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: GRAPH_MIN_HEIGHT,
+                gap: 1,
+              }}
+            >
               <CaseIcon sx={{ fontSize: 48, color: "text.disabled" }} />
               <Typography variant="body2" color="text.disabled">
                 Select a case from the panel on the left

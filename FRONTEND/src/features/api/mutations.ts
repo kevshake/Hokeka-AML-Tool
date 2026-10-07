@@ -39,6 +39,8 @@ export interface GeneratedRulePreview {
   score?: number;
   priority?: number;
   enabled?: boolean;
+  pendingAdminApproval?: boolean;
+  jevAuditId?: number;
   // Backend may include these depending on the model output
   ruleJson?: string;
   drlContent?: string;

@@ -1,58 +1,54 @@
-/* ============================================================================
-   CRM Dashboard — enterprise SaaS presentation (scoped).
-
-   Neutral page field + white/tinted surfaces. Burgundy/gold is accent only.
-   Does not alter global dark glass chrome used by other CRM pages.
-   ========================================================================== */
+/* Dashboard — soft-dark glass (shared design tokens). Scoped under .crm-dashboard */
 
 .crm-dashboard {
-  --db-bg: #f4f5f7;
-  --db-surface: #ffffff;
-  --db-surface-muted: #fafbfc;
-  --db-border: #e4e7ec;
-  --db-border-strong: #d0d5dd;
-  --db-text: #101828;
-  --db-text-secondary: #475467;
-  --db-text-muted: #667085;
-  --db-accent: #7a1f3d;
-  --db-accent-soft: #f9eef2;
-  --db-accent-border: #e8c5d1;
-  --db-success: #079455;
-  --db-success-soft: #ecfdf3;
-  --db-warning: #b54708;
-  --db-warning-soft: #fffaeb;
-  --db-danger: #d92d20;
-  --db-danger-soft: #fef3f2;
-  --db-info: #175cd3;
-  --db-info-soft: #eff8ff;
-  --db-radius: 8px;
-  --db-radius-sm: 6px;
-  --db-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --db-bg: transparent;
+  --db-surface: var(--glass-surface);
+  --db-surface-muted: var(--surface-2);
+  --db-border: var(--line);
+  --db-border-strong: var(--line-strong);
+  --db-text: var(--ink);
+  --db-text-secondary: var(--muted);
+  --db-text-muted: var(--muted-2);
+  --db-accent: var(--gold);
+  --db-accent-soft: rgb(var(--brand-accent-rgb) / 0.12);
+  --db-accent-border: rgb(var(--brand-accent-rgb) / 0.35);
+  --db-success: var(--success);
+  --db-success-soft: var(--success-soft);
+  --db-warning: var(--warning);
+  --db-warning-soft: var(--warning-soft);
+  --db-danger: var(--danger);
+  --db-danger-soft: var(--danger-soft);
+  --db-info: var(--info);
+  --db-info-soft: var(--info-soft);
+  --db-radius: var(--radius);
+  --db-radius-sm: var(--radius);
+  --db-shadow: var(--glass-shadow);
   --db-font: var(--font-body);
   --db-display: var(--font-display);
 
   color: var(--db-text);
   font-family: var(--db-font);
-  background: var(--db-bg);
+  background: transparent;
   min-height: 100%;
 }
 
 .crm-dashboard a {
-  color: var(--db-accent);
+  color: var(--gold);
 }
 
 .crm-dashboard a:hover {
-  color: color-mix(in srgb, var(--db-accent) 85%, #000);
+  color: var(--gold-bright);
 }
 
 .crm-dashboard :focus-visible {
-  outline: 2px solid var(--db-accent);
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
 
-/* Panel surface — thin border, no glow */
 .crm-dashboard .db-panel {
   background: var(--db-surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius);
   box-shadow: var(--db-shadow);
@@ -68,15 +64,19 @@
 
 .crm-dashboard .db-kpi {
   background: var(--db-surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius);
-  box-shadow: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  box-shadow: var(--db-shadow);
+  transition:
+    border-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
 }
 
 .crm-dashboard .db-kpi:hover {
-  border-color: var(--db-border-strong);
-  background: var(--db-surface-muted);
+  border-color: var(--glass-border-hover);
+  box-shadow: var(--glass-glow);
 }
 
 .crm-dashboard .db-section-label {
@@ -109,7 +109,7 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--db-accent);
+  color: var(--gold);
   text-decoration: none;
 }
 
@@ -118,7 +118,12 @@
 }
 
 .crm-dashboard .db-skel {
-  background: linear-gradient(90deg, #eceef2 25%, #f5f6f8 50%, #eceef2 75%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    var(--surface-4) 50%,
+    var(--surface-3) 75%
+  );
   background-size: 200% 100%;
   animation: db-shimmer 1.2s ease-in-out infinite;
   border-radius: 4px;
@@ -136,7 +141,7 @@
 @media (prefers-reduced-motion: reduce) {
   .crm-dashboard .db-skel {
     animation: none;
-    background: #eceef2;
+    background: var(--surface-3);
   }
 }
 
@@ -172,6 +177,7 @@
   padding: 8px 10px;
   border-bottom: 1px solid var(--db-border);
   white-space: nowrap;
+  background: var(--surface-3);
 }
 
 .crm-dashboard .db-table td {
@@ -186,7 +192,7 @@
 }
 
 .crm-dashboard .db-table tbody tr:hover td {
-  background: var(--db-surface-muted);
+  background: rgb(var(--surface-3-rgb) / 0.65);
 }
 
 .crm-dashboard .db-chip {
@@ -204,32 +210,32 @@
 .crm-dashboard .db-chip--active {
   border-color: var(--db-accent-border);
   background: var(--db-accent-soft);
-  color: var(--db-accent);
+  color: var(--gold);
 }
 
 .crm-dashboard .db-chip--danger {
-  border-color: color-mix(in srgb, var(--db-danger) 30%, #fff);
+  border-color: rgb(var(--danger-rgb) / 0.35);
   background: var(--db-danger-soft);
   color: var(--db-danger);
 }
 
 .crm-dashboard .db-chip--warning {
-  border-color: color-mix(in srgb, var(--db-warning) 30%, #fff);
+  border-color: rgb(var(--warning-rgb) / 0.35);
   background: var(--db-warning-soft);
   color: var(--db-warning);
 }
 
 .crm-dashboard .db-chip--success {
-  border-color: color-mix(in srgb, var(--db-success) 30%, #fff);
+  border-color: rgb(var(--success-rgb) / 0.35);
   background: var(--db-success-soft);
   color: var(--db-success);
 }
 
 .crm-dashboard .db-input {
   width: 100%;
-  border: 1px solid var(--db-border);
+  border: 1px solid var(--line-control);
   border-radius: var(--db-radius-sm);
-  background: var(--db-surface);
+  background: var(--surface-1);
   padding: 7px 10px 7px 32px;
   font-size: 12px;
   color: var(--db-text);
@@ -241,8 +247,8 @@
 
 .crm-dashboard .db-input:focus {
   outline: none;
-  border-color: var(--db-accent);
-  box-shadow: 0 0 0 3px var(--db-accent-soft);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgb(var(--brand-accent-rgb) / 0.16);
 }
 
 .crm-dashboard .db-btn {
@@ -252,7 +258,7 @@
   gap: 6px;
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius-sm);
-  background: var(--db-surface);
+  background: var(--surface-2);
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -263,21 +269,21 @@
 }
 
 .crm-dashboard .db-btn:hover {
-  background: var(--db-surface-muted);
+  background: var(--surface-3);
   border-color: var(--db-border-strong);
   color: var(--db-text);
 }
 
 .crm-dashboard .db-btn--primary {
-  border-color: var(--db-accent);
-  background: var(--db-accent);
-  color: #fff;
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--brand-on-primary);
 }
 
 .crm-dashboard .db-btn--primary:hover {
-  background: color-mix(in srgb, var(--db-accent) 90%, #000);
-  border-color: color-mix(in srgb, var(--db-accent) 90%, #000);
-  color: #fff;
+  background: var(--gold-bright);
+  border-color: var(--gold-bright);
+  color: var(--brand-on-primary);
 }
 
 .crm-dashboard .db-risk-badge {
@@ -295,19 +301,19 @@
 .crm-dashboard .db-risk-badge--critical,
 .crm-dashboard .db-risk-badge--high {
   background: var(--db-danger-soft);
-  border-color: color-mix(in srgb, var(--db-danger) 25%, #fff);
+  border-color: rgb(var(--danger-rgb) / 0.35);
   color: var(--db-danger);
 }
 
 .crm-dashboard .db-risk-badge--medium {
   background: var(--db-warning-soft);
-  border-color: color-mix(in srgb, var(--db-warning) 25%, #fff);
+  border-color: rgb(var(--warning-rgb) / 0.35);
   color: var(--db-warning);
 }
 
 .crm-dashboard .db-risk-badge--low {
   background: var(--db-success-soft);
-  border-color: color-mix(in srgb, var(--db-success) 25%, #fff);
+  border-color: rgb(var(--success-rgb) / 0.35);
   color: var(--db-success);
 }
 
@@ -331,8 +337,8 @@
 
 .crm-dashboard .db-tab[data-state='active'],
 .crm-dashboard .db-tab--active {
-  color: var(--db-accent);
-  border-bottom-color: var(--db-accent);
+  color: var(--gold);
+  border-bottom-color: var(--gold);
 }
 
 .crm-dashboard .recharts-cartesian-grid line {

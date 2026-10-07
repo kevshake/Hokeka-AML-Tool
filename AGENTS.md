@@ -84,6 +84,9 @@ Production hardening (when running under the `production` profile, not `testenv`
 ### Cross-service contract
 FRONTEND assumes `/api/v1/*` lives on the Control Plane (port 2637 in dev). Edge Nodes pull rule bundles and POST metrics to the same API host; PSP transaction **dual-post** (edge pre-auth + cloud ingest) is documented in `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`. The `aml-microservice` is internal to the cloud stack — not proxied through Vite.
 
+### Hokeka AI decision layer (Laya Studio)
+All Laya calls go through **`AiDecisionGateway`** / `LayaSystemOneClient` (`POST /v1/systemone`; optional `POST /v1/ask` for rule generation) on the Control Plane only — env: `LAYA_API_KEY` (+ `LAYA_*` / `HOKEKA_AI_*` → `hokeka.ai.*` properties). Operator REST: `/api/v1/ai/*`. Edge uses `POST /edge/decision` over mTLS; never holds the key. AI is advisory on regulated paths (sanctions, SAR); rules fallback on missing key/timeout/error/low confidence/disabled.
+
 ## Working with this repo
 
 - **`BACKEND/` is noisy.** The directory contains many committed `*.log`, `compile_*.txt`, `cookies*.txt`, `debug_output*.txt`, and one-off `*.md` migration reports. Treat them as scratch artefacts — don't rely on them as documentation, and don't add more.

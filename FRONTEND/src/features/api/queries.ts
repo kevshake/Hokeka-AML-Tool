@@ -117,6 +117,20 @@ export const useCaseNetwork = (caseId: number) => {
   });
 };
 
+export interface GraphAnalysisStatus {
+  enabled: boolean;
+  available: boolean;
+  reason?: string | null;
+}
+
+export const useGraphAnalysisStatus = () => {
+  return useQuery<GraphAnalysisStatus>({
+    queryKey: ["network", "graph-analysis", "status"],
+    queryFn: () => apiClient.get<GraphAnalysisStatus>("network/graph-analysis/status"),
+    staleTime: 60_000,
+  });
+};
+
 // SAR Reports
 export const useSarReports = (status?: string) => {
   return useQuery<SarReport[]>({

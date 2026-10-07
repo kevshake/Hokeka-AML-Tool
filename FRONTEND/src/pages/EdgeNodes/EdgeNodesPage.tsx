@@ -169,7 +169,7 @@ export default function EdgeNodesPage() {
       {isError ? (
         <Alert severity="error">{resolveEdgeError(error) || 'Could not load the edge fleet.'}</Alert>
       ) : (
-        <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        <Paper variant="outlined" sx={{ overflow: 'hidden', bgcolor: 'var(--glass-surface)', borderColor: 'var(--glass-border)', backdropFilter: 'var(--glass-blur)' }}>
           <TableContainer sx={{ maxHeight: 'calc(100vh - 260px)' }}>
             <Table stickyHeader size="small">
               <TableHead>

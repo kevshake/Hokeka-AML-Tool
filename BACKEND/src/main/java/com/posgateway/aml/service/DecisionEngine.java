@@ -165,9 +165,47 @@ public class DecisionEngine {
 
         checkAmlRules(transaction, features, decision, reasons);
         saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs);
+        maybeConsultAi(transaction, score, features, decision);
         logger.info("Decision for transaction {}: {} (score={})",
             transaction.getTxnId(), decision.getAction(), score);
         return decision;
+    }
+
+    private void maybeConsultAi(TransactionEntity transaction, Double score,
+                                 Map<String, Object> features, DecisionResult decision) {
+        if (aiEngineAdvisor == null || score == null) {
+            return;
+        }
+        Double holdThreshold = configService.getFraudHoldThreshold();
+        Double blockThreshold = configService.getFraudBlockThreshold();
+        boolean borderline = aiEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
+                || "ALERT".equals(decision.getAction())
+                || "REVIEW".equals(decision.getAction());
+        if (!borderline) {
+            return;
+        }
+        Map<String, Object> aiFeatures = new HashMap<>();
+        aiFeatures.put("score", score);
+        aiFeatures.put("action", decision.getAction());
+        aiFeatures.put("reasons", decision.getReasons());
+        if (features != null) {
+            aiFeatures.putAll(features);
+        }
+        if (transaction.getAmountCents() != null) {
+            aiFeatures.put("amount_cents", transaction.getAmountCents());
+        }
+        if (transaction.getCurrency() != null) {
+            aiFeatures.put("currency", transaction.getCurrency());
+        }
+        aiEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.ai.decision.AiEngineType.TRANSACTION_RISK,
+                transaction.getPspId(),
+                decision.getAction(),
+                aiFeatures,
+                transaction.getTxnId(),
+                null,
+                null,
+                null);
     }
 
     private DecisionResult applyRuleEngineDecision(TransactionEntity transaction, Double score,
@@ -304,6 +342,9 @@ public class DecisionEngine {
      */
     @Autowired(required = false)
     private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
@@ -490,6 +531,23 @@ public class DecisionEngine {
         Alert saved = alertRepository.save(alert);
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
+
+        if (aiEngineAdvisor != null) {
+            Map<String, Object> alertFeatures = new HashMap<>();
+            alertFeatures.put("action", action);
+            alertFeatures.put("reason", reason);
+            alertFeatures.put("score", score);
+            alertFeatures.put("severity", saved.getSeverity());
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.ALERT_TRIAGE,
+                    transaction.getPspId(),
+                    action,
+                    alertFeatures,
+                    transaction.getTxnId(),
+                    saved.getAlertId(),
+                    null,
+                    null);
+        }
 
         // The alert and its event are committed atomically through the outbox.
         publishAlertGeneratedEvent(saved, transaction);
