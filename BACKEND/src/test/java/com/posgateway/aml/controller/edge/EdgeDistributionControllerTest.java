@@ -107,6 +107,7 @@ class EdgeDistributionControllerTest {
                 enrollmentService,
                 distributionService,
                 new EdgeMetricsIngestService(metricsRepository),
+                org.mockito.Mockito.mock(com.posgateway.aml.service.edge.EdgeDecisionService.class),
                 new EdgeReplayGuard(),
                 controlPlaneKeys,
                 properties,

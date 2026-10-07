@@ -84,6 +84,13 @@ public class Psp {
     @Column(name = "signal_taxonomy_mode", nullable = false, length = 32)
     private SignalTaxonomyMode signalTaxonomyMode = SignalTaxonomyMode.INFLUENCE_DECISION;
 
+    /** When true, edge nodes wait for JEV verdict up to aiInlineBudgetMs on borderline pre-auth decisions. */
+    @Column(name = "ai_inline_mode", nullable = false)
+    private Boolean aiInlineMode = false;
+
+    @Column(name = "ai_inline_budget_ms", nullable = false)
+    private Integer aiInlineBudgetMs = 500;
+
     // Theming
     @Column(name = "logo_url", length = 1000)
     private String logoUrl;
@@ -362,6 +369,22 @@ public class Psp {
     public void setSignalTaxonomyMode(SignalTaxonomyMode signalTaxonomyMode) {
         this.signalTaxonomyMode = signalTaxonomyMode == null
                 ? SignalTaxonomyMode.INFLUENCE_DECISION : signalTaxonomyMode;
+    }
+
+    public Boolean getAiInlineMode() {
+        return aiInlineMode != null && aiInlineMode;
+    }
+
+    public void setAiInlineMode(Boolean aiInlineMode) {
+        this.aiInlineMode = aiInlineMode != null && aiInlineMode;
+    }
+
+    public Integer getAiInlineBudgetMs() {
+        return aiInlineBudgetMs == null ? 500 : aiInlineBudgetMs;
+    }
+
+    public void setAiInlineBudgetMs(Integer aiInlineBudgetMs) {
+        this.aiInlineBudgetMs = aiInlineBudgetMs == null ? 500 : aiInlineBudgetMs;
     }
 
     public String getLogoUrl() {

@@ -28,8 +28,17 @@ public class ScoringService {
     private final com.posgateway.aml.service.deeplearning.DL4JAnomalyService dl4jAnomalyService;
     private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
+
     @Value("${scoring.service.enabled:true}")
     private boolean scoringEnabled;
+
+    @Value("${hokeka.ai.fraud-scoring.borderline-low:0.35}")
+    private double fraudScoringBorderlineLow;
+
+    @Value("${hokeka.ai.fraud-scoring.borderline-high:0.70}")
+    private double fraudScoringBorderlineHigh;
 
     @Value("${scoring.service.url:http://localhost:8000}")
     private String scoringServiceUrl;
@@ -113,6 +122,7 @@ public class ScoringService {
                             rulesExecutionService.evaluateRules(txnId, features, cachedScore);
                     applyRuleResultToScore(ruleResult, riskDetails);
                     cachedScore = resolveScoreAfterRules(cachedScore, ruleResult);
+                    maybeConsultAiForFraudScoring(txnId, cachedScore, features, riskDetails);
                     return new ScoringResult(txnId, cachedScore, resp.processingTimeMs(), riskDetails);
                 }
             } catch (Exception e) {
@@ -244,6 +254,7 @@ public class ScoringService {
                 }
 
                 logger.info("Transaction {} scored: score={}, latency={}ms", txnId, score, latencyMs);
+                maybeConsultAiForFraudScoring(txnId, score, features, riskDetails);
                 return new ScoringResult(txnId, score, latencyMs, riskDetails);
             }
 
@@ -335,6 +346,48 @@ public class ScoringService {
         // Persist the summed rule score_impact so it is recorded on the transaction and available to
         // the decision/reporting layers (it was previously computed and thrown away).
         riskDetails.put("rule_score_total", ruleResult.getScoreImpact());
+    }
+
+    private void maybeConsultAiForFraudScoring(Long txnId,
+                                                Double score,
+                                                Map<String, Object> features,
+                                                Map<String, Object> riskDetails) {
+        if (aiEngineAdvisor == null || score == null || txnId == null) {
+            return;
+        }
+        if (score < fraudScoringBorderlineLow || score >= fraudScoringBorderlineHigh) {
+            return;
+        }
+        Map<String, Object> aiFeatures = new HashMap<>();
+        aiFeatures.put("score", score);
+        aiFeatures.put("borderlineBand", fraudScoringBorderlineLow + "-" + fraudScoringBorderlineHigh);
+        if (features != null) {
+            aiFeatures.putAll(features);
+        }
+        if (riskDetails != null) {
+            aiFeatures.put("rule_decision", riskDetails.get("rule_decision"));
+            aiFeatures.put("rules_triggered", riskDetails.get("rules_triggered"));
+            aiFeatures.put("ml_score", riskDetails.get("ml_score"));
+            aiFeatures.put("source", riskDetails.get("source"));
+            aiFeatures.put("cache_layer", riskDetails.get("cache_layer"));
+        }
+        Long pspId = null;
+        Object rawPspId = features != null ? features.getOrDefault("pspId", features.get("psp_id")) : null;
+        if (rawPspId instanceof Number pspNum) {
+            pspId = pspNum.longValue();
+        }
+        String baseline = riskDetails != null && riskDetails.get("rule_decision") != null
+                ? String.valueOf(riskDetails.get("rule_decision"))
+                : "REVIEW";
+        aiEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.ai.decision.AiEngineType.FRAUD_SCORING,
+                pspId,
+                baseline,
+                aiFeatures,
+                txnId,
+                null,
+                null,
+                null);
     }
 
     private double resolveScoreAfterRules(double score, com.posgateway.aml.rules.RuleEvaluationResult ruleResult) {

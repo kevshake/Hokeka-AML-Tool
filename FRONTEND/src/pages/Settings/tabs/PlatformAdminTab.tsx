@@ -10,7 +10,8 @@ import {
   Typography,
 } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Mail, Radio, Receipt, Shield } from "lucide-react";
+import { BookOpen, ExternalLink, KeyRound, Mail, Radio, Receipt, Shield } from "lucide-react";
+import { OPERATOR_DOC_LINKS, operatorDocUrl } from "../../../lib/operatorDocs";
 import { useMemo, useState, type ReactNode } from "react";
 import GlassCard from "../../../components/Common/GlassCard";
 import CopyOnceToken from "../../../components/Common/CopyOnceToken";
@@ -229,6 +230,39 @@ export default function PlatformAdminTab() {
           )}
         </GlassCard>
       </div>
+
+      {OPERATOR_DOC_LINKS.some((link) => operatorDocUrl(link.key)) && (
+        <GlassCard padding="md" glowVariant="teal" static>
+          <SectionHeader
+            eyebrow="Documentation"
+            title="Operator install guides"
+            description="Deep links to the docs-site install series (operator build only)."
+            icon={<BookOpen size={18} />}
+          />
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {OPERATOR_DOC_LINKS.map((link) => {
+              const href = operatorDocUrl(link.key);
+              if (!href) return null;
+              return (
+                <li key={link.key}>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-full flex-col rounded-lg border border-hairline bg-surface-1 px-3 py-2.5 transition-colors hover:border-glass-border-hover hover:bg-surface-2"
+                  >
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
+                      {link.label}
+                      <ExternalLink size={14} className="text-gold" />
+                    </span>
+                    <span className="mt-0.5 text-xs text-ink-muted">{link.description}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </GlassCard>
+      )}
 
       {!scoped ? null : (
         <>

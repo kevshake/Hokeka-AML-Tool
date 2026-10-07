@@ -31,6 +31,9 @@ function buildExcerpt(content: string): string {
   return stripped.slice(0, 220) + (stripped.length > 220 ? "…" : "");
 }
 
+const includeOperatorDocs =
+  import.meta.env.VITE_INCLUDE_OPERATOR_DOCS === "true";
+
 function loadDocs(): InstallDoc[] {
   const docs: InstallDoc[] = [];
 
@@ -39,6 +42,9 @@ function loadDocs(): InstallDoc[] {
     const meta = DOC_META[filename];
     if (!meta) {
       console.warn(`No metadata for install doc: ${filename}`);
+      continue;
+    }
+    if (meta.operatorOnly && !includeOperatorDocs) {
       continue;
     }
     const { title, subtitle } = parseTitle(content);

@@ -2,6 +2,9 @@
 # Build output
 # =============================================================================
 **/target/
+# Stale lowercase trees on case-insensitive checkouts (never commit artifacts here)
+/backend/target/
+/frontend/node_modules/
 **/build/
 **/dist/
 **/out/
