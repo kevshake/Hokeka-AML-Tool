@@ -33,12 +33,16 @@ class AssessmentSchemaIntegrationTest {
         String user = postgres.getUsername();
         String password = postgres.getPassword();
 
-        String migration = Files.readString(
+        String v119 = Files.readString(
+                Path.of("src/main/resources/db/migration/V119__rule_execution_logs.sql"),
+                StandardCharsets.UTF_8);
+        String v238 = Files.readString(
                 Path.of("src/main/resources/db/migration/V238__assessments_findings.sql"),
                 StandardCharsets.UTF_8);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, user, password)) {
-            conn.createStatement().execute(migration);
+            conn.createStatement().execute(v119);
+            conn.createStatement().execute(v238);
 
             UUID assessmentId = UUID.randomUUID();
             try (PreparedStatement ps = conn.prepareStatement(
