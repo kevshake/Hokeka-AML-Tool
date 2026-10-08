@@ -1,6 +1,7 @@
 package com.posgateway.aml.controller;
 
 import com.posgateway.aml.dto.FraudDetectionResponseDTO;
+import com.posgateway.aml.dto.assessment.AssessmentDetailResponseDTO;
 import com.posgateway.aml.dto.TransactionRequestDTO;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.service.AsyncFraudDetectionOrchestrator;
@@ -57,6 +58,7 @@ public class TransactionController {
     private final RequestRateLimiter rateLimiter;
     private final ConnectionCleanupService cleanupService;
     private final PspIsolationService pspIsolationService;
+    private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -80,7 +82,8 @@ public class TransactionController {
             ConnectionCleanupService cleanupService,
             TransactionRepository transactionRepository,
             FraudDetectionMapper fraudMapper,
-            PspIsolationService pspIsolationService) {
+            PspIsolationService pspIsolationService,
+            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -92,6 +95,7 @@ public class TransactionController {
         this.transactionRepository = transactionRepository;
         this.fraudMapper = fraudMapper;
         this.pspIsolationService = pspIsolationService;
+        this.assessmentQueryService = assessmentQueryService;
     }
 
     /**
@@ -315,6 +319,16 @@ public class TransactionController {
         dto.setAction("ERROR");
         dto.setReasons(java.util.List.of(message));
         return dto;
+    }
+
+    /**
+     * Latest assessment and findings for a transaction (read-only, shadow ledger).
+     * GET /api/v1/transactions/{id}/assessment
+     */
+    @GetMapping("/{id}/assessment")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER')")
+    public ResponseEntity<AssessmentDetailResponseDTO> getTransactionAssessment(@PathVariable Long id) {
+        return ResponseEntity.ok(assessmentQueryService.getLatestByTransactionId(id));
     }
 
     /**

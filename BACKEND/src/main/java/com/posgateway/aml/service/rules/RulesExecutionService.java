@@ -36,6 +36,9 @@ public class RulesExecutionService {
     private final FeatureStoreService featureStore;
     private final com.posgateway.aml.compliance.RegulatoryComplianceService regulatoryComplianceService;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
+
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
                                  DroolsRulesService droolsService,
@@ -128,6 +131,13 @@ public class RulesExecutionService {
             }
             if (compliance.isStrRequired()) scoreAdjustment += 20.0;
             if ("HOLD".equals(compliance.getDecision())) scoreAdjustment += 10.0;
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordRegulatoryCompliance(
+                        compliance.isStrRequired(),
+                        compliance.isCtrRequired(),
+                        compliance.getDecision(),
+                        regulatoryEvidence);
+            }
         }
         for (RuleDefinition rule : allRules) {
             boolean triggered = false;
@@ -149,7 +159,23 @@ public class RulesExecutionService {
             } finally {
                 long executionTimeMicros = Math.max(1L, (System.nanoTime() - ruleStartedAt) / 1_000L);
                 effectivenessService.recordExecution(
-                        rule.getId(), evaluationPspId, String.valueOf(txnId), executionTimeMicros, executionResult);
+                        rule.getId(),
+                        rule.getCurrentVersionId(),
+                        null,
+                        evaluationPspId,
+                        String.valueOf(txnId),
+                        executionTimeMicros,
+                        executionResult);
+            }
+
+            if (assessmentEngineRecorder != null) {
+                String proposed = triggered ? normalizeRuleAction(rule.getAction()) : "ALLOW";
+                assessmentEngineRecorder.recordRule(
+                        rule,
+                        triggered,
+                        proposed != null ? proposed : "HOLD",
+                        Math.max(1L, (System.nanoTime() - ruleStartedAt) / 1_000L),
+                        Map.of("result", executionResult.name()));
             }
 
             if (evaluationFailed) {

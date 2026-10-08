@@ -9,8 +9,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.posgateway.aml.service.assessment.AssessmentRecordingScope;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Aggregates {@link RuleExecutionLog} rows into the effectiveness metrics
@@ -69,9 +71,22 @@ public class RuleEffectivenessService {
     @Transactional
     public void recordExecution(Long ruleId, Long pspId, String txnId,
                                 long executionTimeMicros, RuleExecutionLog.Result result) {
+        recordExecution(ruleId, null, null, pspId, txnId, executionTimeMicros, result);
+    }
+
+    public void recordExecution(Long ruleId, Long ruleVersionId, UUID assessmentId, Long pspId, String txnId,
+                                long executionTimeMicros, RuleExecutionLog.Result result) {
         try {
             RuleExecutionLog log = new RuleExecutionLog(
                     ruleId, pspId, txnId, Instant.now(), executionTimeMicros, result);
+            log.setRuleVersionId(ruleVersionId);
+            if (assessmentId == null) {
+                AssessmentRecordingScope.Scope scope = AssessmentRecordingScope.current();
+                if (scope != null) {
+                    assessmentId = scope.assessmentId();
+                }
+            }
+            log.setAssessmentId(assessmentId);
             repository.save(log);
         } catch (Exception e) {
             // Logging only — never propagate; failed metrics writes must not affect scoring.
