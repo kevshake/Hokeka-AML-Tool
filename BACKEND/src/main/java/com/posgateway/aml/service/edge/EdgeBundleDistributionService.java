@@ -7,6 +7,7 @@ import com.posgateway.aml.edge.EdgeBundleService;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.rules.RuleDefinition;
+import com.posgateway.aml.entity.rules.RuleLifecycleStatus;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,14 +144,28 @@ public class EdgeBundleDistributionService {
      * seal, so the edge keeps its previous bundle instead of being handed unexpected rules.
      */
     private List<RuleDefinition> rulesFor(Long pspId) {
-        List<RuleDefinition> own = ruleDefinitionRepository
-                .findByEnabledTrueAndPspIdOrderByPriorityDesc(pspId);
+        List<RuleDefinition> own = live(ruleDefinitionRepository
+                .findByEnabledTrueAndPspIdOrderByPriorityDesc(pspId));
         if (!own.isEmpty()) {
             return own;
         }
         if (pspId != null && ruleDefinitionRepository.existsByPspId(pspId)) {
             return List.of(); // provisioned but deliberately all-disabled — do not substitute defaults
         }
-        return ruleDefinitionRepository.findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc();
+        return live(ruleDefinitionRepository.findByEnabledTrueAndPspIdIsNullOrderByPriorityDesc());
+    }
+
+    /**
+     * Only a rule that has passed maker/checker is distributed. {@code APPROVED} covers a
+     * future-dated change whose previous live content is still the one in force. Drafts, pending
+     * creates, rejections and retirements stay off the edge even if {@code enabled} was left set.
+     */
+    private static List<RuleDefinition> live(List<RuleDefinition> rules) {
+        return rules.stream().filter(rule -> {
+            RuleLifecycleStatus status = rule.getLifecycleStatus();
+            return status == null
+                    || status == RuleLifecycleStatus.ACTIVE
+                    || status == RuleLifecycleStatus.APPROVED;
+        }).toList();
     }
 }

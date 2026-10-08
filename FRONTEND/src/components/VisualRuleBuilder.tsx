@@ -46,9 +46,47 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
 
   const operators = ['>=', '<=', '>', '<', '==', '!=', 'contains', 'in'];
 
+  const canonicalOperator: Record<string, string> = {
+    '>=': 'GREATER_THAN_OR_EQUAL',
+    '<=': 'LESS_THAN_OR_EQUAL',
+    '>': 'GREATER_THAN',
+    '<': 'LESS_THAN',
+    '==': 'EQUALS',
+    '!=': 'NOT_EQUALS',
+    contains: 'CONTAINS',
+    in: 'IN',
+  };
+
+  const edgeField = (field: string) => (field === 'country' ? 'country_code' : field);
+
+  const coerceValue = (raw: string) => {
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    if (raw !== '' && !Number.isNaN(Number(raw))) return Number(raw);
+    return raw;
+  };
+
+  /** Shape both the Control Plane DRL converter and the Edge rule compiler accept. */
+  const canonicalJson = (ruleGroups: RuleGroup[]) => {
+    const parts = ruleGroups.map((group) => {
+      const leaves = group.conditions.map((cond) => ({
+        field: edgeField(cond.field),
+        operator: canonicalOperator[cond.operator] ?? cond.operator,
+        value: coerceValue(cond.value),
+      }));
+      return leaves.length === 1 ? leaves[0] : { all: leaves };
+    });
+    let condition: unknown = parts[0];
+    for (let i = 1; i < parts.length; i += 1) {
+      const key = ruleGroups[i].logic === 'OR' ? 'any' : 'all';
+      condition = { [key]: [condition, parts[i]] };
+    }
+    return { conditions: condition };
+  };
+
   const updateExpression = (newGroups: RuleGroup[]) => {
     let expression = '';
-    const json = { groups: newGroups };
+    const json = canonicalJson(newGroups);
 
     newGroups.forEach((group, gIndex) => {
       if (gIndex > 0) expression += ` ${group.logic} `;
@@ -203,7 +241,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
                 .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`)
                 .join(` ${groups[0]?.logic ?? "OR"} `),
               ruleType: "SPEL",
-              ruleJson: JSON.stringify({ groups }),
+              ruleJson: JSON.stringify(canonicalJson(groups)),
             })
           }
           sx={{ ml: 2 }}

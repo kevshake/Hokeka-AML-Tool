@@ -10,6 +10,7 @@ import com.posgateway.aml.edge.host.EdgeRuleInterpreter;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.edge.EdgeNodeStatus;
 import com.posgateway.aml.entity.rules.RuleDefinition;
+import com.posgateway.aml.entity.rules.RuleLifecycleStatus;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -180,6 +181,77 @@ class EdgeRuleCompilerTest {
                 () -> new HokekaSecureEnvelope().open(sealed.sealed(), edgeX.getPrivate(),
                         keys.signingPublicKey(),
                         EdgeMetricsIngestService.METRICS_CONTEXT.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void compilesCatalogAmountThresholdFromParameters() {
+        RuleDefinition rule = ruleDefinition(2L, "High Value Transaction Threshold", "HOLD", 60, 20, null);
+        rule.setRuleType("SPEL");
+        rule.setRuleExpression("#tx.amount != null && #tx.amount.compareTo(T(java.math.BigDecimal).valueOf(#params['threshold_amount'] ?: 1000000)) >= 0");
+        rule.setParameters("{\"threshold_amount\": 10000}");
+
+        EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
+
+        assertEquals(1, result.rules().size(), result.skipped().toString());
+        EdgeRuleInterpreter interpreter = new EdgeRuleInterpreter();
+        interpreter.loadBundle(bundleService.buildBundleJson(result.version(), 42L, result.rules()));
+        assertEquals(EdgeRuleInterpreter.Action.HOLD, interpreter.evaluate(Map.of("amount", 10000)).action());
+        assertEquals(EdgeRuleInterpreter.Action.ALLOW, interpreter.evaluate(Map.of("amount", 9999)).action());
+    }
+
+    @Test
+    void leavesFeatureBackedCatalogRulesOffTheEdgeBundle() {
+        RuleDefinition rule = ruleDefinition(1L, "First Transaction of a User", "ALERT", 30, 100, null);
+        rule.setRuleExpression("#features['is_first_transaction'] == true");
+
+        EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
+
+        assertTrue(result.rules().isEmpty());
+        assertEquals(List.of("First Transaction of a User"), result.skipped());
+    }
+
+    @Test
+    void compilesTheConsoleVisualBuilderShapeOntoTheEdgeIr() {
+        RuleDefinition rule = ruleDefinition(9L, "Visual high value", "BLOCK", 70, 5,
+                """
+                {"groups":[{"logic":"AND","conditions":[
+                  {"field":"amount","operator":">=","value":"10000"},
+                  {"field":"country","operator":"==","value":"KP"}
+                ]}]}
+                """);
+
+        EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
+
+        assertEquals(1, result.rules().size(), result.skipped().toString());
+        assertTrue(result.skipped().isEmpty());
+        EdgeRuleInterpreter interpreter = new EdgeRuleInterpreter();
+        interpreter.loadBundle(bundleService.buildBundleJson(result.version(), 42L, result.rules()));
+        assertEquals(EdgeRuleInterpreter.Action.BLOCK, interpreter.evaluate(Map.of(
+                "amount", 25000, "country_code", "KP")).action());
+        assertEquals(EdgeRuleInterpreter.Action.ALLOW, interpreter.evaluate(Map.of(
+                "amount", 25000, "country_code", "GB")).action());
+    }
+
+    @Test
+    void pendingApprovalRulesAreNotDistributed() throws Exception {
+        RuleDefinitionRepository repository = mock(RuleDefinitionRepository.class);
+        RuleDefinition pending = ruleDefinition(1L, "Not yet live", "BLOCK", 80, 1,
+                "{\"conditions\":{\"field\":\"amount\",\"operator\":\"GREATER_THAN\",\"value\":1}}");
+        pending.setLifecycleStatus(RuleLifecycleStatus.PENDING_APPROVAL);
+        when(repository.findByEnabledTrueAndPspIdOrderByPriorityDesc(anyLong()))
+                .thenReturn(List.of(pending));
+        when(repository.existsByPspId(anyLong())).thenReturn(true);
+
+        EdgeBundleDistributionService distribution = new EdgeBundleDistributionService(
+                repository, compiler, bundleService,
+                new EdgeControlPlaneKeys(new EdgeProperties()), new HokekaSecureEnvelope());
+        EdgeNode node = new EdgeNode();
+        node.setPspId(42L);
+        node.setEdgeId("acme-eu-1");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                EdgeBundleDistributionService.EmptyBundleException.class,
+                () -> distribution.sealFor(node));
     }
 
     @Test
