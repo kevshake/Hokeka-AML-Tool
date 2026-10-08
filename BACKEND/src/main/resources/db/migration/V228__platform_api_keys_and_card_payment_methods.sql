@@ -3,7 +3,7 @@ CREATE TABLE psp_api_keys (
     key_prefix VARCHAR(16) NOT NULL,
     key_hash VARCHAR(64) NOT NULL UNIQUE,
     psp_id BIGINT NOT NULL REFERENCES psps(psp_id),
-    created_by BIGINT REFERENCES users(id),
+    created_by BIGINT REFERENCES platform_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     rotated_at TIMESTAMP,
     revoked_at TIMESTAMP

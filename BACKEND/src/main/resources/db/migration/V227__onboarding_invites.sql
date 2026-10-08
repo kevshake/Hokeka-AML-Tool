@@ -5,7 +5,7 @@ CREATE TABLE onboarding_invites (
     role VARCHAR(64) NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     used_at TIMESTAMP,
-    created_by BIGINT REFERENCES users(id),
+    created_by BIGINT REFERENCES platform_users(id),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
