@@ -31,8 +31,8 @@ export default function MonitoringAlertsPanel() {
             <span className="db-chip">{data.totalElements}</span>
           ) : null
         }
-        actionLabel="Monitoring"
-        actionTo="/transaction-monitoring"
+        actionLabel="View"
+        actionTo="/transaction-monitoring/live"
       />
 
       {isLoading && !data ? (
