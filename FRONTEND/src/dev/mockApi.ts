@@ -2,6 +2,8 @@
  * Dev-only API mock layer (never bundled for production — gated by VITE_DEV_MOCK_API).
  * Enables authenticated Console screenshots without a live Control Plane.
  */
+import { buildMockUserForRole, DEV_MOCK_ROLES } from './mockRoleProfiles'
+import type { ConsoleTestRole } from '../lib/consoleRbac'
 
 const MOCK_USER = {
   id: 1,
@@ -93,13 +95,8 @@ export function isMockGraphAnalysisEnabled(): boolean {
 function resolveMockUser() {
   if (typeof globalThis.sessionStorage !== 'undefined') {
     const role = globalThis.sessionStorage.getItem('devMockUserRole')
-    if (role === 'PSP_USER') {
-      return {
-        ...MOCK_USER,
-        role: { id: 2, name: 'PSP_USER', permissions: ['PSP_USER'] },
-        pspId: 2,
-        psp: { pspId: 2, code: 'TECHFLOW_PSP', name: 'TechFlow Inc.' },
-      }
+    if (role && (DEV_MOCK_ROLES as readonly string[]).includes(role)) {
+      return buildMockUserForRole(role as ConsoleTestRole)
     }
   }
   return MOCK_USER
@@ -286,8 +283,74 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return jsonResponse({})
   }
 
+  if (path === 'psps' || path.startsWith('psps?')) {
+    return jsonResponse([
+      {
+        pspId: 2,
+        pspCode: 'DEMO_VELOCITY',
+        legalName: 'Velocity Payments LLC',
+        tradingName: 'Velocity Pay',
+        status: 'ACTIVE',
+        country: 'USA',
+      },
+      {
+        pspId: 3,
+        pspCode: 'DEMO_MWANANCHI',
+        legalName: 'Mwananchi Bank Plc',
+        tradingName: 'Mwananchi',
+        status: 'ACTIVE',
+        country: 'KEN',
+      },
+    ])
+  }
+
   if (path.includes('settings/psps')) {
     return jsonResponse([{ id: 2, code: 'TECHFLOW_PSP', name: 'TechFlow Inc.' }])
+  }
+
+  if (path.startsWith('merchants')) {
+    return jsonResponse(
+      page([
+        {
+          id: 44,
+          legalName: 'Acme Retail',
+          tradingName: 'Acme',
+          country: 'USA',
+          riskScore: 72,
+          status: 'ACTIVE',
+        },
+      ]),
+    )
+  }
+
+  if (path.startsWith('cases') && !path.includes('network')) {
+    const now = new Date().toISOString()
+    return jsonResponse(
+      page([
+        {
+          id: 101,
+          caseReference: 'CASE-2026-0101',
+          status: 'INVESTIGATING',
+          priority: 'HIGH',
+          description: 'Mock investigation case',
+          createdAt: now,
+          updatedAt: now,
+          createdBy: { id: 1, username: 'admin' },
+        },
+      ]),
+    )
+  }
+
+  if (path.startsWith('regulatory') || path.startsWith('sar')) {
+    return jsonResponse(page([]))
+  }
+
+  if (path.startsWith('reports')) {
+    return jsonResponse({ templates: [], recent: [] })
+  }
+
+  if (path.startsWith('organization') || path.startsWith('psp/')) {
+    return jsonResponse({ pspId: 2, legalName: 'Velocity Pay', pspCode: 'DEMO_VELOCITY' })
   }
 
   if (path.startsWith('ai/audit')) {
@@ -305,7 +368,95 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   }
 
   if (path.startsWith('alerts')) {
-    return jsonResponse(page([]))
+    const now = new Date().toISOString()
+    return jsonResponse(
+      page([
+        {
+          id: 501,
+          alertType: 'VELOCITY',
+          priority: 'HIGH',
+          status: 'OPEN',
+          description: 'Dev mock alert for triage and disposition UI.',
+          transactionId: 9001,
+          caseId: 101,
+          createdAt: now,
+        },
+      ]),
+    )
+  }
+
+  if (path.match(/^compliance\/links\/transaction\//)) {
+    return jsonResponse({
+      anchorType: 'TRANSACTION',
+      anchorId: path.split('/').pop(),
+      alerts: [{ recordType: 'ALERT', recordId: '501', label: 'Alert #501', relationship: 'SOURCE' }],
+      cases: [{ recordType: 'CASE', recordId: '101', label: 'Case #101', relationship: 'ESCALATED_FROM' }],
+      transactions: [],
+      sars: [],
+      disputes: [],
+      monitoringAlerts: [],
+      riskProfiles: [],
+      screeningActivities: [],
+    })
+  }
+
+  if (path.startsWith('screening/activity')) {
+    return jsonResponse(
+      page([
+        {
+          id: 1,
+          txnId: 9001,
+          channel: 'REALTIME',
+          matchFound: false,
+          pepMatchFound: false,
+          subjectName: 'Acme Holdings',
+          createdAt: new Date().toISOString(),
+        },
+      ]),
+    )
+  }
+
+  if (path.match(/^transactions\/\d+\/assessment/)) {
+    return jsonResponse({
+      assessmentId: 'asm-dev-1',
+      decision: 'REVIEW',
+      latencyMs: 42,
+      findings: [
+        {
+          findingId: 'f1',
+          sourceType: 'RULE',
+          proposedAction: 'HOLD',
+          triggered: true,
+          explanation: 'Velocity threshold exceeded for merchant peer group.',
+        },
+      ],
+    })
+  }
+
+  if (path.match(/^transactions\/\d+\/alerts/)) {
+    return jsonResponse([{ id: 501, alertType: 'VELOCITY', status: 'OPEN', priority: 'HIGH' }])
+  }
+
+  if (path.startsWith('roles')) {
+    return jsonResponse([{ id: 1, name: 'COMPLIANCE_OFFICER', description: 'Demo', permissions: [], global: false }])
+  }
+
+  if (path.startsWith('users')) {
+    return jsonResponse(
+      page([
+        {
+          id: 2,
+          username: 'velocity.analyst',
+          email: 'analyst@velocitypay.demo',
+          firstName: 'Velocity',
+          lastName: 'Analyst',
+          enabled: true,
+          role: { id: 3, name: 'PSP_USER' },
+          psp: { pspId: 2, code: 'DEMO_VELOCITY' },
+          createdAt: new Date().toISOString(),
+        },
+      ]),
+    )
   }
 
   if (path.startsWith('sanctions/screen') && method === 'POST') {

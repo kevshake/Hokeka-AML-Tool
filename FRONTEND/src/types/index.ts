@@ -90,16 +90,20 @@ export interface Alert {
   id: number;
   alertType: string;
   priority: Priority;
-  status: AlertStatus;
+  status: AlertStatus | string;
   transactionId?: number;
   caseId?: number;
   description: string;
   investigator?: string;
   createdAt: string;
   resolvedAt?: string;
+  disposition?: string;
+  dispositionReviewStatus?: string;
+  firstReviewer?: string;
+  secondReviewer?: string;
 }
 
-export type AlertStatus = "OPEN" | "INVESTIGATING" | "RESOLVED";
+export type AlertStatus = "OPEN" | "INVESTIGATING" | "RESOLVED" | "pending_second_review";
 
 export interface Transaction {
   id: number;

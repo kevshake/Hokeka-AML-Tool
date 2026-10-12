@@ -1,53 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  Activity,
-  Bell,
-  Briefcase,
-  UserCheck,
-  ShieldCheck,
-  FileSliders,
-  Gauge,
-  BarChart3,
-  FileText,
-  ClipboardList,
-  Store,
-  Server,
-  Building2,
-  Users,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  Menu,
-  ContactRound,
-  CandlestickChart,
-  Smartphone,
-  WalletCards,
-  LogOut,
-  UserRound,
-  Landmark,
-  Mail,
-  Share2,
-  type LucideIcon,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, LogOut, Menu, UserRound } from 'lucide-react'
 import HokekaLogo from '../branding/HokekaLogo'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
+import { buildConsoleNavGroups, type ConsoleNavGroup } from '../../lib/consoleRbac'
 
 const BADGE_ALERT = 'var(--danger)'
-
-interface NavItem {
-  label: string
-  icon: LucideIcon
-  to: string
-  badge?: number
-}
-
-interface NavGroup {
-  label: string
-  items: NavItem[]
-}
 
 interface HokekaSidebarProps {
   alertCount?: number
@@ -65,7 +24,7 @@ function isRouteActive(pathname: string, to: string): boolean {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 
-function findActiveSection(pathname: string, groups: NavGroup[]): string {
+function findActiveSection(pathname: string, groups: ConsoleNavGroup[]): string {
   for (const group of groups) {
     if (group.items.some((item) => isRouteActive(pathname, item.to))) {
       return group.label
@@ -74,7 +33,7 @@ function findActiveSection(pathname: string, groups: NavGroup[]): string {
   return groups[0]?.label ?? 'INTELLIGENCE'
 }
 
-function sectionBadgeTotal(group: NavGroup): number {
+function sectionBadgeTotal(group: ConsoleNavGroup): number {
   return group.items.reduce((sum, item) => sum + (item.badge ?? 0), 0)
 }
 
@@ -91,87 +50,19 @@ export default function HokekaSidebar({
 }: HokekaSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
 
   const [collapsed, setCollapsed] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
-  const normalizedRole = userRole.replaceAll(' ', '_').toUpperCase()
-  const isPspUser = normalizedRole.startsWith('PSP_')
-  const canManagePspUsers = normalizedRole === 'PSP_ADMIN'
 
-  const groups: NavGroup[] = useMemo(
-    () => [
-      {
-        label: 'INTELLIGENCE',
-        items: [
-          { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard' },
-          { label: 'Live Monitoring', icon: Activity, to: '/transaction-monitoring' },
-          { label: 'Customer 360', icon: ContactRound, to: '/customer-360' },
-          { label: 'Market Surveillance', icon: CandlestickChart, to: '/market-surveillance' },
-          { label: 'Mobile Money', icon: Smartphone, to: '/mobile-money' },
-          { label: 'Wallet Intelligence', icon: WalletCards, to: '/wallet-intelligence' },
-          {
-            label: 'Alerts',
-            icon: Bell,
-            to: '/alerts',
-            badge: alertCount !== undefined && alertCount > 0 ? alertCount : undefined,
-          },
-          {
-            label: 'Cases',
-            icon: Briefcase,
-            to: '/cases',
-            badge: caseCount !== undefined && caseCount > 0 ? caseCount : undefined,
-          },
-          {
-            label: 'Messages',
-            icon: Mail,
-            to: '/messages',
-            badge:
-              messageUnreadCount !== undefined && messageUnreadCount > 0
-                ? messageUnreadCount
-                : undefined,
-          },
-          { label: 'Network', icon: Share2, to: '/network' },
-        ],
-      },
-      {
-        label: 'COMPLIANCE',
-        items: [
-          { label: 'KYC', icon: UserCheck, to: '/kyc-documents' },
-          { label: 'Screening', icon: ShieldCheck, to: '/screening' },
-          { label: 'Risk Rules', icon: FileSliders, to: '/rules-generation' },
-          { label: 'Transaction Limits', icon: Gauge, to: '/limits-aml' },
-          { label: 'Regulatory Reports', icon: Landmark, to: '/regulatory-reports' },
-        ],
-      },
-      {
-        label: 'ANALYTICS',
-        items: [
-          { label: 'Risk Analytics', icon: BarChart3, to: '/risk-analytics' },
-          { label: 'Reports', icon: FileText, to: '/reports' },
-          { label: 'Audit Logs', icon: ClipboardList, to: '/audit' },
-        ],
-      },
-      {
-        label: 'ADMINISTRATION',
-        items: isPspUser
-          ? [
-              { label: 'My Organization', icon: Building2, to: '/organization' },
-              ...(canManagePspUsers ? [{ label: 'Users', icon: Users, to: '/users' }] : []),
-              ...(canManagePspUsers ? [{ label: 'Edge Nodes', icon: Server, to: '/edge-nodes' }] : []),
-              { label: 'Settings', icon: Settings, to: '/settings' },
-            ]
-          : [
-              { label: 'Merchants', icon: Store, to: '/merchants' },
-              { label: 'PSPs', icon: Building2, to: '/psps' },
-              { label: 'Edge Nodes', icon: Server, to: '/edge-nodes' },
-              { label: 'Users', icon: Users, to: '/users' },
-              { label: 'Runtime Errors', icon: ClipboardList, to: '/runtime-errors' },
-              { label: 'Settings', icon: Settings, to: '/settings' },
-            ],
-      },
-    ],
-    [alertCount, caseCount, messageUnreadCount, canManagePspUsers, isPspUser],
+  const groups: ConsoleNavGroup[] = useMemo(
+    () =>
+      buildConsoleNavGroups(user, {
+        alertCount,
+        caseCount,
+        messageUnreadCount,
+      }),
+    [alertCount, caseCount, messageUnreadCount, user],
   )
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {

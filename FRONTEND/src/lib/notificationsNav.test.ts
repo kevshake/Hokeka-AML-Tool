@@ -16,10 +16,11 @@ describe("in-app notifications navigation", () => {
     );
     expect(headerSource).toContain("navigate('/messages')");
 
-    const sidebarSource = readFileSync(
-      resolve(__dirname, "../components/sidebar/HokekaSidebar.tsx"),
+    const rbacSource = readFileSync(
+      resolve(__dirname, "./consoleRbac.ts"),
       "utf8",
     );
-    expect(sidebarSource).toContain("to: '/messages'");
+    expect(rbacSource).toContain('to: "/messages"');
+    expect(rbacSource).toContain("buildConsoleNavGroups");
   });
 });

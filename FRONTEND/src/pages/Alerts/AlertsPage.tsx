@@ -13,6 +13,9 @@ import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import AlertDispositionPanel from "../../components/alerts/AlertDispositionPanel";
+import { useAuth } from "../../contexts/AuthContext";
+import { canPerformAction } from "../../lib/consoleRbac";
 import {
   CheckCheck,
   ChevronDown,
@@ -40,6 +43,9 @@ function alertStatusVariant(status: string): "warning" | "danger" | "info" | "su
 }
 
 export default function AlertsPage() {
+  const { user } = useAuth();
+  const canTriage = canPerformAction(user, "alert.updateStatus");
+  const canExport = canPerformAction(user, "alert.export");
   const [defaultRows] = useResponsivePagination();
   const [page, setPage] = useState({ index: 0, size: defaultRows });
   const [viewAlert, setViewAlert] = useState<Alert | null>(null);
@@ -118,7 +124,7 @@ export default function AlertsPage() {
       <GlassCard padding="md" glowVariant="red" static>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4">
         <div className="flex items-center gap-3">
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
+          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length || !canExport}>
             <Download size={14} />
             Export CSV
           </GlassButton>
@@ -129,7 +135,7 @@ export default function AlertsPage() {
 
         <div className="relative">
           <button
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || !canTriage}
             onClick={() => setBulkOpen(!bulkOpen)}
             className="hokeka-btn-primary disabled:opacity-45"
           >
@@ -317,7 +323,13 @@ export default function AlertsPage() {
               )}
             </div>
             {viewAlert.id ? (
-              <AiVerdictPanel auditPath={`ai/audit/alert/${viewAlert.id}`} />
+              <>
+                <AlertDispositionPanel alert={viewAlert} onResolved={() => setViewAlert(null)} />
+                <AiVerdictPanel
+                  auditPath={`ai/audit/alert/${viewAlert.id}`}
+                  title="Hokeka AI recommendation"
+                />
+              </>
             ) : null}
           </div>
         )}

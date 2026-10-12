@@ -9,6 +9,8 @@ import { useTriggerSanctionsDownload } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
 import { isPlatformAdmin } from "../../lib/userAccess";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
+import { canPerformAction } from "../../lib/consoleRbac";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -21,7 +23,7 @@ export default function ScreeningPage() {
   const { data: downloadStatus } = useSanctionsDownloadStatus();
   const triggerDownload = useTriggerSanctionsDownload();
   const isOperator = isPlatformAdmin(user);
-  const canManageIngest = ["SUPER_ADMIN", "ADMIN", "COMPLIANCE_OFFICER", "MLRO"].includes(user?.role?.name?.toUpperCase() || "");
+  const canManageIngest = canPerformAction(user, "screening.ingest");
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
@@ -176,6 +178,7 @@ export default function ScreeningPage() {
               <div className="mt-4">
                 <AiVerdictPanel
                   auditPath={`ai/audit/screening/${result.aiScreeningHitId}`}
+                  title="Hokeka AI recommendation"
                   pollUntilFound
                 />
               </div>
@@ -184,8 +187,16 @@ export default function ScreeningPage() {
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <MonitoringAlertsPanel />
+        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+          <ScreeningActivityPanel merchantId={result?.merchantId ? String(result.merchantId) : undefined} />
+          {!result?.merchantId ? (
+            <p className="text-sm text-white/45">
+              Run a name screen above or open a transaction record to view persisted screening activity for your tenant.
+            </p>
+          ) : null}
+        </div>
       </div>
     </HokekaPageShell>
   );
