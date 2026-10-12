@@ -90,8 +90,23 @@ public class Alert {
     @Column(name = "disposed_at")
     private LocalDateTime disposedAt;
 
-    @Column(name = "case_id")
-    private Long caseId;
+    /** FK to compliance_cases when this alert was escalated into a case investigation. */
+    @Column(name = "compliance_case_id")
+    private Long complianceCaseId;
+
+    /** Denormalized card identity (pan_hash) for fast card-scoped alert queries. */
+    @Column(name = "pan_hash", length = 128)
+    private String panHash;
+
+    /** Maker-checker state for true-positive dispositions (PENDING_SECOND_REVIEW / APPROVED). */
+    @Column(name = "disposition_review_status", length = 32)
+    private String dispositionReviewStatus;
+
+    @Column(name = "first_reviewer")
+    private String firstReviewer;
+
+    @Column(name = "second_reviewer")
+    private String secondReviewer;
 
     @Column(name = "rule_instance_id")
     private Long ruleInstanceId;
@@ -244,12 +259,44 @@ public class Alert {
         this.disposedAt = disposedAt;
     }
 
-    public Long getCaseId() {
-        return caseId;
+    public Long getComplianceCaseId() {
+        return complianceCaseId;
     }
 
-    public void setCaseId(Long caseId) {
-        this.caseId = caseId;
+    public void setComplianceCaseId(Long complianceCaseId) {
+        this.complianceCaseId = complianceCaseId;
+    }
+
+    public String getPanHash() {
+        return panHash;
+    }
+
+    public void setPanHash(String panHash) {
+        this.panHash = panHash;
+    }
+
+    public String getDispositionReviewStatus() {
+        return dispositionReviewStatus;
+    }
+
+    public void setDispositionReviewStatus(String dispositionReviewStatus) {
+        this.dispositionReviewStatus = dispositionReviewStatus;
+    }
+
+    public String getFirstReviewer() {
+        return firstReviewer;
+    }
+
+    public void setFirstReviewer(String firstReviewer) {
+        this.firstReviewer = firstReviewer;
+    }
+
+    public String getSecondReviewer() {
+        return secondReviewer;
+    }
+
+    public void setSecondReviewer(String secondReviewer) {
+        this.secondReviewer = secondReviewer;
     }
 
     public Long getRuleInstanceId() {

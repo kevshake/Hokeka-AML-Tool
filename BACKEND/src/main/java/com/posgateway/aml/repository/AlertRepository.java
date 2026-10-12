@@ -36,6 +36,15 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
      */
     List<Alert> findByTxnId(Long txnId);
 
+    /** Alerts already escalated to a compliance case (indexed FK on alerts.compliance_case_id). */
+    List<Alert> findByComplianceCaseId(Long complianceCaseId);
+
+    /** Card-scoped alert history using denormalized pan_hash on alerts. */
+    List<Alert> findByPanHashAndMerchantIdOrderByCreatedAtDesc(String panHash, Long merchantId);
+
+    /** Merchant-scoped fraud alert list for compliance graph queries. */
+    List<Alert> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
+
     /**
      * Count alerts by status
      */

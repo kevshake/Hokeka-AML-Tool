@@ -23,9 +23,6 @@ public class CaseAlert {
     @JoinColumn(name = "case_id", nullable = false)
     private ComplianceCase complianceCase;
 
-    @Column(name = "alert_id")
-    private Long alertId;
-
     @Column(nullable = false)
     private String alertType; // RULE, ML_SCORE, SANCTIONS, MANUAL
 
@@ -45,6 +42,10 @@ public class CaseAlert {
 
     @Column(nullable = false)
     private LocalDateTime triggeredAt;
+
+    /** FK to canonical alerts.alert_id — stops case alert copies from drifting from source truth. */
+    @Column(name = "source_alert_id")
+    private Long sourceAlertId;
 
     public CaseAlert() {
     }
@@ -153,11 +154,13 @@ public class CaseAlert {
         this.triggeredAt = triggeredAt;
     }
 
-    public Long getAlertId() {
-        return alertId;
+    /** Returns the canonical alerts row this case alert row was copied from. */
+    public Long getSourceAlertId() {
+        return sourceAlertId;
     }
 
-    public void setAlertId(Long alertId) {
-        this.alertId = alertId;
+    /** Persists the FK back to the canonical alerts table for provenance. */
+    public void setSourceAlertId(Long sourceAlertId) {
+        this.sourceAlertId = sourceAlertId;
     }
 }

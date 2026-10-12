@@ -61,6 +61,7 @@ public class TransactionController {
     private final PspIsolationService pspIsolationService;
     private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
     private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
+    private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -86,7 +87,8 @@ public class TransactionController {
             FraudDetectionMapper fraudMapper,
             PspIsolationService pspIsolationService,
             com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
-            com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService) {
+            com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
+            com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -100,6 +102,7 @@ public class TransactionController {
         this.pspIsolationService = pspIsolationService;
         this.assessmentQueryService = assessmentQueryService;
         this.transactionAlertQueryService = transactionAlertQueryService;
+        this.complianceLinksQueryService = complianceLinksQueryService;
     }
 
     /**
@@ -336,16 +339,6 @@ public class TransactionController {
     }
 
     /**
-     * Lists alerts linked to a transaction (legacy txn_id and alert_transactions join).
-     * GET /api/v1/transactions/{id}/alerts
-     */
-    @GetMapping("/{id}/alerts")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER')")
-    public ResponseEntity<TransactionAlertsResponseDTO> getTransactionAlerts(@PathVariable Long id) {
-        return ResponseEntity.ok(transactionAlertQueryService.getAlertsForTransaction(id));
-    }
-
-    /**
      * Get transaction by ID
      * GET /transactions/{id}
      */
@@ -361,6 +354,36 @@ public class TransactionController {
                         throw new AccessDeniedException("Cannot access a transaction from another PSP", denied);
                     }
                     return ResponseEntity.ok(transaction);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Lists fraud/AML alerts for a transaction (primary txn_id plus V239 alert_transactions joins).
+     * GET /api/v1/transactions/{id}/alerts
+     */
+    @GetMapping("/{id}/alerts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER','PSP_ANALYST','VIEWER')")
+    public ResponseEntity<TransactionAlertsResponseDTO> getAlertsForTransaction(@PathVariable Long id) {
+        return transactionRepository.findById(id)
+                .map(transaction -> {
+                    pspIsolationService.validateTransactionAccess(transaction);
+                    return ResponseEntity.ok(transactionAlertQueryService.getAlertsForTransaction(id));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Returns indexed cross-links (cases, SARs, disputes, screening) for a transaction investigation graph.
+     */
+    @GetMapping("/{id}/compliance-links")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER')")
+    public ResponseEntity<com.posgateway.aml.dto.compliance.ComplianceLinksResponse> getComplianceLinks(
+            @PathVariable Long id) {
+        return transactionRepository.findById(id)
+                .map(transaction -> {
+                    pspIsolationService.validateTransactionAccess(transaction);
+                    return ResponseEntity.ok(complianceLinksQueryService.forTransaction(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -40,8 +40,10 @@ public class AlertController {
     private final RuleEffectivenessService ruleEffectivenessService;
         private final com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService;
     private final com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge;
-        private final UserRepository userRepository;
-        private final com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
+    private final UserRepository userRepository;
+    private final com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
+    private final com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService;
+    private final com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
@@ -50,7 +52,9 @@ public class AlertController {
                                                               com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService,
                                                               com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge,
                                                               UserRepository userRepository,
-                                                              com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService) {
+                                                              com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService,
+                                                              com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService,
+                                                              com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -60,6 +64,8 @@ public class AlertController {
                                 this.alertFraudBridge = alertFraudBridge;
                                 this.userRepository = userRepository;
                                 this.alertDetailQueryService = alertDetailQueryService;
+                                this.alertPrioritizationService = alertPrioritizationService;
+                                this.alertDispositionMakerCheckerService = alertDispositionMakerCheckerService;
                             }
 
     /**
@@ -76,7 +82,8 @@ public class AlertController {
     public ResponseEntity<org.springframework.data.domain.Page<Alert>> getAllAlerts(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sort) {
         
         int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
         int safePage = Math.max(0, page);
@@ -121,6 +128,11 @@ public class AlertController {
         // Execute query with pagination
         org.springframework.data.domain.Page<Alert> pageResult = 
             alertRepository.findAll(spec, pageable);
+
+        if ("priority".equalsIgnoreCase(sort)) {
+            java.util.List<Alert> prioritized = alertPrioritizationService.prioritizeAlerts(pageResult.getContent());
+            return ResponseEntity.ok(new org.springframework.data.domain.PageImpl<>(prioritized, pageable, pageResult.getTotalElements()));
+        }
         
         return ResponseEntity.ok(pageResult);
     }
@@ -187,8 +199,19 @@ public class AlertController {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
                     
+                    boolean makerCheckerComplete = true;
                     // Set status based on disposition or default to resolved
                     if (request != null && request.getDisposition() != null) {
+                        org.springframework.security.core.Authentication authReviewer =
+                                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                        String reviewer = authReviewer != null ? authReviewer.getName() : null;
+                        makerCheckerComplete = alertDispositionMakerCheckerService.applyMakerChecker(
+                                alert, request.getDisposition(), reviewer);
+                        if (!makerCheckerComplete) {
+                            alert.setStatus("pending_second_review");
+                            Alert pending = alertRepository.save(alert);
+                            return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED).body(pending);
+                        }
                         alert.setDisposition(request.getDisposition());
                         // Map disposition to status
                         AlertDisposition disp = request.getDisposition();

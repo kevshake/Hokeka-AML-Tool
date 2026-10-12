@@ -48,6 +48,8 @@ class AlertControllerStatusUpdateIT {
     @Mock private AlertFraudIncidentBridge alertFraudIncidentBridge;
     @Mock private UserRepository userRepository;
     @Mock private com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
+    @Mock private com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService;
+    @Mock private com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService;
 
     private AlertController alertController;
 
@@ -62,7 +64,12 @@ class AlertControllerStatusUpdateIT {
                 alertToCaseService,
                 alertFraudIncidentBridge,
                 userRepository,
-                alertDetailQueryService);
+                alertDetailQueryService,
+                alertPrioritizationService,
+                alertDispositionMakerCheckerService);
+        org.mockito.Mockito.lenient()
+                .when(alertDispositionMakerCheckerService.applyMakerChecker(any(), any(), any()))
+                .thenReturn(true);
     }
 
     @AfterEach

@@ -4,11 +4,10 @@ import com.posgateway.aml.dto.alert.AlertDetailResponseDTO;
 import com.posgateway.aml.dto.assessment.FindingResponseDTO;
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.alert.AlertFindingLink;
-import com.posgateway.aml.entity.alert.AlertTransactionLink;
 import com.posgateway.aml.entity.assessment.Finding;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.alert.AlertFindingLinkRepository;
-import com.posgateway.aml.repository.alert.AlertTransactionLinkRepository;
+import com.posgateway.aml.repository.compliance.AlertTransactionLinkRepository;
 import com.posgateway.aml.repository.assessment.FindingRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -59,8 +58,8 @@ public class AlertDetailQueryService {
         if (alert.getTxnId() != null) {
             txnIds.add(alert.getTxnId());
         }
-        alertTransactionLinkRepository.findByAlertIdOrderByLinkedAtAsc(alertId).stream()
-                .map(AlertTransactionLink::getTxnId)
+        alertTransactionLinkRepository.findByAlertIdOrderByPrimaryLinkDescIdDesc(alertId).stream()
+                .map(link -> link.getTxnId())
                 .forEach(id -> {
                     if (!txnIds.contains(id)) {
                         txnIds.add(id);
