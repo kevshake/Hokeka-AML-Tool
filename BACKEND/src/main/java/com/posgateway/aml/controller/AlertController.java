@@ -40,7 +40,8 @@ public class AlertController {
     private final RuleEffectivenessService ruleEffectivenessService;
         private final com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService;
     private final com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge;
-    private final UserRepository userRepository;
+        private final UserRepository userRepository;
+        private final com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
@@ -48,7 +49,8 @@ public class AlertController {
                                RuleEffectivenessService ruleEffectivenessService,
                                                               com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService,
                                                               com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge,
-                                                              UserRepository userRepository) {
+                                                              UserRepository userRepository,
+                                                              com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -57,6 +59,7 @@ public class AlertController {
                 this.alertToCaseService = alertToCaseService;
                                 this.alertFraudBridge = alertFraudBridge;
                                 this.userRepository = userRepository;
+                                this.alertDetailQueryService = alertDetailQueryService;
                             }
 
     /**
@@ -133,31 +136,10 @@ public class AlertController {
         
         return alertRepository.findById(id)
                 .map(alert -> {
-                    // Super Admin (PSP ID 0) can see all alerts
-                    if (userPspId != null && userPspId == 0L) {
-                        return ResponseEntity.ok(alert);
-                    }
-                    
-                    // Directly scoped alerts (including multi-asset alerts) do not require a merchant bridge.
-                    if (alert.getPspId() != null && alert.getPspId().equals(userPspId)) {
-                        return ResponseEntity.ok(alert);
-                    }
-
-                    // PSP User - validate that alert's merchant belongs to their PSP
-                    if (alert.getMerchantId() != null) {
-                        return merchantRepository.findById(alert.getMerchantId())
-                                .map(merchant -> {
-                                    if (merchant.getPsp() != null && merchant.getPsp().getPspId().equals(userPspId)) {
-                                        return ResponseEntity.ok(alert);
-                                    } else {
-                                        return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-                                    }
-                                })
-                                .orElse(ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build());
-                    } else {
-                        // Alert without merchant - only Super Admin can access
+                    if (!hasAlertAccess(alert, userPspId)) {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
+                    return ResponseEntity.ok(alertDetailQueryService.getAlertDetail(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -363,8 +345,13 @@ public class AlertController {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
                     
-                    alertRepository.deleteById(id);
-                    return ResponseEntity.noContent().build();
+                    alert.setStatus("closed");
+                    alert.setClosedAt(LocalDateTime.now());
+                    alertRepository.save(alert);
+                    return ResponseEntity.ok(Map.of(
+                            "message", "Alert soft-closed; hard DELETE is not permitted",
+                            "alertId", id,
+                            "status", alert.getStatus()));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -11,4 +11,7 @@ public interface FindingRepository extends JpaRepository<Finding, UUID> {
     List<Finding> findByAssessmentIdOrderByCreatedAtAsc(UUID assessmentId);
 
     long countByAssessmentId(UUID assessmentId);
+
+    /** Lists findings recorded for a transaction (assessment ledger). */
+    List<Finding> findByTxnIdOrderByCreatedAtAsc(Long txnId);
 }

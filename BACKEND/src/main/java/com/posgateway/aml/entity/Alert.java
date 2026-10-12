@@ -90,6 +90,18 @@ public class Alert {
     @Column(name = "disposed_at")
     private LocalDateTime disposedAt;
 
+    @Column(name = "case_id")
+    private Long caseId;
+
+    @Column(name = "rule_instance_id")
+    private Long ruleInstanceId;
+
+    @Column(name = "rule_version_id")
+    private Long ruleVersionId;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -230,6 +242,38 @@ public class Alert {
 
     public void setDisposedAt(LocalDateTime disposedAt) {
         this.disposedAt = disposedAt;
+    }
+
+    public Long getCaseId() {
+        return caseId;
+    }
+
+    public void setCaseId(Long caseId) {
+        this.caseId = caseId;
+    }
+
+    public Long getRuleInstanceId() {
+        return ruleInstanceId;
+    }
+
+    public void setRuleInstanceId(Long ruleInstanceId) {
+        this.ruleInstanceId = ruleInstanceId;
+    }
+
+    public Long getRuleVersionId() {
+        return ruleVersionId;
+    }
+
+    public void setRuleVersionId(Long ruleVersionId) {
+        this.ruleVersionId = ruleVersionId;
+    }
+
+    public LocalDateTime getClosedAt() {
+        return closedAt;
+    }
+
+    public void setClosedAt(LocalDateTime closedAt) {
+        this.closedAt = closedAt;
     }
 
     // ── API aliases ──────────────────────────────────────────────────────────────────────────────

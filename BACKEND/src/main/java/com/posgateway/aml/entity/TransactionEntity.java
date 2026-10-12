@@ -91,6 +91,9 @@ public class TransactionEntity {
     @Column(name = "decision", length = 20)
     private String decision; // ALLOW, ALERT, HOLD, BLOCK (legacy values normalized on read)
 
+    @Column(name = "decision_v2", length = 16)
+    private String decisionV2; // ALLOW, FLAG, SUSPEND, BLOCK (canonical orchestrator output)
+
     @Column(name = "sar_required", nullable = false)
     private boolean sarRequired;
 
@@ -331,6 +334,14 @@ public class TransactionEntity {
 
     public void setDecision(String decision) {
         this.decision = decision;
+    }
+
+    public String getDecisionV2() {
+        return decisionV2;
+    }
+
+    public void setDecisionV2(String decisionV2) {
+        this.decisionV2 = decisionV2;
     }
 
     public boolean isSarRequired() { return sarRequired; }

@@ -23,6 +23,9 @@ public class CaseAlert {
     @JoinColumn(name = "case_id", nullable = false)
     private ComplianceCase complianceCase;
 
+    @Column(name = "alert_id")
+    private Long alertId;
+
     @Column(nullable = false)
     private String alertType; // RULE, ML_SCORE, SANCTIONS, MANUAL
 
@@ -148,5 +151,13 @@ public class CaseAlert {
 
     public void setTriggeredAt(LocalDateTime triggeredAt) {
         this.triggeredAt = triggeredAt;
+    }
+
+    public Long getAlertId() {
+        return alertId;
+    }
+
+    public void setAlertId(Long alertId) {
+        this.alertId = alertId;
     }
 }

@@ -47,6 +47,7 @@ class AlertControllerStatusUpdateIT {
     @Mock private AlertToCaseService alertToCaseService;
     @Mock private AlertFraudIncidentBridge alertFraudIncidentBridge;
     @Mock private UserRepository userRepository;
+    @Mock private com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
 
     private AlertController alertController;
 
@@ -60,7 +61,8 @@ class AlertControllerStatusUpdateIT {
                 ruleEffectivenessService,
                 alertToCaseService,
                 alertFraudIncidentBridge,
-                userRepository);
+                userRepository,
+                alertDetailQueryService);
     }
 
     @AfterEach

@@ -1,6 +1,7 @@
 package com.posgateway.aml.controller;
 
 import com.posgateway.aml.dto.FraudDetectionResponseDTO;
+import com.posgateway.aml.dto.alert.TransactionAlertsResponseDTO;
 import com.posgateway.aml.dto.assessment.AssessmentDetailResponseDTO;
 import com.posgateway.aml.dto.TransactionRequestDTO;
 import com.posgateway.aml.entity.TransactionEntity;
@@ -59,6 +60,7 @@ public class TransactionController {
     private final ConnectionCleanupService cleanupService;
     private final PspIsolationService pspIsolationService;
     private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
+    private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -83,7 +85,8 @@ public class TransactionController {
             TransactionRepository transactionRepository,
             FraudDetectionMapper fraudMapper,
             PspIsolationService pspIsolationService,
-            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService) {
+            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
+            com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -96,6 +99,7 @@ public class TransactionController {
         this.fraudMapper = fraudMapper;
         this.pspIsolationService = pspIsolationService;
         this.assessmentQueryService = assessmentQueryService;
+        this.transactionAlertQueryService = transactionAlertQueryService;
     }
 
     /**
@@ -329,6 +333,16 @@ public class TransactionController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER')")
     public ResponseEntity<AssessmentDetailResponseDTO> getTransactionAssessment(@PathVariable Long id) {
         return ResponseEntity.ok(assessmentQueryService.getLatestByTransactionId(id));
+    }
+
+    /**
+     * Lists alerts linked to a transaction (legacy txn_id and alert_transactions join).
+     * GET /api/v1/transactions/{id}/alerts
+     */
+    @GetMapping("/{id}/alerts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER')")
+    public ResponseEntity<TransactionAlertsResponseDTO> getTransactionAlerts(@PathVariable Long id) {
+        return ResponseEntity.ok(transactionAlertQueryService.getAlertsForTransaction(id));
     }
 
     /**

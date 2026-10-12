@@ -34,6 +34,8 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 | Merchants / KYB | `/merchants` | Gap register §2 | implemented+aligned |
 | Screening (incl. PEP / sanctions UX) | `/screening` | Gap register P0 #1–2; 06 dual-post | implemented+aligned |
 | Transaction monitoring (batch path) | `/transaction-monitoring/*` | Gap register P0 #3; 06 dual-post | implemented+aligned |
+| Transaction assessment + findings (explain) | `/records/TRANSACTION/:id` → `TransactionAssessmentPanel` | IMPLEMENTATION_PLAN WP-02; `GET /transactions/{id}/assessment` | implemented+aligned |
+| Alerts by transaction | `/records/TRANSACTION/:id` → `TransactionAlertsPanel` | IMPLEMENTATION_PLAN WP-03; `GET /transactions/{id}/alerts` | implemented+aligned |
 | Rules | `/rules-generation` | Gap register §3 | implemented+aligned |
 | Risk analytics | `/risk-analytics` | Gap register §4 | implemented+aligned |
 | Regulatory / SAR | `/reports`, `/regulatory-reports` | Gap register §6 | implemented+aligned |
