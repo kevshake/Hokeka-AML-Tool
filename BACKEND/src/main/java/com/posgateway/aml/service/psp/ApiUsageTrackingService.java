@@ -11,6 +11,7 @@ import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.PrometheusMetricsService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -35,8 +36,12 @@ public class ApiUsageTrackingService {
     }
 
 
+    /**
+     * Persists one API usage row for billing/analytics without joining the caller's transaction
+     * (avoids rollback-only poisoning when metering insert fails).
+     */
     @Async
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logRequest(ApiUsageEvent event) {
         log.debug("Logging API usage for PSP: {}", event.getPspId());
 

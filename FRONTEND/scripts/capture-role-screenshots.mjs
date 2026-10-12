@@ -57,7 +57,7 @@ for (const role of ROLES) {
     }, role)
 
     for (const path of paths) {
-      await page.goto(`${base}${path}`, { waitUntil: 'networkidle', timeout: 60_000 })
+      await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       await page.waitForTimeout(1500)
       const slug = path.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') || 'root'
       const file = `${outDir}/${role.toLowerCase()}-${slug}-${viewport.tag}.png`

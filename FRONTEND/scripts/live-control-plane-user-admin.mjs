@@ -15,9 +15,18 @@ async function tryFetch(path, init = {}) {
   return res
 }
 
+/** Resolves actuator health URL whether the Control Plane uses a servlet context path (/api/v1) or not. */
+function controlPlaneHealthUrl(apiBase) {
+  const trimmed = apiBase.replace(/\/$/, '')
+  if (trimmed.endsWith('/api/v1')) {
+    return `${trimmed}/actuator/health`
+  }
+  return `${trimmed.replace(/\/api\/v1$/, '')}/actuator/health`
+}
+
 async function main() {
   try {
-    const health = await fetch(`${base.replace(/\/api\/v1$/, '')}/actuator/health`)
+    const health = await fetch(controlPlaneHealthUrl(base))
     if (!health.ok) {
       console.log('SKIP: Control Plane not reachable — live user/role E2E requires Postgres + BACKEND on :2637')
       process.exit(2)
@@ -49,19 +58,20 @@ async function main() {
   }
 
   const suffix = Date.now()
+  /** Platform-scoped users omit pspId; sending 0 makes the Control Plane resolve a non-existent PSP. */
+  const createBody = {
+    username: `e2e.user.${suffix}`,
+    email: `e2e.${suffix}@hokeka.test`,
+    firstName: 'E2E',
+    lastName: 'User',
+    password: 'E2eTestPass!9',
+    roleId: viewerRole.id,
+    enabled: true,
+  }
   const createRes = await tryFetch('/users', {
     method: 'POST',
     headers: authHeaders,
-    body: JSON.stringify({
-      username: `e2e.user.${suffix}`,
-      email: `e2e.${suffix}@hokeka.test`,
-      firstName: 'E2E',
-      lastName: 'User',
-      password: 'E2eTestPass!9',
-      roleId: viewerRole.id,
-      pspId: 0,
-      enabled: true,
-    }),
+    body: JSON.stringify(createBody),
   })
   if (!createRes.ok) {
     console.error('FAIL: create user', createRes.status, await createRes.text())

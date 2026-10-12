@@ -132,11 +132,11 @@ export default function InsightsPanel() {
   return (
     <aside className="flex w-full flex-shrink-0 flex-col gap-4 xl:sticky xl:top-0 xl:w-[300px] xl:min-w-[300px]">
       <DashboardPanel aria-labelledby="db-insights-alerts" padding="md" className="min-h-0 flex-1">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 id="db-insights-alerts" className="db-title">
+        <div className="mb-3 flex flex-nowrap items-center justify-between gap-2">
+          <h3 id="db-insights-alerts" className="db-title min-w-0 flex-1 truncate">
             Alert inbox
           </h3>
-          <Link to="/alerts" className="db-link text-[11px]">
+          <Link to="/alerts" className="db-link inline-flex shrink-0 whitespace-nowrap text-[11px]">
             Open alerts
           </Link>
         </div>

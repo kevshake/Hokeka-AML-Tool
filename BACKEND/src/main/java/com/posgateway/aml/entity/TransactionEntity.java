@@ -3,6 +3,7 @@ package com.posgateway.aml.entity;
 import com.posgateway.aml.config.tenant.PspTenantFilter;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -53,8 +54,10 @@ public class TransactionEntity {
     @Column(name = "txn_ts")
     private LocalDateTime txnTs;
 
+    /** EMV tag map persisted as PostgreSQL JSONB (not varchar) for ingest and feature extraction. */
+    @JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "emv_tags", columnDefinition = "JSONB")
-    private String emvTags; // JSON string representation
+    private String emvTags;
 
     @Column(name = "acquirer_response")
     private String acquirerResponse;

@@ -13,6 +13,8 @@ spring:
 aerospike:
   host: ${AEROSPIKE_HOST:fd-test-aerospike}
   port: ${AEROSPIKE_PORT:3000}
+  # Docker CE image exposes namespace "test"; prod/test compose configs use aml_cache via env.
+  namespace: ${AEROSPIKE_NAMESPACE:aml_cache}
 
 # NOTE: a single top-level `aml:` block. YAML/Spring Boot (allowDuplicateKeys=false)
 # rejects duplicate top-level keys, so internal-auth-key and risk MUST be siblings here

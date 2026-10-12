@@ -12,8 +12,20 @@ ALTER INDEX IF EXISTS idx_jev_audit_alert RENAME TO idx_ai_audit_alert;
 ALTER INDEX IF EXISTS idx_jev_audit_case RENAME TO idx_ai_audit_case;
 ALTER INDEX IF EXISTS idx_jev_audit_branch_created RENAME TO idx_ai_audit_branch_created;
 
-ALTER TABLE ai_decision_audit
-    RENAME COLUMN openrouter_request_id TO provider_request_id;
+-- Rename legacy OpenRouter column when present; V234 may already have added provider_request_id on greenfield DBs.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ai_decision_audit'
+          AND column_name = 'openrouter_request_id'
+    ) THEN
+        ALTER TABLE ai_decision_audit
+            RENAME COLUMN openrouter_request_id TO provider_request_id;
+    END IF;
+END $$;
 
 COMMENT ON TABLE ai_bands IS 'Per-PSP provisional AI band thresholds; replace with labeled-sample tuning.';
 COMMENT ON COLUMN ai_decision_audit.shadow_mode IS 'When true, AI output was logged only and did not mutate decisions.';

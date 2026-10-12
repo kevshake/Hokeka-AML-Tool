@@ -47,7 +47,7 @@ export function DashboardEmpty({
       <p className="text-xs text-[var(--db-text-secondary)]">{message}</p>
       {hint ? <p className="text-[11px] text-[var(--db-text-muted)]">{hint}</p> : null}
       {actionLabel && actionTo ? (
-        <Link to={actionTo} className="db-link text-[11px]">
+        <Link to={actionTo} className="db-link inline-flex shrink-0 whitespace-nowrap text-[11px]">
           {actionLabel}
         </Link>
       ) : null}
