@@ -5,6 +5,8 @@ import { apiClient } from "../../lib/apiClient";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import TransactionAssessmentPanel from "../../components/TransactionMonitoring/TransactionAssessmentPanel";
 import TransactionAlertsPanel from "../../components/TransactionMonitoring/TransactionAlertsPanel";
+import ComplianceLinksPanel from "../../components/compliance/ComplianceLinksPanel";
+import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
 
 interface RecordLink {
   recordType: string;
@@ -69,6 +71,8 @@ export default function RecordDetailPage() {
           <>
             <TransactionAssessmentPanel txnId={record.recordId} />
             <TransactionAlertsPanel txnId={record.recordId} />
+            <ComplianceLinksPanel subjectType="TRANSACTION" subjectId={record.recordId} />
+            <ScreeningActivityPanel txnId={record.recordId} />
             <AiVerdictPanel
               auditPath={`ai/audit/transaction/${record.recordId}`}
               title="Hokeka AI recommendation"

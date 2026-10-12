@@ -9,6 +9,8 @@ import { useTriggerSanctionsDownload } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
 import { isPlatformAdmin } from "../../lib/userAccess";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
+import { canPerformAction } from "../../lib/consoleRbac";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -21,7 +23,7 @@ export default function ScreeningPage() {
   const { data: downloadStatus } = useSanctionsDownloadStatus();
   const triggerDownload = useTriggerSanctionsDownload();
   const isOperator = isPlatformAdmin(user);
-  const canManageIngest = ["SUPER_ADMIN", "ADMIN", "COMPLIANCE_OFFICER", "MLRO"].includes(user?.role?.name?.toUpperCase() || "");
+  const canManageIngest = canPerformAction(user, "screening.ingest");
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
@@ -61,7 +63,7 @@ export default function ScreeningPage() {
       {downloadStatus && (
         <div className="mb-4 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3 text-xs text-glass-muted">
           {isOperator ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 min-[481px]:flex-row min-[481px]:flex-wrap min-[481px]:items-center min-[481px]:justify-between">
               <div>
                 <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
                 <p className="mt-1">
@@ -102,18 +104,18 @@ export default function ScreeningPage() {
           <h3 className="text-base font-semibold text-white">Sanctions Screening</h3>
         </div>
 
-        <div className="mb-4 flex gap-3">
+        <div className="mb-4 flex max-[480px]:flex-col max-[480px]:gap-2 min-[481px]:flex-row min-[481px]:gap-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleScreening()}
             placeholder="Enter a name to screen against sanctions lists..."
-            className="flex-1 rounded-lg border border-white/10 bg-[var(--surface-3)] px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-burgundy-700"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[var(--surface-3)] px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 max-[480px]:w-full"
           />
           <button
             onClick={handleScreening}
             disabled={loading}
-            className="flex min-w-[130px] items-center justify-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy-800 disabled:opacity-50"
+            className="flex min-h-[42px] w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy-800 disabled:opacity-50 min-[481px]:w-auto min-[481px]:min-w-[130px]"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             {loading ? "Screening..." : "Screen"}
@@ -176,6 +178,7 @@ export default function ScreeningPage() {
               <div className="mt-4">
                 <AiVerdictPanel
                   auditPath={`ai/audit/screening/${result.aiScreeningHitId}`}
+                  title="Hokeka AI recommendation"
                   pollUntilFound
                 />
               </div>
@@ -184,8 +187,16 @@ export default function ScreeningPage() {
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <MonitoringAlertsPanel />
+        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+          <ScreeningActivityPanel merchantId={result?.merchantId ? String(result.merchantId) : undefined} />
+          {!result?.merchantId ? (
+            <p className="text-sm text-white/45">
+              Run a name screen above or open a transaction record to view persisted screening activity for your tenant.
+            </p>
+          ) : null}
+        </div>
       </div>
     </HokekaPageShell>
   );

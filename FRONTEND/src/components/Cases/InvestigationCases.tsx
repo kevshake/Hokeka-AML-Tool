@@ -47,7 +47,12 @@ export default function InvestigationCases() {
           <div className="sm:pr-4">
             <p className="db-section-label mb-2">By priority</p>
             {entries.length === 0 ? (
-              <DashboardEmpty message="No open cases." />
+              <DashboardEmpty
+                message="No open cases."
+                hint="Escalated alerts and SAR workflows create cases automatically."
+                actionLabel="Review alerts"
+                actionTo="/alerts"
+              />
             ) : (
               <div className="flex items-center gap-3">
                 <div className="relative h-[88px] w-[88px] flex-shrink-0">

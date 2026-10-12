@@ -9,6 +9,9 @@
         "build:prod": "vite build",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "test": "vitest run",
+        "screenshots:roles": "node scripts/capture-role-screenshots.mjs",
+        "screenshots:before-main": "node scripts/capture-before-main-screenshots.mjs",
+        "e2e:live-user-admin": "node scripts/live-control-plane-user-admin.mjs",
         "preview": "vite preview",
         "typecheck": "tsc --noEmit"
     },

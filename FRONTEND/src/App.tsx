@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { isPlatformAdmin } from "./pages/EdgeNodes/edgeMeta";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
+import PermissionRoute from "./components/Auth/PermissionRoute";
 import HokekaLayout from "./layouts/HokekaLayout";
 import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
 import { LEGACY_CONSOLE_ROUTE_ALIASES } from "./lib/documentedConsoleRoutes";
@@ -97,6 +98,7 @@ function App() {
                     <HokekaLayout>
                       <RouteErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
+                          <PermissionRoute>
                           <Routes>
                             <Route index element={<Navigate to="/dashboard" replace />} />
                             <Route path="dashboard" element={<DashboardPage />} />
@@ -144,6 +146,7 @@ function App() {
                             <Route path="limits-aml" element={<LimitsAmlPage />} />
                             <Route path="billing" element={<BillingRoute />} />
                           </Routes>
+                          </PermissionRoute>
                         </Suspense>
                       </RouteErrorBoundary>
                     </HokekaLayout>
