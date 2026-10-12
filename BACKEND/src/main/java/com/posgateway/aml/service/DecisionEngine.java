@@ -43,6 +43,9 @@ public class DecisionEngine {
     @Autowired(required = false)
     private com.posgateway.aml.service.case_management.CaseCreationService caseCreationService;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
+
     /**
      * How long (days) a card is auto-declined after a Do-Not-Honour (BLOCK) decision. The goal is
      * "decline that card for a month", so the default is 30. Tunable via {@code fraud.dnh.block-days}.
@@ -566,6 +569,10 @@ public class DecisionEngine {
         Alert saved = alertRepository.save(alert);
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
+
+        if (complianceEntityLinkService != null) {
+            complianceEntityLinkService.registerNewFraudAlert(saved, transaction);
+        }
 
         if (aiEngineAdvisor != null) {
             Map<String, Object> alertFeatures = new HashMap<>();

@@ -59,6 +59,8 @@ public class TransactionController {
     private final ConnectionCleanupService cleanupService;
     private final PspIsolationService pspIsolationService;
     private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
+    private final com.posgateway.aml.repository.AlertRepository alertRepository;
+    private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -83,7 +85,9 @@ public class TransactionController {
             TransactionRepository transactionRepository,
             FraudDetectionMapper fraudMapper,
             PspIsolationService pspIsolationService,
-            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService) {
+            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
+            com.posgateway.aml.repository.AlertRepository alertRepository,
+            com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -96,6 +100,8 @@ public class TransactionController {
         this.fraudMapper = fraudMapper;
         this.pspIsolationService = pspIsolationService;
         this.assessmentQueryService = assessmentQueryService;
+        this.alertRepository = alertRepository;
+        this.complianceLinksQueryService = complianceLinksQueryService;
     }
 
     /**
@@ -347,6 +353,35 @@ public class TransactionController {
                         throw new AccessDeniedException("Cannot access a transaction from another PSP", denied);
                     }
                     return ResponseEntity.ok(transaction);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Lists fraud/AML alerts linked to a transaction (primary txn_id plus alert_transactions joins).
+     */
+    @GetMapping("/{id}/alerts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER')")
+    public ResponseEntity<java.util.List<com.posgateway.aml.entity.Alert>> getAlertsForTransaction(@PathVariable Long id) {
+        return transactionRepository.findById(id)
+                .map(transaction -> {
+                    pspIsolationService.validateTransactionAccess(transaction);
+                    return ResponseEntity.ok(alertRepository.findByTxnId(id));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Returns indexed cross-links (cases, SARs, disputes, screening) for a transaction investigation graph.
+     */
+    @GetMapping("/{id}/compliance-links")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER')")
+    public ResponseEntity<com.posgateway.aml.dto.compliance.ComplianceLinksResponse> getComplianceLinks(
+            @PathVariable Long id) {
+        return transactionRepository.findById(id)
+                .map(transaction -> {
+                    pspIsolationService.validateTransactionAccess(transaction);
+                    return ResponseEntity.ok(complianceLinksQueryService.forTransaction(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

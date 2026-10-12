@@ -1,0 +1,152 @@
+package com.posgateway.aml.service.compliance;
+
+import com.posgateway.aml.dto.compliance.ComplianceLinksResponse;
+import com.posgateway.aml.dto.compliance.ComplianceLinksResponse.LinkedRecord;
+import com.posgateway.aml.repository.AlertRepository;
+import com.posgateway.aml.repository.ComplianceCaseRepository;
+import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
+import com.posgateway.aml.repository.chargeback.ChargebackDisputeRepository;
+import com.posgateway.aml.repository.compliance.AlertTransactionLinkRepository;
+import com.posgateway.aml.repository.compliance.SarAlertLinkRepository;
+import com.posgateway.aml.repository.merchant.MerchantRiskScoreRepository;
+import com.posgateway.aml.repository.monitoring.MonitoringAlertRepository;
+import com.posgateway.aml.repository.sanctions.ScreeningActivityRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Read-side aggregator for indexed FK bridges between fraud alerts, AML artifacts, merchants, cards, and txns.
+ */
+@Service
+@Transactional(readOnly = true)
+public class ComplianceLinksQueryService {
+
+    private final AlertRepository alertRepository;
+    private final AlertTransactionLinkRepository alertTransactionLinkRepository;
+    private final ComplianceCaseRepository complianceCaseRepository;
+    private final SarAlertLinkRepository sarAlertLinkRepository;
+    private final SuspiciousActivityReportRepository sarRepository;
+    private final ChargebackDisputeRepository disputeRepository;
+    private final MonitoringAlertRepository monitoringAlertRepository;
+    private final MerchantRiskScoreRepository merchantRiskScoreRepository;
+    private final ScreeningActivityRepository screeningActivityRepository;
+
+    public ComplianceLinksQueryService(AlertRepository alertRepository,
+                                       AlertTransactionLinkRepository alertTransactionLinkRepository,
+                                       ComplianceCaseRepository complianceCaseRepository,
+                                       SarAlertLinkRepository sarAlertLinkRepository,
+                                       SuspiciousActivityReportRepository sarRepository,
+                                       ChargebackDisputeRepository disputeRepository,
+                                       MonitoringAlertRepository monitoringAlertRepository,
+                                       MerchantRiskScoreRepository merchantRiskScoreRepository,
+                                       ScreeningActivityRepository screeningActivityRepository) {
+        this.alertRepository = alertRepository;
+        this.alertTransactionLinkRepository = alertTransactionLinkRepository;
+        this.complianceCaseRepository = complianceCaseRepository;
+        this.sarAlertLinkRepository = sarAlertLinkRepository;
+        this.sarRepository = sarRepository;
+        this.disputeRepository = disputeRepository;
+        this.monitoringAlertRepository = monitoringAlertRepository;
+        this.merchantRiskScoreRepository = merchantRiskScoreRepository;
+        this.screeningActivityRepository = screeningActivityRepository;
+    }
+
+    /** Returns the compliance graph anchored on a transaction id. */
+    public ComplianceLinksResponse forTransaction(Long txnId) {
+        List<LinkedRecord> alerts = new ArrayList<>();
+        alertRepository.findByTxnId(txnId).forEach(a ->
+                alerts.add(link("ALERT", a.getAlertId(), "FRAUD_ALERT", a.getReason())));
+        alertTransactionLinkRepository.findByTxnIdOrderByIdDesc(txnId).forEach(row ->
+                alertRepository.findById(row.getAlertId()).ifPresent(a ->
+                        alerts.add(link("ALERT", a.getAlertId(), "LINKED_ALERT", a.getReason()))));
+
+        List<LinkedRecord> cases = new ArrayList<>();
+        dedupe(alerts).forEach(a -> alertRepository.findById(Long.valueOf(a.recordId())).ifPresent(alert -> {
+            if (alert.getComplianceCaseId() != null) {
+                complianceCaseRepository.findById(alert.getComplianceCaseId()).ifPresent(c ->
+                        cases.add(link("CASE", c.getId(), "ESCALATED_CASE", c.getCaseReference())));
+            }
+        }));
+
+        List<LinkedRecord> sars = new ArrayList<>();
+        dedupe(alerts).forEach(a -> sarAlertLinkRepository.findByAlertId(Long.valueOf(a.recordId())).forEach(row ->
+                sars.add(link("SAR", row.getSarId(), "FILED_SAR", "SAR #" + row.getSarId()))));
+
+        List<LinkedRecord> disputes = new ArrayList<>();
+        dedupe(alerts).forEach(a -> {
+            Long alertId = Long.valueOf(a.recordId());
+            alertRepository.findById(alertId).ifPresent(alert -> {
+                if (alert.getMerchantId() == null) {
+                    return;
+                }
+                disputeRepository.findByMerchantIdOrderByCreatedAtDesc(alert.getMerchantId()).stream()
+                        .filter(d -> alertId.equals(d.getAlertId()))
+                        .forEach(d -> disputes.add(link("CHARGEBACK_DISPUTE", d.getId(), "DISPUTE", d.getNotificationType())));
+            });
+        });
+
+        List<LinkedRecord> screening = new ArrayList<>();
+        screeningActivityRepository.findByTxnIdOrderByCreatedAtDesc(txnId, PageRequest.of(0, 20))
+                .forEach(sa -> screening.add(link("SCREENING_ACTIVITY", sa.getId(), "SCREENING", sa.getReason())));
+
+        return new ComplianceLinksResponse("TRANSACTION", String.valueOf(txnId), dedupe(alerts), dedupe(cases),
+                List.of(link("TRANSACTION", txnId, "SELF", "Transaction #" + txnId)),
+                dedupe(sars), dedupe(disputes), List.of(), List.of(), dedupe(screening));
+    }
+
+    /** Returns the compliance graph anchored on a merchant id. */
+    public ComplianceLinksResponse forMerchant(Long merchantId) {
+        List<LinkedRecord> alerts = new ArrayList<>();
+        alertRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId).stream().limit(200).forEach(a ->
+                alerts.add(link("ALERT", a.getAlertId(), "MERCHANT_ALERT", a.getReason())));
+
+        List<LinkedRecord> cases = new ArrayList<>();
+        complianceCaseRepository.findByMerchantId(merchantId).forEach(c ->
+                cases.add(link("CASE", c.getId(), "CASE", c.getCaseReference())));
+
+        List<LinkedRecord> risk = new ArrayList<>();
+        merchantRiskScoreRepository.findLatestByMerchantId(merchantId)
+                .ifPresent(score -> risk.add(link("MERCHANT_RISK_SCORE", score.getScoreId(), "RISK_PROFILE", score.getRiskLevel())));
+
+        List<LinkedRecord> monitoring = new ArrayList<>();
+        monitoringAlertRepository.findByMerchant_MerchantIdOrderByCreatedAtDesc(merchantId).forEach(m ->
+                monitoring.add(link("MONITORING_ALERT", m.getAlertId(), "AML_MONITORING", m.getAlertType())));
+
+        List<LinkedRecord> screening = new ArrayList<>();
+        screeningActivityRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId, PageRequest.of(0, 50))
+                .forEach(sa -> screening.add(link("SCREENING_ACTIVITY", sa.getId(), "SCREENING", sa.getReason())));
+
+        List<LinkedRecord> sars = new ArrayList<>();
+        sarRepository.findByComplianceCaseMerchantId(merchantId).stream().limit(50).forEach(s ->
+                sars.add(link("SAR", s.getId(), "SAR", s.getSarReference())));
+
+        List<LinkedRecord> disputes = new ArrayList<>();
+        disputeRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId).forEach(d ->
+                disputes.add(link("CHARGEBACK_DISPUTE", d.getId(), "DISPUTE", d.getNotificationType())));
+
+        return new ComplianceLinksResponse("MERCHANT", String.valueOf(merchantId), dedupe(alerts), dedupe(cases),
+                List.of(), dedupe(sars), dedupe(disputes), dedupe(monitoring), dedupe(risk), dedupe(screening));
+    }
+
+    private static LinkedRecord link(String type, Object id, String relationship, String label) {
+        return new LinkedRecord(type, String.valueOf(id), relationship, label);
+    }
+
+    private static List<LinkedRecord> dedupe(List<LinkedRecord> input) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<LinkedRecord> out = new ArrayList<>();
+        for (LinkedRecord record : input) {
+            String key = record.recordType() + ":" + record.recordId();
+            if (seen.add(key)) {
+                out.add(record);
+            }
+        }
+        return out;
+    }
+}
