@@ -5,6 +5,7 @@ import HokekaHeader from '../components/header/HokekaHeader'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavBadges } from '../hooks/useNavBadges'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useConsolePageTitle } from '../hooks/useConsolePageTitle'
 
 interface HokekaLayoutProps {
   children: ReactNode
@@ -13,6 +14,7 @@ interface HokekaLayoutProps {
 export default function HokekaLayout({ children }: HokekaLayoutProps) {
   const { user } = useAuth()
   const badges = useNavBadges()
+  const pageTitle = useConsolePageTitle()
   const isMobileNav = useMediaQuery('(max-width: 767px)')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -45,6 +47,7 @@ export default function HokekaLayout({ children }: HokekaLayoutProps) {
       <div className="hokeka-dashboard-main flex min-w-0 flex-1 flex-col overflow-hidden">
         <HokekaHeader
           userName={displayName}
+          pageTitle={pageTitle}
           notificationCount={badges.messageUnreadCount}
           showMobileMenu={isMobileNav}
           onOpenMobileMenu={() => setMobileNavOpen(true)}

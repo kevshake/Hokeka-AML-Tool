@@ -69,7 +69,7 @@ export default function AlertDispositionPanel({ alert, onResolved }: Props) {
           disposition to finalize.
         </p>
       ) : null}
-      <label className="block text-xs text-white/45">
+      <label className="block text-xs text-white/45 max-[480px]:w-full">
         Disposition
         <select
           value={disposition}

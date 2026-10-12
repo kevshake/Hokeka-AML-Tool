@@ -40,7 +40,12 @@ export default function MonitoringAlertsPanel() {
       ) : error ? (
         <DashboardError message="Monitoring alerts unavailable." />
       ) : rows.length === 0 ? (
-        <DashboardEmpty message="No monitoring alerts." />
+        <DashboardEmpty
+          message="No monitoring alerts."
+          hint="Batch rescreening and risk-change jobs will list events here."
+          actionLabel="Live monitoring"
+          actionTo="/transaction-monitoring/live"
+        />
       ) : (
         <ul className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
           {rows.map((row) => (

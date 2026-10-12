@@ -162,9 +162,77 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
       })
     }
     if (path.includes('live-alerts')) {
+      const now = new Date().toISOString()
       return jsonResponse([
-        { id: 1, severity: 'HIGH', title: 'Velocity spike', createdAt: new Date().toISOString() },
+        {
+          id: 501,
+          alertType: 'VELOCITY_SPIKE',
+          priority: 'HIGH',
+          status: 'OPEN',
+          description: 'Multiple high-value transfers within 15 minutes',
+          transactionId: 9001,
+          caseId: 101,
+          investigator: 'velocity.analyst',
+          createdAt: now,
+        },
+        {
+          id: 502,
+          alertType: 'SANCTIONS_HIT',
+          priority: 'CRITICAL',
+          status: 'INVESTIGATING',
+          description: 'Watchlist match on beneficiary name',
+          transactionId: 9002,
+          investigator: 'compliance.officer',
+          createdAt: now,
+        },
       ])
+    }
+    if (path.includes('risk-distribution')) {
+      return jsonResponse({ HIGH: 12, MEDIUM: 34, LOW: 128 })
+    }
+    if (path.includes('cases/priority')) {
+      return jsonResponse({ HIGH: 3, MEDIUM: 5, LOW: 2, CRITICAL: 1 })
+    }
+    if (path.includes('cases/closed-recent')) {
+      return jsonResponse({
+        closureRate: 68,
+        closureRateTrend: 4,
+        resolved: 24,
+        falsePositive: 6,
+        sparkline: [2, 3, 2, 4, 5, 4, 6],
+      })
+    }
+    if (path.includes('risk-heatmap')) {
+      return jsonResponse([
+        {
+          countryCode: 'USA',
+          countryName: 'United States',
+          riskLevel: 'MEDIUM',
+          transactionCount: 4200,
+          alertCount: 12,
+        },
+        {
+          countryCode: 'KEN',
+          countryName: 'Kenya',
+          riskLevel: 'HIGH',
+          transactionCount: 1800,
+          alertCount: 9,
+        },
+      ])
+    }
+    if (path.startsWith('monitoring/alerts')) {
+      return jsonResponse(
+        page([
+          {
+            alertId: 801,
+            alertType: 'RESCREENING_DUE',
+            alertSeverity: 'MEDIUM',
+            merchantId: 44,
+            acknowledged: false,
+            createdAt: new Date().toISOString(),
+          },
+        ]),
+      )
     }
     if (path.includes('sparklines')) {
       const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -211,6 +279,22 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return jsonResponse(MOCK_NETWORK_GRAPH)
   }
 
+  if (/^compliance\/cases\/\d+$/.test(path)) {
+    const id = Number(path.split('/').pop())
+    const now = new Date().toISOString()
+    return jsonResponse({
+      id,
+      caseReference: `CASE-2026-${String(id).padStart(4, '0')}`,
+      description: 'Structuring pattern across linked merchants',
+      status: 'INVESTIGATING',
+      priority: 'HIGH',
+      createdAt: now,
+      updatedAt: now,
+      alerts: [{ id: 501 }, { id: 502 }],
+      assignedTo: { id: 2, username: 'velocity.analyst', firstName: 'Velocity', lastName: 'Analyst' },
+    })
+  }
+
   if (path.startsWith('compliance/cases')) {
     const now = new Date().toISOString()
     const mockUser = { id: 1, username: 'admin', email: 'admin@sys.com' }
@@ -225,6 +309,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           createdBy: mockUser,
           createdAt: now,
           updatedAt: now,
+          alerts: [{ id: 501 }, { id: 502 }],
         },
         {
           id: 88,
@@ -235,6 +320,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
           createdBy: mockUser,
           createdAt: now,
           updatedAt: now,
+          alerts: [{ id: 503 }],
         },
       ]),
     )

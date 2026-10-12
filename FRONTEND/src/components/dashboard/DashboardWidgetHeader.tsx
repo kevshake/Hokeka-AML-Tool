@@ -20,21 +20,21 @@ export default function DashboardWidgetHeader({
   trailing,
 }: DashboardWidgetHeaderProps) {
   return (
-    <div className="mb-3 flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h3 id={id} className="db-title">
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 id={id} className="db-title min-w-0 flex-1 truncate">
           {title}
         </h3>
-        {description ? <p className="db-subtitle mt-0.5">{description}</p> : null}
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {trailing}
+          {actionLabel && actionTo ? (
+            <Link to={actionTo} className="db-link whitespace-nowrap text-[11px]">
+              {actionLabel} <ArrowRight size={12} aria-hidden />
+            </Link>
+          ) : null}
+        </div>
       </div>
-      <div className="flex flex-shrink-0 items-center gap-2">
-        {trailing}
-        {actionLabel && actionTo ? (
-          <Link to={actionTo} className="db-link">
-            {actionLabel} <ArrowRight size={12} aria-hidden />
-          </Link>
-        ) : null}
-      </div>
+      {description ? <p className="db-subtitle mt-1 line-clamp-2">{description}</p> : null}
     </div>
   )
 }

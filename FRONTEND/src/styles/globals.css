@@ -122,6 +122,11 @@
     transition-timing-function: var(--ease);
   }
 
+  /** Stacks primary form controls full-width on narrow viewports (≤480px). */
+  .hokeka-form-row {
+    @apply flex flex-col gap-2 max-[480px]:w-full min-[481px]:flex-row min-[481px]:items-stretch min-[481px]:gap-3;
+  }
+
   /* Chart accents — a hairline halo, not neon. */
   .chart-neon-red {
     filter: drop-shadow(0 0 5px rgb(var(--danger-rgb) / 0.45));

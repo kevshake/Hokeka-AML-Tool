@@ -1,4 +1,5 @@
-import { AlertCircle, Inbox } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export function DashboardLoading({ rows = 4, className = '' }: { rows?: number; className?: string }) {
   return (
@@ -19,11 +20,37 @@ export function DashboardError({ message = 'Could not load data. Try refreshing 
   )
 }
 
-export function DashboardEmpty({ message = 'No data available' }: { message?: string }) {
+export interface DashboardEmptyProps {
+  message?: string
+  hint?: string
+  actionLabel?: string
+  actionTo?: string
+  compact?: boolean
+}
+
+/** Compact empty state for dashboard widgets (optional single-line hint + CTA). */
+export function DashboardEmpty({
+  message = 'No data available',
+  hint,
+  actionLabel,
+  actionTo,
+  compact = true,
+}: DashboardEmptyProps) {
   return (
-    <div className="db-empty flex-col gap-1.5">
-      <Inbox size={16} aria-hidden className="opacity-50" />
-      <span>{message}</span>
+    <div
+      className={
+        compact
+          ? 'db-empty-compact flex flex-col items-start gap-2 py-3 text-left'
+          : 'db-empty flex-col gap-1.5'
+      }
+    >
+      <p className="text-xs text-[var(--db-text-secondary)]">{message}</p>
+      {hint ? <p className="text-[11px] text-[var(--db-text-muted)]">{hint}</p> : null}
+      {actionLabel && actionTo ? (
+        <Link to={actionTo} className="db-link text-[11px]">
+          {actionLabel}
+        </Link>
+      ) : null}
     </div>
   )
 }

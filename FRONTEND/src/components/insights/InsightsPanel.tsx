@@ -9,6 +9,7 @@ import { useCase, useCases } from '../../features/api/queries'
 import { useLiveAlerts } from '../../hooks/useDashboard'
 import { cn } from '../../lib/utils'
 import type { Alert, Case } from '../../types'
+import { alertHeadline, alertSubline, caseStatusChipClass } from '../../lib/dashboardFormatters'
 
 const FILTERS = ['All', 'New', 'Investigating', 'Resolved'] as const
 const CASE_STEPS = ['New', 'Under Review', 'Escalated', 'Closed']
@@ -113,7 +114,8 @@ export default function InsightsPanel() {
   const caseRisk = featuredCase?.priority
   const caseStatus = featuredCase?.status
   const caseOwner = ownerName(featuredCase)
-  const caseAlertCount = caseDetail?.alerts?.length
+  const caseAlertCount =
+    caseDetail?.alerts?.length ?? featuredCase?.alerts?.length ?? 0
   const activeStep = stepIndexForStatus(featuredCase?.status)
 
   const alerts = (data ?? []).filter((a) => {
@@ -182,11 +184,11 @@ export default function InsightsPanel() {
                 className="rounded-[var(--db-radius-sm)] border border-[var(--db-border)] bg-[var(--db-surface)] p-3 transition-colors hover:bg-[var(--db-surface-muted)]"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-xs font-medium text-[var(--db-text)]">{a.alertType}</p>
+                  <p className="truncate text-xs font-medium text-[var(--db-text)]">{alertHeadline(a)}</p>
                   <DashboardRiskBadge level={a.priority} />
                 </div>
                 <p className="mt-1 truncate text-[11px] text-[var(--db-text-muted)]">
-                  {a.description || `#${a.id}`}
+                  {alertSubline(a)}
                 </p>
                 <p className="mt-1.5 text-[10px] text-[var(--db-text-muted)]">{timeAgo(a.createdAt)}</p>
               </article>
@@ -212,7 +214,7 @@ export default function InsightsPanel() {
             <p className="text-xs font-medium text-[var(--db-accent)]">#{caseRef}</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-[var(--db-text)]">{caseName}</p>
-              <span className="db-chip db-chip--warning">{statusLabel(caseStatus)}</span>
+              <span className={caseStatusChipClass(caseStatus)}>{statusLabel(caseStatus)}</span>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
@@ -223,13 +225,13 @@ export default function InsightsPanel() {
                     <DashboardRiskBadge level={caseRisk} />
                   </div>
                 ) : (
-                  <p className="mt-1 text-[var(--db-text-muted)]">—</p>
+                  <p className="mt-1 text-[11px] text-[var(--db-text-muted)]">Not scored</p>
                 )}
               </div>
               <div>
                 <p className="text-[var(--db-text-muted)]">Linked alerts</p>
                 <p className="mt-1 font-semibold tabular-nums text-[var(--db-text)]">
-                  {caseAlertCount !== undefined ? caseAlertCount : '—'}
+                  {caseAlertCount}
                 </p>
               </div>
               <div className="col-span-2">
@@ -254,8 +256,8 @@ export default function InsightsPanel() {
                         className={cn(
                           'flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold',
                           i <= activeStep
-                            ? 'bg-[var(--db-accent)] text-white'
-                            : 'bg-[#eceef2] text-[var(--db-text-muted)]',
+                            ? 'bg-[var(--db-info)] text-white'
+                            : 'bg-[var(--surface-3)] text-[var(--db-text-muted)]',
                         )}
                         aria-current={i === activeStep ? 'step' : undefined}
                       >

@@ -11,6 +11,7 @@
         "test": "vitest run",
         "screenshots:roles": "node scripts/capture-role-screenshots.mjs",
         "screenshots:before-main": "node scripts/capture-before-main-screenshots.mjs",
+        "e2e:live-user-admin": "node scripts/live-control-plane-user-admin.mjs",
         "preview": "vite preview",
         "typecheck": "tsc --noEmit"
     },
