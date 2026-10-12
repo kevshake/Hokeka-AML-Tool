@@ -1,6 +1,7 @@
 package com.posgateway.aml.controller;
 
 import com.posgateway.aml.dto.FraudDetectionResponseDTO;
+import com.posgateway.aml.dto.alert.TransactionAlertsResponseDTO;
 import com.posgateway.aml.dto.assessment.AssessmentDetailResponseDTO;
 import com.posgateway.aml.dto.TransactionRequestDTO;
 import com.posgateway.aml.entity.TransactionEntity;
@@ -59,7 +60,7 @@ public class TransactionController {
     private final ConnectionCleanupService cleanupService;
     private final PspIsolationService pspIsolationService;
     private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
-    private final com.posgateway.aml.repository.AlertRepository alertRepository;
+    private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
     private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
@@ -86,7 +87,7 @@ public class TransactionController {
             FraudDetectionMapper fraudMapper,
             PspIsolationService pspIsolationService,
             com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
-            com.posgateway.aml.repository.AlertRepository alertRepository,
+            com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
             com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
@@ -100,7 +101,7 @@ public class TransactionController {
         this.fraudMapper = fraudMapper;
         this.pspIsolationService = pspIsolationService;
         this.assessmentQueryService = assessmentQueryService;
-        this.alertRepository = alertRepository;
+        this.transactionAlertQueryService = transactionAlertQueryService;
         this.complianceLinksQueryService = complianceLinksQueryService;
     }
 
@@ -358,15 +359,16 @@ public class TransactionController {
     }
 
     /**
-     * Lists fraud/AML alerts linked to a transaction (primary txn_id plus alert_transactions joins).
+     * Lists fraud/AML alerts for a transaction (primary txn_id plus V239 alert_transactions joins).
+     * GET /api/v1/transactions/{id}/alerts
      */
     @GetMapping("/{id}/alerts")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER')")
-    public ResponseEntity<java.util.List<com.posgateway.aml.entity.Alert>> getAlertsForTransaction(@PathVariable Long id) {
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER','PSP_ANALYST','VIEWER')")
+    public ResponseEntity<TransactionAlertsResponseDTO> getAlertsForTransaction(@PathVariable Long id) {
         return transactionRepository.findById(id)
                 .map(transaction -> {
                     pspIsolationService.validateTransactionAccess(transaction);
-                    return ResponseEntity.ok(alertRepository.findByTxnId(id));
+                    return ResponseEntity.ok(transactionAlertQueryService.getAlertsForTransaction(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

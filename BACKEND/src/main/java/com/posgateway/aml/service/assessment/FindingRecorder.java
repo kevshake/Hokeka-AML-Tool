@@ -50,6 +50,7 @@ public class FindingRecorder {
             return;
         }
         pending.add(resolved);
+        AssessmentFindingBuffer.append(resolved);
         if (pendingCount.incrementAndGet() >= batchSize) {
             flushAsync();
         }

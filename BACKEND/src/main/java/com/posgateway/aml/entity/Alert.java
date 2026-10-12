@@ -108,6 +108,15 @@ public class Alert {
     @Column(name = "second_reviewer")
     private String secondReviewer;
 
+    @Column(name = "rule_instance_id")
+    private Long ruleInstanceId;
+
+    @Column(name = "rule_version_id")
+    private Long ruleVersionId;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -288,6 +297,30 @@ public class Alert {
 
     public void setSecondReviewer(String secondReviewer) {
         this.secondReviewer = secondReviewer;
+    }
+
+    public Long getRuleInstanceId() {
+        return ruleInstanceId;
+    }
+
+    public void setRuleInstanceId(Long ruleInstanceId) {
+        this.ruleInstanceId = ruleInstanceId;
+    }
+
+    public Long getRuleVersionId() {
+        return ruleVersionId;
+    }
+
+    public void setRuleVersionId(Long ruleVersionId) {
+        this.ruleVersionId = ruleVersionId;
+    }
+
+    public LocalDateTime getClosedAt() {
+        return closedAt;
+    }
+
+    public void setClosedAt(LocalDateTime closedAt) {
+        this.closedAt = closedAt;
     }
 
     // ── API aliases ──────────────────────────────────────────────────────────────────────────────

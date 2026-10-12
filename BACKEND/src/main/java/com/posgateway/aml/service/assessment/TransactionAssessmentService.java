@@ -84,6 +84,7 @@ public class TransactionAssessmentService {
             logger.warn("Failed to finalize assessment {}: {}", assessmentId, e.getMessage());
         } finally {
             findingRecorder.flushAsync();
+            AssessmentFindingBuffer.clear();
             AssessmentRecordingScope.clear();
         }
     }
@@ -137,7 +138,8 @@ public class TransactionAssessmentService {
     private static Map<String, Object> buildInitialVersions() {
         Map<String, Object> versions = new LinkedHashMap<>();
         versions.put("riskModel", "CRA-v1");
-        versions.put("assessmentLedger", "WP-01-shadow");
+        versions.put("assessmentLedger", "WP-01");
+        versions.put("decisionOrchestrator", "WP-02");
         return versions;
     }
 

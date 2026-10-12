@@ -154,10 +154,12 @@ public class CaseAlert {
         this.triggeredAt = triggeredAt;
     }
 
+    /** Returns the canonical alerts row this case alert row was copied from. */
     public Long getSourceAlertId() {
         return sourceAlertId;
     }
 
+    /** Persists the FK back to the canonical alerts table for provenance. */
     public void setSourceAlertId(Long sourceAlertId) {
         this.sourceAlertId = sourceAlertId;
     }
