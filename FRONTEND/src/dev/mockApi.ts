@@ -290,7 +290,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
     return jsonResponse([{ id: 2, code: 'TECHFLOW_PSP', name: 'TechFlow Inc.' }])
   }
 
-  if (path.startsWith('jev/audit')) {
+  if (path.startsWith('ai/audit')) {
     return jsonResponse([
       {
         id: 1,
@@ -311,7 +311,7 @@ export async function mockFetch(input: RequestInfo | URL, init?: RequestInit): P
   if (path.startsWith('sanctions/screen') && method === 'POST') {
     return jsonResponse({
       matchFound: true,
-      jevScreeningHitId: 9001,
+      aiScreeningHitId: 9001,
       matches: [{ name: 'Sample Entity', listName: 'Demo', score: 0.91, pepLevel: 'TIER_2' }],
     })
   }

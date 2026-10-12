@@ -24,12 +24,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
 import PlatformAdminTab from "./tabs/PlatformAdminTab";
-import JevSettingsTab from "./tabs/JevSettingsTab";
+import AiSettingsTab from "./tabs/AiSettingsTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import GlassCard from "../../components/Common/GlassCard";
 import SettingsTabBar, { type SettingsTabItem } from "../../components/Settings/SettingsTabBar";
 import {
-  canAccessJevSettingsTab,
+  canAccessAiSettingsTab,
   getSettingsTabsForUser,
   settingsTabIndex,
 } from "../../lib/settingsTabs";
@@ -183,7 +183,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    if (requestedTab === "jev" && !canAccessJevSettingsTab(user)) {
+    if (requestedTab === "ai" && !canAccessAiSettingsTab(user)) {
       setSearchParams({}, { replace: true });
       setTabValue(0);
       return;
@@ -198,7 +198,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const active = settingsTabs[tabValue];
-    if (active?.id === "jev" && !canAccessJevSettingsTab(user)) {
+    if (active?.id === "ai" && !canAccessAiSettingsTab(user)) {
       setTabValue(0);
     }
   }, [settingsTabs, tabValue, user]);
@@ -625,9 +625,9 @@ export default function SettingsPage() {
       {renderSettingsPanel("platform-admin", <PlatformAdminTab />)}
 
       {renderSettingsPanel(
-        "jev",
-        canAccessJevSettingsTab(user) ? (
-          <JevSettingsTab />
+        "ai",
+        canAccessAiSettingsTab(user) ? (
+          <AiSettingsTab />
         ) : (
           <Alert severity="error">You do not have permission to view Hokeka AI operator settings.</Alert>
         ),

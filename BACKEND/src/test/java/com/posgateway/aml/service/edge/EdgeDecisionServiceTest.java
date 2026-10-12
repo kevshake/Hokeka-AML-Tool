@@ -5,10 +5,10 @@ import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.repository.PspRepository;
-import com.posgateway.aml.service.jev.JevAiDisclosureSanitizer;
-import com.posgateway.aml.service.jev.JevDecisionGateway;
-import com.posgateway.aml.service.jev.JevDecisionOutcome;
-import com.posgateway.aml.service.jev.JevRecommendation;
+import com.posgateway.aml.service.ai.decision.AiDisclosureSanitizer;
+import com.posgateway.aml.service.ai.decision.AiDecisionGateway;
+import com.posgateway.aml.service.ai.decision.AiDecisionOutcome;
+import com.posgateway.aml.service.ai.decision.AiRecommendation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EdgeDecisionServiceTest {
 
-    @Mock private JevDecisionGateway gateway;
+    @Mock private AiDecisionGateway gateway;
     @Mock private PspRepository pspRepository;
     @InjectMocks private EdgeDecisionService service;
 
@@ -40,9 +40,9 @@ class EdgeDecisionServiceTest {
         psp.setAiInlineBudgetMs(800);
         when(pspRepository.findById(10L)).thenReturn(Optional.of(psp));
 
-        JevDecisionOutcome outcome = JevDecisionOutcome.builder()
+        AiDecisionOutcome outcome = AiDecisionOutcome.builder()
                 .fallback(false)
-                .recommendation(JevRecommendation.REVIEW)
+                .recommendation(AiRecommendation.REVIEW)
                 .confidence(0.77)
                 .reasons(java.util.List.of("borderline velocity"))
                 .finalDecision("ALLOW")
@@ -75,7 +75,7 @@ class EdgeDecisionServiceTest {
         assertTrue(response.fallback());
         verify(gateway).decideAsync(any());
         verify(gateway, never()).decide(any(), any());
-        JevAiDisclosureSanitizer.assertPspSafe("edge inline-off fallback",
+        AiDisclosureSanitizer.assertPspSafe("edge inline-off fallback",
                 response.fallbackReason());
     }
 
@@ -90,14 +90,14 @@ class EdgeDecisionServiceTest {
         psp.setAiInlineBudgetMs(500);
         when(pspRepository.findById(10L)).thenReturn(Optional.of(psp));
 
-        JevDecisionOutcome outcome = JevDecisionOutcome.fallback("ALERT",
-                "OpenRouter error: TimeoutException");
+        AiDecisionOutcome outcome = AiDecisionOutcome.fallback("ALERT",
+                "Laya error: TimeoutException");
         when(gateway.decide(any(), any())).thenReturn(outcome);
 
         EdgeDecisionResponse response = service.handle(node,
                 new EdgeDecisionRequest("TRANSACTION_RISK", "ALERT", Map.of(), false));
 
-        JevAiDisclosureSanitizer.assertPspSafe("edge decision fallback", response.fallbackReason());
+        AiDisclosureSanitizer.assertPspSafe("edge decision fallback", response.fallbackReason());
         assertFalse(response.fallbackReason().toLowerCase().contains("openrouter"));
     }
 }

@@ -8,7 +8,7 @@ import { useSanctionsDownloadStatus, useSanctionsHealth, useSanctionsListVersion
 import { useTriggerSanctionsDownload } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
 import { isPlatformAdmin } from "../../lib/userAccess";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -159,7 +159,7 @@ export default function ScreeningPage() {
             ) : (
               <div className="space-y-1">
                 {Object.entries(result).map(([key, val]) => (
-                  key !== "matches" && key !== "matchFound" && key !== "jevScreeningHitId" ? (
+                  key !== "matches" && key !== "matchFound" && key !== "aiScreeningHitId" ? (
                     <div key={key} className="flex gap-2 text-sm">
                       <span className="min-w-[120px] text-xs font-semibold uppercase tracking-wider text-glass-muted">
                         {key.replace(/([A-Z])/g, " $1").trim()}
@@ -172,10 +172,10 @@ export default function ScreeningPage() {
                 ))}
               </div>
             )}
-            {result.jevScreeningHitId ? (
+            {result.aiScreeningHitId ? (
               <div className="mt-4">
                 <AiVerdictPanel
-                  auditPath={`jev/audit/screening/${result.jevScreeningHitId}`}
+                  auditPath={`ai/audit/screening/${result.aiScreeningHitId}`}
                   pollUntilFound
                 />
               </div>

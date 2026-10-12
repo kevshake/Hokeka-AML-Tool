@@ -1,6 +1,6 @@
 -- JEV AI decision layer: audit trail, per-engine settings, PSP inline mode
 
-CREATE TABLE IF NOT EXISTS jev_engine_settings (
+CREATE TABLE IF NOT EXISTS ai_engine_settings (
     engine_code        VARCHAR(64)  PRIMARY KEY,
     enabled            BOOLEAN      NOT NULL DEFAULT TRUE,
     advisory_only      BOOLEAN      NOT NULL DEFAULT TRUE,
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS jev_engine_settings (
     updated_by         VARCHAR(128)
 );
 
-INSERT INTO jev_engine_settings (engine_code, enabled, advisory_only, prompt_version) VALUES
+INSERT INTO ai_engine_settings (engine_code, enabled, advisory_only, prompt_version) VALUES
     ('TRANSACTION_RISK',       TRUE, TRUE,  'v1'),
     ('ALERT_TRIAGE',           TRUE, TRUE,  'v1'),
     ('CASE_TRIAGE',            TRUE, TRUE,  'v1'),
@@ -21,7 +21,7 @@ INSERT INTO jev_engine_settings (engine_code, enabled, advisory_only, prompt_ver
     ('FRAUD_SCORING',          TRUE, TRUE,  'v1')
 ON CONFLICT (engine_code) DO NOTHING;
 
-CREATE TABLE IF NOT EXISTS jev_decision_audit (
+CREATE TABLE IF NOT EXISTS ai_decision_audit (
     id                     BIGSERIAL PRIMARY KEY,
     psp_id                 BIGINT,
     engine_code            VARCHAR(64)  NOT NULL,
@@ -52,13 +52,13 @@ CREATE TABLE IF NOT EXISTS jev_decision_audit (
     created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_jev_audit_psp_created ON jev_decision_audit (psp_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_jev_audit_engine_created ON jev_decision_audit (engine_code, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_jev_audit_transaction ON jev_decision_audit (transaction_id) WHERE transaction_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_jev_audit_alert ON jev_decision_audit (alert_id) WHERE alert_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_jev_audit_case ON jev_decision_audit (case_id) WHERE case_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_jev_audit_psp_created ON ai_decision_audit (psp_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jev_audit_engine_created ON ai_decision_audit (engine_code, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jev_audit_transaction ON ai_decision_audit (transaction_id) WHERE transaction_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_jev_audit_alert ON ai_decision_audit (alert_id) WHERE alert_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_jev_audit_case ON ai_decision_audit (case_id) WHERE case_id IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS jev_daily_spend (
+CREATE TABLE IF NOT EXISTS ai_daily_spend (
     psp_id         BIGINT       NOT NULL,
     spend_date     DATE         NOT NULL,
     call_count     INTEGER      NOT NULL DEFAULT 0,

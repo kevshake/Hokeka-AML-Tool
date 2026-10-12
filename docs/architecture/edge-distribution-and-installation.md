@@ -210,9 +210,11 @@ cleanup job is needed.
 surfaced as `featureStore: unavailable` on `/edge/status` so a history-blind node cannot masquerade as
 healthy — important, because velocity rules silently cannot fire without local history.
 
-**Restart behaviour:** the verified rule bundle is persisted, so a restart resumes enforcing
-immediately. Previously a restart meant HOLDing all traffic until the next successful poll — an outage
-on every process bounce, and an indefinite one if the control plane was unreachable.
+**Restart behaviour:** the verified rule bundle is kept in two places on the PSP premises: Aerospike
+set `rules` key `active` (never expires), and a file `rule-bundle.ir` beside the node identity
+(`EDGE_RULE_BUNDLE_FILE`, default sibling of `EDGE_IDENTITY_FILE`). Startup loads the file first and
+falls back to Aerospike, so a restart resumes enforcing even when the feature store is down. A
+control-plane outage does not stop an already-enrolled node from deciding on that local copy.
 
 ---
 

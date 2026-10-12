@@ -34,7 +34,7 @@ public class ContentMonitoringService {
     private final RestTemplate restTemplate;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     public ContentMonitoringService(MerchantRepository merchantRepository,
                                     ComplianceCaseService caseService,
@@ -108,13 +108,13 @@ public class ContentMonitoringService {
             result = executeWebsiteScan(merchant);
         }
         G2ScanResult persisted = persistScanEvent(merchant, result, scannedBy);
-        if (jevEngineAdvisor != null && "MATCH".equalsIgnoreCase(persisted.status())) {
+        if (aiEngineAdvisor != null && "MATCH".equalsIgnoreCase(persisted.status())) {
             java.util.Map<String, Object> features = new java.util.LinkedHashMap<>();
             features.put("website", persisted.website());
             features.put("matchedKeyword", persisted.matchedKeyword());
             features.put("message", persisted.message());
-            jevEngineAdvisor.adviseAsync(
-                    com.posgateway.aml.service.jev.JevEngineType.G2_CONTENT,
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.G2_CONTENT,
                     merchant.getPsp() != null ? merchant.getPsp().getPspId() : null,
                     "REVIEW",
                     features,

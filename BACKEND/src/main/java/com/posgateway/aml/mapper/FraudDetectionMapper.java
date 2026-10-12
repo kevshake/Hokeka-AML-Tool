@@ -10,11 +10,14 @@ import org.mapstruct.Mapper;
 public interface FraudDetectionMapper {
 
     @org.mapstruct.Mapping(target = "riskDetails", source = "riskDetails")
+    @org.mapstruct.Mapping(target = "assessmentId", source = "assessmentId")
     FraudDetectionResponseDTO toResponse(FraudDetectionResult result);
 
     @org.mapstruct.Mapping(target = "riskDetails", ignore = true)
+    @org.mapstruct.Mapping(target = "assessmentId", source = "assessmentId")
     FraudDetectionResponseDTO toResponse(HighConcurrencyFraudOrchestrator.FraudDetectionResult result);
 
     @org.mapstruct.Mapping(target = "riskDetails", ignore = true)
+    @org.mapstruct.Mapping(target = "assessmentId", source = "assessmentId")
     FraudDetectionResponseDTO toResponse(AsyncFraudDetectionOrchestrator.FraudDetectionResult result);
 }

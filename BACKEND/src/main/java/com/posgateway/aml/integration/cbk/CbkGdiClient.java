@@ -9,6 +9,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -89,6 +90,7 @@ public class CbkGdiClient {
     private final ObjectMapper objectMapper;
     private final WebClient webClient;
 
+    @Autowired
     public CbkGdiClient(CbkProperties properties, CbkTokenService tokenService, ObjectMapper objectMapper) {
         this(properties, tokenService, objectMapper, buildWebClient(properties));
     }

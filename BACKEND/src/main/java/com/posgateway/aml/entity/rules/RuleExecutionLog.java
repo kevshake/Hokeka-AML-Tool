@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.envers.Audited;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Append-only execution log for the AML rules engine.
@@ -63,6 +64,12 @@ public class RuleExecutionLog {
     @Column(name = "disposition", length = 32)
     private String disposition;
 
+    @Column(name = "rule_version_id")
+    private Long ruleVersionId;
+
+    @Column(name = "assessment_id")
+    private UUID assessmentId;
+
     public RuleExecutionLog() {}
 
     public RuleExecutionLog(Long ruleId, Long pspId, String txnId,
@@ -91,4 +98,8 @@ public class RuleExecutionLog {
     public void setResult(Result result) { this.result = result; }
     public String getDisposition() { return disposition; }
     public void setDisposition(String disposition) { this.disposition = disposition; }
+    public Long getRuleVersionId() { return ruleVersionId; }
+    public void setRuleVersionId(Long ruleVersionId) { this.ruleVersionId = ruleVersionId; }
+    public UUID getAssessmentId() { return assessmentId; }
+    public void setAssessmentId(UUID assessmentId) { this.assessmentId = assessmentId; }
 }

@@ -101,7 +101,14 @@ public class DecisionEngine {
         applyRuleEvidence(transaction, riskDetails);
 
         // Merchant-configured limits (hard block)
-        DecisionResult limitResult = checkTransactionLimits(transaction);
+        Optional<com.posgateway.aml.service.limits.TransactionLimitEnforcementService.LimitBreach> limitBreach =
+                limitEnforcementService.checkLimits(transaction);
+        if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordLimits(limitBreach.orElse(null));
+        }
+        DecisionResult limitResult = limitBreach
+                .map(b -> new DecisionResult("BLOCK", 1.0, new ArrayList<>(b.reasons())))
+                .orElse(null);
         if (limitResult != null) {
             applyDecisionAction(transaction, limitResult);
             saveFeaturesAndDecision(transaction, score, features, riskDetails, limitResult, latencyMs);
@@ -138,6 +145,9 @@ public class DecisionEngine {
         if (isBlock) {
             List<String> reasons = new ArrayList<>();
             reasons.add(String.format("Score %.3f >= block threshold %.3f", score, blockThreshold));
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordMlThresholdDecision("BLOCK", score, reasons.get(0));
+            }
             takeBlockAction(transaction, score, reasons);
             DecisionResult decision = new DecisionResult("BLOCK", score, reasons);
             checkAmlRules(transaction, features, decision, reasons);
@@ -150,6 +160,9 @@ public class DecisionEngine {
         if (isHold) {
             List<String> reasons = new ArrayList<>();
             reasons.add(String.format("Score %.3f >= hold threshold %.3f", score, holdThreshold));
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordMlThresholdDecision("HOLD", score, reasons.get(0));
+            }
             takeHoldAction(transaction, score, reasons);
             DecisionResult decision = new DecisionResult("HOLD", score, reasons);
             checkAmlRules(transaction, features, decision, reasons);
@@ -162,46 +175,49 @@ public class DecisionEngine {
         List<String> reasons = new ArrayList<>();
         reasons.add(String.format("Score %.3f < hold threshold %.3f", score, holdThreshold));
         DecisionResult decision = new DecisionResult("ALLOW", score, reasons);
+        if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordMlThresholdDecision("ALLOW", score, reasons.get(0));
+        }
 
         checkAmlRules(transaction, features, decision, reasons);
         saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs);
-        maybeConsultJev(transaction, score, features, decision);
+        maybeConsultAi(transaction, score, features, decision);
         logger.info("Decision for transaction {}: {} (score={})",
             transaction.getTxnId(), decision.getAction(), score);
         return decision;
     }
 
-    private void maybeConsultJev(TransactionEntity transaction, Double score,
+    private void maybeConsultAi(TransactionEntity transaction, Double score,
                                  Map<String, Object> features, DecisionResult decision) {
-        if (jevEngineAdvisor == null || score == null) {
+        if (aiEngineAdvisor == null || score == null) {
             return;
         }
         Double holdThreshold = configService.getFraudHoldThreshold();
         Double blockThreshold = configService.getFraudBlockThreshold();
-        boolean borderline = jevEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
+        boolean borderline = aiEngineAdvisor.isBorderlineTransactionScore(score, holdThreshold, blockThreshold)
                 || "ALERT".equals(decision.getAction())
                 || "REVIEW".equals(decision.getAction());
         if (!borderline) {
             return;
         }
-        Map<String, Object> jevFeatures = new HashMap<>();
-        jevFeatures.put("score", score);
-        jevFeatures.put("action", decision.getAction());
-        jevFeatures.put("reasons", decision.getReasons());
+        Map<String, Object> aiFeatures = new HashMap<>();
+        aiFeatures.put("score", score);
+        aiFeatures.put("action", decision.getAction());
+        aiFeatures.put("reasons", decision.getReasons());
         if (features != null) {
-            jevFeatures.putAll(features);
+            aiFeatures.putAll(features);
         }
         if (transaction.getAmountCents() != null) {
-            jevFeatures.put("amount_cents", transaction.getAmountCents());
+            aiFeatures.put("amount_cents", transaction.getAmountCents());
         }
         if (transaction.getCurrency() != null) {
-            jevFeatures.put("currency", transaction.getCurrency());
+            aiFeatures.put("currency", transaction.getCurrency());
         }
-        jevEngineAdvisor.adviseAsync(
-                com.posgateway.aml.service.jev.JevEngineType.TRANSACTION_RISK,
+        aiEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.ai.decision.AiEngineType.TRANSACTION_RISK,
                 transaction.getPspId(),
                 decision.getAction(),
-                jevFeatures,
+                aiFeatures,
                 transaction.getTxnId(),
                 null,
                 null,
@@ -281,16 +297,6 @@ public class DecisionEngine {
         };
     }
 
-    private DecisionResult checkTransactionLimits(TransactionEntity transaction) {
-        Optional<com.posgateway.aml.service.limits.TransactionLimitEnforcementService.LimitBreach> limitBreach =
-                limitEnforcementService.checkLimits(transaction);
-        if (limitBreach.isEmpty()) {
-            return null;
-        }
-        List<String> reasons = new ArrayList<>(limitBreach.get().reasons());
-        return new DecisionResult("BLOCK", 1.0, reasons);
-    }
-
     private DecisionResult checkHardRules(TransactionEntity transaction) {
         List<String> reasons = new ArrayList<>();
         if (configService.isBlacklistEnabled()) {
@@ -307,6 +313,9 @@ public class DecisionEngine {
                 reasons.add("BLACKLIST: IP address is blacklisted");
             }
         }
+        if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordBlacklistChecks(reasons);
+        }
         if (!reasons.isEmpty()) {
             return new DecisionResult("BLOCK", 1.0, reasons);
         }
@@ -321,6 +330,8 @@ public class DecisionEngine {
             if (crossPspResult != null) {
                 return crossPspResult;
             }
+        } else if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordCrossPsp(false, List.of(), "ALLOW", 0.0);
         }
 
         return null;
@@ -344,10 +355,16 @@ public class DecisionEngine {
     private com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordScreening(null);
+            }
             return new DecisionResult("HOLD", 1.0,
                     List.of("SANCTIONS_SCREENING_UNAVAILABLE: manual compliance review required"));
         }
@@ -355,6 +372,10 @@ public class DecisionEngine {
         try {
             com.posgateway.aml.service.sanctions.RealTimeTransactionScreeningService.TransactionScreeningResult result =
                     realTimeScreeningService.screenTransaction(transaction);
+
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordScreening(result);
+            }
 
             if (result.isScreeningUnavailable()) {
                 return new DecisionResult("HOLD", 1.0,
@@ -379,6 +400,9 @@ public class DecisionEngine {
         } catch (Exception e) {
             logger.error("Error during real-time sanctions screening for transaction {}: {}",
                 transaction.getTxnId(), e.getMessage(), e);
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordScreening(null);
+            }
             return new DecisionResult("HOLD", 1.0,
                     List.of("SANCTIONS_SCREENING_UNAVAILABLE: manual compliance review required"));
         }
@@ -407,13 +431,24 @@ public class DecisionEngine {
                 // BLOCK if high risk or multiple PSPs flagged; otherwise FLAG
                 String action = result.isHigh() || result.getTotalFlagCount() > 1 ? "BLOCK" : "HOLD";
 
+                if (assessmentEngineRecorder != null) {
+                    assessmentEngineRecorder.recordCrossPsp(true, reasons, action, 0.9);
+                }
+
                 logger.warn("Transaction {} {} due to cross-PSP fraud match: {}",
                         transaction.getTxnId(), action, reasons);
                 return new DecisionResult(action, 0.9, reasons);
             }
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordCrossPsp(false, List.of(), "ALLOW", 0.0);
+            }
         } catch (Exception e) {
             logger.error("Cross-PSP fraud check failed for transaction {}: {}",
                     transaction.getTxnId(), e.getMessage());
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordCrossPsp(true,
+                        List.of("CROSS_PSP_SCREENING_UNAVAILABLE"), "HOLD", 0.8);
+            }
             return new DecisionResult("HOLD", 0.8,
                     List.of("CROSS_PSP_SCREENING_UNAVAILABLE: manual fraud review required"));
         }
@@ -532,14 +567,14 @@ public class DecisionEngine {
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
 
-        if (jevEngineAdvisor != null) {
+        if (aiEngineAdvisor != null) {
             Map<String, Object> alertFeatures = new HashMap<>();
             alertFeatures.put("action", action);
             alertFeatures.put("reason", reason);
             alertFeatures.put("score", score);
             alertFeatures.put("severity", saved.getSeverity());
-            jevEngineAdvisor.adviseAsync(
-                    com.posgateway.aml.service.jev.JevEngineType.ALERT_TRIAGE,
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.ALERT_TRIAGE,
                     transaction.getPspId(),
                     action,
                     alertFeatures,
