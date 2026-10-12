@@ -40,11 +40,14 @@ public class RealTimeTransactionScreeningService {
     @Value("${screening.realtime.screen-merchant:true}")
     private boolean screenMerchant;
 
-    @Value("${screening.realtime.screen-counterparty:false}")
+    @Value("${screening.realtime.screen-counterparty:true}")
     private boolean screenCounterparty;
 
     @Autowired(required = false)
     private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
+
+    @Autowired(required = false)
+    private ScreeningActivityRecorder screeningActivityRecorder;
 
     @Autowired
     public RealTimeTransactionScreeningService(
@@ -145,6 +148,11 @@ public class RealTimeTransactionScreeningService {
                         null,
                         null);
             }
+        }
+
+        if (screeningActivityRecorder != null) {
+            String subjectName = matches.isEmpty() ? null : matches.get(0).getScreenedName();
+            screeningActivityRecorder.recordTransactionScreening(transaction, result, "TRANSACTION", subjectName);
         }
 
         return result;

@@ -60,6 +60,14 @@ public class MonitoringAlert {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    /** Bridge to fraud alerts table when ongoing monitoring raises an operator queue item. */
+    @Column(name = "fraud_alert_id")
+    private Long fraudAlertId;
+
+    /** Compliance case opened from this AML monitoring alert, when escalated. */
+    @Column(name = "compliance_case_id")
+    private Long complianceCaseId;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -169,5 +177,21 @@ public class MonitoringAlert {
 
     public void setResolvedAt(LocalDateTime resolvedAt) {
         this.resolvedAt = resolvedAt;
+    }
+
+    public Long getFraudAlertId() {
+        return fraudAlertId;
+    }
+
+    public void setFraudAlertId(Long fraudAlertId) {
+        this.fraudAlertId = fraudAlertId;
+    }
+
+    public Long getComplianceCaseId() {
+        return complianceCaseId;
+    }
+
+    public void setComplianceCaseId(Long complianceCaseId) {
+        this.complianceCaseId = complianceCaseId;
     }
 }

@@ -3,6 +3,8 @@ package com.posgateway.aml.repository;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.model.SarStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -29,6 +31,10 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
      * Find SARs due for filing soon
      */
     List<SuspiciousActivityReport> findByFilingDeadlineBeforeAndStatusNot(LocalDateTime date, SarStatus status);
+
+    /** SAR rows filed from cases belonging to a merchant subject. */
+    @Query("SELECT s FROM SuspiciousActivityReport s WHERE s.complianceCase.merchantId = :merchantId ORDER BY s.id DESC")
+    List<SuspiciousActivityReport> findByComplianceCaseMerchantId(@Param("merchantId") Long merchantId);
 
     /**
      * Find SARs created within a window (for reporting)

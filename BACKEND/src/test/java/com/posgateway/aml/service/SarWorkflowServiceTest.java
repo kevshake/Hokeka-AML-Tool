@@ -27,12 +27,14 @@ class SarWorkflowServiceTest {
     private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final RegulatoryDeadlineService deadlineService = mock(RegulatoryDeadlineService.class);
     private final ComplianceCalendarService calendarService = mock(ComplianceCalendarService.class);
+    private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService =
+            mock(com.posgateway.aml.service.compliance.ComplianceEntityLinkService.class);
     private SarWorkflowService service;
 
     @BeforeEach
     void setUp() {
         service = new SarWorkflowService(repository, permissionService, auditLogService,
-                deadlineService, calendarService);
+                deadlineService, calendarService, complianceEntityLinkService);
         when(repository.save(any(SuspiciousActivityReport.class))).thenAnswer(invocation -> {
             SuspiciousActivityReport sar = invocation.getArgument(0);
             if (sar.getId() == null) sar.setId(77L);
