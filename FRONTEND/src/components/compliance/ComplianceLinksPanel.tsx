@@ -24,16 +24,42 @@ interface ComplianceLinksResponse {
 }
 
 interface Props {
-  subjectType: "TRANSACTION" | "MERCHANT";
+  subjectType:
+    | "TRANSACTION"
+    | "MERCHANT"
+    | "ALERT"
+    | "CASE"
+    | "SAR"
+    | "DISPUTE"
+    | "MULTI_ASSET_CUSTOMER"
+    | "ASSET_ACCOUNT";
   subjectId: string;
 }
 
 /** Renders cross-domain compliance links (alerts, cases, SARs) for a transaction or merchant. */
 export default function ComplianceLinksPanel({ subjectType, subjectId }: Props) {
-  const path =
-    subjectType === "TRANSACTION"
-      ? `compliance/links/transaction/${subjectId}`
-      : `compliance/links/merchant/${subjectId}`;
+  const path = (() => {
+    switch (subjectType) {
+      case "TRANSACTION":
+        return `compliance/links/transaction/${subjectId}`;
+      case "MERCHANT":
+        return `compliance/links/merchant/${subjectId}`;
+      case "ALERT":
+        return `compliance/links/alert/${subjectId}`;
+      case "CASE":
+        return `compliance/links/case/${subjectId}`;
+      case "SAR":
+        return `compliance/links/sar/${subjectId}`;
+      case "DISPUTE":
+        return `compliance/links/dispute/${subjectId}`;
+      case "MULTI_ASSET_CUSTOMER":
+        return `compliance/links/customer/${subjectId}`;
+      case "ASSET_ACCOUNT":
+        return `compliance/links/asset-account/${subjectId}`;
+      default:
+        return "";
+    }
+  })();
 
   const query = useQuery<ComplianceLinksResponse>({
     queryKey: ["compliance-links", subjectType, subjectId],

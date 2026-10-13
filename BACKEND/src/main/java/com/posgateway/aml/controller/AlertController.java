@@ -44,6 +44,7 @@ public class AlertController {
     private final com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
     private final com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService;
     private final com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService;
+    private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
@@ -54,7 +55,8 @@ public class AlertController {
                                                               UserRepository userRepository,
                                                               com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService,
                                                               com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService,
-                                                              com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService) {
+                                                              com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService,
+                                                              com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -66,6 +68,7 @@ public class AlertController {
                                 this.alertDetailQueryService = alertDetailQueryService;
                                 this.alertPrioritizationService = alertPrioritizationService;
                                 this.alertDispositionMakerCheckerService = alertDispositionMakerCheckerService;
+                                this.keysetSliceService = keysetSliceService;
                             }
 
     /**
@@ -79,11 +82,12 @@ public class AlertController {
      * @return Paginated list of alerts
      */
     @GetMapping
-    public ResponseEntity<org.springframework.data.domain.Page<Alert>> getAllAlerts(
+    public ResponseEntity<?> getAllAlerts(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String sort) {
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String cursor) {
         
         int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
         int safePage = Math.max(0, page);
@@ -121,20 +125,25 @@ public class AlertController {
             }
         }
         
-        // Create Pageable with sorting by created date descending
-        org.springframework.data.domain.Pageable pageable = 
-            PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        
-        // Execute query with pagination
-        org.springframework.data.domain.Page<Alert> pageResult = 
-            alertRepository.findAll(spec, pageable);
-
         if ("priority".equalsIgnoreCase(sort)) {
+            org.springframework.data.domain.Pageable pageable =
+                    PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            org.springframework.data.domain.Page<Alert> pageResult =
+                    alertRepository.findAll(spec, pageable);
             java.util.List<Alert> prioritized = alertPrioritizationService.prioritizeAlerts(pageResult.getContent());
             return ResponseEntity.ok(new org.springframework.data.domain.PageImpl<>(prioritized, pageable, pageResult.getTotalElements()));
         }
-        
-        return ResponseEntity.ok(pageResult);
+
+        return ResponseEntity.ok(keysetSliceService.slice(
+                alertRepository,
+                spec,
+                safePage,
+                safeSize,
+                cursor,
+                "createdAt",
+                "alertId",
+                Alert::getCreatedAt,
+                Alert::getAlertId));
     }
 
     /**

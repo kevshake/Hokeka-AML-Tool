@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -50,6 +50,9 @@ import {
   useDeletePsp,
 } from "../../features/api/mutations";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
 
 const ACCENT = "var(--gold)";
 
@@ -86,9 +89,9 @@ const EMPTY_FORM = {
 
 export default function PspsListPage() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const [search, setSearch] = useState(tableState.filters.q ?? "");
+  const debouncedSearch = useDebouncedUrlFilter(search);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -108,9 +111,15 @@ export default function PspsListPage() {
   const statusMutation = useUpdatePspStatus();
   const deleteMutation = useDeletePsp();
 
+  useEffect(() => {
+    if (debouncedSearch !== (tableState.filters.q ?? "")) {
+      setFilter("q", debouncedSearch);
+    }
+  }, [debouncedSearch, setFilter, tableState.filters.q]);
+
   const rows = (psps ?? []).filter((p: any) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
+    if (!tableState.filters.q) return true;
+    const q = tableState.filters.q.toLowerCase();
     return (
       (p.legalName ?? "").toLowerCase().includes(q) ||
       (p.tradingName ?? "").toLowerCase().includes(q) ||
@@ -120,7 +129,10 @@ export default function PspsListPage() {
     );
   });
 
-  const paginated = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginated = rows.slice(
+    tableState.page * tableState.size,
+    tableState.page * tableState.size + tableState.size,
+  );
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | { value: unknown }>) =>
     setForm((f) => ({ ...f, [field]: (e.target as any).value }));
@@ -167,6 +179,7 @@ export default function PspsListPage() {
     <HokekaPageShell title="PSPs" subtitle="Payment service provider onboarding and configuration" noCard>
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 0.5 }}>
+        <ConsoleListExportMenu viewType="PSPS" filters={exportFilterMap} disabled={!rows.length} />
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -190,7 +203,7 @@ export default function PspsListPage() {
           size="small"
           placeholder="Search PSPs…"
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          onChange={(e) => setSearch(e.target.value)}
           sx={{ width: 280 }}
           InputProps={{
             startAdornment: (
@@ -364,10 +377,10 @@ export default function PspsListPage() {
           rowsPerPageOptions={[10, 25, 50]}
           component="div"
           count={rows.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
+          rowsPerPage={tableState.size}
+          page={tableState.page}
           onPageChange={(_, p) => setPage(p)}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+          onRowsPerPageChange={(e) => setPageSize(parseInt(e.target.value, 10))}
         />
       </TableContainer>
 

@@ -42,6 +42,9 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     /** Card-scoped alert history using denormalized pan_hash on alerts. */
     List<Alert> findByPanHashAndMerchantIdOrderByCreatedAtDesc(String panHash, Long merchantId);
 
+    /** Customer-scoped alert list for multi-asset customer compliance graphs. */
+    List<Alert> findByMultiAssetCustomerIdOrderByCreatedAtDesc(Long multiAssetCustomerId);
+
     /** Merchant-scoped fraud alert list for compliance graph queries. */
     List<Alert> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 
