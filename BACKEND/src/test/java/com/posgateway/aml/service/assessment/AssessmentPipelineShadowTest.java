@@ -7,6 +7,7 @@ import com.posgateway.aml.repository.TransactionFeaturesRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.ConfigService;
 import com.posgateway.aml.service.DecisionEngine;
+import com.posgateway.aml.service.decision.DecisionOrchestratorModeService;
 import com.posgateway.aml.service.kafka.KafkaOutboxService;
 import com.posgateway.aml.service.limits.TransactionLimitEnforcementService;
 import com.posgateway.aml.service.sanctions.RealTimeTransactionScreeningService;
@@ -33,6 +34,12 @@ import static org.mockito.Mockito.when;
  * Shadow ledger hooks must not change DecisionEngine outcomes.
  */
 class AssessmentPipelineShadowTest {
+
+    /** Wires legacy orchestrator mode for unit tests that construct DecisionEngine without Spring. */
+    private static void useLegacyOrchestratorMode(DecisionEngine engine) {
+        ReflectionTestUtils.setField(
+                engine, "orchestratorModeService", new DecisionOrchestratorModeService("legacy"));
+    }
 
     @AfterEach
     void clearScope() {
@@ -65,6 +72,7 @@ class AssessmentPipelineShadowTest {
                 new ObjectMapper(), outboxService, limitService, blacklistService);
         ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
         ReflectionTestUtils.setField(engine, "assessmentEngineRecorder", engineRecorder);
+        useLegacyOrchestratorMode(engine);
 
         UUID assessmentId = UUID.randomUUID();
         AssessmentRecordingScope.set(new AssessmentRecordingScope.Scope(assessmentId, 2L, 10L, 5L));
