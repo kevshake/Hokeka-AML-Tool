@@ -29,12 +29,12 @@ CREATE INDEX IF NOT EXISTS idx_console_list_export_jobs_status_created
 CREATE INDEX IF NOT EXISTS idx_sar_psp_status_created
     ON suspicious_activity_reports (psp_id, status, created_at DESC);
 
--- Audit log range queries with PSP filter
-CREATE INDEX IF NOT EXISTS idx_audit_logs_psp_timestamp
-    ON audit_logs (psp_id, timestamp DESC);
+-- Audit log range queries with PSP filter (entity maps to audit_logs_enhanced; see V4/V106)
+CREATE INDEX IF NOT EXISTS idx_audit_logs_enhanced_psp_timestamp
+    ON audit_logs_enhanced (psp_id, timestamp DESC);
 
-CREATE INDEX IF NOT EXISTS idx_audit_logs_action_timestamp
-    ON audit_logs (action_type, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_enhanced_action_timestamp
+    ON audit_logs_enhanced (action_type, timestamp DESC);
 
 -- Transaction monitoring list (PSP + time ordering)
 CREATE INDEX IF NOT EXISTS idx_transactions_psp_txn_ts
@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_chargeback_disputes_psp_created
     ON chargeback_disputes (psp_id, created_at DESC);
 
 ANALYZE suspicious_activity_reports;
-ANALYZE audit_logs;
+ANALYZE audit_logs_enhanced;
 ANALYZE transactions;
 ANALYZE screening_activities;
 ANALYZE chargeback_disputes;
