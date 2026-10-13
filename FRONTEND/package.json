@@ -12,6 +12,9 @@
         "screenshots:roles": "node scripts/capture-role-screenshots.mjs",
         "screenshots:before-main": "node scripts/capture-before-main-screenshots.mjs",
         "e2e:live-user-admin": "node scripts/live-control-plane-user-admin.mjs",
+        "e2e:live-role-matrix": "node ../scripts/live-console-role-matrix.mjs",
+        "e2e:live-orchestrator-toggle": "node ../scripts/live-decision-orchestrator-toggle-smoke.mjs",
+        "e2e:live-compliance-chain": "node ../scripts/live-full-compliance-chain-smoke.mjs",
         "preview": "vite preview",
         "typecheck": "tsc --noEmit"
     },

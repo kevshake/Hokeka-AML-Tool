@@ -1,0 +1,5 @@
+# Pins the Edge Rust workspace to a Cargo release that understands edition2024
+# transitive deps (e.g. zeroize_derive). CI and local builds must use this file.
+[toolchain]
+channel = "1.85.0"
+components = ["clippy", "rustfmt"]

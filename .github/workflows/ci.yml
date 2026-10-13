@@ -107,9 +107,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
+      - uses: dtolnay/rust-toolchain@master
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: edge-engine
@@ -174,7 +172,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: edge-engine
@@ -220,6 +218,36 @@ jobs:
           name: ${{ matrix.artifact }}
           path: edge-engine/target/release/${{ matrix.libname }}
           if-no-files-found: error
+
+  deployment-readiness:
+    name: Deployment readiness (unit + Flyway/Kafka/Neo4j smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - name: Orchestrator mode + OpenSanctions sample parse
+        working-directory: BACKEND
+        run: >
+          mvn -B --no-transfer-progress test
+          -Dtest=DecisionOrchestratorModeServiceTest,DecisionOrchestratorAdminControllerTest,OpenSanctionsSampleLoadTest
+      - name: Flyway fresh DB + Kafka/Neo4j containers
+        working-directory: BACKEND
+        run: >
+          mvn -B --no-transfer-progress test
+          -Dtest=FlywayFreshDatabaseIntegrationTest,KafkaNeo4jContainerSmokeTest
+      - name: Live smoke script syntax
+        run: |
+          set -euo pipefail
+          node --check scripts/live-console-role-matrix.mjs
+          node --check scripts/live-decision-orchestrator-toggle-smoke.mjs
+          node --check scripts/live-full-compliance-chain-smoke.mjs
+          node --check scripts/live-api-closure-smoke.mjs
+          bash -n scripts/edge-runtime-smoke.sh
 
   frontend:
     name: Dashboard (FRONTEND)
