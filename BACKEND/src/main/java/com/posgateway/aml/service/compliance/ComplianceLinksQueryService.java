@@ -100,6 +100,83 @@ public class ComplianceLinksQueryService {
                 dedupe(sars), dedupe(disputes), List.of(), List.of(), dedupe(screening));
     }
 
+    /** Returns the compliance graph anchored on a fraud alert id. */
+    public ComplianceLinksResponse forAlert(Long alertId) {
+        List<LinkedRecord> alerts = new ArrayList<>();
+        alertRepository.findById(alertId).ifPresent(a ->
+                alerts.add(link("ALERT", a.getAlertId(), "SELF", "Alert #" + a.getAlertId())));
+
+        List<LinkedRecord> transactions = new ArrayList<>();
+        alertRepository.findById(alertId).ifPresent(a -> {
+            if (a.getTxnId() != null) {
+                transactions.add(link("TRANSACTION", a.getTxnId(), "TRIGGERED_BY_TRANSACTION", "Txn #" + a.getTxnId()));
+            }
+        });
+
+        List<LinkedRecord> cases = new ArrayList<>();
+        alertRepository.findById(alertId).ifPresent(a -> {
+            if (a.getComplianceCaseId() != null) {
+                complianceCaseRepository.findById(a.getComplianceCaseId()).ifPresent(c ->
+                        cases.add(link("CASE", c.getId(), "ESCALATED_CASE", c.getCaseReference())));
+            }
+        });
+
+        List<LinkedRecord> sars = new ArrayList<>();
+        sarAlertLinkRepository.findByAlertId(alertId).forEach(row ->
+                sars.add(link("SAR", row.getSarId(), "FILED_SAR", "SAR #" + row.getSarId())));
+
+        return new ComplianceLinksResponse("ALERT", String.valueOf(alertId), dedupe(alerts), dedupe(cases),
+                dedupe(transactions), dedupe(sars), List.of(), List.of(), List.of(), List.of());
+    }
+
+    /** Returns the compliance graph anchored on a compliance case id. */
+    public ComplianceLinksResponse forCase(Long caseId) {
+        List<LinkedRecord> cases = new ArrayList<>();
+        complianceCaseRepository.findById(caseId).ifPresent(c ->
+                cases.add(link("CASE", c.getId(), "SELF", c.getCaseReference())));
+
+        List<LinkedRecord> alerts = new ArrayList<>();
+        alertRepository.findByComplianceCaseId(caseId).forEach(a ->
+                alerts.add(link("ALERT", a.getAlertId(), "CASE_ALERT", a.getReason())));
+
+        List<LinkedRecord> sars = new ArrayList<>();
+        sarRepository.findByComplianceCase_Id(caseId).forEach(s ->
+                sars.add(link("SAR", s.getId(), "CASE_SAR", s.getSarReference())));
+
+        List<LinkedRecord> subjectLinks = new ArrayList<>();
+        complianceCaseRepository.findById(caseId).ifPresent(c -> {
+            if (c.getMerchantId() != null) {
+                subjectLinks.add(link("MERCHANT", c.getMerchantId(), "SUBJECT", "Merchant " + c.getMerchantId()));
+            }
+        });
+
+        return new ComplianceLinksResponse("CASE", String.valueOf(caseId), dedupe(alerts), dedupe(cases),
+                dedupe(subjectLinks), dedupe(sars), List.of(), List.of(), List.of(), List.of());
+    }
+
+    /** Returns the compliance graph anchored on a SAR id. */
+    public ComplianceLinksResponse forSar(Long sarId) {
+        List<LinkedRecord> sars = new ArrayList<>();
+        sarRepository.findById(sarId).ifPresent(s ->
+                sars.add(link("SAR", s.getId(), "SELF", s.getSarReference())));
+
+        List<LinkedRecord> alerts = new ArrayList<>();
+        sarAlertLinkRepository.findBySarId(sarId).forEach(row ->
+                alertRepository.findById(row.getAlertId()).ifPresent(a ->
+                        alerts.add(link("ALERT", a.getAlertId(), "LINKED_ALERT", a.getReason()))));
+
+        List<LinkedRecord> cases = new ArrayList<>();
+        sarRepository.findById(sarId).ifPresent(s -> {
+            if (s.getComplianceCase() != null) {
+                cases.add(link("CASE", s.getComplianceCase().getId(), "SOURCE_CASE",
+                        s.getComplianceCase().getCaseReference()));
+            }
+        });
+
+        return new ComplianceLinksResponse("SAR", String.valueOf(sarId), dedupe(alerts), dedupe(cases),
+                List.of(), dedupe(sars), List.of(), List.of(), List.of(), List.of());
+    }
+
     /** Returns the compliance graph anchored on a merchant id. */
     public ComplianceLinksResponse forMerchant(Long merchantId) {
         List<LinkedRecord> alerts = new ArrayList<>();

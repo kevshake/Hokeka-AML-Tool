@@ -34,4 +34,22 @@ public class ComplianceLinksController {
     public ResponseEntity<ComplianceLinksResponse> transactionLinks(@PathVariable Long txnId) {
         return ResponseEntity.ok(complianceLinksQueryService.forTransaction(txnId));
     }
+
+    /** Returns linked compliance records for a fraud alert. */
+    @GetMapping("/alert/{alertId}")
+    public ResponseEntity<ComplianceLinksResponse> alertLinks(@PathVariable Long alertId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forAlert(alertId));
+    }
+
+    /** Returns linked compliance records for a compliance case. */
+    @GetMapping("/case/{caseId}")
+    public ResponseEntity<ComplianceLinksResponse> caseLinks(@PathVariable Long caseId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forCase(caseId));
+    }
+
+    /** Returns linked compliance records for a suspicious activity report. */
+    @GetMapping("/sar/{sarId}")
+    public ResponseEntity<ComplianceLinksResponse> sarLinks(@PathVariable Long sarId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forSar(sarId));
+    }
 }

@@ -13,7 +13,8 @@ import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import { Download, Eye, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Eye, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 
 type Owner = CreateMerchantRequest["beneficialOwners"][number];
 
@@ -122,46 +123,6 @@ export default function MerchantsPage() {
 
   const showPspColumn = platformAdmin || tenantPsps.length > 1;
 
-  const handleExportCSV = () => {
-    if (!content.length) return;
-    const headers = [
-      "Merchant ID",
-      "Legal Name",
-      "Trading Name",
-      "Country",
-      "MCC",
-      "Risk Level",
-      "Risk Score",
-      "KRS",
-      "CRA",
-      "KYC Status",
-      "CBK Sector",
-      "CBK Account Configured",
-    ];
-    const rows = content.map((merchant) => [
-      merchant.merchantId,
-      (merchant.legalName || "").replace(/,/g, ";"),
-      (merchant.tradingName || "").replace(/,/g, ";"),
-      merchant.country || "",
-      merchant.mcc || "",
-      merchant.riskLevel || "",
-      merchant.riskScore ?? "",
-      formatScore(merchant.krs),
-      formatScore(merchant.cra),
-      merchant.kycStatus || "",
-      merchant.cbkEconomicSectorCode || "",
-      merchant.cbkSettlementAccountConfigured ? "YES" : "NO",
-    ]);
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `merchants-${new Date().toISOString().split("T")[0]}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   const updateOwner = <K extends keyof Owner>(index: number, field: K, value: Owner[K]) => {
     setFormData((current) => ({
       ...current,
@@ -241,9 +202,11 @@ export default function MerchantsPage() {
               />
             </div>
           )}
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
-            <Download size={14} /> Export CSV
-          </GlassButton>
+          <ConsoleListExportMenu
+            viewType="MERCHANTS"
+            filters={{ page: String(page.index), size: String(page.size) }}
+            disabled={!merchants?.totalElements}
+          />
         </div>
         <button type="button" onClick={() => setAddOpen(true)} className="hokeka-btn-primary">
           <Plus size={14} /> Onboard Merchant

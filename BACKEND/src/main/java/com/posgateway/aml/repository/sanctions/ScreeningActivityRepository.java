@@ -19,4 +19,7 @@ public interface ScreeningActivityRepository extends JpaRepository<ScreeningActi
     Page<ScreeningActivity> findByMerchantIdOrderByCreatedAtDesc(Long merchantId, Pageable pageable);
 
     List<ScreeningActivity> findByPspIdAndTxnIdOrderByCreatedAtDesc(Long pspId, Long txnId);
+
+    /** PSP-scoped screening ledger page for Console exports and list views. */
+    Page<ScreeningActivity> findByPspIdOrderByCreatedAtDesc(Long pspId, Pageable pageable);
 }

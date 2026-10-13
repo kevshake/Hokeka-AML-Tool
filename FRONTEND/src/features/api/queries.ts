@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type {
   Case,
@@ -90,6 +90,7 @@ export const useCases = (params?: string | CaseQueryParams) => {
       apiClient.get<PageResponse<Case>>(
         `compliance/cases${queryString ? `?${queryString}` : ""}`
       ),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -132,13 +133,26 @@ export const useGraphAnalysisStatus = () => {
 };
 
 // SAR Reports
-export const useSarReports = (status?: string) => {
-  return useQuery<SarReport[]>({
-    queryKey: ["sar", status],
+export interface SarQueryParams {
+  page?: number;
+  size?: number;
+  status?: string;
+}
+
+export const useSarReports = (params?: string | SarQueryParams) => {
+  const queryParams = typeof params === "string" ? { status: params } : params || {};
+  const queryString = Object.entries(queryParams)
+    .filter(([_, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+    .join("&");
+
+  return useQuery<SarReport[] | PageResponse<SarReport>>({
+    queryKey: ["sar", queryParams],
     queryFn: () =>
-      apiClient.get<SarReport[]>(
-        `compliance/sar${status ? `?status=${status}` : ""}`
+      apiClient.get<SarReport[] | PageResponse<SarReport>>(
+        `compliance/sar${queryString ? `?${queryString}` : ""}`
       ),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -162,6 +176,7 @@ export const useAlerts = (params?: AlertQueryParams) => {
     queryKey: ["alerts", queryParams],
     queryFn: () =>
       apiClient.get<PageResponse<Alert>>(`alerts${queryString ? `?${queryString}` : ""}`),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -190,6 +205,7 @@ export const useTransactions = (params?: number | TransactionQueryParams) => {
       apiClient.get<PageResponse<Transaction>>(
         `transactions${queryString ? `?${queryString}` : ""}`
       ),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -214,6 +230,7 @@ export const useMerchants = (params?: MerchantQueryParams) => {
     queryKey: ["merchants", queryParams],
     queryFn: () =>
       apiClient.get<PageResponse<Merchant>>(`merchants${queryString ? `?${queryString}` : ""}`),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -275,6 +292,7 @@ export const useAuditLogs = (params?: number | AuditLogQueryParams) => {
     queryKey: ["audit", queryParams],
     queryFn: () =>
       apiClient.get<PageResponse<AuditLog>>(`audit/logs${queryString ? `?${queryString}` : ""}`),
+    placeholderData: keepPreviousData,
   });
 };
 

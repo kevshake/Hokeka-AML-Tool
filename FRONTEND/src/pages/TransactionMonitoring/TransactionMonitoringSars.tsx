@@ -36,7 +36,10 @@ export default function TransactionMonitoringSars() {
 
   const createSar = useCreateSar();
 
-  const transactionSars = (sars?.filter((sar: any) => sar.suspiciousActivityType?.toLowerCase().includes("transaction")) || []);
+  const sarList = Array.isArray(sars) ? sars : sars?.content ?? [];
+  const transactionSars = sarList.filter((sar: any) =>
+    sar.suspiciousActivityType?.toLowerCase().includes("transaction"),
+  );
 
   const handleCreate = () => {
     if (!form.sarReference.trim() || !form.suspiciousActivityType || !form.narrative.trim()) {

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { Link } from "react-router-dom";
 import { useAlerts } from "../../features/api/queries";
 import { useUpdateAlertStatus } from "../../features/api/mutations";
@@ -19,7 +21,6 @@ import { canPerformAction } from "../../lib/consoleRbac";
 import {
   CheckCheck,
   ChevronDown,
-  Download,
   Eye,
   Loader2,
   RotateCcw,
@@ -47,7 +48,7 @@ export default function AlertsPage() {
   const canTriage = canPerformAction(user, "alert.updateStatus");
   const canExport = canPerformAction(user, "alert.export");
   const [defaultRows] = useResponsivePagination();
-  const [page, setPage] = useState({ index: 0, size: defaultRows });
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState(defaultRows);
   const [viewAlert, setViewAlert] = useState<Alert | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -55,9 +56,10 @@ export default function AlertsPage() {
     open: false, message: "", severity: "success",
   });
 
-  const { data: alerts, isLoading, isError, error } = useAlerts({
-    page: page.index,
-    size: page.size,
+  const { data: alerts, isLoading, isError, error, isFetching } = useAlerts({
+    page: tableState.page,
+    size: tableState.size,
+    status: tableState.filters.status,
   });
 
   const updateStatus = useUpdateAlertStatus();
@@ -92,30 +94,6 @@ export default function AlertsPage() {
     }
   };
 
-  const handleExportCSV = () => {
-    if (!content.length) return;
-    const headers = ["ID", "Type", "Priority", "Status", "Description", "Transaction ID", "Case ID", "Created", "Resolved"];
-    const rows = content.map(a => [
-      a.id,
-      a.alertType,
-      a.priority,
-      a.status,
-      (a.description || "").replace(/,/g, ";"),
-      a.transactionId ?? "",
-      a.caseId ?? "",
-      new Date(a.createdAt).toISOString().split("T")[0],
-      a.resolvedAt ? new Date(a.resolvedAt).toISOString().split("T")[0] : "",
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `alerts-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const allSelected = content.length > 0 && selected.size === content.length;
   const someSelected = selected.size > 0 && selected.size < content.length;
 
@@ -124,10 +102,16 @@ export default function AlertsPage() {
       <GlassCard padding="md" glowVariant="red" static>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4">
         <div className="flex items-center gap-3">
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length || !canExport}>
-            <Download size={14} />
-            Export CSV
-          </GlassButton>
+          {canExport && (
+            <ConsoleListExportMenu
+              viewType="ALERTS"
+              filters={exportFilterMap}
+              disabled={!totalElements}
+            />
+          )}
+          {isFetching && !isLoading && (
+            <span className="text-xs text-glass-muted">Updating…</span>
+          )}
           {selected.size > 0 && (
             <span className="text-xs text-glass-muted">{selected.size} selected</span>
           )}
@@ -250,12 +234,12 @@ export default function AlertsPage() {
       </div>
 
         <TwPagination
-          page={page.index}
+          page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
-          rowsPerPage={page.size}
-          onPageChange={(newPage) => { setPage(prev => ({ ...prev, index: newPage })); setSelected(new Set()); }}
-          onRowsPerPageChange={(newSize) => { setPage({ index: 0, size: newSize }); setSelected(new Set()); }}
+          rowsPerPage={tableState.size}
+          onPageChange={(newPage) => { setPage(newPage); setSelected(new Set()); }}
+          onRowsPerPageChange={(newSize) => { setPageSize(newSize); setSelected(new Set()); }}
         />
       </GlassCard>
 

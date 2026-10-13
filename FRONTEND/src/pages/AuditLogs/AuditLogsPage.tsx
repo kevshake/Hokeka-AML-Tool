@@ -5,7 +5,8 @@ import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import { Download, Loader2, RotateCcw } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 import { Link } from "react-router-dom";
 import { normalizeRecordType, recordPath } from "../../lib/recordLinks";
 
@@ -66,26 +67,6 @@ export default function AuditLogsPage() {
     ...(psps || []).map((p: any) => ({ value: p.id.toString(), label: p.name || p.legalName || `PSP #${p.id}` })),
   ];
 
-  const handleExportCSV = () => {
-    const content = (logs as any)?.content || [];
-    if (!content.length) return;
-    const headers = ["ID", "Action", "Entity Type", "Entity ID", "Username", "Role", "PSP ID", "Timestamp", "Success", "Reason"];
-    const rows = content.map((log: any) => [
-      log.id, log.actionType, log.entityType || "", log.entityId || "",
-      log.username || "", log.userRole || "", log.pspId ?? "",
-      log.timestamp ? new Date(log.timestamp).toISOString() : "",
-      log.success ?? "", (log.reason || "").replace(/,/g, ";"),
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-logs-${filters.startDate}-to-${filters.endDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const content = (logs as any)?.content || [];
   const totalElements = (logs as any)?.totalElements ?? 0;
   const totalPages = (logs as any)?.totalPages ?? 1;
@@ -94,13 +75,19 @@ export default function AuditLogsPage() {
     <HokekaPageShell title="Audit Logs" subtitle="Platform activity and compliance audit trail" noCard>
       {/* Export button */}
       <div className="flex justify-end pb-3">
-        <button
-          onClick={handleExportCSV}
-          disabled={!content.length}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-glass-muted transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
-        >
-          <Download size={14} /> Export CSV
-        </button>
+        <ConsoleListExportMenu
+          viewType="AUDIT_LOGS"
+          filters={{
+            page: String(page.index),
+            size: String(page.size),
+            start: filters.startDate ? `${filters.startDate}T00:00:00` : "",
+            end: filters.endDate ? `${filters.endDate}T23:59:59` : "",
+            actionType: filters.actionType,
+            username: filters.username,
+            pspId: filters.pspId,
+          }}
+          disabled={!totalElements}
+        />
       </div>
 
       {/* Filters */}

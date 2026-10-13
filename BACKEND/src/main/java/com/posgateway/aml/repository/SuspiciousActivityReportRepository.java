@@ -2,6 +2,8 @@ package com.posgateway.aml.repository;
 
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.model.SarStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -49,6 +51,13 @@ public interface SuspiciousActivityReportRepository extends JpaRepository<Suspic
     // HOK-39 fix: filter SAR list by PSP
     List<SuspiciousActivityReport> findByPspId(Long pspId);
     List<SuspiciousActivityReport> findByPspIdAndStatus(Long pspId, SarStatus status);
+
+    /** Paginated SAR list for Console with optional PSP and status filters. */
+    Page<SuspiciousActivityReport> findByPspId(Long pspId, Pageable pageable);
+
+    Page<SuspiciousActivityReport> findByPspIdAndStatus(Long pspId, SarStatus status, Pageable pageable);
+
+    Page<SuspiciousActivityReport> findByStatus(SarStatus status, Pageable pageable);
     Optional<SuspiciousActivityReport> findByIdAndPspId(Long id, Long pspId);
     List<SuspiciousActivityReport> findByStatusInAndFilingDeadlineBefore(
             List<SarStatus> statuses, LocalDateTime deadline);
