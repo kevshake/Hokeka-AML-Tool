@@ -24,10 +24,8 @@ class FlywayFreshDatabaseIntegrationTest {
 
     @Test
     void migratesFromEmptyDatabaseThroughLatestVersion() throws Exception {
-        Flyway flyway = Flyway.configure()
-                .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                .locations("classpath:db/migration")
-                .load();
+        Flyway flyway = productionAlignedFlyway(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
         var result = flyway.migrate();
         assertTrue(result.migrationsExecuted > 0, "expected Flyway to apply migrations");
 
@@ -39,5 +37,19 @@ class FlywayFreshDatabaseIntegrationTest {
                 assertTrue(rs.getString(1).startsWith("V"), "latest migration must be versioned");
             }
         }
+    }
+
+    /**
+     * Builds Flyway with the same placeholder policy as production
+     * ({@code spring.flyway.placeholder-replacement=false} in application.properties).
+     * V132 embeds Mustache-style {@code ${...}} in SAR JSON templates; enabling replacement
+     * makes Flyway treat those as missing placeholders and abort fresh installs.
+     */
+    private static Flyway productionAlignedFlyway(String jdbcUrl, String user, String password) {
+        return Flyway.configure()
+                .dataSource(jdbcUrl, user, password)
+                .locations("classpath:db/migration")
+                .placeholderReplacement(false)
+                .load();
     }
 }

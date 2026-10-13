@@ -8,10 +8,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 /**
-* Configuration to ensure Flyway migrations run before Hibernate validation
-* This prevents schema validation errors when migrations haven't been applied yet.
-* Only active when spring.flyway.enabled is true (or unset).
-*/
+ * Configuration to ensure Flyway migrations run before Hibernate validation.
+ * This prevents schema validation errors when migrations haven't been applied yet.
+ * Only active when spring.flyway.enabled is true (or unset).
+ *
+ * <p>Placeholder replacement stays off ({@code spring.flyway.placeholder-replacement=false})
+ * so migrations with embedded Mustache/JSON (e.g. V132 SAR templates) are not rewritten.
+ */
 @Configuration
 @ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
 public class FlywayConfig {
