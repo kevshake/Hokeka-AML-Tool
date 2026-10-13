@@ -100,6 +100,7 @@ public class DecisionEngine {
     public DecisionResult evaluate(TransactionEntity transaction, Double score,
                                    Map<String, Object> features, Long latencyMs,
                                    Map<String, Object> riskDetails) {
+        String orchestratorMode = orchestratorModeService.getMode();
         if ("live".equalsIgnoreCase(orchestratorMode)) {
             return evaluateComputeAll(transaction, score, features, latencyMs, riskDetails, true);
         }
@@ -498,8 +499,8 @@ public class DecisionEngine {
     @Autowired(required = false)
     private com.posgateway.aml.service.alert.AlertLinkageService alertLinkageService;
 
-    @org.springframework.beans.factory.annotation.Value("${hokeka.decision.orchestrator:shadow}")
-    private String orchestratorMode;
+    @Autowired
+    private com.posgateway.aml.service.decision.DecisionOrchestratorModeService orchestratorModeService;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {

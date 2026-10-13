@@ -1,0 +1,2 @@
+{"id":"os-sample-pep-1","caption":"Sample PEP Person","schema":"Person","datasets":["everypolitician"],"properties":{"topics":["role.pep"],"country":["ke"],"alias":["SP Alias"]}}
+{"id":"os-sample-sdn-1","caption":"Sample Sanctioned Entity","schema":"LegalEntity","datasets":["us_ofac_sdn"],"properties":{"topics":["sanction"],"country":["us"]}}
