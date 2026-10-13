@@ -5,8 +5,11 @@ export interface UrlTableState {
   page: number;
   size: number;
   sort?: string;
+  cursor?: string;
   filters: Record<string, string>;
 }
+
+const DEFAULT_RESERVED_KEYS = ["page", "size", "sort", "cursor"];
 
 /** Parses integer query params safely with a default fallback. */
 function readInt(raw: string | null, fallback: number): number {
@@ -19,7 +22,7 @@ function readInt(raw: string | null, fallback: number): number {
  * Keeps table pagination, sort, and filter state in the URL so list pages are shareable
  * and server-side exports can replay the same filter map.
  */
-export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = ["page", "size", "sort"]) {
+export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = DEFAULT_RESERVED_KEYS) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const state: UrlTableState = useMemo(() => {
@@ -33,6 +36,7 @@ export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = ["pa
       page: readInt(searchParams.get("page"), 0),
       size: readInt(searchParams.get("size"), defaultSize),
       sort: searchParams.get("sort") || undefined,
+      cursor: searchParams.get("cursor") || undefined,
       filters,
     };
   }, [searchParams, defaultSize, reservedKeys]);
@@ -50,6 +54,7 @@ export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = ["pa
       });
       if (resetPage) {
         next.set("page", "0");
+        next.delete("cursor");
       }
       setSearchParams(next, { replace: true });
     },
@@ -66,8 +71,8 @@ export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = ["pa
 
   /** Changes the active page index while preserving filters. */
   const setPage = useCallback(
-    (page: number) => {
-      patchParams({ page });
+    (page: number, cursor?: string | null) => {
+      patchParams({ page, cursor: cursor ?? undefined });
     },
     [patchParams],
   );
@@ -75,7 +80,7 @@ export function useUrlTableState(defaultSize = 25, reservedKeys: string[] = ["pa
   /** Changes page size and resets to page zero. */
   const setPageSize = useCallback(
     (size: number) => {
-      patchParams({ size, page: 0 });
+      patchParams({ size, page: 0, cursor: undefined });
     },
     [patchParams],
   );

@@ -24,7 +24,14 @@ interface ComplianceLinksResponse {
 }
 
 interface Props {
-  subjectType: "TRANSACTION" | "MERCHANT" | "ALERT" | "CASE" | "SAR";
+  subjectType:
+    | "TRANSACTION"
+    | "MERCHANT"
+    | "ALERT"
+    | "CASE"
+    | "SAR"
+    | "DISPUTE"
+    | "MULTI_ASSET_CUSTOMER";
   subjectId: string;
 }
 
@@ -42,6 +49,10 @@ export default function ComplianceLinksPanel({ subjectType, subjectId }: Props) 
         return `compliance/links/case/${subjectId}`;
       case "SAR":
         return `compliance/links/sar/${subjectId}`;
+      case "DISPUTE":
+        return `compliance/links/dispute/${subjectId}`;
+      case "MULTI_ASSET_CUSTOMER":
+        return `compliance/links/customer/${subjectId}`;
       default:
         return "";
     }

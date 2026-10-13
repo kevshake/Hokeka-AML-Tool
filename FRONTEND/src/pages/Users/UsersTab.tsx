@@ -12,6 +12,8 @@ import GlassButton from "../../components/Common/GlassButton";
 import { TwSelect } from "../../components/Common/TwInput";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../lib/apiClient";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import {
   canManageUsers,
   filterPspsForUser,
@@ -28,11 +30,12 @@ export default function UsersTab() {
   const platformAdmin = isPlatformAdmin(currentUser);
   const pspAdmin = isPspAdmin(currentUser);
   const tenantPspId = lockedPspId(currentUser);
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [pspFilter, setPspFilter] = useState("");
+  const pspFilter = tableState.filters.pspId ?? "";
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -44,7 +47,6 @@ export default function UsersTab() {
     enabled: true,
   });
 
-  const [page, setPage] = useState({ index: 0, size: 25 });
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false,
     message: "",
@@ -53,8 +55,8 @@ export default function UsersTab() {
 
   const filterPspId = platformAdmin && pspFilter ? Number(pspFilter) : undefined;
   const { data: usersPage, isLoading } = useUsers({
-    page: page.index,
-    size: page.size,
+    page: tableState.page,
+    size: tableState.size,
     pspId: filterPspId,
   });
   const users = usersPage?.content || [];
@@ -248,13 +250,15 @@ export default function UsersTab() {
               label="Filter by PSP"
               value={pspFilter}
               options={pspFilterOptions}
-              onChange={(event) => {
-                setPspFilter(event.target.value);
-                setPage((current) => ({ ...current, index: 0 }));
-              }}
+              onChange={(event) => setFilter("pspId", event.target.value)}
             />
           </div>
         )}
+        <ConsoleListExportMenu
+          viewType="USERS"
+          filters={exportFilterMap}
+          disabled={!usersPage?.totalElements}
+        />
         <button type="button" onClick={() => handleOpenDialog()} className="ml-auto hokeka-btn-primary">
           <Plus size={14} /> Add User
         </button>
@@ -360,12 +364,12 @@ export default function UsersTab() {
       </div>
 
       <TwPagination
-        page={page.index}
-        totalPages={Math.ceil((usersPage?.totalElements || 0) / page.size) || 1}
+        page={tableState.page}
+        totalPages={Math.ceil((usersPage?.totalElements || 0) / tableState.size) || 1}
         totalCount={usersPage?.totalElements || 0}
-        rowsPerPage={page.size}
-        onPageChange={(p) => setPage((prev) => ({ ...prev, index: p }))}
-        onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+        rowsPerPage={tableState.size}
+        onPageChange={setPage}
+        onRowsPerPageChange={setPageSize}
       />
 
       <GlassModal

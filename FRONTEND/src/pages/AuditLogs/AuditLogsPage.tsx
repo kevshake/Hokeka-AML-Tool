@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuditLogs, useAllPsps } from "../../features/api/queries";
 import { useAuth } from "../../contexts/AuthContext";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwBadge from "../../components/Common/TwBadge";
-import TwPagination from "../../components/Common/TwPagination";
+import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
 import { Loader2, RotateCcw } from "lucide-react";
 import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 import { Link } from "react-router-dom";
 import { normalizeRecordType, recordPath } from "../../lib/recordLinks";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
 
 const actionBadge: Record<string, "danger" | "success" | "info" | "warning" | "default"> = {
   DELETE: "danger",
@@ -32,18 +34,28 @@ export default function AuditLogsPage() {
   const defaultStartDate = new Date();
   defaultStartDate.setDate(defaultStartDate.getDate() - 30);
 
-  const [page, setPage] = useState({ index: 0, size: 25 });
-  const [filters, setFilters] = useState({
-    startDate: defaultStartDate.toISOString().split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
-    actionType: "",
-    username: "",
-    pspId: "",
-  });
+  const { state: tableState, setFilter, setPage, setPageSize, patchParams } =
+    useUrlTableState();
+  const filters = {
+    startDate: tableState.filters.startDate ?? defaultStartDate.toISOString().split("T")[0],
+    endDate: tableState.filters.endDate ?? new Date().toISOString().split("T")[0],
+    actionType: tableState.filters.actionType ?? "",
+    username: tableState.filters.username ?? "",
+    pspId: tableState.filters.pspId ?? "",
+  };
+  const [username, setUsername] = useState(filters.username);
+  const debouncedUsername = useDebouncedUrlFilter(username);
+
+  useEffect(() => {
+    if (debouncedUsername !== filters.username) {
+      setFilter("username", debouncedUsername);
+    }
+  }, [debouncedUsername, filters.username, setFilter]);
 
   const { data: logs, isLoading } = useAuditLogs({
-    page: page.index,
-    size: page.size,
+    page: tableState.page,
+    size: tableState.size,
+    cursor: tableState.cursor,
     start: filters.startDate ? `${filters.startDate}T00:00:00` : undefined,
     end: filters.endDate ? `${filters.endDate}T23:59:59` : undefined,
     actionType: filters.actionType || undefined,
@@ -52,10 +64,6 @@ export default function AuditLogsPage() {
   });
 
   const { data: psps } = useAllPsps();
-
-  const handleFilterChange = (field: string, value: any) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
 
   const actionTypes = [
     { value: "", label: "All Actions" },
@@ -78,8 +86,8 @@ export default function AuditLogsPage() {
         <ConsoleListExportMenu
           viewType="AUDIT_LOGS"
           filters={{
-            page: String(page.index),
-            size: String(page.size),
+            page: String(tableState.page),
+            size: String(tableState.size),
             start: filters.startDate ? `${filters.startDate}T00:00:00` : "",
             end: filters.endDate ? `${filters.endDate}T23:59:59` : "",
             actionType: filters.actionType,
@@ -97,41 +105,48 @@ export default function AuditLogsPage() {
             type="date"
             label="Start Date"
             value={filters.startDate}
-            onChange={(e) => handleFilterChange("startDate", e.target.value)}
+            onChange={(e) => setFilter("startDate", e.target.value)}
           />
           <TwInput
             type="date"
             label="End Date"
             value={filters.endDate}
-            onChange={(e) => handleFilterChange("endDate", e.target.value)}
+            onChange={(e) => setFilter("endDate", e.target.value)}
           />
           <TwSelect
             label="Action"
             value={filters.actionType}
-            onChange={(e) => handleFilterChange("actionType", e.target.value)}
+            onChange={(e) => setFilter("actionType", e.target.value)}
             options={actionTypes}
           />
           <TwInput
             label="Username"
-            value={filters.username}
-            onChange={(e) => handleFilterChange("username", e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             placeholder="Filter by username..."
           />
           {isSuperAdmin && (
             <TwSelect
               label="PSP"
               value={filters.pspId}
-              onChange={(e) => handleFilterChange("pspId", e.target.value)}
+              onChange={(e) => setFilter("pspId", e.target.value)}
               options={pspOptions}
             />
           )}
           <div className="flex items-end">
             <button
-              onClick={() => setFilters({
-                startDate: defaultStartDate.toISOString().split("T")[0],
-                endDate: new Date().toISOString().split("T")[0],
-                actionType: "", username: "", pspId: "",
-              })}
+              onClick={() => {
+                setUsername("");
+                patchParams({
+                  startDate: undefined,
+                  endDate: undefined,
+                  actionType: undefined,
+                  username: undefined,
+                  pspId: undefined,
+                  cursor: undefined,
+                  page: 0,
+                });
+              }}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-glass-muted transition-colors hover:bg-white/5"
             >
               <RotateCcw size={14} /> Reset
@@ -196,13 +211,14 @@ export default function AuditLogsPage() {
             </table>
           )}
         </div>
-        <TwPagination
-          page={page.index}
+        <TwKeysetPagination
+          page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
-          rowsPerPage={page.size}
-          onPageChange={(p) => setPage(prev => ({ ...prev, index: p }))}
-          onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+          rowsPerPage={tableState.size}
+          nextCursor={(logs as any)?.nextCursor}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
         />
       </div>
     </HokekaPageShell>

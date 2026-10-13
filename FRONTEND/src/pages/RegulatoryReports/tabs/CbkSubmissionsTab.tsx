@@ -8,6 +8,7 @@ import TwBadge from "../../../components/Common/TwBadge";
 import TwPagination from "../../../components/Common/TwPagination";
 import TwSnackbar from "../../../components/Common/TwSnackbar";
 import { Repeat, Loader2, Network } from "lucide-react";
+import { useUrlTableState } from "../../../hooks/useUrlTableState";
 
 const statusBadge = (s: string): "success" | "danger" | "warning" | "info" | "default" => {
   if (s === "SUCCESS") return "success";
@@ -18,10 +19,10 @@ const statusBadge = (s: string): "success" | "danger" | "warning" | "info" | "de
 };
 
 export default function CbkSubmissionsTab() {
-  const [page, setPage] = useState({ index: 0, size: 25 });
-  const [filterPspId, setFilterPspId] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("");
-  const [filterEndpoint, setFilterEndpoint] = useState<string>("");
+  const { state: tableState, setFilter, setPage, setPageSize } = useUrlTableState();
+  const filterPspId = tableState.filters.pspId ?? "";
+  const filterStatus = tableState.filters.status ?? "";
+  const filterEndpoint = tableState.filters.endpoint ?? "";
   const [toast, setToast] = useState<{ open: boolean; severity: "success" | "error"; message: string }>({ open: false, severity: "success", message: "" });
   const [replayingId, setReplayingId] = useState<number | null>(null);
 
@@ -32,8 +33,8 @@ export default function CbkSubmissionsTab() {
     pspId: filterPspId || undefined,
     status: filterStatus || undefined,
     endpoint: filterEndpoint || undefined,
-    page: page.index,
-    size: page.size,
+    page: tableState.page,
+    size: tableState.size,
   });
 
   const rows = data?.content ?? [];
@@ -56,18 +57,18 @@ export default function CbkSubmissionsTab() {
       <h4 className="mb-3 text-base font-semibold text-white">CBK Submission History</h4>
 
       <div className="mb-3 flex flex-wrap gap-2">
-        <select value={filterPspId} onChange={(e) => { setFilterPspId(e.target.value); setPage({ index: 0, size: page.size }); }} className={selectClass}>
+        <select value={filterPspId} onChange={(e) => setFilter("pspId", e.target.value)} className={selectClass}>
           <option value="">All PSPs</option>
           {(psps ?? []).map((p: any) => <option key={p.id ?? p.pspId} value={String(p.id ?? p.pspId)}>{p.legalName ?? p.tradingName ?? `PSP ${p.id}`}</option>)}
         </select>
-        <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage({ index: 0, size: page.size }); }} className={selectClass}>
+        <select value={filterStatus} onChange={(e) => setFilter("status", e.target.value)} className={selectClass}>
           <option value="">All Status</option>
           <option value="SUCCESS">Success</option>
           <option value="FAILED">Failed</option>
           <option value="PENDING">Pending</option>
           <option value="RETRYING">Retrying</option>
         </select>
-        <select value={filterEndpoint} onChange={(e) => { setFilterEndpoint(e.target.value); setPage({ index: 0, size: page.size }); }} className={selectClass}>
+        <select value={filterEndpoint} onChange={(e) => setFilter("endpoint", e.target.value)} className={selectClass}>
           <option value="">All Endpoints</option>
           {(Object.keys(CBK_ENDPOINT_LABELS) as CbkEndpointType[]).map((ep) => (
             <option key={ep} value={ep}>{CBK_ENDPOINT_LABELS[ep]}</option>
@@ -126,9 +127,12 @@ export default function CbkSubmissionsTab() {
           )}
         </div>
         <TwPagination
-          page={page.index} totalPages={totalPages} totalCount={totalElements} rowsPerPage={page.size}
-          onPageChange={(p) => setPage(prev => ({ ...prev, index: p }))}
-          onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+          page={tableState.page}
+          totalPages={totalPages}
+          totalCount={totalElements}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
         />
       </div>
 

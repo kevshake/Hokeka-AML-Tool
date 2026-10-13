@@ -12,7 +12,7 @@ import GlassCard from "../../components/Common/GlassCard";
 import GlassModal from "../../components/Common/GlassModal";
 import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
-import TwPagination from "../../components/Common/TwPagination";
+import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import AlertDispositionPanel from "../../components/alerts/AlertDispositionPanel";
@@ -60,6 +60,7 @@ export default function AlertsPage() {
     page: tableState.page,
     size: tableState.size,
     status: tableState.filters.status,
+    cursor: tableState.cursor,
   });
 
   const updateStatus = useUpdateAlertStatus();
@@ -233,12 +234,13 @@ export default function AlertsPage() {
           )}
       </div>
 
-        <TwPagination
+        <TwKeysetPagination
           page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
           rowsPerPage={tableState.size}
-          onPageChange={(newPage) => { setPage(newPage); setSelected(new Set()); }}
+          nextCursor={alerts?.nextCursor}
+          onPageChange={(newPage, cursor) => { setPage(newPage, cursor); setSelected(new Set()); }}
           onRowsPerPageChange={(newSize) => { setPageSize(newSize); setSelected(new Set()); }}
         />
       </GlassCard>

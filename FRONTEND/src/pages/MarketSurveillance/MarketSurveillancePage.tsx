@@ -5,7 +5,7 @@ import { Activity, Ban, Cable, Plus, Scale, SearchCheck } from "lucide-react";
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   MenuItem, Paper, Snackbar, Tab, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Tabs, TextField, Typography,
+  TableHead, TablePagination, TableRow, Tabs, TextField, Typography,
 } from "@mui/material";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import { useMarketOrders, useMarketSignals, useMultiAssetCustomers } from "../../features/api/queries";
@@ -16,6 +16,7 @@ import { apiClient } from "../../lib/apiClient";
 import type {
   FixMessagePage, FixSession, MarketOrder, MarketSignalStatus, MarketSurveillanceSignal,
 } from "../../types/marketSurveillance";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 const orderInitial = {
   externalOrderId: "", customerId: "", accountReference: "", beneficialOwnerReference: "",
@@ -33,7 +34,8 @@ function displayDate(value?: string) {
 }
 
 export default function MarketSurveillancePage() {
-  const [tab, setTab] = useState(0);
+  const { state: tableState, setFilter, setPage, setPageSize } = useUrlTableState();
+  const tab = Number(tableState.filters.tab ?? 0);
   const [dialog, setDialog] = useState<"order" | "execution" | "cancel" | "review" | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<MarketOrder | null>(null);
   const [selectedSignal, setSelectedSignal] = useState<MarketSurveillanceSignal | null>(null);
@@ -43,8 +45,8 @@ export default function MarketSurveillancePage() {
   const [cancelReason, setCancelReason] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const orders = useMarketOrders();
-  const signals = useMarketSignals();
+  const orders = useMarketOrders(tableState.page, tableState.size);
+  const signals = useMarketSignals(tableState.page, tableState.size);
   const customers = useMultiAssetCustomers("", 0, 100);
   const placeOrder = usePlaceMarketOrder();
   const recordExecution = useRecordMarketExecution();
@@ -57,8 +59,8 @@ export default function MarketSurveillancePage() {
     refetchInterval: tab === 2 ? 10000 : false,
   });
   const fixMessages = useQuery<FixMessagePage>({
-    queryKey: ["market-fix-messages"],
-    queryFn: () => apiClient.get("market-surveillance/fix/messages?page=0&size=50"),
+    queryKey: ["market-fix-messages", tableState.page, tableState.size],
+    queryFn: () => apiClient.get(`market-surveillance/fix/messages?page=${tableState.page}&size=${tableState.size}`),
     enabled: tab === 2,
     refetchInterval: tab === 2 ? 10000 : false,
   });
@@ -87,7 +89,7 @@ export default function MarketSurveillancePage() {
   return <HokekaPageShell title="Market Surveillance" subtitle="Orders, executions, and market-integrity signals" noCard>
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)}><Tab label={`Signals (${signals.data?.totalElements ?? 0})`} /><Tab label={`Orders (${orders.data?.totalElements ?? 0})`} /><Tab label={`FIX feed (${fixMessages.data?.totalElements ?? 0})`} /></Tabs>
+        <Tabs value={tab} onChange={(_, value) => setFilter("tab", String(value))}><Tab label={`Signals (${signals.data?.totalElements ?? 0})`} /><Tab label={`Orders (${orders.data?.totalElements ?? 0})`} /><Tab label={`FIX feed (${fixMessages.data?.totalElements ?? 0})`} /></Tabs>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button variant="outlined" startIcon={<Activity size={16} />} onClick={() => setDialog("execution")}>Execution</Button>
           <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setDialog("order")}>Order</Button>
@@ -124,6 +126,22 @@ export default function MarketSurveillancePage() {
           </TableBody></Table></TableContainer>
         </Paper>
       </Box>}
+
+      <TablePagination
+        component="div"
+        count={
+          tab === 0
+            ? signals.data?.totalElements ?? 0
+            : tab === 1
+              ? orders.data?.totalElements ?? 0
+              : fixMessages.data?.totalElements ?? 0
+        }
+        page={tableState.page}
+        rowsPerPage={tableState.size}
+        rowsPerPageOptions={[10, 25, 50]}
+        onPageChange={(_, page) => setPage(page)}
+        onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))}
+      />
 
       <Dialog open={dialog === "order"} onClose={closeDialog} fullWidth maxWidth="md"><DialogTitle>Record market order</DialogTitle><DialogContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, pt: 1 }}>
         <TextField label="External order ID" required value={orderForm.externalOrderId} onChange={(e) => setOrderForm({ ...orderForm, externalOrderId: e.target.value })} />

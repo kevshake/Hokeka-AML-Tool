@@ -22,6 +22,10 @@ import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import { useChargebackDisputes } from "../../features/api/queries";
 import { apiClient } from "../../lib/apiClient";
 import { useQuery } from "@tanstack/react-query";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import TwPagination from "../../components/Common/TwPagination";
+import ComplianceLinksPanel from "../../components/compliance/ComplianceLinksPanel";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 interface ChargebackDispute {
   id: number;
@@ -51,18 +55,29 @@ function useChargebackDispute(id: number | null) {
 
 export default function ChargebacksPage() {
   const navigate = useNavigate();
-  const { data: disputes = [], isLoading } = useChargebackDisputes();
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const { data: disputesPage, isLoading } = useChargebackDisputes({
+    page: tableState.page,
+    size: tableState.size,
+  });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { data: detail, isLoading: detailLoading } = useChargebackDispute(selectedId);
 
   const sorted = useMemo(
-    () => [...disputes].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)),
-    [disputes]
+    () => [...(disputesPage?.content ?? [])].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)),
+    [disputesPage?.content]
   );
 
   return (
     <HokekaPageShell title="Chargeback Operations" subtitle="Verifi RDR disputes and case linkage">
       <Paper sx={{ p: 2, borderRadius: "12px" }}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+          <ConsoleListExportMenu
+            viewType="CHARGEBACKS"
+            filters={exportFilterMap}
+            disabled={!disputesPage?.totalElements}
+          />
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Disputes ingested from Visa/Verifi RDR webhooks. Open a row for detail and jump to linked compliance cases.
         </Typography>
@@ -137,6 +152,14 @@ export default function ChargebacksPage() {
           </Table>
           </TableContainer>
         )}
+        <TwPagination
+          page={tableState.page}
+          totalPages={disputesPage?.totalPages ?? 1}
+          totalCount={disputesPage?.totalElements ?? 0}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
+        />
       </Paper>
 
       <Drawer
@@ -177,6 +200,7 @@ export default function ChargebacksPage() {
                 Trace compliance case #{detail.complianceCaseId}
               </Button>
             )}
+            <ComplianceLinksPanel subjectType="DISPUTE" subjectId={String(detail.id)} />
           </Stack>
         )}
       </Drawer>

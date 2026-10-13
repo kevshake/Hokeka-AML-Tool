@@ -4,7 +4,10 @@ import { useSarReports } from "../../features/api/queries";
 import { useCreateSar } from "../../features/api/mutations";
 import type { SarReport } from "../../types";
 import TwBadge from "../../components/Common/TwBadge";
-import { TwInput } from "../../components/Common/TwInput";
+import { TwInput, TwSelect } from "../../components/Common/TwInput";
+import TwPagination from "../../components/Common/TwPagination";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { Eye, Loader2, Plus, X } from "lucide-react";
 
 const statusBadge = (s: string | undefined): "default" | "warning" | "info" | "success" | "danger" | "info" => {
@@ -28,7 +31,12 @@ function localDateTimeValue(date = new Date()) {
 const newSarForm = () => ({ sarReference: "", suspiciousActivityType: "", narrative: "", jurisdiction: "KE", suspicionAroseAt: localDateTimeValue() });
 
 export default function TransactionMonitoringSars() {
-  const { data: sars, isLoading } = useSarReports();
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const { data: sars, isLoading } = useSarReports({
+    page: tableState.page,
+    size: tableState.size,
+    status: tableState.filters.status,
+  });
   const [viewSar, setViewSar] = useState<SarReport | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(newSarForm);
@@ -70,10 +78,25 @@ export default function TransactionMonitoringSars() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Transaction-Related SAR Reports</h3>
-        <button onClick={() => { setCreateOpen(true); setFormError(null); setForm(newSarForm()); }}
-          className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800">
-          <Plus size={14} /> Create SAR
-        </button>
+        <div className="flex items-end gap-2">
+          <TwSelect
+            label="Status"
+            value={tableState.filters.status ?? ""}
+            options={[
+              { value: "", label: "All statuses" },
+              ...["DRAFT", "REVIEW", "APPROVED", "FILED", "REJECTED", "AMENDED"].map((status) => ({
+                value: status,
+                label: status,
+              })),
+            ]}
+            onChange={(event) => setFilter("status", event.target.value)}
+          />
+          <ConsoleListExportMenu viewType="SARS" filters={exportFilterMap} disabled={!transactionSars.length} />
+          <button onClick={() => { setCreateOpen(true); setFormError(null); setForm(newSarForm()); }}
+            className="flex items-center gap-1.5 rounded-lg bg-burgundy-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-burgundy-800">
+            <Plus size={14} /> Create SAR
+          </button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
@@ -112,6 +135,14 @@ export default function TransactionMonitoringSars() {
             </table>
           )}
         </div>
+        <TwPagination
+          page={tableState.page}
+          totalPages={Array.isArray(sars) ? 1 : sars?.totalPages ?? 1}
+          totalCount={Array.isArray(sars) ? transactionSars.length : sars?.totalElements ?? 0}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
+        />
       </div>
 
       {/* Create SAR Dialog */}

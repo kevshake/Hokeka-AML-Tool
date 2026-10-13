@@ -175,6 +175,8 @@ export interface PageResponse<T> {
   totalPages: number;
   size: number;
   number: number;
+  nextCursor?: string | null;
+  hasNext?: boolean;
 }
 
 export interface DashboardStats {

@@ -11,6 +11,8 @@ import { isPlatformAdmin } from "../../lib/userAccess";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
 import { canPerformAction } from "../../lib/consoleRbac";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -24,6 +26,7 @@ export default function ScreeningPage() {
   const triggerDownload = useTriggerSanctionsDownload();
   const isOperator = isPlatformAdmin(user);
   const canManageIngest = canPerformAction(user, "screening.ingest");
+  const { exportFilterMap } = useUrlTableState();
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
@@ -190,6 +193,15 @@ export default function ScreeningPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <MonitoringAlertsPanel />
         <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+          <div className="mb-3 flex justify-end">
+            <ConsoleListExportMenu
+              viewType="SCREENING_ACTIVITY"
+              filters={{
+                ...exportFilterMap,
+                ...(result?.merchantId ? { merchantId: String(result.merchantId) } : {}),
+              }}
+            />
+          </div>
           <ScreeningActivityPanel merchantId={result?.merchantId ? String(result.merchantId) : undefined} />
           {!result?.merchantId ? (
             <p className="text-sm text-white/45">

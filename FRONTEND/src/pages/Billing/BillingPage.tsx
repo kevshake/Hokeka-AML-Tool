@@ -83,6 +83,7 @@ import type { Invoice, Subscription, SubscriptionRequest } from "../../types/bil
 import type { Psp } from "../../types";
 import { getApiUrl } from "../../config/api";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { formatCount, formatCurrency } from "../../lib/formatDisplay";
 import { withAlpha } from "../../theme/tokens";
 import { glassPanelSx, glassTableContainerSx } from "../../theme/muiGlass";
@@ -654,15 +655,14 @@ interface MarkPaidForm {
 
 function InvoicesTab() {
   const { data: psps = [] } = useAllPsps();
-  const [filterPspId, setFilterPspId] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("");
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const { state: tableState, setFilter, setPage, setPageSize } = useUrlTableState();
+  const filterPspId = tableState.filters.pspId ?? "";
+  const filterStatus = tableState.filters.status ?? "";
 
   const { data: invoicesPage, isLoading, isError } = useInvoices({
     pspId: filterPspId ? Number(filterPspId) : undefined,
-    page,
-    size: rowsPerPage,
+    page: tableState.page,
+    size: tableState.size,
   });
 
   const rows: Invoice[] = invoicesPage?.content ?? (Array.isArray(invoicesPage) ? (invoicesPage as Invoice[]) : []);
@@ -780,7 +780,7 @@ function InvoicesTab() {
         <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>PSP</InputLabel>
-            <Select value={filterPspId} label="PSP" onChange={(e) => { setFilterPspId(e.target.value); setPage(0); }}>
+            <Select value={filterPspId} label="PSP" onChange={(e) => setFilter("pspId", e.target.value)}>
               <MenuItem value="">All PSPs</MenuItem>
               {(psps as Psp[]).map((p) => {
                 const id = String(p.id ?? (p as unknown as { pspId?: number }).pspId ?? "");
@@ -791,7 +791,7 @@ function InvoicesTab() {
 
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Status</InputLabel>
-            <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}>
+            <Select value={filterStatus} label="Status" onChange={(e) => setFilter("status", e.target.value)}>
               <MenuItem value="">All</MenuItem>
               {["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"].map((s) => (
                 <MenuItem key={s} value={s}>{s}</MenuItem>
@@ -906,10 +906,10 @@ function InvoicesTab() {
           rowsPerPageOptions={[10, 25, 50]}
           component="div"
           count={total}
-          rowsPerPage={rowsPerPage}
-          page={page}
+          rowsPerPage={tableState.size}
+          page={tableState.page}
           onPageChange={(_, p) => setPage(p)}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+          onRowsPerPageChange={(e) => setPageSize(parseInt(e.target.value, 10))}
         />
       </TableContainer>
 

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import { getApiUrl } from "../../config/api";
@@ -9,6 +9,9 @@ import TwSnackbar from "../../components/Common/TwSnackbar";
 import { Download, FileText, Loader2, Search, Upload, X, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
 
 // ── Data types ──
 interface MerchantsPage {
@@ -240,31 +243,43 @@ function DocumentsDialog({ merchantId, merchantName, onClose }: { merchantId: nu
 
 // ── Main Page ──
 export default function KycDocumentsPage() {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState({ index: 0, size: 25 });
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const [search, setSearch] = useState(tableState.filters.search ?? "");
+  const debouncedSearch = useDebouncedUrlFilter(search);
   const [selectedMerchant, setSelectedMerchant] = useState<{ id: number; name: string } | null>(null);
 
-  const queryString = [`page=${page.index}`, `size=${page.size}`, search ? `search=${encodeURIComponent(search)}` : ""].filter(Boolean).join("&");
+  useEffect(() => {
+    if (debouncedSearch !== (tableState.filters.search ?? "")) {
+      setFilter("search", debouncedSearch);
+    }
+  }, [debouncedSearch, setFilter, tableState.filters.search]);
+
+  const queryString = [
+    `page=${tableState.page}`,
+    `size=${tableState.size}`,
+    tableState.filters.search ? `search=${encodeURIComponent(tableState.filters.search)}` : "",
+  ].filter(Boolean).join("&");
 
   const { data: merchantsPage, isLoading, isError } = useQuery<MerchantsPage>({
-    queryKey: ["merchants-kyc", page.index, page.size, search],
+    queryKey: ["merchants-kyc", tableState.page, tableState.size, tableState.filters.search],
     queryFn: () => apiClient.get<MerchantsPage>(`merchants?${queryString}`),
     placeholderData: (prev) => prev,
   });
 
   const merchants = merchantsPage?.content || [];
   const totalElements = merchantsPage?.totalElements || 0;
-  const totalPages = Math.ceil(totalElements / page.size) || 1;
+  const totalPages = Math.ceil(totalElements / tableState.size) || 1;
 
   return (
     <HokekaPageShell title="KYC" subtitle="Manage merchant KYC status and compliance documents" noCard>
       {/* Search */}
-      <div className="flex justify-end pb-3">
+      <div className="flex justify-end gap-2 pb-3">
+        <ConsoleListExportMenu viewType="KYC_DOCUMENTS" filters={exportFilterMap} disabled={!totalElements} />
         <div className="relative w-72">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-glass-muted" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage({ index: 0, size: page.size }); }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search merchants..."
             className="w-full rounded-lg border border-white/10 bg-[var(--surface-3)] py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-burgundy-700"
           />
@@ -317,9 +332,12 @@ export default function KycDocumentsPage() {
           )}
         </div>
         <TwPagination
-          page={page.index} totalPages={totalPages} totalCount={totalElements} rowsPerPage={page.size}
-          onPageChange={(p) => setPage(prev => ({ ...prev, index: p }))}
-          onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+          page={tableState.page}
+          totalPages={totalPages}
+          totalCount={totalElements}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
         />
       </div>
 

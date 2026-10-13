@@ -12,7 +12,16 @@ export type ConsoleListViewType =
   | "CHARGEBACKS"
   | "SCREENING_ACTIVITY"
   | "USERS"
-  | "RULES";
+  | "RULES"
+  | "RECORD_DETAIL"
+  | "CUSTOMERS"
+  | "EDGE_NODES"
+  | "PSPS"
+  | "KYC_DOCUMENTS"
+  | "ASSET_ACCOUNTS"
+  | "MESSAGES"
+  | "RUNTIME_ERRORS"
+  | "MONITORING_TRANSACTIONS";
 
 export interface ConsoleExportRequest {
   viewType: ConsoleListViewType;
