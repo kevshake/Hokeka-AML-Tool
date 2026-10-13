@@ -34,7 +34,11 @@ class FlywayFreshDatabaseIntegrationTest {
             try (ResultSet rs = conn.createStatement().executeQuery(
                     "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1")) {
                 assertTrue(rs.next(), "flyway_schema_history must record latest version");
-                assertTrue(rs.getString(1).startsWith("V"), "latest migration must be versioned");
+                String latest = rs.getString(1);
+                // Flyway stores the numeric suffix only (e.g. "243" for V243__*.sql), not the "V" prefix.
+                assertTrue(
+                        latest != null && latest.matches("\\d+"),
+                        "latest migration version must be numeric, got: " + latest);
             }
         }
     }
