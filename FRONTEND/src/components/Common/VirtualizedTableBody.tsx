@@ -9,7 +9,7 @@ interface Props {
 }
 
 /**
- * Virtualizes long table bodies so only visible rows mount DOM nodes during scroll.
+ * Virtualizes long lists by rendering only visible row nodes inside a scroll container.
  */
 export default function VirtualizedTableBody({
   rowCount,
@@ -27,8 +27,8 @@ export default function VirtualizedTableBody({
   });
 
   return (
-    <div ref={parentRef} style={{ maxHeight, overflow: "auto" }}>
-      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+    <div ref={parentRef} style={{ maxHeight, overflow: "auto" }} className="hokeka-table-wrap !border-0">
+      <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
         {virtualizer.getVirtualItems().map((item) => (
           <div
             key={item.key}

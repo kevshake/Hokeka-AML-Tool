@@ -24,6 +24,7 @@ import {
   useSubmitRegulatoryReview,
 } from "../../../features/api/regulatorySubmissionQueries";
 import { useUrlTableState } from "../../../hooks/useUrlTableState";
+import ConsoleListExportMenu from "../../../components/Common/ConsoleListExportMenu";
 
 const statusVariant = (
   status: RegulatorySubmission["status"],
@@ -43,7 +44,7 @@ const mutationMessage = (error: unknown) => {
 };
 
 export default function RegulatoryFilingsTab() {
-  const { state: tableState, setFilter, setPage, setPageSize } = useUrlTableState();
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
   const status = tableState.filters.status ?? "";
   const regulator = tableState.filters.regulator ?? "FRC";
   const [executionId, setExecutionId] = useState("");
@@ -101,7 +102,8 @@ export default function RegulatoryFilingsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3 border-b border-white/10 pb-4">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-72 text-xs text-glass-muted">
           Completed filing report
           <select
@@ -147,6 +149,12 @@ export default function RegulatoryFilingsTab() {
         <span className="text-xs text-glass-muted">
           Only completed CTR and cash-structuring executions are currently eligible.
         </span>
+        </div>
+        <ConsoleListExportMenu
+          viewType="REGULATORY_SUBMISSIONS"
+          filters={{ ...exportFilterMap, status, regulator }}
+          disabled={!(submissions.data?.totalElements ?? 0)}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">

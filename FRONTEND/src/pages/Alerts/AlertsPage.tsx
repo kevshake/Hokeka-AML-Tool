@@ -13,6 +13,7 @@ import GlassModal from "../../components/Common/GlassModal";
 import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
 import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
+import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import AlertDispositionPanel from "../../components/alerts/AlertDispositionPanel";
@@ -183,53 +184,62 @@ export default function AlertsPage() {
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {content.map((alert) => (
-                  <tr
-                    key={alert.id}
-                    className={selected.has(alert.id) ? "bg-burgundy-800/40" : undefined}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(alert.id)}
-                        onChange={(e) => handleSelectOne(alert.id, e.target.checked)}
-                        className="rounded border-hairline accent-gold"
-                      />
-                    </td>
-                    <td>#{alert.id}</td>
-                    <td>{alert.alertType}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <TwBadge variant={priorityVariant(alert.priority)}>{alert.priority}</TwBadge>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <TwBadge variant={alertStatusVariant(alert.status)}>{alert.status}</TwBadge>
-                    </td>
-                    <td className="max-w-xs truncate text-ink-muted">
-                      {alert.description || <span className="text-glass-muted">-</span>}
-                    </td>
-                    <td className="text-glass-muted">
-                      {new Date(alert.createdAt).toLocaleDateString()}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => setViewAlert(alert)}
-                        className="flex items-center gap-1 text-xs text-gold hover:underline"
-                      >
-                        <Eye size={14} /> View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!content.length && (
+              {content.length > 0 ? (
+                <VirtualizedTableBody
+                  rowCount={content.length}
+                  maxHeight={520}
+                  renderRow={(index) => {
+                    const alert = content[index];
+                    return (
+                      <table className="hokeka-table w-full">
+                        <tbody>
+                          <tr className={selected.has(alert.id) ? "bg-burgundy-800/40" : undefined}>
+                            <td className="w-10">
+                              <input
+                                type="checkbox"
+                                checked={selected.has(alert.id)}
+                                onChange={(e) => handleSelectOne(alert.id, e.target.checked)}
+                                className="rounded border-hairline accent-gold"
+                              />
+                            </td>
+                            <td>#{alert.id}</td>
+                            <td>{alert.alertType}</td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <TwBadge variant={priorityVariant(alert.priority)}>{alert.priority}</TwBadge>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <TwBadge variant={alertStatusVariant(alert.status)}>{alert.status}</TwBadge>
+                            </td>
+                            <td className="max-w-xs truncate text-ink-muted">
+                              {alert.description || <span className="text-glass-muted">-</span>}
+                            </td>
+                            <td className="text-glass-muted">
+                              {new Date(alert.createdAt).toLocaleDateString()}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => setViewAlert(alert)}
+                                className="flex items-center gap-1 text-xs text-gold hover:underline"
+                              >
+                                <Eye size={14} /> View
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    );
+                  }}
+                />
+              ) : (
+                <tbody>
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-sm text-glass-muted">
                       No alerts found
                     </td>
                   </tr>
-                )}
-              </tbody>
+                </tbody>
+              )}
             </table>
           )}
       </div>

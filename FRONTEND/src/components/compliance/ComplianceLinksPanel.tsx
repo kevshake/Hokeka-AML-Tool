@@ -31,7 +31,8 @@ interface Props {
     | "CASE"
     | "SAR"
     | "DISPUTE"
-    | "MULTI_ASSET_CUSTOMER";
+    | "MULTI_ASSET_CUSTOMER"
+    | "ASSET_ACCOUNT";
   subjectId: string;
 }
 
@@ -53,6 +54,8 @@ export default function ComplianceLinksPanel({ subjectType, subjectId }: Props) 
         return `compliance/links/dispute/${subjectId}`;
       case "MULTI_ASSET_CUSTOMER":
         return `compliance/links/customer/${subjectId}`;
+      case "ASSET_ACCOUNT":
+        return `compliance/links/asset-account/${subjectId}`;
       default:
         return "";
     }

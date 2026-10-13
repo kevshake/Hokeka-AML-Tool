@@ -6,6 +6,7 @@ import {
 } from "../../features/api/queries";
 import TwBadge from "../../components/Common/TwBadge";
 import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
+import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
 import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { Loader2 } from "lucide-react";
@@ -80,23 +81,37 @@ export default function TransactionMonitoringLive() {
                     <th>Timestamp</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {content.length > 0 ? content.map((txn: any) => (
-                    <tr key={txn.txnId || txn.transactionId || txn.id}>
-                      <td><Link className="text-gold hover:underline" to={`/records/TRANSACTION/${txn.txnId || txn.transactionId || txn.id}`}>#{txn.txnId || txn.transactionId || txn.id}</Link></td>
-                      <td>{txn.merchantId ? <Link className="text-gold hover:underline" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
-                      <td>{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <TwBadge variant={decisionBadge(txn.decision)}>{txn.decision || "ALLOW"}</TwBadge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
-                        {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "-"}
-                      </td>
-                    </tr>
-                  )) : (
+                {content.length > 0 ? (
+                  <VirtualizedTableBody
+                    rowCount={content.length}
+                    maxHeight={460}
+                    renderRow={(index) => {
+                      const txn = content[index];
+                      const id = txn.txnId || txn.transactionId || txn.id;
+                      return (
+                        <table className="hokeka-table w-full">
+                          <tbody>
+                            <tr>
+                              <td><Link className="text-gold hover:underline" to={`/records/TRANSACTION/${id}`}>#{id}</Link></td>
+                              <td>{txn.merchantId ? <Link className="text-gold hover:underline" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
+                              <td>{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
+                              <td className="whitespace-nowrap px-4 py-3">
+                                <TwBadge variant={decisionBadge(txn.decision)}>{txn.decision || "ALLOW"}</TwBadge>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
+                                {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "-"}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      );
+                    }}
+                  />
+                ) : (
+                  <tbody>
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-glass-muted">No transactions found</td></tr>
-                  )}
-                </tbody>
+                  </tbody>
+                )}
               </table>
             )}
           </div>

@@ -62,6 +62,7 @@ public class TransactionController {
     private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
     private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
     private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
+    private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -88,7 +89,8 @@ public class TransactionController {
             PspIsolationService pspIsolationService,
             com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
             com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
-            com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService) {
+            com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService,
+            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -103,6 +105,7 @@ public class TransactionController {
         this.assessmentQueryService = assessmentQueryService;
         this.transactionAlertQueryService = transactionAlertQueryService;
         this.complianceLinksQueryService = complianceLinksQueryService;
+        this.keysetSliceService = keysetSliceService;
     }
 
     /**
@@ -397,10 +400,11 @@ public class TransactionController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'VIEWER')")
-    public ResponseEntity<org.springframework.data.domain.Page<TransactionEntity>> getAllTransactions(
+    public ResponseEntity<?> getAllTransactions(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size,
-            @RequestParam(required = false) Long pspId) {
+            @RequestParam(required = false) Long pspId,
+            @RequestParam(required = false) String cursor) {
         logger.info("Get all transactions request (page: {}, size: {}, pspId: {})", page, size, pspId);
         try {
             int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
@@ -421,16 +425,18 @@ public class TransactionController {
             // Filter out null timestamps
             spec = spec.and((root, query, cb) -> cb.isNotNull(root.get("txnTs")));
             
-            // Create Pageable with sorting
-            org.springframework.data.domain.Pageable pageable = 
-                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "txnTs"));
-            
-            // Execute query with pagination
-            org.springframework.data.domain.Page<TransactionEntity> pageResult = 
-                transactionRepository.findAll(spec, pageable);
-            
-            logger.info("Returning page {} with {} transactions (total: {})", 
-                safePage, pageResult.getContent().size(), pageResult.getTotalElements());
+            var pageResult = keysetSliceService.slice(
+                    transactionRepository,
+                    spec,
+                    safePage,
+                    safeSize,
+                    cursor,
+                    "txnTs",
+                    "txnId",
+                    TransactionEntity::getTxnTs,
+                    TransactionEntity::getTxnId);
+            logger.info("Returning page {} with {} transactions (total: {})",
+                    safePage, pageResult.content().size(), pageResult.totalElements());
             return ResponseEntity.ok(pageResult);
         } catch (Exception e) {
             logger.error("Error fetching transactions: {}", e.getMessage(), e);

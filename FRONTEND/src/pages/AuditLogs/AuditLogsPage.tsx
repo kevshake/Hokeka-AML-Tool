@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 import { normalizeRecordType, recordPath } from "../../lib/recordLinks";
 import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
+import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
 
 const actionBadge: Record<string, "danger" | "success" | "info" | "warning" | "default"> = {
   DELETE: "danger",
@@ -176,38 +177,50 @@ export default function AuditLogsPage() {
                   <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-glass-muted">Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
-                {content.map((log: any) => (
-                  <tr key={log.id} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white">
-                      <Link to={`/records/AUDIT_LOG/${log.id}`} className="hover:text-gold">{new Date(log.timestamp).toLocaleString()}</Link>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
-                      {log.pspId && log.pspId !== 0 ? <Link to={`/records/PSP/${log.pspId}`} className="hover:text-gold">PSP #{log.pspId}</Link> : "System"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{log.username}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <TwBadge variant={badgeForAction(log.actionType)}>{log.actionType}</TwBadge>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">{log.entityType}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-sm text-white/80">
-                      {log.entityType && recordPath(normalizeRecordType(log.entityType), log.entityId)
-                        ? <Link to={recordPath(normalizeRecordType(log.entityType), log.entityId)!} className="hover:text-gold">{log.entityId}</Link>
-                        : log.entityId}
-                    </td>
-                    <td className="max-w-xs truncate px-4 py-3 text-sm text-glass-muted">
-                      {log.reason || log.details || <span className="text-glass-muted/50">N/A</span>}
-                    </td>
-                  </tr>
-                ))}
-                {!content.length && (
+              {content.length > 0 ? (
+                <VirtualizedTableBody
+                  rowCount={content.length}
+                  maxHeight={520}
+                  renderRow={(index) => {
+                    const log = content[index];
+                    return (
+                      <table className="w-full border-collapse">
+                        <tbody>
+                          <tr className="divide-y divide-white/5 transition-colors hover:bg-white/[0.02]">
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-white">
+                              <Link to={`/records/AUDIT_LOG/${log.id}`} className="hover:text-gold">{new Date(log.timestamp).toLocaleString()}</Link>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
+                              {log.pspId && log.pspId !== 0 ? <Link to={`/records/PSP/${log.pspId}`} className="hover:text-gold">PSP #{log.pspId}</Link> : "System"}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-white">{log.username}</td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <TwBadge variant={badgeForAction(log.actionType)}>{log.actionType}</TwBadge>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-white/80">{log.entityType}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-mono text-sm text-white/80">
+                              {log.entityType && recordPath(normalizeRecordType(log.entityType), log.entityId)
+                                ? <Link to={recordPath(normalizeRecordType(log.entityType), log.entityId)!} className="hover:text-gold">{log.entityId}</Link>
+                                : log.entityId}
+                            </td>
+                            <td className="max-w-xs truncate px-4 py-3 text-sm text-glass-muted">
+                              {log.reason || log.details || <span className="text-glass-muted/50">N/A</span>}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    );
+                  }}
+                />
+              ) : (
+                <tbody>
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-sm text-glass-muted">
                       No audit logs found for the selected period
                     </td>
                   </tr>
-                )}
-              </tbody>
+                </tbody>
+              )}
             </table>
           )}
         </div>

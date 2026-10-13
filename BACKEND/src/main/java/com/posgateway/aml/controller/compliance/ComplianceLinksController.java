@@ -52,4 +52,22 @@ public class ComplianceLinksController {
     public ResponseEntity<ComplianceLinksResponse> sarLinks(@PathVariable Long sarId) {
         return ResponseEntity.ok(complianceLinksQueryService.forSar(sarId));
     }
+
+    /** Returns linked compliance records for a multi-asset customer profile. */
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<ComplianceLinksResponse> customerLinks(@PathVariable Long customerId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forCustomer(customerId));
+    }
+
+    /** Returns linked compliance records for a chargeback dispute. */
+    @GetMapping("/dispute/{disputeId}")
+    public ResponseEntity<ComplianceLinksResponse> disputeLinks(@PathVariable Long disputeId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forDispute(disputeId));
+    }
+
+    /** Returns linked compliance records for a card or wallet asset account. */
+    @GetMapping("/asset-account/{accountId}")
+    public ResponseEntity<ComplianceLinksResponse> assetAccountLinks(@PathVariable Long accountId) {
+        return ResponseEntity.ok(complianceLinksQueryService.forAssetAccount(accountId));
+    }
 }

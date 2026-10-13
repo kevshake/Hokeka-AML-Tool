@@ -9,7 +9,15 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.chargeback.ChargebackDispute;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
+import com.posgateway.aml.entity.admin.RuntimeError;
+import com.posgateway.aml.entity.edge.EdgeNode;
+import com.posgateway.aml.entity.messaging.Message;
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.entity.multiasset.AssetAccount;
+import com.posgateway.aml.entity.multiasset.MultiAssetCustomer;
+import com.posgateway.aml.entity.psp.Psp;
+import com.posgateway.aml.entity.reporting.RegulatorySubmission;
+import com.posgateway.aml.entity.reporting.SubmissionStatus;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.entity.sanctions.ScreeningActivity;
 import com.posgateway.aml.model.CaseStatus;
@@ -22,6 +30,13 @@ import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.repository.chargeback.ChargebackDisputeRepository;
 import com.posgateway.aml.repository.MerchantRepository;
+import com.posgateway.aml.repository.PspRepository;
+import com.posgateway.aml.repository.admin.RuntimeErrorRepository;
+import com.posgateway.aml.repository.edge.EdgeNodeRepository;
+import com.posgateway.aml.repository.messaging.MessageRepository;
+import com.posgateway.aml.repository.multiasset.AssetAccountRepository;
+import com.posgateway.aml.repository.multiasset.MultiAssetCustomerRepository;
+import com.posgateway.aml.repository.reporting.RegulatorySubmissionRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.repository.sanctions.ScreeningActivityRepository;
 import com.posgateway.aml.service.compliance.ComplianceLinksQueryService;
@@ -63,6 +78,13 @@ public class ConsoleListExportQueryFacade {
     private final UserRepository userRepository;
     private final RuleDefinitionRepository ruleDefinitionRepository;
     private final ComplianceLinksQueryService complianceLinksQueryService;
+    private final MultiAssetCustomerRepository multiAssetCustomerRepository;
+    private final EdgeNodeRepository edgeNodeRepository;
+    private final PspRepository pspRepository;
+    private final AssetAccountRepository assetAccountRepository;
+    private final MessageRepository messageRepository;
+    private final RuntimeErrorRepository runtimeErrorRepository;
+    private final RegulatorySubmissionRepository regulatorySubmissionRepository;
 
     public ConsoleListExportQueryFacade(PspIsolationService pspIsolationService,
                                         AlertRepository alertRepository,
@@ -75,7 +97,14 @@ public class ConsoleListExportQueryFacade {
                                         ScreeningActivityRepository screeningActivityRepository,
                                         UserRepository userRepository,
                                         RuleDefinitionRepository ruleDefinitionRepository,
-                                        ComplianceLinksQueryService complianceLinksQueryService) {
+                                        ComplianceLinksQueryService complianceLinksQueryService,
+                                        MultiAssetCustomerRepository multiAssetCustomerRepository,
+                                        EdgeNodeRepository edgeNodeRepository,
+                                        PspRepository pspRepository,
+                                        AssetAccountRepository assetAccountRepository,
+                                        MessageRepository messageRepository,
+                                        RuntimeErrorRepository runtimeErrorRepository,
+                                        RegulatorySubmissionRepository regulatorySubmissionRepository) {
         this.pspIsolationService = pspIsolationService;
         this.alertRepository = alertRepository;
         this.complianceCaseRepository = complianceCaseRepository;
@@ -88,6 +117,13 @@ public class ConsoleListExportQueryFacade {
         this.userRepository = userRepository;
         this.ruleDefinitionRepository = ruleDefinitionRepository;
         this.complianceLinksQueryService = complianceLinksQueryService;
+        this.multiAssetCustomerRepository = multiAssetCustomerRepository;
+        this.edgeNodeRepository = edgeNodeRepository;
+        this.pspRepository = pspRepository;
+        this.assetAccountRepository = assetAccountRepository;
+        this.messageRepository = messageRepository;
+        this.runtimeErrorRepository = runtimeErrorRepository;
+        this.regulatorySubmissionRepository = regulatorySubmissionRepository;
     }
 
     /** Returns how many primary rows match the export filters (used to choose sync vs async). */
@@ -104,6 +140,15 @@ public class ConsoleListExportQueryFacade {
             case USERS -> countUsers(filters);
             case RULES -> countRules(filters);
             case RECORD_DETAIL -> 1L;
+            case MONITORING_TRANSACTIONS -> transactionRepository.count(transactionSpec(filters));
+            case CUSTOMERS -> countCustomers(filters);
+            case EDGE_NODES -> countEdgeNodes(filters);
+            case PSPS -> countPsps(filters);
+            case KYC_DOCUMENTS -> merchantRepository.count(merchantSpec(filters));
+            case ASSET_ACCOUNTS -> countAssetAccounts(filters);
+            case MESSAGES -> countMessages(filters);
+            case RUNTIME_ERRORS -> countRuntimeErrors(filters);
+            case REGULATORY_SUBMISSIONS -> countRegulatorySubmissions(filters);
         };
     }
 
@@ -129,6 +174,17 @@ public class ConsoleListExportQueryFacade {
             case USERS -> mapUsers(fetchUserPage(filters, page, size));
             case RULES -> mapRules(fetchRulesPage(filters, page, size));
             case RECORD_DETAIL -> List.of();
+            case MONITORING_TRANSACTIONS -> mapTransactions(transactionRepository.findAll(transactionSpec(filters),
+                    PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "txnTs"))).getContent());
+            case CUSTOMERS -> mapCustomers(fetchCustomerPage(filters, page, size));
+            case EDGE_NODES -> mapEdgeNodes(fetchEdgeNodePage(filters, page, size));
+            case PSPS -> mapPsps(fetchPspPage(filters, page, size));
+            case KYC_DOCUMENTS -> mapMerchants(merchantRepository.findAll(merchantSpec(filters),
+                    PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent());
+            case ASSET_ACCOUNTS -> mapAssetAccounts(fetchAssetAccountPage(filters, page, size));
+            case MESSAGES -> mapMessages(fetchMessagePage(filters, page, size));
+            case RUNTIME_ERRORS -> mapRuntimeErrors(fetchRuntimeErrorPage(filters, page, size));
+            case REGULATORY_SUBMISSIONS -> mapRegulatorySubmissions(fetchRegulatorySubmissionPage(filters, page, size));
         };
         if (!includeCorrelated || rows.isEmpty()) {
             return rows;
@@ -165,6 +221,8 @@ public class ConsoleListExportQueryFacade {
                 case ALERTS -> complianceLinksQueryService.forAlert(longVal(row.get("alertId")));
                 case CASES -> complianceLinksQueryService.forCase(longVal(row.get("caseId")));
                 case SARS -> complianceLinksQueryService.forSar(longVal(row.get("sarId")));
+                case CHARGEBACKS -> complianceLinksQueryService.forDispute(longVal(row.get("disputeId")));
+                case CUSTOMERS -> complianceLinksQueryService.forCustomer(longVal(row.get("customerId")));
                 default -> null;
             };
         } catch (Exception ignored) {
@@ -202,9 +260,19 @@ public class ConsoleListExportQueryFacade {
 
     private Specification<Alert> alertSpec(Map<String, String> filters) {
         Specification<Alert> spec = Specification.where(null);
-        Long pspId = scopedPspId();
-        if (pspId != null && pspId > 0) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("pspId"), pspId));
+        if (pspIsolationService.isPlatformAdministrator()) {
+            // Super-admin exports are not PSP-scoped.
+        } else {
+            Long userPspId = pspIsolationService.getCurrentUserPspId();
+            spec = spec.and((root, query, cb) -> {
+                var subquery = query.subquery(Long.class);
+                var merchantRoot = subquery.from(Merchant.class);
+                subquery.select(merchantRoot.get("merchantId"))
+                        .where(cb.and(
+                                cb.equal(merchantRoot.get("merchantId"), root.get("merchantId")),
+                                cb.equal(merchantRoot.get("psp").get("pspId"), userPspId)));
+                return cb.or(cb.equal(root.get("pspId"), userPspId), cb.exists(subquery));
+            });
         }
         String status = filters.get("status");
         if (status != null && !status.isBlank()) {
@@ -245,6 +313,24 @@ public class ConsoleListExportQueryFacade {
         String status = filters.get("status");
         if (status != null && !status.isBlank()) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        String riskLevel = filters.get("riskLevel");
+        if (riskLevel != null && !riskLevel.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("riskLevel"), riskLevel));
+        }
+        String q = filters.get("q");
+        if (q == null || q.isBlank()) {
+            q = filters.get("search");
+        }
+        if (q != null && !q.isBlank()) {
+            String needle = "%" + q.trim().toLowerCase() + "%";
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("legalName")), needle),
+                    cb.like(cb.lower(root.get("tradingName")), needle)));
+        }
+        String kycStatus = filters.get("kycStatus");
+        if (kycStatus != null && !kycStatus.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("kycStatus"), kycStatus));
         }
         return spec;
     }
@@ -395,19 +481,36 @@ public class ConsoleListExportQueryFacade {
     }
 
     private long countChargebacks(Map<String, String> filters) {
+        return fetchChargebackPage(filters, 0, 1).isEmpty()
+                ? chargebackPageTotal(filters)
+                : chargebackPageTotal(filters);
+    }
+
+    /** Counts chargeback rows using the same paging repository methods as list export. */
+    private long chargebackPageTotal(Map<String, String> filters) {
+        Long merchantId = parseLongFilter(filters.get("merchantId"));
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"));
         Long pspId = scopedPspId();
+        if (merchantId != null) {
+            return chargebackDisputeRepository.findByMerchantId(merchantId, one).getTotalElements();
+        }
         if (pspId != null && pspId > 0) {
-            return chargebackDisputeRepository.findByPspIdOrderByCreatedAtDesc(pspId).size();
+            return chargebackDisputeRepository.findByPspId(pspId, one).getTotalElements();
         }
         return chargebackDisputeRepository.count();
     }
 
     private List<ChargebackDispute> fetchChargebackPage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Long merchantId = parseLongFilter(filters.get("merchantId"));
         Long pspId = scopedPspId();
-        List<ChargebackDispute> all = pspId != null && pspId > 0
-                ? chargebackDisputeRepository.findByPspIdOrderByCreatedAtDesc(pspId)
-                : chargebackDisputeRepository.findAll();
-        return all.stream().skip((long) page * size).limit(size).toList();
+        if (merchantId != null) {
+            return chargebackDisputeRepository.findByMerchantId(merchantId, pageable).getContent();
+        }
+        if (pspId != null && pspId > 0) {
+            return chargebackDisputeRepository.findByPspId(pspId, pageable).getContent();
+        }
+        return chargebackDisputeRepository.findAll(pageable).getContent();
     }
 
     private long countScreening(Map<String, String> filters) {
@@ -657,6 +760,317 @@ public class ConsoleListExportQueryFacade {
             row.put("priority", r.getPriority());
             row.put("pspId", r.getPspId());
             row.put("systemManaged", r.isSystemManaged());
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Counts multi-asset customers using the same search keys as Customer360 URL state. */
+    private long countCustomers(Map<String, String> filters) {
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "displayName"));
+        return customerPage(filters, one).getTotalElements();
+    }
+
+    /** Builds a customer page query with PSP isolation and optional display-name search. */
+    private Page<MultiAssetCustomer> customerPage(Map<String, String> filters, PageRequest pageable) {
+        Long pspId = scopedPspId();
+        String search = customerSearch(filters);
+        if (pspId != null && pspId > 0) {
+            if (search == null) {
+                return multiAssetCustomerRepository.findByPspId(pspId, pageable);
+            }
+            return multiAssetCustomerRepository.findByPspIdAndDisplayNameContainingIgnoreCase(pspId, search, pageable);
+        }
+        if (search == null) {
+            return multiAssetCustomerRepository.findAll(pageable);
+        }
+        return multiAssetCustomerRepository.findByDisplayNameContainingIgnoreCase(search, pageable);
+    }
+
+    /** Fetches one page of multi-asset customers for export. */
+    private List<MultiAssetCustomer> fetchCustomerPage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "displayName"));
+        return customerPage(filters, pageable).getContent();
+    }
+
+    /** Reads the customer search filter from Console URL keys. */
+    private static String customerSearch(Map<String, String> filters) {
+        String search = filters.get("search");
+        if (search == null || search.isBlank()) {
+            search = filters.get("q");
+        }
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+        return search.trim();
+    }
+
+    /** Counts edge nodes visible to the current PSP tenant. */
+    private long countEdgeNodes(Map<String, String> filters) {
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return edgeNodePage(filters, one).getTotalElements();
+    }
+
+    /** Fetches one page of edge node registry rows for export. */
+    private List<EdgeNode> fetchEdgeNodePage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return edgeNodePage(filters, pageable).getContent();
+    }
+
+    /** Resolves edge node listing with PSP isolation matching the Edge Nodes Console page. */
+    private Page<EdgeNode> edgeNodePage(Map<String, String> filters, PageRequest pageable) {
+        Long pspId = scopedPspId();
+        if (pspId != null && pspId > 0) {
+            List<EdgeNode> all = edgeNodeRepository.findByPspIdOrderByCreatedAtDesc(pspId);
+            return new org.springframework.data.domain.PageImpl<>(sliceList(all, pageable.getPageNumber(), pageable.getPageSize()),
+                    pageable, all.size());
+        }
+        List<EdgeNode> all = edgeNodeRepository.findAllByOrderByCreatedAtDesc();
+        return new org.springframework.data.domain.PageImpl<>(sliceList(all, pageable.getPageNumber(), pageable.getPageSize()),
+                pageable, all.size());
+    }
+
+    /** Counts PSP rows the caller is allowed to export. */
+    private long countPsps(Map<String, String> filters) {
+        return fetchPspPage(filters, 0, 1).isEmpty() ? pspPageTotal(filters) : pspPageTotal(filters);
+    }
+
+    /** Returns total PSP rows for export row-count estimation. */
+    private long pspPageTotal(Map<String, String> filters) {
+        Long pspId = scopedPspId();
+        if (pspId != null && pspId > 0) {
+            return pspRepository.existsById(pspId) ? 1 : 0;
+        }
+        return pspRepository.count();
+    }
+
+    /** Fetches one page of PSP configuration rows for export. */
+    private List<Psp> fetchPspPage(Map<String, String> filters, int page, int size) {
+        Long pspId = scopedPspId();
+        if (pspId != null && pspId > 0) {
+            return pspRepository.findById(pspId).map(List::of).orElse(List.of());
+        }
+        return sliceList(pspRepository.findAll(), page, size);
+    }
+
+    /** Counts asset accounts for the active PSP tenant or platform-wide for administrators. */
+    private long countAssetAccounts(Map<String, String> filters) {
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return assetAccountPage(filters, one).getTotalElements();
+    }
+
+    /** Fetches one page of asset accounts for export. */
+    private List<AssetAccount> fetchAssetAccountPage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return assetAccountPage(filters, pageable).getContent();
+    }
+
+    /** Resolves asset account paging with PSP isolation. */
+    private Page<AssetAccount> assetAccountPage(Map<String, String> filters, PageRequest pageable) {
+        Long pspId = scopedPspId();
+        if (pspId != null && pspId > 0) {
+            return assetAccountRepository.findByPspIdOrderByCreatedAtDesc(pspId, pageable);
+        }
+        return assetAccountRepository.findAllByOrderByCreatedAtDesc(pageable);
+    }
+
+    /** Counts in-app messages for the recipient encoded in export filters. */
+    private long countMessages(Map<String, String> filters) {
+        Long recipientUserId = parseLongFilter(filters.get("recipientUserId"));
+        if (recipientUserId == null) {
+            return 0;
+        }
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return messageRepository.findByRecipientUserIdOrderByCreatedAtDesc(recipientUserId, one).getTotalElements();
+    }
+
+    /** Fetches one page of messages for export for the authenticated recipient. */
+    private List<Message> fetchMessagePage(Map<String, String> filters, int page, int size) {
+        Long recipientUserId = parseLongFilter(filters.get("recipientUserId"));
+        if (recipientUserId == null) {
+            return List.of();
+        }
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return messageRepository.findByRecipientUserIdOrderByCreatedAtDesc(recipientUserId, pageable).getContent();
+    }
+
+    /** Counts runtime error rows with PSP isolation. */
+    private long countRuntimeErrors(Map<String, String> filters) {
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "occurredAt"));
+        return runtimeErrorPage(one).getTotalElements();
+    }
+
+    /** Fetches one page of runtime errors for export. */
+    private List<RuntimeError> fetchRuntimeErrorPage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "occurredAt"));
+        return runtimeErrorPage(pageable).getContent();
+    }
+
+    /** Resolves runtime error paging with PSP isolation. */
+    private Page<RuntimeError> runtimeErrorPage(PageRequest pageable) {
+        Long pspId = scopedPspId();
+        if (pspId != null && pspId > 0) {
+            return runtimeErrorRepository.findByPspIdOrderByOccurredAtDesc(pspId, pageable);
+        }
+        return runtimeErrorRepository.findAllByOrderByOccurredAtDesc(pageable);
+    }
+
+    /** Counts regulatory submission rows using Console URL filter keys. */
+    private long countRegulatorySubmissions(Map<String, String> filters) {
+        PageRequest one = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return regulatorySubmissionPage(filters, one).getTotalElements();
+    }
+
+    /** Fetches one page of regulatory submissions for export. */
+    private List<RegulatorySubmission> fetchRegulatorySubmissionPage(Map<String, String> filters, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return regulatorySubmissionPage(filters, pageable).getContent();
+    }
+
+    /** Resolves regulatory submission paging with PSP isolation and status/regulator filters. */
+    private Page<RegulatorySubmission> regulatorySubmissionPage(Map<String, String> filters, PageRequest pageable) {
+        Long pspId = scopedPspId();
+        Long filterPsp = pspId != null && pspId > 0 ? pspId : null;
+        SubmissionStatus status = parseSubmissionStatus(filters.get("status"));
+        String regulator = blankToNull(filters.get("regulator"));
+        return regulatorySubmissionRepository.findByFilters(filterPsp, status, regulator, null, null, pageable);
+    }
+
+    /** Parses a regulatory submission status filter safely. */
+    private static SubmissionStatus parseSubmissionStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return SubmissionStatus.valueOf(raw.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Treats blank filter strings as SQL NULL equivalents for optional query params. */
+    private static String blankToNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return raw.trim();
+    }
+
+    /** Maps multi-asset customers into export column rows. */
+    private List<Map<String, Object>> mapCustomers(List<MultiAssetCustomer> customers) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (MultiAssetCustomer c : customers) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "CUSTOMER:" + c.getId());
+            row.put("customerId", c.getId());
+            row.put("externalCustomerId", c.getExternalCustomerId());
+            row.put("displayName", c.getDisplayName());
+            row.put("customerType", c.getCustomerType());
+            row.put("riskTier", c.getRiskTier());
+            row.put("kycStatus", c.getKycStatus());
+            row.put("pspId", c.getPspId());
+            row.put("createdAt", c.getCreatedAt() != null ? ISO.format(c.getCreatedAt()) : "");
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps edge node registry rows into export column rows. */
+    private List<Map<String, Object>> mapEdgeNodes(List<EdgeNode> nodes) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (EdgeNode node : nodes) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "EDGE_NODE:" + node.getId());
+            row.put("edgeNodeId", node.getId());
+            row.put("edgeId", node.getEdgeId());
+            row.put("status", node.getStatus() != null ? node.getStatus().name() : "");
+            row.put("pspId", node.getPspId());
+            row.put("createdAt", node.getCreatedAt() != null ? node.getCreatedAt().toString() : "");
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps PSP rows into export column rows. */
+    private List<Map<String, Object>> mapPsps(List<Psp> psps) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Psp p : psps) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "PSP:" + p.getPspId());
+            row.put("pspId", p.getPspId());
+            row.put("pspCode", p.getPspCode());
+            row.put("legalName", p.getLegalName());
+            row.put("status", p.getStatus());
+            row.put("country", p.getCountry());
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps asset account rows into export column rows. */
+    private List<Map<String, Object>> mapAssetAccounts(List<AssetAccount> accounts) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (AssetAccount account : accounts) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "ASSET_ACCOUNT:" + account.getId());
+            row.put("accountId", account.getId());
+            row.put("customerId", account.getCustomer() != null ? account.getCustomer().getId() : null);
+            row.put("externalAccountId", account.getExternalAccountId());
+            row.put("assetClass", account.getAssetClass() != null ? account.getAssetClass().name() : "");
+            row.put("accountType", account.getAccountType() != null ? account.getAccountType().name() : "");
+            row.put("status", account.getStatus());
+            row.put("pspId", account.getPspId());
+            row.put("createdAt", account.getCreatedAt() != null ? ISO.format(account.getCreatedAt()) : "");
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps in-app messages into export column rows. */
+    private List<Map<String, Object>> mapMessages(List<Message> messages) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Message message : messages) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "MESSAGE:" + message.getId());
+            row.put("messageId", message.getId());
+            row.put("subject", message.getSubject());
+            row.put("category", message.getCategory() != null ? message.getCategory().name() : "");
+            row.put("readAt", message.getReadAt() != null ? ISO.format(message.getReadAt()) : "");
+            row.put("createdAt", message.getCreatedAt() != null ? ISO.format(message.getCreatedAt()) : "");
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps runtime error rows into export column rows. */
+    private List<Map<String, Object>> mapRuntimeErrors(List<RuntimeError> errors) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (RuntimeError error : errors) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "RUNTIME_ERROR:" + error.getId());
+            row.put("errorId", error.getId());
+            row.put("errorCode", error.getErrorCode());
+            row.put("message", error.getMessage());
+            row.put("pspId", error.getPspId());
+            row.put("occurredAt", error.getOccurredAt() != null ? ISO.format(error.getOccurredAt()) : "");
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Maps regulatory submission rows into export column rows. */
+    private List<Map<String, Object>> mapRegulatorySubmissions(List<RegulatorySubmission> submissions) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (RegulatorySubmission submission : submissions) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("exportKey", "REGULATORY_SUBMISSION:" + submission.getId());
+            row.put("submissionId", submission.getId());
+            row.put("submissionReference", submission.getSubmissionReference());
+            row.put("status", submission.getStatus() != null ? submission.getStatus().name() : "");
+            row.put("regulatorCode", submission.getRegulatorCode());
+            row.put("pspId", submission.getPspId());
+            row.put("filingDeadline", submission.getFilingDeadline() != null ? submission.getFilingDeadline().toString() : "");
+            row.put("createdAt", submission.getCreatedAt() != null ? ISO.format(submission.getCreatedAt()) : "");
             rows.add(row);
         }
         return rows;

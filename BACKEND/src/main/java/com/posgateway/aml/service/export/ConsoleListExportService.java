@@ -76,7 +76,8 @@ public class ConsoleListExportService {
      */
     public ResponseEntity<?> export(User user, ConsoleListExportRequestDto request, String clientIp) {
         assertCanExport(user, request.viewType());
-        Map<String, String> filters = request.filters() != null ? request.filters() : Map.of();
+        Map<String, String> filters = enrichExportFilters(user, request.viewType(),
+                request.filters() != null ? request.filters() : Map.of());
         String format = normalizeFormat(request.format());
         long totalRows = queryFacade.countRows(request.viewType(), filters);
 
@@ -209,6 +210,18 @@ public class ConsoleListExportService {
             return reportExportService.exportToPDF(all, title, meta);
         }
         return reportExportService.exportToXLSX(all, title);
+    }
+
+    /** Adds server-side filter keys that must not be supplied by the browser (e.g. message recipient). */
+    private Map<String, String> enrichExportFilters(User user,
+                                                    ConsoleListViewType viewType,
+                                                    Map<String, String> filters) {
+        if (viewType != ConsoleListViewType.MESSAGES || user == null) {
+            return filters;
+        }
+        Map<String, String> enriched = new LinkedHashMap<>(filters);
+        enriched.put("recipientUserId", String.valueOf(user.getId()));
+        return enriched;
     }
 
     /** Validates the caller holds permission to export the requested Console view. */

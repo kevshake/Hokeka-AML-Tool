@@ -257,7 +257,7 @@ export default function KycDocumentsPage() {
   const queryString = [
     `page=${tableState.page}`,
     `size=${tableState.size}`,
-    tableState.filters.search ? `search=${encodeURIComponent(tableState.filters.search)}` : "",
+    tableState.filters.search ? `q=${encodeURIComponent(tableState.filters.search)}` : "",
   ].filter(Boolean).join("&");
 
   const { data: merchantsPage, isLoading, isError } = useQuery<MerchantsPage>({
