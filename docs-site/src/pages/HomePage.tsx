@@ -28,6 +28,9 @@ export function HomePage() {
           <Link to="/catalog" className="btn btn-primary">
             Browse catalog
           </Link>
+          <Link to="/management-api" className="btn btn-secondary">
+            Management API
+          </Link>
         </div>
       </header>
 

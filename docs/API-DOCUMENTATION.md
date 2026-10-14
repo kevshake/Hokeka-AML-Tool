@@ -5,7 +5,9 @@
 The AML Fraud Detector exposes a comprehensive REST API documented using **SpringDoc OpenAPI 2** (Swagger UI).
 
 - **Swagger UI**: `http://localhost:2637/api/v1/swagger-ui.html`
-- **OpenAPI JSON**: `http://localhost:2637/api/v1/v3/api-docs`
+- **OpenAPI JSON (all groups)**: `http://localhost:2637/api/v1/api-docs`
+- **Management API OpenAPI**: `http://localhost:2637/api/v1/api-docs/management`
+- **Management API docs site**: `docs-site/` → `/management-api` (static reference generated from springdoc)
 
 ## Authentication
 

@@ -13,14 +13,15 @@ export function Layout() {
             <span className="brand-mark" aria-hidden="true" />
             <span>
               <strong>Hokeka AML</strong>
-              <small>Install Suite</small>
+              <small>Documentation</small>
             </span>
           </Link>
           <nav className="header-nav" aria-label="Primary">
             <NavLink to="/" end>
-              Overview
+              Install
             </NavLink>
             <NavLink to="/catalog">Catalog</NavLink>
+            <NavLink to="/management-api">Management API</NavLink>
           </nav>
           <SearchBar />
         </div>
