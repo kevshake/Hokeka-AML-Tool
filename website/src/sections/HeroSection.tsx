@@ -1,17 +1,22 @@
-import { lazy, Suspense } from 'react'
 import IconArrowRight from '../components/IconArrowRight'
 import IconShieldCheck from '../components/IconShieldCheck'
 import MagneticButton from '../components/MagneticButton'
+import { lazy, Suspense } from 'react'
+import { useAfterLcp } from '../hooks/useAfterLcp'
 
 const NetworkGraphHero = lazy(() => import('../components/NetworkGraphHero'))
 
-/** Hero with deferred network graph canvas, headline, and primary CTAs. */
+/** Hero with LCP-safe headline, poster background, and canvas mounted after LCP. */
 export default function HeroSection() {
+  const afterLcp = useAfterLcp()
+
   return (
-    <section className="hero hero-animated" id="home">
-      <Suspense fallback={null}>
-        <NetworkGraphHero />
-      </Suspense>
+    <section className="hero hero-animated hero-poster" id="home">
+      {afterLcp && (
+        <Suspense fallback={null}>
+          <NetworkGraphHero />
+        </Suspense>
+      )}
       <div className="container hero-content">
         <p className="eyebrow">Unified financial crime intelligence</p>
         <h1>Hokeka</h1>

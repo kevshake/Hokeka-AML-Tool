@@ -2,10 +2,7 @@ import { lazy, Suspense } from 'react'
 import Navbar from './components/Navbar'
 import Footer from './sections/Footer'
 import HeroSection from './sections/HeroSection'
-import ProofSection from './sections/ProofSection'
-import OfferSection from './sections/OfferSection'
 import ComplianceSection from './sections/ComplianceSection'
-import CtaSection from './sections/CtaSection'
 import { useLenisGsap } from './hooks/useLenisGsap'
 import { useViewTransitionNav } from './hooks/useViewTransitionNav'
 import { useDeferredSectionBackgrounds } from './hooks/useDeferredSectionBackgrounds'
@@ -17,6 +14,9 @@ const CommandSection = lazy(() => import('./sections/CommandSection'))
 const OperationsSection = lazy(() => import('./sections/OperationsSection'))
 const ArchitectureSection = lazy(() => import('./sections/ArchitectureSection'))
 const IntegrationsSection = lazy(() => import('./sections/IntegrationsSection'))
+const ProofSection = lazy(() => import('./sections/ProofSection'))
+const OfferSection = lazy(() => import('./sections/OfferSection'))
+const CtaSection = lazy(() => import('./sections/CtaSection'))
 
 /** Marketing site shell: preserves original IA with animated sections layered on top. */
 export default function App() {
@@ -29,15 +29,15 @@ export default function App() {
       <Navbar />
       <main>
         <HeroSection />
-        <ProofSection />
         <Suspense fallback={null}>
+          <ProofSection />
           <StatsSection />
         </Suspense>
         <Suspense fallback={null}>
           <ScrollStorySection />
         </Suspense>
-        <OfferSection />
         <Suspense fallback={null}>
+          <OfferSection />
           <BentoSection />
         </Suspense>
         <Suspense fallback={null}>
@@ -47,7 +47,9 @@ export default function App() {
           <IntegrationsSection />
         </Suspense>
         <ComplianceSection />
-        <CtaSection />
+        <Suspense fallback={null}>
+          <CtaSection />
+        </Suspense>
       </main>
       <Footer />
     </div>

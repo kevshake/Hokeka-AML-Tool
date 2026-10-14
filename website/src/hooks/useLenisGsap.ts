@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
 import { useReducedMotion } from './useReducedMotion'
+import { useAfterLcp } from './useAfterLcp'
 
-/** Wire Lenis smooth scroll to GSAP's ticker after idle (keeps first paint light). */
+/** Wire Lenis smooth scroll to GSAP's ticker after LCP and idle time. */
 export function useLenisGsap(): void {
   const reduced = useReducedMotion()
+  const afterLcp = useAfterLcp()
 
   useEffect(() => {
-    if (reduced) return
+    if (reduced || !afterLcp) return
 
     let cancelled = false
     /** Dynamically load scroll libraries so LCP stays text-first. */
@@ -54,5 +56,5 @@ export function useLenisGsap(): void {
       }
       cleanup?.()
     }
-  }, [reduced])
+  }, [reduced, afterLcp])
 }
