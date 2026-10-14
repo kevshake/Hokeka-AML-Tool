@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,6 +61,10 @@ class ManagementOpenApiExportIT {
         assertTrue(body.contains("\"openapi\""), "payload must be OpenAPI JSON");
         assertTrue(body.contains("\"\\/users\"") || body.contains("\"/users\""),
                 "management spec must include /users paths");
+        assertFalse(body.contains("/ai/engines"),
+                "exported management spec must omit operator-only AI admin paths");
+        assertFalse(body.contains("promptVersion"),
+                "exported management spec must omit AI internal fields");
 
         Files.createDirectories(OUTPUT.getParent());
         Files.writeString(OUTPUT, body, StandardCharsets.UTF_8);

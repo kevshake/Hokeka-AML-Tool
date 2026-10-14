@@ -12,6 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,5 +55,9 @@ class ManagementOpenApiSmokeIT {
         assertTrue(response.getStatusCode().is2xxSuccessful());
         assertNotNull(response.getBody());
         assertTrue(response.getBody().contains("/users"));
+        assertFalse(response.getBody().contains("/ai/engines"),
+                "public management spec must not document operator-only AI admin endpoints");
+        assertFalse(response.getBody().contains("promptVersion"),
+                "public management spec must not expose AI prompt version fields");
     }
 }

@@ -5,7 +5,7 @@
 
 ## API Reference
 
-- API Reference [Admin - List](/management-api/reference/status_3)
+- API Reference [Admin - List](/management-api/reference/status_2)
 - API Reference [Admin - Update](/management-api/reference/updateMode)
 - API Reference [Admin - Create](/management-api/reference/issue)
 - API Reference [Admin - List](/management-api/reference/list_17)
@@ -28,11 +28,6 @@
 - API Reference [Admin - Update](/management-api/reference/update_13)
 - API Reference [Admin - Delete](/management-api/reference/deactivate_1)
 - API Reference [Admin - List](/management-api/reference/list_14)
-- API Reference [Ai - List](/management-api/reference/engines)
-- API Reference [Ai - Update](/management-api/reference/updateEngine)
-- API Reference [Ai - Get](/management-api/reference/pspAiSettings)
-- API Reference [Ai - Update](/management-api/reference/updatePspAiSettings)
-- API Reference [Ai - List](/management-api/reference/status_2)
 - API Reference [Audit - List](/management-api/reference/getAllAuditLogs)
 - API Reference [Audit - List](/management-api/reference/byEntity)
 - API Reference [Audit - List](/management-api/reference/byRange)

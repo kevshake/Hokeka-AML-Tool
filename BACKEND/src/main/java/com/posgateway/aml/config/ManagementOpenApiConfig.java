@@ -1,5 +1,6 @@
 package com.posgateway.aml.config;
 
+import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
@@ -50,20 +51,20 @@ public class ManagementOpenApiConfig {
             "/rules/**",
             "/audit/logs/**",
             "/console/exports/**",
-            "/settings/**",
-            "/ai/status",
-            "/ai/engines",
-            "/ai/engines/**",
-            "/ai/psps/**"
+            "/settings/**"
     };
 
-    /** Self-service profile, PSP machine login, and investigation-only AI audit paths. */
+    /** Self-service profile, PSP machine login, and operator-only AI admin / investigation paths. */
     static final String[] MANAGEMENT_PATH_EXCLUSIONS = {
             "/users/me",
             "/users/me/**",
             "/psps/auth/**",
-            "/ai/audit/**"
+            "/ai/**"
     };
+
+    /** Spring MVC package excluded from the public Management OpenAPI group (operator-only AI admin). */
+    static final String MANAGEMENT_PACKAGES_TO_EXCLUDE =
+            "com.posgateway.aml.controller.ai";
 
     @Value("${server.servlet.context-path:/api/v1}")
     private String contextPath;
@@ -78,6 +79,7 @@ public class ManagementOpenApiConfig {
     public GroupedOpenApi managementOpenApi() {
         return GroupedOpenApi.builder()
                 .group("management")
+                .packagesToExclude(MANAGEMENT_PACKAGES_TO_EXCLUDE)
                 .pathsToMatch(MANAGEMENT_PATH_PREFIXES)
                 .pathsToExclude(MANAGEMENT_PATH_EXCLUSIONS)
                 .addOpenApiCustomizer(openApi -> {
@@ -127,6 +129,7 @@ public class ManagementOpenApiConfig {
                         openApi.getPaths().entrySet().removeIf(entry ->
                                 !ManagementPathRules.isDocumentedManagementPath(entry.getKey()));
                     }
+                    ManagementPublicSpecSanitizer.removeOperatorOnlyAiSurfaces(openApi);
                 })
                 .addOperationCustomizer(managementOperationCustomizer())
                 .build();
@@ -160,7 +163,7 @@ public class ManagementOpenApiConfig {
         }
 
         /** Minimal ant matcher supporting {@code *} (one segment) and {@code **} (suffix). */
-        private static boolean matchesAnt(String path, String pattern) {
+        static boolean matchesAnt(String path, String pattern) {
             if (pattern.endsWith("/**")) {
                 String prefix = pattern.substring(0, pattern.length() - 3);
                 return path.equals(prefix) || path.startsWith(prefix + "/");
@@ -284,7 +287,6 @@ public class ManagementOpenApiConfig {
             RESOURCE_TITLES.put("psp-api-keys", "PSP API key");
             RESOURCE_TITLES.put("decision-orchestrator", "Decision orchestrator");
             RESOURCE_TITLES.put("permissions", "Permission");
-            RESOURCE_TITLES.put("engines", "Hokeka AI engine");
         }
 
         private ManagementApiPathSupport() {
@@ -338,6 +340,84 @@ public class ManagementOpenApiConfig {
                 return m.value()[0];
             }
             return null;
+        }
+    }
+
+    /**
+     * Strips operator-only Hokeka AI admin paths and internal AI schema fields from the PSP-visible
+     * Management API OpenAPI document (doc.hokeka.com).
+     */
+    static final class ManagementPublicSpecSanitizer {
+
+        private static final String[] FORBIDDEN_PATH_PREFIXES = {
+                "/ai/engines",
+                "/ai/psps",
+                "/ai/status"
+        };
+
+        private static final String[] FORBIDDEN_SCHEMA_NAMES = {
+                "AiEngineSetting"
+        };
+
+        private static final String[] FORBIDDEN_PROPERTY_NAMES = {
+                "promptVersion",
+                "modelId",
+                "aiProvider",
+                "tokenCount",
+                "inputTokens",
+                "outputTokens",
+                "aiCostUsd"
+        };
+
+        private ManagementPublicSpecSanitizer() {
+        }
+
+        /** Removes {@code /ai/**} admin operations and schemas that expose AI operator internals. */
+        static void removeOperatorOnlyAiSurfaces(OpenAPI openApi) {
+            if (openApi.getPaths() != null) {
+                openApi.getPaths().entrySet().removeIf(entry ->
+                        isForbiddenPublicManagementPath(entry.getKey()));
+            }
+            if (openApi.getComponents() == null || openApi.getComponents().getSchemas() == null) {
+                return;
+            }
+            var schemas = openApi.getComponents().getSchemas();
+            for (String forbidden : FORBIDDEN_SCHEMA_NAMES) {
+                schemas.remove(forbidden);
+            }
+            schemas.entrySet().removeIf(entry ->
+                    schemaExposesForbiddenAiInternals(entry.getKey(), entry.getValue()));
+        }
+
+        /** Returns true when a servlet path must not appear on the public Management API docs site. */
+        static boolean isForbiddenPublicManagementPath(String servletPath) {
+            if (servletPath == null || servletPath.isBlank()) {
+                return false;
+            }
+            String path = servletPath.startsWith("/") ? servletPath : "/" + servletPath;
+            if (ManagementPathRules.matchesAnt(path, "/ai/**")) {
+                return true;
+            }
+            for (String prefix : FORBIDDEN_PATH_PREFIXES) {
+                if (path.equals(prefix) || path.startsWith(prefix + "/")) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Returns true when a component schema name or property list exposes AI operator internals. */
+        private static boolean schemaExposesForbiddenAiInternals(String schemaName, Object schema) {
+            if (schemaName != null && schemaName.startsWith("AiEngine")) {
+                return true;
+            }
+            String serialized = String.valueOf(schema);
+            for (String property : FORBIDDEN_PROPERTY_NAMES) {
+                if (serialized.contains("\"" + property + "\"")) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
