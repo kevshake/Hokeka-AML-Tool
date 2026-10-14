@@ -62,6 +62,7 @@ public class PspActivationFilter extends OncePerRequestFilter {
             "/pricing/**",
             "/merchants/onboard",
             "/merchants/health",
+            "/public/website/**",
             "/actuator/**",
             "/error",
             // Machine-to-machine edge endpoints: no user session, authenticated by mTLS +

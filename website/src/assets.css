@@ -1,2 +1,18 @@
-.hero { background-image: url('/hero-financial-district.jpg'); }
-.cta { background-image: url('/cta-architecture.jpg'); }
+.hero {
+  background-color: var(--bg);
+}
+.hero.hero-bg-ready {
+  background-image: linear-gradient(180deg, rgb(8 9 9 / 0.72), rgb(8 9 9 / 0.88)),
+    url('/hero-financial-district.webp');
+  background-size: cover;
+  background-position: center;
+}
+.cta {
+  background-color: var(--bg);
+}
+.cta.cta-bg-ready {
+  background-image: linear-gradient(180deg, rgb(8 9 9 / 0.85), rgb(8 9 9 / 0.78)),
+    url('/cta-architecture.jpg');
+  background-size: cover;
+  background-position: center;
+}
