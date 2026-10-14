@@ -22,6 +22,6 @@ mvn test -Dtest=ManagementOpenApiExportIT -DfailIfNoSpecifiedTests=false
 
 ## Scope
 
-Documented paths include users, roles, permissions, PSPs, platform admin (`/admin/**`), edge nodes, webhooks, rules, audit logs, console export jobs, settings, and Hokeka AI operator settings. Transaction ingest, screening, cases, and alerts are **not** part of the Management API (see PSP integration guide).
+Documented paths include users, roles, permissions, PSPs, platform admin (`/admin/**`), edge nodes, webhooks, rules, audit logs, console export jobs, and settings. Operator-only Hokeka AI admin (`/ai/**` engine and PSP AI settings) is **excluded** from the public Management OpenAPI export (Console-only). Transaction ingest, screening, cases, and alerts are **not** part of the Management API (see PSP integration guide).
 
 Role matrix: [CONSOLE_ROLE_MATRIX.md](../CONSOLE_ROLE_MATRIX.md).
