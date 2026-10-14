@@ -17,7 +17,7 @@ export default function Navbar() {
     <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="container nav-inner">
         <a className="brand" href="#home">
-          <img src="/hokeka-logo.png" alt="Hokeka" />
+          <img src="/hokeka-logo.png" alt="Hokeka" width="34" height="34" decoding="async" fetchPriority="low" />
           <span>Hokeka</span>
         </a>
         <nav className={`nav-links ${open ? 'open' : ''}`} onClick={() => setOpen(false)}>
