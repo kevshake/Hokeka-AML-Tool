@@ -39,6 +39,9 @@ jobs:
       - name: Test
         working-directory: BACKEND
         run: mvn -B --no-transfer-progress test
+      - name: Management OpenAPI smoke (springdoc group)
+        working-directory: BACKEND
+        run: mvn -B --no-transfer-progress test -Dtest=ManagementOpenApiSmokeIT -DfailIfNoSpecifiedTests=false
       - name: Publish test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -286,9 +289,36 @@ jobs:
   docs-site:
     name: Install docs site
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: hokeka_mgmt_openapi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d hokeka_mgmt_openapi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - name: Export Management OpenAPI (springdoc)
+        working-directory: BACKEND
+        env:
+          MANAGEMENT_OPENAPI_EXPORT: "true"
+          DATABASE_URL: jdbc:postgresql://localhost:5432/hokeka_mgmt_openapi
+          DATABASE_USERNAME: test
+          DATABASE_PASSWORD: test
+        run: mvn -B --no-transfer-progress test -Dtest=ManagementOpenApiExportIT -DfailIfNoSpecifiedTests=false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
