@@ -4,4 +4,5 @@ import App from './App'
 import './index.css'
 import './assets.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
+/** Mount the marketing SPA (StrictMode disabled to avoid double effect work in dev perf runs). */
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />)
