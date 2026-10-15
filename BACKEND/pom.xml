@@ -25,6 +25,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <org.mapstruct.version>1.5.5.Final</org.mapstruct.version>
         <opentelemetry.version>1.44.1</opentelemetry.version>
+        <!-- Docker Engine 29+ needs Testcontainers >= 1.21 (Npipe/API 400 on 1.19.x). -->
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencies>

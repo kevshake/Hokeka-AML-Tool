@@ -243,11 +243,13 @@ jobs:
         run: >
           mvn -B --no-transfer-progress test
           -Dtest=DecisionOrchestratorModeServiceTest,DecisionOrchestratorAdminControllerTest,OpenSanctionsSampleLoadTest
-      - name: Flyway fresh DB + Kafka/Neo4j containers
+      - name: Flyway fresh DB + Kafka/Neo4j containers + keyset benchmark
         working-directory: BACKEND
         run: >
           mvn -B --no-transfer-progress test
-          -Dtest=FlywayFreshDatabaseIntegrationTest,KafkaNeo4jContainerSmokeTest
+          -Dtest=FlywayFreshDatabaseIntegrationTest,KafkaNeo4jContainerSmokeTest,ConsoleListKeysetBenchmarkIT
+      - name: Fail if Docker ITs skipped (Testcontainers regression guard)
+        run: node scripts/assert-docker-integration-tests.mjs BACKEND/target/surefire-reports
       - name: Live smoke script syntax
         run: |
           set -euo pipefail
@@ -256,6 +258,24 @@ jobs:
           node --check scripts/live-full-compliance-chain-smoke.mjs
           node --check scripts/live-api-closure-smoke.mjs
           bash -n scripts/edge-runtime-smoke.sh
+
+  docker-compose-prod-images:
+    name: docker-compose.prod.yml image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all production compose images
+        env:
+          DATABASE_USERNAME: ci_user
+          DATABASE_PASSWORD: ci_pass
+          NEO4J_PASSWORD: ci_neo4j_pass
+          AUDIT_HMAC_KEY: ci-audit-hmac-key-0123456789abcdef
+          PII_LOOKUP_HMAC_KEY: ci-pii-hmac-key-0123456789abcdef
+          AML_MS_INTERNAL_KEY: ci-aml-ms-internal-key
+          ENCRYPTION_KEY: ci-encryption-key-0123456789ab
+          JWT_SECRET: ci-jwt-secret-0123456789abcdef0123456789ab
+        run: docker compose -f docker-compose.prod.yml build
 
   frontend:
     name: Dashboard (FRONTEND)
