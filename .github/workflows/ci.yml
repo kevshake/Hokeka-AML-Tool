@@ -369,6 +369,80 @@ jobs:
         working-directory: website
         run: npm run build
 
+  hokeka-install-bootstrap:
+    name: First-run bootstrap (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: ubuntu-22.04
+            image: ubuntu:22.04
+            setup: apt-get update && apt-get install -y sudo bash curl ca-certificates python3 procps git
+          - label: ubuntu-24.04
+            image: ubuntu:24.04
+            setup: apt-get update && apt-get install -y sudo bash curl ca-certificates python3 procps git
+          - label: rockylinux-9
+            image: rockylinux:9
+            setup: dnf install -y sudo procps-ng git
+    container:
+      image: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare OS tools
+        run: ${{ matrix.setup }}
+      - name: Shell syntax (hokeka-install tree)
+        run: |
+          set -euo pipefail
+          chmod +x scripts/install/hokeka-install.sh
+          bash -n scripts/install/hokeka-install.sh
+          for f in scripts/install/lib/*.sh scripts/install/roles/*.sh; do bash -n "$f"; done
+      - name: --check edge role (reports missing Docker on clean image)
+        run: |
+          set +e
+          ./scripts/install/hokeka-install.sh --role edge --check 2>&1 | tee /tmp/check-edge.log
+          code=$?
+          set -e
+          grep -qi docker /tmp/check-edge.log || { echo "::error::edge --check did not mention docker"; exit 1; }
+          echo "edge --check exit code: $code (non-zero expected without Docker)"
+      - name: --check control-plane role
+        run: |
+          set +e
+          ./scripts/install/hokeka-install.sh --role control-plane --check 2>&1 | tee /tmp/check-cp.log
+          code=$?
+          set -e
+          grep -qi docker /tmp/check-cp.log || { echo "::error::control-plane --check did not mention docker"; exit 1; }
+          echo "control-plane --check exit code: $code"
+
+  hokeka-install-windows:
+    name: First-run bootstrap (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          foreach ($path in @(
+            'scripts/install/hokeka-install.ps1',
+            'scripts/install/lib/Common.ps1'
+          )) {
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path), [ref]$null, [ref]$errors)
+            if ($errors) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
+          }
+          Write-Host 'hokeka-install.ps1: SYNTAX OK'
+      - name: -Check edge role
+        shell: pwsh
+        run: |
+          & ./scripts/install/hokeka-install.ps1 -Role edge -Check
+          if ($LASTEXITCODE -ne 0) { throw "edge -Check failed with exit code $LASTEXITCODE" }
+
   deploy-scripts:
     name: Edge installer scripts
     runs-on: ubuntu-latest

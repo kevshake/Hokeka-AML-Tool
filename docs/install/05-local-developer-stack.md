@@ -31,6 +31,14 @@ Edge Node (`edge-host/`) is optional for edge-specific work — see [01 — Clie
 | **Docker** + Compose v2 | current | Postgres and optional infra |
 | **Rust toolchain** | stable | Only if building `edge-engine` / JNI locally |
 
+**Automated bootstrap (fresh laptop):**
+
+```bash
+sudo ./scripts/install/hokeka-install.sh --role console --yes
+```
+
+See [07 — First-run bootstrap](07-first-run-bootstrap.md).
+
 ---
 
 ## Step 1 — Infrastructure (Postgres minimum)
