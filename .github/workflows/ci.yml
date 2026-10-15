@@ -385,7 +385,7 @@ jobs:
             setup: apt-get update && apt-get install -y sudo bash curl ca-certificates python3 procps git
           - label: rockylinux-9
             image: rockylinux:9
-            setup: dnf install -y sudo bash curl python3 procps-ng git
+            setup: dnf install -y sudo procps-ng git
     container:
       image: ${{ matrix.image }}
     defaults:
@@ -440,9 +440,8 @@ jobs:
       - name: -Check edge role
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-          & ./scripts/install/hokeka-install.ps1 -Role edge -Check 2>&1 | Tee-Object -Variable out
-          if ($out -notmatch 'docker') { throw 'edge -Check did not mention docker' }
+          & ./scripts/install/hokeka-install.ps1 -Role edge -Check
+          if ($LASTEXITCODE -ne 0) { throw "edge -Check failed with exit code $LASTEXITCODE" }
 
   deploy-scripts:
     name: Edge installer scripts
