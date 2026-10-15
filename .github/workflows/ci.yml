@@ -388,6 +388,9 @@ jobs:
             setup: dnf install -y sudo bash curl python3 procps-ng git
     container:
       image: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Prepare OS tools
