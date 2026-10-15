@@ -291,8 +291,8 @@ services:
   # Marketing Website (Production - Public)
   website-prod:
     build:
-      context: ./website
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: website/Dockerfile
     container_name: hokeka-website
     environment:
       NODE_ENV: production
