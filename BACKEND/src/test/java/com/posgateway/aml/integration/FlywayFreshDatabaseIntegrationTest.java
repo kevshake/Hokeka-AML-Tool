@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Applies the full Flyway history on an empty Postgres instance (fresh install path).
  */
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class FlywayFreshDatabaseIntegrationTest {
 
     @Container

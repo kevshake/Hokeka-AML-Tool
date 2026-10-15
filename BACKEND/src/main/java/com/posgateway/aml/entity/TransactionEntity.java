@@ -154,12 +154,14 @@ public class TransactionEntity {
     @Column(name = "customer_email", columnDefinition = "TEXT")
     private String customerEmail;
 
+    /** Initializes audit timestamps and legacy-column bridge defaults before insert. */
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         if (txnTs == null) {
             txnTs = LocalDateTime.now();
         }
+        TransactionLegacyColumnBridge.applyBeforePersist(this);
     }
 
     // Getters and Setters

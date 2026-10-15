@@ -10,7 +10,7 @@ Edge nodes, and correlated compliance data. Canonical install facts remain in
 |------|--------|
 | VPS | Docker Engine + Compose v2, ports 80/443, `/opt/aml-fraud-detector` |
 | Secrets | `.env` per `docs/INSTALL.md` §1.3 (`DATABASE_*`, `NEO4J_PASSWORD`, `JWT_SECRET`, …) |
-| Flyway | Latest migration on main (currently `V243__*` — confirm with `ls BACKEND/src/main/resources/db/migration/V*.sql \| sort -V \| tail -1`) |
+| Flyway | Latest migration on main (currently `V245__*` — confirm with `ls BACKEND/src/main/resources/db/migration/V*.sql \| sort -V \| tail -1`) |
 | AML internal key | `AML_MS_INTERNAL_KEY` identical on `backend-prod` and `aml-ms-prod` |
 | Sanctions (prod) | `sanctions.download.enabled=true` and `sanctions.opensanctions.url` set |
 
@@ -89,12 +89,28 @@ Personas: `docs/CONSOLE_ROLE_MATRIX.md`. Demo passwords: `V127__seed_demo_accoun
 
 Infra: `infra/docker-compose.infrastructure.yml` or `docker-compose.prod.yml` services.
 
-Automated container smoke:
+Automated container smoke (Docker required; CI fails if these skip while Docker is present):
 
 ```bash
 cd BACKEND
-mvn -q test -Dtest=KafkaNeo4jContainerSmokeTest
+mvn -q test -Dtest=KafkaNeo4jContainerSmokeTest,ConsoleListKeysetBenchmarkIT
+node ../scripts/assert-docker-integration-tests.mjs target/surefire-reports
 ```
+
+Console list keyset benchmark prints `BENCHMARK alerts|transactions|audit` lines (counts + timings) to
+Surefire stdout for regression tracking.
+
+## 7b. Production Docker images
+
+CI builds every service declared in `docker-compose.prod.yml`:
+
+```bash
+docker compose -f docker-compose.prod.yml build
+```
+
+The AML microservice image is multi-stage (`aml-microservice/Dockerfile`): it runs `mvn install` on
+`aeroorm-java` and `mvn package` on `aml-microservice` inside the build — no pre-built JAR on the host
+is required. The Console image uses repository root context so `design-tokens/` is available to Vite.
 
 ## 8. OpenSanctions
 

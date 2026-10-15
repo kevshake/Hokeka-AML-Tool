@@ -28,9 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Proves Kafka produce/consume and Neo4j Cypher against real containers (docker-compose parity).
- * Skipped automatically when Docker is unavailable ({@code disabledWithoutDocker = true}).
+ * Requires Docker; CI fails via {@code scripts/assert-docker-integration-tests.mjs} if this class skips.
  */
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class KafkaNeo4jContainerSmokeTest {
 
     @Container
