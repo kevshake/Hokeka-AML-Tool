@@ -8,7 +8,7 @@ Edge nodes, and correlated compliance data. Canonical install facts remain in
 
 | Item | Check |
 |------|--------|
-| VPS | Docker Engine + Compose v2, ports 80/443, `/opt/aml-fraud-detector` |
+| VPS | Docker Engine + Compose v2, ports 80/443, `/opt/aml-fraud-detector` — or run `sudo ./scripts/install/hokeka-install.sh --role control-plane --yes` on a fresh Linux host ([`docs/install/07-first-run-bootstrap.md`](../install/07-first-run-bootstrap.md)) |
 | Secrets | `.env` per `docs/INSTALL.md` §1.3 (`DATABASE_*`, `NEO4J_PASSWORD`, `JWT_SECRET`, …) |
 | Flyway | Latest migration on main (currently `V245__*` — confirm with `ls BACKEND/src/main/resources/db/migration/V*.sql \| sort -V \| tail -1`) |
 | AML internal key | `AML_MS_INTERNAL_KEY` identical on `backend-prod` and `aml-ms-prod` |

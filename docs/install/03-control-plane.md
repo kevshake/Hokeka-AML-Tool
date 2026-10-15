@@ -22,7 +22,18 @@
 
 ---
 
-## Step 1 — Bootstrap server (optional script)
+## Step 1 — Bootstrap server
+
+**Recommended (on the VPS, idempotent):**
+
+```bash
+cd /opt/aml-fraud-detector   # or your git clone
+sudo ./scripts/install/hokeka-install.sh --role control-plane --yes
+```
+
+This installs Docker + Compose v2, Node LTS, git, generates `/opt/aml-fraud-detector/.env` with strong secrets (values are never printed), starts `docker-compose.prod.yml`, enables `hokeka-control-plane.service`, and checks `http://127.0.0.1:2637/actuator/health`. Details: [07 — First-run bootstrap](07-first-run-bootstrap.md).
+
+**Optional (from your laptop — rsync only):**
 
 ```bash
 ./deploy-to-hostinger.sh <VPS_IP> <SSH_USER> <SSH_KEY_PATH>

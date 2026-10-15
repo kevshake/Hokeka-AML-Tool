@@ -37,6 +37,8 @@ Follow these in order for a **new PSP go-live**:
 | 4 | [01 — Client Edge Node](01-client-edge-node.md) | PSP installs on-prem evaluation node; enroll from Console |
 | 5 | [06 — PSP API dual-post](06-psp-api-dual-post-integration.md) | PSP wires API nodes: pre-auth edge + post-auth cloud ingest |
 
+**Fresh OS?** Run [07 — First-run bootstrap](07-first-run-bootstrap.md) (`scripts/install/hokeka-install.sh` / `hokeka-install.ps1`) before the role-specific steps above.
+
 For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-developer-stack.md) instead of steps 1–2 on a laptop.
 
 ---
@@ -51,6 +53,7 @@ For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-d
 | [04-packages-cdn-and-edge-release.md](04-packages-cdn-and-edge-release.md) | Hokeka release ops | packages.hokeka.com layout, GPG signing, GitHub release workflow |
 | [05-local-developer-stack.md](05-local-developer-stack.md) | Hokeka engineers | Java 21, Postgres, BACKEND dev profile, FRONTEND Vite |
 | [06-psp-api-dual-post-integration.md](06-psp-api-dual-post-integration.md) | PSP integration | Wire evaluate + ingest; webhooks; enrollment from Console |
+| [07-first-run-bootstrap.md](07-first-run-bootstrap.md) | All installers | Idempotent OS bootstrap: Docker, Java/Node/Rust, `.env`, systemd; delegates to Edge/Compose |
 
 ---
 
