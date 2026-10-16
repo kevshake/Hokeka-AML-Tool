@@ -228,6 +228,7 @@ public class CaseCreationService {
             cCase.setCreatedAt(LocalDateTime.now());
             cCase.setDescription("Auto-generated case from " + alertType);
             cCase.setAlerts(new ArrayList<>());
+            cCase.setSuspicionFormedAt(LocalDateTime.now());
             logger.info("Creating new case {} for alert {}", cCase.getCaseReference(), alertType);
         }
 

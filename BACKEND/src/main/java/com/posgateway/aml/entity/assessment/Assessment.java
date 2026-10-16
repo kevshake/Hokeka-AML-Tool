@@ -37,7 +37,7 @@ public class Assessment {
     private UUID parentAssessmentId;
 
     @Column(name = "edge_assessment_id")
-    private UUID edgeAssessmentId;
+    private String edgeAssessmentId;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "versions", columnDefinition = "jsonb")
@@ -113,11 +113,13 @@ public class Assessment {
         this.parentAssessmentId = parentAssessmentId;
     }
 
-    public UUID getEdgeAssessmentId() {
+    /** Returns the edge node's opaque assessment identifier. */
+    public String getEdgeAssessmentId() {
         return edgeAssessmentId;
     }
 
-    public void setEdgeAssessmentId(UUID edgeAssessmentId) {
+    /** Associates this control-plane assessment with an opaque edge assessment identifier. */
+    public void setEdgeAssessmentId(String edgeAssessmentId) {
         this.edgeAssessmentId = edgeAssessmentId;
     }
 

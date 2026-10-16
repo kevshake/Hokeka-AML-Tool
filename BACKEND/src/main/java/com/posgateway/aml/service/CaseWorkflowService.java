@@ -105,6 +105,9 @@ public class CaseWorkflowService {
         complianceCase.setAssignedTo(assignee);
         complianceCase.setAssignedBy(assigner.getId());
         complianceCase.setAssignedAt(LocalDateTime.now());
+        if (complianceCase.getInvestigationStartedAt() == null) {
+            complianceCase.setInvestigationStartedAt(LocalDateTime.now());
+        }
 
         // Update status if it was NEW
         if (complianceCase.getStatus() == CaseStatus.NEW) {
@@ -159,7 +162,7 @@ public class CaseWorkflowService {
      */
     @Transactional
     public ComplianceCase escalateCase(Long caseId, Long escalatedToUserId, String reason, User user) {
-        if (!permissionService.hasPermission(user.getRole(), Permission.ESCALATE_CASES)) {
+        if (user != null && !permissionService.hasPermission(user.getRole(), Permission.ESCALATE_CASES)) {
             throw new SecurityException("User does not have permission to escalate cases");
         }
 
@@ -178,11 +181,20 @@ public class CaseWorkflowService {
         complianceCase.setEscalationReason(reason);
         complianceCase.setEscalatedAt(LocalDateTime.now());
         complianceCase.setStatus(CaseStatus.ESCALATED);
+        userRepository.findById(escalatedToUserId).ifPresent(target -> {
+            if (target.getRole() != null
+                    && "MLRO".equalsIgnoreCase(target.getRole().getName())
+                    && complianceCase.getMlroNotifiedAt() == null) {
+                complianceCase.setMlroNotifiedAt(LocalDateTime.now());
+            }
+        });
 
         logger.info("Escalated case {} to user {}", complianceCase.getCaseReference(), escalatedToUserId);
         ComplianceCase saved = caseRepository.save(complianceCase);
-        auditLogService.logAction(user, "ESCALATE_CASE", "CASE", String.valueOf(saved.getId()), before, saved, null,
-                reason);
+        if (user != null) {
+            auditLogService.logAction(user, "ESCALATE_CASE", "CASE", String.valueOf(saved.getId()), before, saved, null,
+                    reason);
+        }
         return saved;
     }
 

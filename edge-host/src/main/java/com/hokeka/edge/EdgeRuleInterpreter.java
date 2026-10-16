@@ -18,13 +18,20 @@ import java.util.Map;
 public final class EdgeRuleInterpreter {
 
     public enum Action {
-        ALLOW(0), ALERT(1), HOLD(2), BLOCK(3);
+        ALLOW(0), ALERT(1), FLAG(2), HOLD(3), SUSPEND(4), BLOCK(5);
         final int severity;
         Action(int s) { this.severity = s; }
         Action max(Action other) { return other.severity > this.severity ? other : this; }
     }
 
-    public record Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons) {}
+    /** Evaluation result including the version ids parallel to triggered rule ids. */
+    public record Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons,
+                           List<Long> triggeredRuleVersionIds) {
+        public Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons) {
+            // Keeps older callers compatible when no rule-version provenance is available.
+            this(action, score, triggeredRuleIds, reasons, List.of());
+        }
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
     private volatile JsonNode bundle;
@@ -213,6 +220,7 @@ public final class EdgeRuleInterpreter {
         return bundle != null;
     }
 
+    /** Evaluates every loaded rule and returns action, score, reasons, and rule-version provenance. */
     public Decision evaluate(Map<String, Object> features) {
         JsonNode b = this.bundle;
         if (b == null) {
@@ -222,17 +230,64 @@ public final class EdgeRuleInterpreter {
         Action action = Action.ALLOW;
         int score = 0;
         List<Long> triggered = new ArrayList<>();
+        List<Long> versions = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
         for (JsonNode rule : b.path("rules")) {
             if (evalCondition(rule.get("condition"), features)) {
                 action = action.max(Action.valueOf(rule.path("action").asText("ALLOW")));
                 score += rule.path("score").asInt(0);
                 triggered.add(rule.path("id").asLong());
+                versions.add(rule.hasNonNull("rule_version_id") ? rule.path("rule_version_id").asLong() : null);
                 String desc = rule.path("description").asText(null);
                 reasons.add(desc != null && !desc.isEmpty() ? desc : rule.path("name").asText(""));
             }
         }
-        return new Decision(action, score, triggered, reasons);
+        return new Decision(action, score, triggered, reasons, versions);
+    }
+
+    /**
+     * Content hash of the loaded bundle's rule-version manifest, using the same canonical form as
+     * {@code EdgeRuleCompiler.manifestHash}. A declared {@code manifest_hash} is returned only when
+     * it matches that form.
+     */
+    public String manifestHash() {
+        JsonNode b = this.bundle;
+        if (b == null) {
+            return "";
+        }
+        String computed = manifestHash(b.path("rules"));
+        String declared = b.path("manifest_hash").asText("");
+        if (!declared.isEmpty() && declared.equals(computed)) {
+            return declared;
+        }
+        return computed;
+    }
+
+    /** Computes the canonical rule-id/rule-version manifest hash for a rules array. */
+    public static String manifestHash(JsonNode rules) {
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        if (rules != null && rules.isArray()) {
+            java.util.List<JsonNode> ordered = new java.util.ArrayList<>();
+            rules.forEach(ordered::add);
+            ordered.sort(java.util.Comparator.comparingLong(r -> r.path("id").asLong()));
+            for (JsonNode rule : ordered) {
+                String version = rule.hasNonNull("rule_version_id")
+                        ? Long.toString(rule.path("rule_version_id").asLong()) : "";
+                lines.add(rule.path("id").asLong() + ":" + version);
+            }
+        }
+        return sha256(String.join("\n", lines));
+    }
+
+    /** Prefixes the SHA-256 digest using the hash identifier carried in bundle JSON. */
+    private static String sha256(String canonical) {
+        try {
+            byte[] dig = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "sha256:" + java.util.HexFormat.of().formatHex(dig);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private boolean evalCondition(JsonNode cond, Map<String, Object> f) {

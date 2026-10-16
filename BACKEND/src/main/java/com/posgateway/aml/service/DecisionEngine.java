@@ -424,21 +424,23 @@ public class DecisionEngine {
         return new DecisionResult(action, score, reasons);
     }
 
+    /** Collects tenant and platform blacklist matches for the transaction's identifiers. */
     private List<String> collectBlacklistReasons(TransactionEntity transaction) {
         List<String> reasons = new ArrayList<>();
         if (!configService.isBlacklistEnabled()) {
             return reasons;
         }
         String panHash = transaction.getPanHash();
-        if (panHash != null && paymentBlacklistService.isBlacklisted("pan", panHash)) {
+        if (panHash != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "pan", panHash)) {
             reasons.add("BLACKLIST: PAN hash is blacklisted");
         }
         String terminalId = transaction.getTerminalId();
-        if (terminalId != null && paymentBlacklistService.isBlacklisted("terminal", terminalId)) {
+        if (terminalId != null
+                && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "terminal", terminalId)) {
             reasons.add("BLACKLIST: Terminal is blacklisted");
         }
         String ip = transaction.getIpAddress();
-        if (ip != null && paymentBlacklistService.isBlacklisted("ip", ip)) {
+        if (ip != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "ip", ip)) {
             reasons.add("BLACKLIST: IP address is blacklisted");
         }
         return reasons;
@@ -675,7 +677,7 @@ public class DecisionEngine {
         // Idempotent and best-effort — never breaks the decline path; a repeat DNH extends the window.
         String panHash = transaction.getPanHash();
         if (panHash != null && !panHash.isBlank()) {
-            paymentBlacklistService.addToBlacklist("pan", panHash,
+            paymentBlacklistService.addToBlacklist(transaction.getPspId(), "pan", panHash,
                     "Do Not Honour — auto-declined by DecisionEngine: " + String.join("; ", reasons),
                     null, LocalDateTime.now().plusDays(dnhBlockDays));
         }
@@ -704,6 +706,7 @@ public class DecisionEngine {
         alert.setSarRequired(transaction.isSarRequired());
         alert.setCtrRequired(transaction.isCtrRequired());
         alert.setTriggeredRules(transaction.getTriggeredRules());
+        alert.setSuspicionFormedAt(LocalDateTime.now());
 
         Alert saved = alertRepository.save(alert);
         if (alertLinkageService != null) {
@@ -874,7 +877,6 @@ public class DecisionEngine {
             }
             transaction.setRiskLevel(resolveFinalRiskLevel(decision.getAction(), transaction.getRiskLevel()));
             transactionRepository.save(transaction);
-
             TransactionFeatures txnFeatures = new TransactionFeatures();
             txnFeatures.setTxnId(transaction.getTxnId());
             txnFeatures.setScore(score);

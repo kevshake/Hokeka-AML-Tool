@@ -338,7 +338,7 @@ jobs:
           DATABASE_URL: jdbc:postgresql://localhost:5432/hokeka_mgmt_openapi
           DATABASE_USERNAME: test
           DATABASE_PASSWORD: test
-        run: mvn -B --no-transfer-progress test -Dtest=ManagementOpenApiExportIT -DfailIfNoSpecifiedTests=false
+        run: mvn -U -B --no-transfer-progress test -Dtest=ManagementOpenApiExportIT -DfailIfNoSpecifiedTests=false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

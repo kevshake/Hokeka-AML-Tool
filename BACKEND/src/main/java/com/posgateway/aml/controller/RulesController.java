@@ -12,6 +12,8 @@ import com.posgateway.aml.service.rules.DroolsRulesService;
 import com.posgateway.aml.service.rules.DynamicRuleConverter;
 import com.posgateway.aml.service.rules.RuleEffectivenessService;
 import com.posgateway.aml.service.rules.RuleGovernanceService;
+import com.posgateway.aml.service.edge.EdgeRuleCompiler;
+import org.springframework.web.server.ResponseStatusException;
 import com.posgateway.aml.service.security.PspIsolationService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,8 +44,10 @@ public class RulesController {
     private final UserRepository userRepository;
     private final RuleEffectivenessService effectivenessService;
     private final RuleGovernanceService governanceService;
+    private final EdgeRuleCompiler edgeRuleCompiler;
 
 
+    /** Creates the rules API with governance, generation, and Edge validation collaborators. */
     @Autowired
     public RulesController(
             RuleDefinitionRepository ruleRepository,
@@ -53,7 +57,8 @@ public class RulesController {
             PspIsolationService pspIsolationService,
             UserRepository userRepository,
             RuleEffectivenessService effectivenessService,
-            RuleGovernanceService governanceService) {
+            RuleGovernanceService governanceService,
+            EdgeRuleCompiler edgeRuleCompiler) {
         this.ruleRepository = ruleRepository;
         this.aiService = aiService;
         this.droolsService = droolsService;
@@ -62,6 +67,19 @@ public class RulesController {
         this.userRepository = userRepository;
         this.effectivenessService = effectivenessService;
         this.governanceService = governanceService;
+        this.edgeRuleCompiler = edgeRuleCompiler;
+    }
+
+    /** Rejects structured rule JSON that cannot be compiled for Edge execution. */
+    private void requireEdgeDeployable(String ruleJson) {
+        if (ruleJson == null || ruleJson.isBlank()) {
+            return;
+        }
+        try {
+            edgeRuleCompiler.assertEdgeDeployable(ruleJson);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rule is not edge-deployable: " + ex.getMessage());
+        }
     }
 
     /**
@@ -128,6 +146,14 @@ public class RulesController {
                 ));
     }
 
+    /** Validates authored rule JSON without persisting a rule. */
+    @PostMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validateRule(@RequestBody Map<String, String> body) {
+        String ruleJson = body == null ? null : body.get("ruleJson");
+        requireEdgeDeployable(ruleJson);
+        return ResponseEntity.ok(Map.of("edgeDeployable", true));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('MANAGE_RULES')")
     public ResponseEntity<RuleDefinition> createRule(@RequestBody RuleDefinition rule) {
@@ -135,6 +161,8 @@ public class RulesController {
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+
+        requireEdgeDeployable(rule.getRuleJson());
 
         // If JSON is provided but DRL is missing, auto-generate DRL
         if (rule.getDrlContent() == null || rule.getDrlContent().isBlank()) {
@@ -221,6 +249,7 @@ public class RulesController {
         // System-managed rules: lock identity (name + external_code) so the
         // catalog stays referenceable from compliance docs. Everything else —
         // parameters, threshold, description, action, enabled — is editable.
+        requireEdgeDeployable(rule.getRuleJson());
         return ResponseEntity.ok(governanceService.proposeUpdate(existing, rule, currentUser, "Update rule"));
     }
 

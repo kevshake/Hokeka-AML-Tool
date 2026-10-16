@@ -28,9 +28,11 @@ import java.util.concurrent.TimeUnit;
  * Key Patterns:
  * - aml:customer:{customerId}:features        - Main feature object
  * - aml:customer:{customerId}:tx:timestamps   - Transaction timestamps (sorted set)
+ * - aml:customer:{customerId}:velocity:1m     - Rolling 1m velocity counter
+ * - aml:customer:{customerId}:velocity:5m     - Rolling 5m velocity counter
  * - aml:customer:{customerId}:velocity:1h     - Rolling 1h velocity counter
  * - aml:customer:{customerId}:countries       - Recent countries (sorted set)
- * - aml:blacklist:{type}                      - Blacklist entries (set)
+ * - aml:blacklist:{psp|platform}:{type}       - Tenant-scoped blacklist entries (set)
  *
  * Performance: target &lt; 1ms for feature retrieval.
  */
@@ -44,11 +46,15 @@ public class FeatureCacheService {
     private static final String KEY_FEATURES = KEY_PREFIX + "customer:%s:features";
     private static final String KEY_TX_TIMESTAMPS = KEY_PREFIX + "customer:%s:tx:timestamps";
     private static final String KEY_COUNTRIES = KEY_PREFIX + "customer:%s:countries";
-    private static final String KEY_BLACKLIST = KEY_PREFIX + "blacklist:%s";
+    private static final String KEY_BLACKLIST = KEY_PREFIX + "blacklist:%s:%s";
+    private static final String KEY_VELOCITY = KEY_PREFIX + "customer:%s:velocity:%s";
+    private static final String KEY_LAST_GEO = KEY_PREFIX + "customer:%s:last-geo";
 
     // TTL values
     private static final long TTL_FEATURES_DAYS = 7;
     private static final long TTL_VELOCITY_SECONDS = 3600; // 1 hour
+    private static final long TTL_VELOCITY_1M_SECONDS = 60;
+    private static final long TTL_VELOCITY_5M_SECONDS = 300;
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final RedisTemplate<String, String> stringRedisTemplate;
@@ -127,6 +133,7 @@ public class FeatureCacheService {
             zSetOps.removeRangeByScore(key, 0, cutoff);
 
             stringRedisTemplate.expire(key, TTL_VELOCITY_SECONDS, TimeUnit.SECONDS);
+            incrementVelocityWindows(customerId);
 
         } catch (Exception e) {
             logger.error("Error recording transaction for velocity: {}", customerId, e);
@@ -141,11 +148,99 @@ public class FeatureCacheService {
     public void recordTransactionEvent(String customerId, String transactionId, long timestamp) {
         String key = String.format(KEY_TX_TIMESTAMPS, customerId);
         ZSetOperations<String, String> zSetOps = stringRedisTemplate.opsForZSet();
-        zSetOps.add(key, transactionId, timestamp);
+        Boolean added = zSetOps.add(key, transactionId, timestamp);
         long cutoff = timestamp - (24 * 3600 * 1000);
         zSetOps.removeRangeByScore(key, 0, cutoff);
         stringRedisTemplate.expire(key, TTL_VELOCITY_SECONDS, TimeUnit.SECONDS);
+        if (Boolean.TRUE.equals(added)) {
+            incrementVelocityWindows(customerId);
+        }
     }
+
+    /** Increments the short and hourly transaction counters for a customer. */
+    public void incrementVelocityWindows(String customerId) {
+        incrementVelocityKey(customerId, "1m", TTL_VELOCITY_1M_SECONDS);
+        incrementVelocityKey(customerId, "5m", TTL_VELOCITY_5M_SECONDS);
+        incrementVelocityKey(customerId, "1h", TTL_VELOCITY_SECONDS);
+    }
+
+    /** Returns the current one-minute transaction counter. */
+    public long getVelocity1m(String customerId) {
+        return getVelocity(customerId, "1m");
+    }
+
+    /** Returns the current five-minute transaction counter. */
+    public long getVelocity5m(String customerId) {
+        return getVelocity(customerId, "5m");
+    }
+
+    /** Returns the current one-hour transaction counter. */
+    public long getVelocity1h(String customerId) {
+        return getVelocity(customerId, "1h");
+    }
+
+    /** Increments one Redis velocity key and starts its expiry on the first event. */
+    private void incrementVelocityKey(String customerId, String window, long ttlSeconds) {
+        String key = String.format(KEY_VELOCITY, customerId, window);
+        Long current = stringRedisTemplate.opsForValue().increment(key);
+        if (current != null && current == 1) {
+            stringRedisTemplate.expire(key, ttlSeconds, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Reads a Redis velocity counter and treats missing or malformed values as zero. */
+    private long getVelocity(String customerId, String window) {
+        String key = String.format(KEY_VELOCITY, customerId, window);
+        String value = stringRedisTemplate.opsForValue().get(key);
+        try {
+            return value != null ? Long.parseLong(value) : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Caches the latest known customer coordinates for impossible-travel checks. */
+    public void recordLastLocation(String customerId, double latitude, double longitude, long timestampMs) {
+        if (customerId == null || customerId.isBlank()) {
+            return;
+        }
+        try {
+            String key = String.format(KEY_LAST_GEO, customerId);
+            stringRedisTemplate.opsForValue().set(key, latitude + "|" + longitude + "|" + timestampMs);
+            stringRedisTemplate.expire(key, 24, TimeUnit.HOURS);
+        } catch (Exception e) {
+            logger.debug("Could not cache last location for {}: {}", customerId, e.getMessage());
+        }
+    }
+
+    /** Returns the latest cached coordinates when the stored value is valid. */
+    public java.util.Optional<GeoPoint> getLastLocation(String customerId) {
+        if (customerId == null || customerId.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        try {
+            String raw = stringRedisTemplate.opsForValue().get(String.format(KEY_LAST_GEO, customerId));
+            if (raw == null || raw.isBlank()) {
+                return java.util.Optional.empty();
+            }
+            String[] parts = raw.split("\\|");
+            if (parts.length < 3) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(new GeoPoint(
+                    Double.parseDouble(parts[0]),
+                    Double.parseDouble(parts[1]),
+                    java.time.Instant.ofEpochMilli(Long.parseLong(parts[2]))
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .toLocalDateTime()));
+        } catch (Exception e) {
+            logger.debug("Could not read last location for {}: {}", customerId, e.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
+    /** Immutable cached coordinates and the local timestamp when they were recorded. */
+    public record GeoPoint(double latitude, double longitude, java.time.LocalDateTime recordedAt) {}
 
     /** Get transaction count in time window. */
     public long getTxCountInWindow(String customerId, long windowMs) {
@@ -189,35 +284,58 @@ public class FeatureCacheService {
 
     // ========== Blacklist / Whitelist ==========
 
-    /** Check if value is in blacklist. */
-    public boolean isBlacklisted(String type, String value) {
+    /** Converts a nullable PSP id into the stable Redis key segment for tenant or platform scope. */
+    private static String blacklistPspSegment(Long pspId) {
+        return pspId == null ? "platform" : String.valueOf(pspId);
+    }
+
+    /** Check if value is in the tenant (or platform) blacklist set. */
+    public boolean isBlacklisted(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             return Boolean.TRUE.equals(stringRedisTemplate.opsForSet().isMember(key, value));
         } catch (Exception e) {
-            logger.error("Error checking blacklist: {}:{}", type, value, e);
+            logger.error("Error checking blacklist: psp={} {}:{}", pspId, type, value, e);
             return false;
         }
     }
 
-    /** Add to blacklist. */
-    public void addToBlacklist(String type, String value) {
+    /** @deprecated Prefer {@link #isBlacklisted(Long, String, String)}. */
+    @Deprecated
+    public boolean isBlacklisted(String type, String value) {
+        return isBlacklisted(null, type, value);
+    }
+
+    /** Add to the tenant (or platform) blacklist set. */
+    public void addToBlacklist(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             stringRedisTemplate.opsForSet().add(key, value);
         } catch (Exception e) {
-            logger.error("Error adding to blacklist: {}:{}", type, value, e);
+            logger.error("Error adding to blacklist: psp={} {}:{}", pspId, type, value, e);
         }
     }
 
-    /** Remove from blacklist. */
-    public void removeFromBlacklist(String type, String value) {
+    /** @deprecated Prefer {@link #addToBlacklist(Long, String, String)}. */
+    @Deprecated
+    public void addToBlacklist(String type, String value) {
+        addToBlacklist(null, type, value);
+    }
+
+    /** Remove from the tenant (or platform) blacklist set. */
+    public void removeFromBlacklist(Long pspId, String type, String value) {
         try {
-            String key = String.format(KEY_BLACKLIST, type);
+            String key = String.format(KEY_BLACKLIST, blacklistPspSegment(pspId), type);
             stringRedisTemplate.opsForSet().remove(key, value);
         } catch (Exception e) {
-            logger.error("Error removing from blacklist: {}:{}", type, value, e);
+            logger.error("Error removing from blacklist: psp={} {}:{}", pspId, type, value, e);
         }
+    }
+
+    /** @deprecated Prefer {@link #removeFromBlacklist(Long, String, String)}. */
+    @Deprecated
+    public void removeFromBlacklist(String type, String value) {
+        removeFromBlacklist(null, type, value);
     }
 
     // ========== Country Tracking ==========

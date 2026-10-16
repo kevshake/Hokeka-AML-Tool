@@ -28,6 +28,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 import com.posgateway.aml.service.security.PspIsolationService;
+import com.posgateway.aml.service.edge.EdgeAssessmentConflictException;
+import com.posgateway.aml.service.edge.EdgeAssessmentService;
 
 import com.posgateway.aml.mapper.FraudDetectionMapper;
 import com.posgateway.aml.repository.TransactionRepository;
@@ -63,6 +65,7 @@ public class TransactionController {
     private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
     private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
     private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
+    private final EdgeAssessmentService edgeAssessmentService;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -90,7 +93,8 @@ public class TransactionController {
             com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
             com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
             com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService,
-            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
+            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService,
+            EdgeAssessmentService edgeAssessmentService) {
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -106,6 +110,7 @@ public class TransactionController {
         this.transactionAlertQueryService = transactionAlertQueryService;
         this.complianceLinksQueryService = complianceLinksQueryService;
         this.keysetSliceService = keysetSliceService;
+        this.edgeAssessmentService = edgeAssessmentService;
     }
 
     /**
@@ -139,6 +144,20 @@ public class TransactionController {
 
             // Step 1: Ingest transaction (store in database)
             TransactionEntity transaction = ingestionService.ingestTransaction(request);
+
+            if (requestDTO.getEdgeAssessmentId() != null && !requestDTO.getEdgeAssessmentId().isBlank()) {
+                try {
+                    FraudDetectionResult adopted = edgeAssessmentService
+                            .adopt(transaction, requestDTO.getEdgeAssessmentId())
+                            .orElseThrow(() -> new IllegalStateException("edge assessment id was present"));
+                    return CompletableFuture.completedFuture(
+                            ResponseEntity.ok(fraudMapper.toResponse(adopted)));
+                } catch (EdgeAssessmentConflictException conflict) {
+                    return CompletableFuture.completedFuture(
+                            ResponseEntity.status(HttpStatus.CONFLICT)
+                                    .body(createErrorResponse(conflict.getMessage())));
+                }
+            }
 
             // Check concurrent request limit
             int current = currentConcurrentRequests.incrementAndGet();

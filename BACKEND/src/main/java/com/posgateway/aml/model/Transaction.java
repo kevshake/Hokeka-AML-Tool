@@ -53,6 +53,10 @@ public class Transaction {
 
     private String countryCode;
 
+    private java.math.BigDecimal latitude;
+
+    private java.math.BigDecimal longitude;
+
     private boolean cashTransaction;
 
     private LocalDateTime createdAt;
@@ -237,6 +241,26 @@ public class Transaction {
     /** Sets the ISO country code when present. */
     public void setCountryCode(String countryCode) {
         this.countryCode = countryCode;
+    }
+
+    /** Returns the transaction latitude supplied by an upstream adapter. */
+    public java.math.BigDecimal getLatitude() {
+        return latitude;
+    }
+
+    /** Sets the transaction latitude supplied by an upstream adapter. */
+    public void setLatitude(java.math.BigDecimal latitude) {
+        this.latitude = latitude;
+    }
+
+    /** Returns the transaction longitude supplied by an upstream adapter. */
+    public java.math.BigDecimal getLongitude() {
+        return longitude;
+    }
+
+    /** Sets the transaction longitude supplied by an upstream adapter. */
+    public void setLongitude(java.math.BigDecimal longitude) {
+        this.longitude = longitude;
     }
 
     /** Returns true when the transaction is a cash reporting candidate. */

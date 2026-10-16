@@ -1,0 +1,15 @@
+-- Nullable lifecycle timestamps preserve when suspicion and investigation milestones occurred.
+ALTER TABLE alerts
+    ADD COLUMN IF NOT EXISTS suspicion_formed_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS investigation_started_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS mlro_notified_at TIMESTAMP;
+
+ALTER TABLE compliance_cases
+    ADD COLUMN IF NOT EXISTS suspicion_formed_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS investigation_started_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS mlro_notified_at TIMESTAMP;
+
+ALTER TABLE compliance_cases_aud
+    ADD COLUMN IF NOT EXISTS suspicion_formed_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS investigation_started_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS mlro_notified_at TIMESTAMP;

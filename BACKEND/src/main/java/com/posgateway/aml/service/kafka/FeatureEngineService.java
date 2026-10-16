@@ -35,6 +35,8 @@ public class FeatureEngineService {
 
     private static final Logger logger = LoggerFactory.getLogger(FeatureEngineService.class);
 
+    private static final long WINDOW_1M_MS  =         60_000L;
+    private static final long WINDOW_5M_MS  =        300_000L;
     private static final long WINDOW_1H_MS  =      3_600_000L;
     private static final long WINDOW_24H_MS =     86_400_000L;
     private static final long WINDOW_7D_MS  =    604_800_000L;
@@ -83,12 +85,16 @@ public class FeatureEngineService {
                     panHash, String.valueOf(transactionId), eventTimestampMs);
 
             // 3. Read current velocity counts from the sorted-set for the enriched event.
+            long count1m  = featureCacheService.getTxCountInWindow(panHash, WINDOW_1M_MS);
+            long count5m  = featureCacheService.getTxCountInWindow(panHash, WINDOW_5M_MS);
             long count1h  = featureCacheService.getTxCountInWindow(panHash, WINDOW_1H_MS);
             long count24h = featureCacheService.getTxCountInWindow(panHash, WINDOW_24H_MS);
             long count7d  = featureCacheService.getTxCountInWindow(panHash, WINDOW_7D_MS);
 
             // 4. Patch the cached CustomerFeatures object (if present) with fresh velocity data.
             featureCacheService.getFeatures(panHash).ifPresent(features -> {
+                features.setTxCount1m((int) count1m);
+                features.setTxCount5m((int) count5m);
                 features.setTxCount1h((int) count1h);
                 features.setTxCount24h((int) count24h);
                 features.setTxCount7d((int) count7d);

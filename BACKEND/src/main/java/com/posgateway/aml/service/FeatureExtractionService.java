@@ -176,6 +176,8 @@ public class FeatureExtractionService {
 
     private void extractBehavioralFeatures(TransactionEntity transaction, Map<String, Object> features) {
         LocalDateTime now = transaction.getTxnTs() != null ? transaction.getTxnTs() : LocalDateTime.now();
+        LocalDateTime oneMinuteAgo = now.minus(1, ChronoUnit.MINUTES);
+        LocalDateTime fiveMinutesAgo = now.minus(5, ChronoUnit.MINUTES);
         LocalDateTime oneHourAgo = now.minus(1, ChronoUnit.HOURS);
         LocalDateTime twentyFourHoursAgo = now.minus(24, ChronoUnit.HOURS);
         LocalDateTime sevenDaysAgo = now.minus(7, ChronoUnit.DAYS);
@@ -197,6 +199,10 @@ public class FeatureExtractionService {
         // PAN velocity features - cache panHash for performance
         String panHash = transaction.getPanHash();
         if (panHash != null) {
+            Long panTxnCount1m = transactionRepository.countByPanInTimeWindow(
+                    panHash, oneMinuteAgo, now);
+            Long panTxnCount5m = transactionRepository.countByPanInTimeWindow(
+                    panHash, fiveMinutesAgo, now);
             Long panTxnCount1h = transactionRepository.countByPanInTimeWindow(
                     panHash, oneHourAgo, now);
             Long panAmountSum7d = transactionRepository.sumAmountByPanInTimeWindow(
@@ -209,6 +215,8 @@ public class FeatureExtractionService {
             LocalDateTime lastTxnTime = transactionRepository.findLastTransactionTimeByPanBefore(
                     panHash, now);
 
+            features.put("pan_txn_count_1m", panTxnCount1m != null ? panTxnCount1m : 0L);
+            features.put("pan_txn_count_5m", panTxnCount5m != null ? panTxnCount5m : 0L);
             features.put("pan_txn_count_1h", panTxnCount1h != null ? panTxnCount1h : 0L);
             features.put("pan_txn_amount_sum_7d", panAmountSum7d != null ? panAmountSum7d / 100.0 : 0.0);
             features.put("distinct_terminals_last_30d_for_pan",

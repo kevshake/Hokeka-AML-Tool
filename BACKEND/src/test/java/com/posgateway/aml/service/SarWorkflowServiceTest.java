@@ -64,6 +64,31 @@ class SarWorkflowServiceTest {
                 "SAR-TEST filing deadline (KE-POCAMLA-STR-2D)", "KE", 45L, "SAR", 77L);
     }
 
+    /** Verifies prefers case suspicion timestamp when sar does not record one. */
+    @Test
+    void prefersCaseSuspicionTimestampWhenSarDoesNotRecordOne() {
+        User creator = user(10L, 45L, "analyst");
+        when(permissionService.hasPermission(creator.getRole(), Permission.CREATE_SAR)).thenReturn(true);
+        LocalDateTime caseSuspicion = LocalDateTime.of(2026, 7, 15, 9, 0);
+        LocalDateTime deadline = caseSuspicion.plusDays(2);
+        when(deadlineService.calculate(RegulatoryDeadlineService.SAR_STR, "KE", 45L, caseSuspicion))
+                .thenReturn(new RegulatoryDeadlineService.DeadlineCalculation(
+                        2L, "KE-POCAMLA-STR-2D", deadline, 24, "POCAMLA section 44"));
+        com.posgateway.aml.entity.compliance.ComplianceCase complianceCase =
+                new com.posgateway.aml.entity.compliance.ComplianceCase();
+        complianceCase.setSuspicionFormedAt(caseSuspicion);
+        SuspiciousActivityReport draft = sar(creator, 45L, SarStatus.DRAFT);
+        draft.setJurisdiction("KE");
+        draft.setSuspicionAroseAt(null);
+        draft.setComplianceCase(complianceCase);
+
+        SuspiciousActivityReport saved = service.createSarDraft(draft, creator);
+
+        assertThat(saved.getSuspicionAroseAt()).isEqualTo(caseSuspicion);
+        assertThat(saved.getFilingDeadline()).isEqualTo(deadline);
+        assertThat(saved.getDeadlinePolicyCode()).isEqualTo("KE-POCAMLA-STR-2D");
+    }
+
     @Test
     void onlyCreatorCanSubmitAndCreatorCannotApprove() {
         User creator = user(10L, 45L, "analyst");

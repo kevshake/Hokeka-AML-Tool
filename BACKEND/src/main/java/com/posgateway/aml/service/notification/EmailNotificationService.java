@@ -102,6 +102,7 @@ public class EmailNotificationService {
         String caseRef = null;
         String status = null;
         String priority = null;
+        boolean analystRecipient = false;
 
         try {
             JsonNode root = objectMapper.readTree(json);
@@ -111,6 +112,7 @@ public class EmailNotificationService {
                 Optional<User> u = userRepository.findById(recipUserIdNode.asLong());
                 if (u.isPresent() && u.get().getEmail() != null) {
                     to = u.get().getEmail();
+                    analystRecipient = true;
                 }
             }
             if (to == null) {
@@ -142,6 +144,13 @@ public class EmailNotificationService {
             }
         }
 
+        if (!analystRecipient) {
+            subject = TippingOffGuard.sanitizeCustomerText(subject);
+            bodyText = TippingOffGuard.sanitizeCustomerText(bodyText);
+            caseRef = null;
+            status = null;
+            priority = null;
+        }
         String html = buildHtmlBody(subject, bodyText, caseRef, status, priority);
         sendHtml(to, subject, html);
     }
@@ -154,7 +163,7 @@ public class EmailNotificationService {
      * @param resetLink  Fully-qualified password-reset URL including the raw token
      */
     public void sendPasswordResetEmail(String toEmail, String firstName, String resetLink) {
-        String subject = "Password Reset Request — Hokeka AML Platform";
+        String subject = TippingOffGuard.sanitizeCustomerText("Password Reset Request — Hokeka AML Platform");
         String salutation = (firstName != null && !firstName.isBlank()) ? firstName : "there";
         String htmlBody = "<html><body style=\"font-family:Arial,Helvetica,sans-serif;\">"
                 + "<h2 style=\"color:#0a3d62;\">Password Reset Request</h2>"

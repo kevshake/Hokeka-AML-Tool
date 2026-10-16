@@ -247,6 +247,22 @@ services:
       DOCUMENT_ANTIVIRUS_REQUIRED: "true"
       DOCUMENT_ANTIVIRUS_HOST: clamav-prod
       DOCUMENT_ANTIVIRUS_PORT: 3310
+      # Hokeka AI via Laya Studio (Control Plane only — never set these on Edge Nodes).
+      # An empty LAYA_API_KEY disables provider calls and preserves the rules-only fallback.
+      LAYA_API_KEY: ${LAYA_API_KEY:-}
+      LAYA_API_BASE_URL: ${LAYA_API_BASE_URL:-https://api.laya.studio}
+      LAYA_MODEL: ${LAYA_MODEL:-}
+      LAYA_LANG: ${LAYA_LANG:-}
+      LAYA_DECISIONS_TIMEOUT: ${LAYA_DECISIONS_TIMEOUT:-3s}
+      LAYA_ASK_TIMEOUT: ${LAYA_ASK_TIMEOUT:-30s}
+      LAYA_MAX_RETRIES: ${LAYA_MAX_RETRIES:-2}
+      LAYA_MIN_CONFIDENCE_TO_APPLY: ${LAYA_MIN_CONFIDENCE_TO_APPLY:-0.55}
+      LAYA_MIN_CONFIDENCE_TO_AUTO_ACT: ${LAYA_MIN_CONFIDENCE_TO_AUTO_ACT:-0.72}
+      LAYA_DAILY_INPUT_TOKEN_CAP_PER_PSP: ${LAYA_DAILY_INPUT_TOKEN_CAP_PER_PSP:-0}
+      HOKEKA_AI_SHADOW_MODE: ${HOKEKA_AI_SHADOW_MODE:-true}
+      HOKEKA_AI_PROMOTED: ${HOKEKA_AI_PROMOTED:-false}
+      HOKEKA_AI_INLINE_TIMEOUT: ${HOKEKA_AI_INLINE_TIMEOUT:-500ms}
+      HOKEKA_AI_DAILY_CALL_BUDGET_PER_PSP: ${HOKEKA_AI_DAILY_CALL_BUDGET_PER_PSP:-0}
       # JVM optimization for production
       JAVA_OPTS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom"
     # Exposed for host nginx proxy
