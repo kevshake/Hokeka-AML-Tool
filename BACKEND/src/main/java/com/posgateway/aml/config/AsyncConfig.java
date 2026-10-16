@@ -84,9 +84,40 @@ public class AsyncConfig {
         return virtualExecutor("AML-VT-", amlConcurrency);
     }
 
+    /**
+     * Long-running request-initiated work (report generation, exports). The submitting request's
+     * Spring Security context is propagated to the worker: {@code ReportGenerationService} enforces
+     * tenant isolation through {@code PspIsolationService} on the worker thread, and without the
+     * caller's identity every manual report failed with "User not authenticated" and stayed PENDING.
+     * Scheduler-submitted tasks have no context and still run unauthenticated.
+     */
     @Bean(name = "backgroundTaskExecutor")
     public Executor backgroundTaskExecutor() {
-        return virtualExecutor("BG-VT-", backgroundConcurrency);
+        SimpleAsyncTaskExecutor executor = (SimpleAsyncTaskExecutor) virtualExecutor("BG-VT-", backgroundConcurrency);
+        executor.setTaskDecorator(AsyncConfig::withCallerSecurityContext);
+        return executor;
+    }
+
+    /**
+     * Wraps {@code task} so it runs with the security context of the thread that submitted it, and
+     * restores the worker's previous (normally empty) context afterwards so nothing leaks across tasks.
+     */
+    static Runnable withCallerSecurityContext(Runnable task) {
+        org.springframework.security.core.context.SecurityContext caller =
+                org.springframework.security.core.context.SecurityContextHolder.getContext();
+        org.springframework.security.core.context.SecurityContext snapshot =
+                org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+        snapshot.setAuthentication(caller.getAuthentication());
+        return () -> {
+            org.springframework.security.core.context.SecurityContext previous =
+                    org.springframework.security.core.context.SecurityContextHolder.getContext();
+            org.springframework.security.core.context.SecurityContextHolder.setContext(snapshot);
+            try {
+                task.run();
+            } finally {
+                org.springframework.security.core.context.SecurityContextHolder.setContext(previous);
+            }
+        };
     }
 
     /**
