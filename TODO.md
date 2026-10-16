@@ -24,14 +24,29 @@ _Last updated: 2026-10-16_
 - [x] L19 Envers HHH015007 boot error
 - [x] Verify: clean compile; BACKEND 711 tests (only the 2 known Docker-env failures); schema validate on real Postgres 16; aml-ms 39; edge-host 70
 
+## Wave 74 — Edge-only transactions redesign (user decision 2026-10-16)
+
+Edge is the sole fraud/AML decider; the cloud stores decision records only, never transactions. The Console fetches transaction details live from the Edge over an outbound mTLS tunnel that the Edge opens. The cloud keeps alert, case and SAR workflow records that reference transactions by ID; filed SAR/STR documents stay in the cloud. PSP-set retention (min 5y, default 5y) is purged on the Edge.
+
+- [x] Implementation plan + work packages: `docs/architecture/EDGE_DATA_RESIDENCY_PLAN.md`. Owner decisions: port detections to the Edge before deleting cloud ones; cross-PSP sharing is opt-in SAR indicators only; back-fill existing cloud data to the Edge, then purge; support access only when the PSP allows it, audited.
+- [ ] R0 spec + JSON schemas (`docs/contracts/`)
+- [ ] Lane 1: R1 Edge ledger + durable outbox · R3 retention/config doc · R4 cloud tunnel server · R7 decision record v2 · R14a docs drafts
+- [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
+- [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
+- [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
+- [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
+- [ ] Lane 6: R13 simulator rewrite + N1 residency canary · R14b docs final
+- [ ] Re-run full simulation on the new architecture
+- [ ] Open decision: Travel Rule (VASP) originator/beneficiary exchange — Edge-to-Edge, or relayed through the cloud without being stored?
+
 ## Wave 72 — Full PSP simulation: Edge + Control Plane, live readiness (2026-10-16)
 
 - [x] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch — `34e98037c`, pushed
-- [ ] Build a simulation environment (Docker data services + Control Plane + aml-microservice + Edge Node) and a reusable multi-PSP simulator under `scripts/sim/`
-- [ ] Run every functional scenario (onboarding, auth/RBAC, API keys, edge enrollment, bundle pull, edge pre-auth + cloud dual-post ingest, rules, velocity, sanctions/PEP, alerts, cases, SAR/STR/CTR, exports, AI shadow, billing, metrics) and record each failure with its root cause
-- [ ] Fix every failure at the root (no stubs), with regression tests
-- [ ] Re-run all simulations until green
-- [ ] Live-readiness report
+- [x] Build a simulation environment (Docker data services + Control Plane + aml-microservice + Edge Node) and a reusable multi-PSP simulator under `scripts/sim/`
+- [x] Run every functional scenario (onboarding, auth/RBAC, API keys, edge enrollment, bundle pull, edge pre-auth + cloud dual-post ingest, rules, velocity, sanctions/PEP, alerts, cases, SAR/STR/CTR, exports, AI shadow, billing, metrics) and record each failure with its root cause
+- [x] Fix every failure at the root (no stubs), with regression tests (19 in Wave 73 plus 16 in run 5)
+- [x] Re-run all simulations until green. Run 5: everything passes except cloud-ingest scoring (R1/T1/T5/T8), which the Wave 74 redesign replaces.
+- [x] Live-readiness report: `docs/LIVE_READINESS_REPORT_2026-10-16.md`
 
 ## Wave 71 — Resume from Grok Bot history (2026-10-16)
 
