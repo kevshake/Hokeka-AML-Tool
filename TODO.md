@@ -35,8 +35,13 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
   - [x] R4 cloud tunnel server (merged 021ef992e; 146 tunnel tests pass)
   - [x] R3 + R7 retention/config doc + decision record v2 (merged 3fadba33b; BACKEND 807 tests 0 failures; FRONTEND typecheck/lint/vitest pass)
   - [ ] Lane 1 integration: real per-PSP tunnel settings, config.updated notify, site_id single source, support-access revocation cuts tunnel sessions; full suite on merged branch
-  - [ ] R14a docs drafts
+  - [ ] R14a docs drafts (agent running)
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
+  - [ ] R2 + R5 Edge purge/holds/config consumer + tunnel client (agent running)
+  - [ ] R8 refs-by-ID (starts after lane 1 integration)
+  - [ ] R10a Edge typologies
+  - [ ] R10b Edge sanctions matcher
+  - [ ] R10c remove PII feature-bag POST
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
 - [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
