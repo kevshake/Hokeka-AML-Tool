@@ -38,10 +38,10 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
   - [x] R14a docs drafts (merged f6b6a1248; 23 docs, 0 broken links; dual-post install guide 06 deleted)
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
   - [ ] R2 + R5 Edge purge/holds/config consumer + tunnel client (agent running)
-  - [ ] R8 refs-by-ID
+  - [ ] R8 refs-by-ID (agent running; migration V264 reserved)
   - [ ] R10a Edge typologies
   - [ ] R10b Edge sanctions matcher
-  - [ ] R10c remove PII feature-bag POST
+  - [ ] R10c remove PII feature-bag POST + site-scoped velocity (agent running)
 - [ ] Gaps found by R14a: billing counts only cloud ingest, so Edge decision records bill nothing (owner decision, must land before R12) · Edge does not de-duplicate a retried txn_id (re-evaluates; ref points at newest row)
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
