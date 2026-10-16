@@ -1,0 +1,2097 @@
+{
+  "runId": "r1016174257",
+  "meta": {
+    "startedAt": "2026-10-16T17:42:57",
+    "finishedAt": "2026-10-16T17:48:31",
+    "base": "http://127.0.0.1:2637/api/v1",
+    "requests": 148,
+    "psps": {
+      "card": {
+        "id": 7,
+        "code": "SIMCARD_R1016174257",
+        "merchants": [
+          1,
+          2,
+          3
+        ]
+      },
+      "momo": {
+        "id": 8,
+        "code": "SIMMOMO_R1016174257",
+        "merchants": [
+          4,
+          5
+        ]
+      },
+      "vasp": {
+        "id": 9,
+        "code": "SIMVASP_R1016174257",
+        "merchants": [
+          6,
+          7
+        ]
+      }
+    },
+    "edge": {}
+  },
+  "summary": {
+    "PASS": 6,
+    "FAIL": 6
+  },
+  "scenarios": [
+    {
+      "id": "S0",
+      "area": "seed",
+      "title": "Seed PSPs, users, roles, merchants",
+      "status": "PASS",
+      "durationSeconds": 75.44,
+      "error": null,
+      "notes": [
+        "admin did not accept SEED_ADMIN_PASSWORD; falling back to the hard-coded default"
+      ],
+      "checks": [
+        {
+          "ok": true,
+          "message": "create platform checker user",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.checker.r1016174257\", \"email\": \"sim.checker.r1016174257@sim.hokeka.test\", \"firstName\": \"Sim\", \"lastName\": \"Checker\", \"password\": \"SimUser!2026-x9\", \"roleId\": 27}",
+            "status": 200,
+            "ms": 568.3,
+            "response": "{\"id\":16,\"username\":\"sim.checker.r1016174257\",\"email\":\"sim.checker.r1016174257@sim.hokeka.test\",\"firstName\":\"Sim\",\"lastName\":\"Checker\",\"role\":{\"id\":27,\"name\":\"ADMIN\",\"description\":\"Platform Administrator\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"OVERRIDE_SCREENING_MATCH\",\"VIEW_SCREENING_RESULTS\",\"MANAGE_SKILLS\",\"PSP_SETTINGS_EDIT\",\"APPROVE_SAR\",\"ADD_CASE_NOTES\",\"ESCALATE_CASES\",\"MODIFY_RISK_SCORES\",\"MANAGE_ROLES\",\"CONFIGURE_SYSTEM\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"VIEW_AUDIT_LOGS\",\"MANAGE_PSP_THEME\",\"ASSIGN_CASES\",\"PSP_SETTINGS"
+          }
+        },
+        {
+          "ok": true,
+          "message": "platform checker login",
+          "severity": null
+        },
+        {
+          "ok": true,
+          "message": "register PSP SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{\"pspCode\": \"SIMCARD_R1016174257\", \"legalName\": \"SimCard Acquiring Ltd r1016174257\", \"tradingName\": \"SimCard Acquiring\", \"country\": \"KE\", \"contactEmail\": \"ops@card.r1016174257.sim.test\", \"billingPlan\": \"PAY_AS_YOU_GO\", \"currency\": \"USD\"}",
+            "status": 200,
+            "ms": 16531.1,
+            "response": "{\"id\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"status\":\"PENDING\",\"isTestMode\":false,\"kycEnabled\":true,\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"currency\":\"USD\",\"paymentTerms\":30,\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"brandingTheme\":\"default\",\"createdAt\":\"2026-10-16T17:43:00.5384684\",\"updatedAt\":\"2026-10-16T17:43:00.5384684\",\"onboardedAt\":\"2026-10-16T17:43:00.5384684\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "activate PSP SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/status",
+            "requestBody": "{\"status\": \"ACTIVE\"}",
+            "status": 200,
+            "ms": 1158.9,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "create per-PSP PSP_USER role for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /roles",
+            "requestBody": "{\"name\": \"PSP_USER\", \"description\": \"Sim PSP operator\", \"pspId\": 7, \"permissions\": [\"VIEW_CASES\", \"MERCHANT_VIEW\", \"REPORT_VIEW\", \"VIEW_TRANSACTION_DETAILS\"]}",
+            "status": 200,
+            "ms": 1919.4,
+            "response": "{\"id\":33,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"USD\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":false,\"aiInlineBudgetMs\":500,\"brandingTheme\":\"default\",\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"cbkAllowLive\":false,\"onboardedAt\":"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create admin user for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.card.admin.r1016174257\", \"email\": \"sim.card.admin.r1016174257@sim.hokeka.test\", \"firstName\": \"Card\", \"lastName\": \"Admin\", \"password\": \"SimUser!2026-x9\", \"roleId\": 28, \"pspId\": 7}",
+            "status": 200,
+            "ms": 1065.1,
+            "response": "{\"id\":17,\"username\":\"sim.card.admin.r1016174257\",\"email\":\"sim.card.admin.r1016174257@sim.hokeka.test\",\"firstName\":\"Card\",\"lastName\":\"Admin\",\"role\":{\"id\":28,\"name\":\"PSP_ADMIN\",\"description\":\"PSP Administrator\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITEL"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.card.admin.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.admin.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 446.3,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:43:20.235654\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITELIST_ENTITY\",\"REPORT_VIEW\",\"EXPORT_DATA\",\"VIEW_PII\",\"CLOSE_CASES\",\"FILE_"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create compliance user for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.card.compliance.r1016174257\", \"email\": \"sim.card.compliance.r1016174257@sim.hokeka.test\", \"firstName\": \"Card\", \"lastName\": \"Compliance\", \"password\": \"SimUser!2026-x9\", \"roleId\": 29, \"pspId\": 7}",
+            "status": 200,
+            "ms": 546.4,
+            "response": "{\"id\":18,\"username\":\"sim.card.compliance.r1016174257\",\"email\":\"sim.card.compliance.r1016174257@sim.hokeka.test\",\"firstName\":\"Card\",\"lastName\":\"Compliance\",\"role\":{\"id\":29,\"name\":\"COMPLIANCE_OFFICER\",\"description\":\"Compliance Officer\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"systemRole\":true},\"psp\":{\"pspId\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"billingPlan\":\"PA"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.card.compliance.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.compliance.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 421.0,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"Compliance\",\"createdAt\":\"2026-10-16T17:43:21.657413\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"name\":\"COMPLIANCE_OFFICER\",\"id\":29},\"pspId\":7,\"id\":18,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.compliance.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.compliance.r1016174257\"},\"token\":\"F63BE8E1A0A846D06A86ECF8CF42E5"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create analyst user for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.card.analyst.r1016174257\", \"email\": \"sim.card.analyst.r1016174257@sim.hokeka.test\", \"firstName\": \"Card\", \"lastName\": \"Analyst\", \"password\": \"SimUser!2026-x9\", \"roleId\": 25, \"pspId\": 7}",
+            "status": 200,
+            "ms": 790.2,
+            "response": "{\"id\":19,\"username\":\"sim.card.analyst.r1016174257\",\"email\":\"sim.card.analyst.r1016174257@sim.hokeka.test\",\"firstName\":\"Card\",\"lastName\":\"Analyst\",\"role\":{\"id\":25,\"name\":\"PSP_ANALYST\",\"description\":\"PSP Case Analyst\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"systemRole\":true},\"psp\":{\"pspId\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.card.analyst.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.analyst.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 421.8,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"Analyst\",\"createdAt\":\"2026-10-16T17:43:22.661069\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"name\":\"PSP_ANALYST\",\"id\":25},\"pspId\":7,\"id\":19,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.analyst.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.analyst.r1016174257\"},\"token\":\"7D30913CA"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create user user for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"email\": \"sim.card.user.r1016174257@sim.hokeka.test\", \"firstName\": \"Card\", \"lastName\": \"User\", \"password\": \"SimUser!2026-x9\", \"roleId\": 33, \"pspId\": 7}",
+            "status": 200,
+            "ms": 770.0,
+            "response": "{\"id\":20,\"username\":\"sim.card.user.r1016174257\",\"email\":\"sim.card.user.r1016174257@sim.hokeka.test\",\"firstName\":\"Card\",\"lastName\":\"User\",\"role\":{\"id\":33,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"USD\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":f"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.card.user.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 458.7,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:43:23.866339\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":33},\"pspId\":7,\"id\":20,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.user.r1016174257\"},\"token\":\"11D12073D3445955F2DEEAA7ABCB938B\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Grocer for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Grocer r1016174257\", \"tradingName\": \"Sim Grocer\", \"registrationNumber\": \"SIM-card-0-r1016174257\", \"country\": \"KE\", \"mcc\": \"5411\", \"pspId\": 7, \"contactEmail\": \"m0@card.sim.test\"}",
+            "status": 201,
+            "ms": 4730.0,
+            "response": "{\"merchantId\":1,\"legalName\":\"Sim Grocer r1016174257\",\"tradingName\":\"Sim Grocer\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"5411\",\"contactEmail\":\"m0@card.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:43:25.8657407\",\"updatedAt\":\"2026-10-16T17:43:28.9594477\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:43:26.6966245\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:43:26.6966245\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfigured\":false}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Electronics for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Electronics r1016174257\", \"tradingName\": \"Sim Electronics\", \"registrationNumber\": \"SIM-card-1-r1016174257\", \"country\": \"KE\", \"mcc\": \"5732\", \"pspId\": 7, \"contactEmail\": \"m1@card.sim.test\"}",
+            "status": 201,
+            "ms": 1289.5,
+            "response": "{\"merchantId\":2,\"legalName\":\"Sim Electronics r1016174257\",\"tradingName\":\"Sim Electronics\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"5732\",\"contactEmail\":\"m1@card.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:43:29.9738222\",\"updatedAt\":\"2026-10-16T17:43:30.4188486\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:43:30.0936073\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:43:30.0936073\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfigured\""
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Casino Online for SIMCARD_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Casino Online r1016174257\", \"tradingName\": \"Sim Casino Online\", \"registrationNumber\": \"SIM-card-2-r1016174257\", \"country\": \"MT\", \"mcc\": \"7995\", \"pspId\": 7, \"contactEmail\": \"m2@card.sim.test\"}",
+            "status": 201,
+            "ms": 665.7,
+            "response": "{\"merchantId\":3,\"legalName\":\"Sim Casino Online r1016174257\",\"tradingName\":\"Sim Casino Online\",\"country\":\"MT\",\"registrationNumber\":\"****4257\",\"mcc\":\"7995\",\"contactEmail\":\"m2@card.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:43:31.1877078\",\"updatedAt\":\"2026-10-16T17:43:31.4802861\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:43:31.3157953\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:43:31.3157953\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfigu"
+          }
+        },
+        {
+          "ok": true,
+          "message": "register PSP SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{\"pspCode\": \"SIMMOMO_R1016174257\", \"legalName\": \"SimMobile Money Ltd r1016174257\", \"tradingName\": \"SimMoMo\", \"country\": \"KE\", \"contactEmail\": \"ops@momo.r1016174257.sim.test\", \"billingPlan\": \"PAY_AS_YOU_GO\", \"currency\": \"KES\"}",
+            "status": 200,
+            "ms": 13804.2,
+            "response": "{\"id\":8,\"pspCode\":\"SIMMOMO_R1016174257\",\"legalName\":\"SimMobile Money Ltd r1016174257\",\"tradingName\":\"SimMoMo\",\"country\":\"KE\",\"contactEmail\":\"ops@momo.r1016174257.sim.test\",\"status\":\"PENDING\",\"isTestMode\":false,\"kycEnabled\":true,\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"currency\":\"KES\",\"paymentTerms\":30,\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"brandingTheme\":\"default\",\"createdAt\":\"2026-10-16T17:43:31.7739773\",\"updatedAt\":\"2026-10-16T17:43:31.7739773\",\"onboardedAt\":\"2026-10-16T17:43:31.7739773\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "activate PSP SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/8/status",
+            "requestBody": "{\"status\": \"ACTIVE\"}",
+            "status": 200,
+            "ms": 408.2,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "create per-PSP PSP_USER role for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /roles",
+            "requestBody": "{\"name\": \"PSP_USER\", \"description\": \"Sim PSP operator\", \"pspId\": 8, \"permissions\": [\"VIEW_CASES\", \"MERCHANT_VIEW\", \"REPORT_VIEW\", \"VIEW_TRANSACTION_DETAILS\"]}",
+            "status": 200,
+            "ms": 593.2,
+            "response": "{\"id\":34,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":8,\"pspCode\":\"SIMMOMO_R1016174257\",\"legalName\":\"SimMobile Money Ltd r1016174257\",\"tradingName\":\"SimMoMo\",\"country\":\"KE\",\"contactEmail\":\"ops@momo.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"KES\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":false,\"aiInlineBudgetMs\":500,\"brandingTheme\":\"default\",\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"cbkAllowLive\":false,\"onboardedAt\":\"2026-10-16T"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create admin user for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.momo.admin.r1016174257\", \"email\": \"sim.momo.admin.r1016174257@sim.hokeka.test\", \"firstName\": \"Momo\", \"lastName\": \"Admin\", \"password\": \"SimUser!2026-x9\", \"roleId\": 28, \"pspId\": 8}",
+            "status": 200,
+            "ms": 614.1,
+            "response": "{\"id\":21,\"username\":\"sim.momo.admin.r1016174257\",\"email\":\"sim.momo.admin.r1016174257@sim.hokeka.test\",\"firstName\":\"Momo\",\"lastName\":\"Admin\",\"role\":{\"id\":28,\"name\":\"PSP_ADMIN\",\"description\":\"PSP Administrator\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITEL"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.momo.admin.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.momo.admin.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 415.3,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Momo\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:43:46.551181\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITELIST_ENTITY\",\"REPORT_VIEW\",\"EXPORT_DATA\",\"VIEW_PII\",\"CLOSE_CASES\",\"FILE_"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create compliance user for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.momo.compliance.r1016174257\", \"email\": \"sim.momo.compliance.r1016174257@sim.hokeka.test\", \"firstName\": \"Momo\", \"lastName\": \"Compliance\", \"password\": \"SimUser!2026-x9\", \"roleId\": 29, \"pspId\": 8}",
+            "status": 200,
+            "ms": 696.2,
+            "response": "{\"id\":22,\"username\":\"sim.momo.compliance.r1016174257\",\"email\":\"sim.momo.compliance.r1016174257@sim.hokeka.test\",\"firstName\":\"Momo\",\"lastName\":\"Compliance\",\"role\":{\"id\":29,\"name\":\"COMPLIANCE_OFFICER\",\"description\":\"Compliance Officer\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"systemRole\":true},\"psp\":{\"pspId\":8,\"pspCode\":\"SIMMOMO_R1016174257\",\"legalName\":\"SimMobile Money Ltd r1016174257\",\"tradingName\":\"SimMoMo\",\"country\":\"KE\",\"contactEmail\":\"ops@momo.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\""
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.momo.compliance.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.momo.compliance.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 370.0,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Momo\",\"lastName\":\"Compliance\",\"createdAt\":\"2026-10-16T17:43:47.659779\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"name\":\"COMPLIANCE_OFFICER\",\"id\":29},\"pspId\":8,\"id\":22,\"psp\":{\"code\":\"SIMMOMO_R1016174257\",\"name\":\"SimMoMo\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":8},\"email\":\"sim.momo.compliance.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.momo.compliance.r1016174257\"},\"token\":\"5779FB35C4CAF8A3D96E75C9B568E3E3\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create analyst user for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.momo.analyst.r1016174257\", \"email\": \"sim.momo.analyst.r1016174257@sim.hokeka.test\", \"firstName\": \"Momo\", \"lastName\": \"Analyst\", \"password\": \"SimUser!2026-x9\", \"roleId\": 25, \"pspId\": 8}",
+            "status": 200,
+            "ms": 665.3,
+            "response": "{\"id\":23,\"username\":\"sim.momo.analyst.r1016174257\",\"email\":\"sim.momo.analyst.r1016174257@sim.hokeka.test\",\"firstName\":\"Momo\",\"lastName\":\"Analyst\",\"role\":{\"id\":25,\"name\":\"PSP_ANALYST\",\"description\":\"PSP Case Analyst\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"systemRole\":true},\"psp\":{\"pspId\":8,\"pspCode\":\"SIMMOMO_R1016174257\",\"legalName\":\"SimMobile Money Ltd r1016174257\",\"tradingName\":\"SimMoMo\",\"country\":\"KE\",\"contactEmail\":\"ops@momo.r1016174257.sim.test\",\"billingPl"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.momo.analyst.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.momo.analyst.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 406.0,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Momo\",\"lastName\":\"Analyst\",\"createdAt\":\"2026-10-16T17:43:48.69047\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"name\":\"PSP_ANALYST\",\"id\":25},\"pspId\":8,\"id\":23,\"psp\":{\"code\":\"SIMMOMO_R1016174257\",\"name\":\"SimMoMo\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":8},\"email\":\"sim.momo.analyst.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.momo.analyst.r1016174257\"},\"token\":\"3EA4576BB1940BA22B6D"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create user user for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.momo.user.r1016174257\", \"email\": \"sim.momo.user.r1016174257@sim.hokeka.test\", \"firstName\": \"Momo\", \"lastName\": \"User\", \"password\": \"SimUser!2026-x9\", \"roleId\": 34, \"pspId\": 8}",
+            "status": 200,
+            "ms": 697.6,
+            "response": "{\"id\":24,\"username\":\"sim.momo.user.r1016174257\",\"email\":\"sim.momo.user.r1016174257@sim.hokeka.test\",\"firstName\":\"Momo\",\"lastName\":\"User\",\"role\":{\"id\":34,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":8,\"pspCode\":\"SIMMOMO_R1016174257\",\"legalName\":\"SimMobile Money Ltd r1016174257\",\"tradingName\":\"SimMoMo\",\"country\":\"KE\",\"contactEmail\":\"ops@momo.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"KES\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":false,\"aiInli"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.momo.user.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.momo.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 471.6,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Momo\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:43:49.74511\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":34},\"pspId\":8,\"id\":24,\"psp\":{\"code\":\"SIMMOMO_R1016174257\",\"name\":\"SimMoMo\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":8},\"email\":\"sim.momo.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.momo.user.r1016174257\"},\"token\":\"032EDF90D2DD07845C7A641B5F1F57FF\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Agent Westlands for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Agent Westlands r1016174257\", \"tradingName\": \"Sim Agent Westlands\", \"registrationNumber\": \"SIM-momo-0-r1016174257\", \"country\": \"KE\", \"mcc\": \"6012\", \"pspId\": 8, \"contactEmail\": \"m0@momo.sim.test\"}",
+            "status": 201,
+            "ms": 770.8,
+            "response": "{\"merchantId\":4,\"legalName\":\"Sim Agent Westlands r1016174257\",\"tradingName\":\"Sim Agent Westlands\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"6012\",\"contactEmail\":\"m0@momo.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:43:51.0076292\",\"updatedAt\":\"2026-10-16T17:43:51.4040242\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:43:51.2254054\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:43:51.2254054\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountCon"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Utility Bills for SIMMOMO_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Utility Bills r1016174257\", \"tradingName\": \"Sim Utility Bills\", \"registrationNumber\": \"SIM-momo-1-r1016174257\", \"country\": \"KE\", \"mcc\": \"4900\", \"pspId\": 8, \"contactEmail\": \"m1@momo.sim.test\"}",
+            "status": 201,
+            "ms": 649.1,
+            "response": "{\"merchantId\":5,\"legalName\":\"Sim Utility Bills r1016174257\",\"tradingName\":\"Sim Utility Bills\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"4900\",\"contactEmail\":\"m1@momo.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:43:51.7590398\",\"updatedAt\":\"2026-10-16T17:43:52.0495618\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:43:51.8945169\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:43:51.8945169\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfigu"
+          }
+        },
+        {
+          "ok": true,
+          "message": "register PSP SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{\"pspCode\": \"SIMVASP_R1016174257\", \"legalName\": \"SimChain Exchange Ltd r1016174257\", \"tradingName\": \"SimChain\", \"country\": \"KE\", \"contactEmail\": \"ops@vasp.r1016174257.sim.test\", \"billingPlan\": \"PAY_AS_YOU_GO\", \"currency\": \"USD\"}",
+            "status": 200,
+            "ms": 14533.2,
+            "response": "{\"id\":9,\"pspCode\":\"SIMVASP_R1016174257\",\"legalName\":\"SimChain Exchange Ltd r1016174257\",\"tradingName\":\"SimChain\",\"country\":\"KE\",\"contactEmail\":\"ops@vasp.r1016174257.sim.test\",\"status\":\"PENDING\",\"isTestMode\":false,\"kycEnabled\":true,\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"currency\":\"USD\",\"paymentTerms\":30,\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"brandingTheme\":\"default\",\"createdAt\":\"2026-10-16T17:43:52.3333018\",\"updatedAt\":\"2026-10-16T17:43:52.3333018\",\"onboardedAt\":\"2026-10-16T17:43:52.3333018\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "activate PSP SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/9/status",
+            "requestBody": "{\"status\": \"ACTIVE\"}",
+            "status": 200,
+            "ms": 239.0,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "create per-PSP PSP_USER role for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /roles",
+            "requestBody": "{\"name\": \"PSP_USER\", \"description\": \"Sim PSP operator\", \"pspId\": 9, \"permissions\": [\"VIEW_CASES\", \"MERCHANT_VIEW\", \"REPORT_VIEW\", \"VIEW_TRANSACTION_DETAILS\"]}",
+            "status": 200,
+            "ms": 571.1,
+            "response": "{\"id\":35,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":9,\"pspCode\":\"SIMVASP_R1016174257\",\"legalName\":\"SimChain Exchange Ltd r1016174257\",\"tradingName\":\"SimChain\",\"country\":\"KE\",\"contactEmail\":\"ops@vasp.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"USD\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":false,\"aiInlineBudgetMs\":500,\"brandingTheme\":\"default\",\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"cbkAllowLive\":false,\"onboardedAt\":\"2026-10-"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create admin user for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.vasp.admin.r1016174257\", \"email\": \"sim.vasp.admin.r1016174257@sim.hokeka.test\", \"firstName\": \"Vasp\", \"lastName\": \"Admin\", \"password\": \"SimUser!2026-x9\", \"roleId\": 28, \"pspId\": 9}",
+            "status": 200,
+            "ms": 474.2,
+            "response": "{\"id\":25,\"username\":\"sim.vasp.admin.r1016174257\",\"email\":\"sim.vasp.admin.r1016174257@sim.hokeka.test\",\"firstName\":\"Vasp\",\"lastName\":\"Admin\",\"role\":{\"id\":28,\"name\":\"PSP_ADMIN\",\"description\":\"PSP Administrator\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITEL"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.vasp.admin.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.vasp.admin.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 392.9,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Vasp\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:44:07.636557\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITELIST_ENTITY\",\"REPORT_VIEW\",\"EXPORT_DATA\",\"VIEW_PII\",\"CLOSE_CASES\",\"FILE_"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create compliance user for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.vasp.compliance.r1016174257\", \"email\": \"sim.vasp.compliance.r1016174257@sim.hokeka.test\", \"firstName\": \"Vasp\", \"lastName\": \"Compliance\", \"password\": \"SimUser!2026-x9\", \"roleId\": 29, \"pspId\": 9}",
+            "status": 200,
+            "ms": 660.2,
+            "response": "{\"id\":26,\"username\":\"sim.vasp.compliance.r1016174257\",\"email\":\"sim.vasp.compliance.r1016174257@sim.hokeka.test\",\"firstName\":\"Vasp\",\"lastName\":\"Compliance\",\"role\":{\"id\":29,\"name\":\"COMPLIANCE_OFFICER\",\"description\":\"Compliance Officer\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"systemRole\":true},\"psp\":{\"pspId\":9,\"pspCode\":\"SIMVASP_R1016174257\",\"legalName\":\"SimChain Exchange Ltd r1016174257\",\"tradingName\":\"SimChain\",\"country\":\"KE\",\"contactEmail\":\"ops@vasp.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.vasp.compliance.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.vasp.compliance.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 362.0,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Vasp\",\"lastName\":\"Compliance\",\"createdAt\":\"2026-10-16T17:44:08.596642\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"name\":\"COMPLIANCE_OFFICER\",\"id\":29},\"pspId\":9,\"id\":26,\"psp\":{\"code\":\"SIMVASP_R1016174257\",\"name\":\"SimChain\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":9},\"email\":\"sim.vasp.compliance.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.vasp.compliance.r1016174257\"},\"token\":\"05017FB84BCD1C65E99B9B35EE81CCE6\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create analyst user for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.vasp.analyst.r1016174257\", \"email\": \"sim.vasp.analyst.r1016174257@sim.hokeka.test\", \"firstName\": \"Vasp\", \"lastName\": \"Analyst\", \"password\": \"SimUser!2026-x9\", \"roleId\": 25, \"pspId\": 9}",
+            "status": 200,
+            "ms": 578.8,
+            "response": "{\"id\":27,\"username\":\"sim.vasp.analyst.r1016174257\",\"email\":\"sim.vasp.analyst.r1016174257@sim.hokeka.test\",\"firstName\":\"Vasp\",\"lastName\":\"Analyst\",\"role\":{\"id\":25,\"name\":\"PSP_ANALYST\",\"description\":\"PSP Case Analyst\",\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"systemRole\":true},\"psp\":{\"pspId\":9,\"pspCode\":\"SIMVASP_R1016174257\",\"legalName\":\"SimChain Exchange Ltd r1016174257\",\"tradingName\":\"SimChain\",\"country\":\"KE\",\"contactEmail\":\"ops@vasp.r1016174257.sim.test\",\"billin"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.vasp.analyst.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.vasp.analyst.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 382.5,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Vasp\",\"lastName\":\"Analyst\",\"createdAt\":\"2026-10-16T17:44:09.572132\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"name\":\"PSP_ANALYST\",\"id\":25},\"pspId\":9,\"id\":27,\"psp\":{\"code\":\"SIMVASP_R1016174257\",\"name\":\"SimChain\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":9},\"email\":\"sim.vasp.analyst.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.vasp.analyst.r1016174257\"},\"token\":\"31E89B8FE4260E3F6B"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create user user for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /users",
+            "requestBody": "{\"username\": \"sim.vasp.user.r1016174257\", \"email\": \"sim.vasp.user.r1016174257@sim.hokeka.test\", \"firstName\": \"Vasp\", \"lastName\": \"User\", \"password\": \"SimUser!2026-x9\", \"roleId\": 35, \"pspId\": 9}",
+            "status": 200,
+            "ms": 630.0,
+            "response": "{\"id\":28,\"username\":\"sim.vasp.user.r1016174257\",\"email\":\"sim.vasp.user.r1016174257@sim.hokeka.test\",\"firstName\":\"Vasp\",\"lastName\":\"User\",\"role\":{\"id\":35,\"name\":\"PSP_USER\",\"description\":\"Sim PSP operator\",\"psp\":{\"pspId\":9,\"pspCode\":\"SIMVASP_R1016174257\",\"legalName\":\"SimChain Exchange Ltd r1016174257\",\"tradingName\":\"SimChain\",\"country\":\"KE\",\"contactEmail\":\"ops@vasp.r1016174257.sim.test\",\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"paymentTerms\":30,\"currency\":\"USD\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"signalTaxonomyMode\":\"INFLUENCE_DECISION\",\"aiInlineMode\":false,\"aiI"
+          }
+        },
+        {
+          "ok": true,
+          "message": "sim.vasp.user.r1016174257 login",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.vasp.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 418.3,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Vasp\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:44:10.532906\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":35},\"pspId\":9,\"id\":28,\"psp\":{\"code\":\"SIMVASP_R1016174257\",\"name\":\"SimChain\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":9},\"email\":\"sim.vasp.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.vasp.user.r1016174257\"},\"token\":\"A633D1B88083C2A928B1DEC222A3803F\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim OTC Desk for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim OTC Desk r1016174257\", \"tradingName\": \"Sim OTC Desk\", \"registrationNumber\": \"SIM-vasp-0-r1016174257\", \"country\": \"KE\", \"mcc\": \"6051\", \"pspId\": 9, \"contactEmail\": \"m0@vasp.sim.test\"}",
+            "status": 201,
+            "ms": 609.4,
+            "response": "{\"merchantId\":6,\"legalName\":\"Sim OTC Desk r1016174257\",\"tradingName\":\"Sim OTC Desk\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"6051\",\"contactEmail\":\"m0@vasp.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:44:11.6573258\",\"updatedAt\":\"2026-10-16T17:44:11.9310133\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:44:11.7867054\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:44:11.7867054\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfigured\":false"
+          }
+        },
+        {
+          "ok": true,
+          "message": "create merchant Sim Wallet Payouts for SIMVASP_R1016174257",
+          "severity": null,
+          "evidence": {
+            "request": "POST /merchants",
+            "requestBody": "{\"legalName\": \"Sim Wallet Payouts r1016174257\", \"tradingName\": \"Sim Wallet Payouts\", \"registrationNumber\": \"SIM-vasp-1-r1016174257\", \"country\": \"KE\", \"mcc\": \"6012\", \"pspId\": 9, \"contactEmail\": \"m1@vasp.sim.test\"}",
+            "status": 201,
+            "ms": 579.6,
+            "response": "{\"merchantId\":7,\"legalName\":\"Sim Wallet Payouts r1016174257\",\"tradingName\":\"Sim Wallet Payouts\",\"country\":\"KE\",\"registrationNumber\":\"****4257\",\"mcc\":\"6012\",\"contactEmail\":\"m1@vasp.sim.test\",\"status\":\"PENDING_SCREENING\",\"createdAt\":\"2026-10-16T17:44:12.2430871\",\"updatedAt\":\"2026-10-16T17:44:12.5224268\",\"lastCorporateIntelligenceAt\":\"2026-10-16T17:44:12.3500244\",\"nextCorporateIntelligenceDue\":\"2026-10-19T17:44:12.3500244\",\"kycStatus\":\"PENDING\",\"contractStatus\":\"NO_CONTRACT\",\"dailyLimit\":0,\"currentUsage\":0,\"riskLevel\":\"UNKNOWN\",\"krs\":0.0,\"cra\":0.0,\"pep\":false,\"new\":true,\"cbkSettlementAccountConfi"
+          }
+        }
+      ]
+    },
+    {
+      "id": "A1",
+      "area": "monitoring",
+      "title": "Actuator health / info / metrics exposure",
+      "status": "FAIL",
+      "durationSeconds": 23.17,
+      "error": null,
+      "notes": [
+        "health components: db=UP, diskSpace=UP, livenessState=UP, mail=DOWN, neo4j=UP, onPremLease=UP, ping=UP, readinessState=UP, redis=UP, sanctionsData=DOWN"
+      ],
+      "checks": [
+        {
+          "ok": false,
+          "message": "anonymous /actuator/health is UP",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "GET /actuator/health",
+            "requestBody": null,
+            "status": 503,
+            "ms": 15649.0,
+            "response": "{\"status\":\"DOWN\",\"groups\":[\"liveness\",\"readiness\"]}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "anonymous health hides component detail",
+          "severity": null,
+          "evidence": {
+            "request": "GET /actuator/health",
+            "requestBody": null,
+            "status": 503,
+            "ms": 15649.0,
+            "response": "{\"status\":\"DOWN\",\"groups\":[\"liveness\",\"readiness\"]}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component db UP",
+          "severity": null,
+          "evidence": {
+            "component": "db",
+            "detail": {
+              "status": "UP",
+              "details": {
+                "database": "PostgreSQL",
+                "validationQuery": "SELECT 1",
+                "result": 1
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component diskSpace UP",
+          "severity": null,
+          "evidence": {
+            "component": "diskSpace",
+            "detail": {
+              "status": "UP",
+              "details": {
+                "total": 1022948798464,
+                "free": 374366093312,
+                "threshold": 10485760,
+                "path": "C:\\Users\\kevsh\\Documents\\AML system\\AML_FRAUD_DETECTOR\\.claude\\worktrees\\agent-ad657cf9abf5e23ba\\scripts\\sim\\results\\logs\\.",
+                "exists": true
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component livenessState UP",
+          "severity": null,
+          "evidence": {
+            "component": "livenessState",
+            "detail": {
+              "status": "UP"
+            }
+          }
+        },
+        {
+          "ok": false,
+          "message": "health component mail UP",
+          "severity": "WARN",
+          "evidence": {
+            "component": "mail",
+            "detail": {
+              "status": "DOWN",
+              "details": {
+                "location": ":587",
+                "error": "jakarta.mail.AuthenticationFailedException: failed to connect, no password specified?"
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component neo4j UP",
+          "severity": null,
+          "evidence": {
+            "component": "neo4j",
+            "detail": {
+              "status": "UP",
+              "details": {
+                "server": "5.26.32@127.0.0.1:57687",
+                "edition": "community",
+                "database": "neo4j"
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component onPremLease UP",
+          "severity": null,
+          "evidence": {
+            "component": "onPremLease",
+            "detail": {
+              "status": "UP",
+              "details": {
+                "mode": "DISABLED",
+                "authEnabled": false
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component ping UP",
+          "severity": null,
+          "evidence": {
+            "component": "ping",
+            "detail": {
+              "status": "UP"
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component readinessState UP",
+          "severity": null,
+          "evidence": {
+            "component": "readinessState",
+            "detail": {
+              "status": "UP"
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "health component redis UP",
+          "severity": null,
+          "evidence": {
+            "component": "redis",
+            "detail": {
+              "status": "UP",
+              "details": {
+                "version": "7.2.16"
+              }
+            }
+          }
+        },
+        {
+          "ok": false,
+          "message": "health component sanctionsData UP",
+          "severity": "WARN",
+          "evidence": {
+            "component": "sanctionsData",
+            "detail": {
+              "status": "DOWN",
+              "details": {
+                "watchlistRecords": -1,
+                "status": "UNAVAILABLE",
+                "reason": "Could not read sanctions count from aml-microservice; screening data status is unknown."
+              }
+            }
+          }
+        },
+        {
+          "ok": true,
+          "message": "anonymous /actuator/metrics refused",
+          "severity": null
+        },
+        {
+          "ok": true,
+          "message": "anonymous /actuator/prometheus refused",
+          "severity": null
+        },
+        {
+          "ok": true,
+          "message": "admin can scrape /actuator/prometheus",
+          "severity": null,
+          "evidence": {
+            "request": "GET /actuator/prometheus",
+            "requestBody": null,
+            "status": 200,
+            "ms": 4446.8,
+            "response": "# HELP kafka_consumer_coordinator_join_total The total number of group joins\n# TYPE kafka_consumer_coordinator_join_total counter\nkafka_consumer_coordinator_join_total{application=\"aml-fraud-detector\",client_id=\"consumer-aml-neo4j-projection-5\",environment=\"production\",kafka_version=\"3.6.0\",spring_id=\"kafkaConsumerFactory.consumer-aml-neo4j-projection-5\",} 1.0\nkafka_consumer_coordinator_join_total{application=\"aml-fraud-detector\",client_id=\"consumer-aml-feature-engine-6\",environment=\"production\",kafka_version=\"3.6.0\",spring_id=\"kafkaConsumerFactory.consumer-aml-feature-engine-6\",} 1.0\nkafka_co"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP user cannot scrape prometheus",
+          "severity": null
+        }
+      ]
+    },
+    {
+      "id": "A2",
+      "area": "monitoring",
+      "title": "Startup configuration warnings (Control Plane log)",
+      "status": "FAIL",
+      "durationSeconds": 62.27,
+      "error": null,
+      "notes": [
+        "boot WARN lines (excluding Flyway 'already exists'): 6; ERROR lines: 1",
+        "2026-10-16 17:20:40.846 WARN  [main] [] org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)",
+        "2026-10-16 17:20:56.153 WARN  [main] [] c.p.a.c.s.MpesaCallbackIpAllowlistFilter - MPESA_CALLBACK_ALLOWED_IPS is not configured \u2014 the M-Pesa callback endpoint accepts requests from any IP (matches pre-existing behaviour). Set it to Safaricom Daraja's published",
+        "2026-10-16 17:21:17.797 WARN  [main] [] o.d.c.k.builder.impl.KieBuilderImpl - File 'rules/aml-rules.drl' is in folder 'rules' but declares package 'com.posgateway.aml.rules'. It is advised to have a correspondance between package and folder names.",
+        "2026-10-16 17:21:43.944 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.AccountTransfer is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please consider",
+        "2026-10-16 17:21:43.950 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.MerchantRelationship is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please con",
+        "2026-10-16 17:21:47.143 WARN  [main] [] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to di",
+        "2026-10-16 17:20:51.539 ERROR [main] [] o.h.m.internal.MetadataContext - HHH015007: Illegal argument on static metamodel field injection : org.hibernate.envers.DefaultRevisionEntity_#class_; expected type :  org.hibernate.metamodel.model.domain.internal.Entity"
+      ],
+      "checks": [
+        {
+          "ok": true,
+          "message": "edge HSE-1 keys are configured (no EPHEMERAL key warning)",
+          "severity": null
+        },
+        {
+          "ok": false,
+          "message": "EnvVarStartupValidator reports 0 MISSING",
+          "severity": "FAIL",
+          "evidence": {
+            "line": null
+          }
+        },
+        {
+          "ok": true,
+          "message": "Flyway migrations are free of duplicate DDL (0 'already exists' notices)",
+          "severity": null
+        },
+        {
+          "ok": false,
+          "message": "no ERROR lines during boot",
+          "severity": "WARN",
+          "evidence": {
+            "errors": [
+              "2026-10-16 17:20:51.539 ERROR [main] [] o.h.m.internal.MetadataContext - HHH015007: Illegal argument on static metamodel field injection : org.hibernate.envers.DefaultRevisionEntity_#class_; expected type :  org.hibernate.metamodel.model.domain.internal.EntityTypeImpl; encountered type : jakarta.per"
+            ]
+          }
+        },
+        {
+          "ok": true,
+          "message": "sanctions startup count check did not time out",
+          "severity": null,
+          "evidence": {
+            "hint": "SanctionsCountClient 500ms timeout turns the fail-closed check into a warning"
+          }
+        },
+        {
+          "ok": true,
+          "message": "Flyway: all migrations successful (latest V251)",
+          "severity": null,
+          "evidence": {
+            "latest": "251",
+            "failed": "0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "AI1",
+      "area": "ai",
+      "title": "AI decision layer degrades gracefully with no LAYA key (shadow)",
+      "status": "PASS",
+      "durationSeconds": 1.36,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "AI status: not configured",
+          "severity": null,
+          "evidence": {
+            "request": "GET /ai/status",
+            "requestBody": null,
+            "status": 200,
+            "ms": 1356.1,
+            "response": "{\"configured\":false,\"provider\":\"laya\",\"questionConfigVersion\":\"v1-draft-2026-09-25\",\"shadowMode\":true,\"promoted\":false,\"active\":false,\"apiBaseUrl\":\"https://api.laya.studio\",\"decisionsBaseUrl\":\"https://api.laya.studio\",\"decisionsTimeoutMs\":3000,\"inlineTimeoutMs\":500,\"minConfidenceToApply\":0.55,\"minConfidenceToAutoAct\":0.72,\"dailyCallBudgetPerPsp\":0,\"dailyInputTokenCapPerPsp\":0,\"bandsVersion\":\"provisional-v1\",\"circuitState\":\"CLOSED\",\"circuitFailureRate\":-1.0,\"callsLast24h\":0,\"fallbacksLast24h\":0,\"inputTokensLast24h\":0,\"spendLast24hUsd\":0,\"engines\":[{\"engineCode\":\"TRANSACTION_RISK\",\"enabled\":true"
+          }
+        },
+        {
+          "ok": true,
+          "message": "shadow mode on, AI inactive",
+          "severity": null,
+          "evidence": {
+            "request": "GET /ai/status",
+            "requestBody": null,
+            "status": 200,
+            "ms": 1356.1,
+            "response": "{\"configured\":false,\"provider\":\"laya\",\"questionConfigVersion\":\"v1-draft-2026-09-25\",\"shadowMode\":true,\"promoted\":false,\"active\":false,\"apiBaseUrl\":\"https://api.laya.studio\",\"decisionsBaseUrl\":\"https://api.laya.studio\",\"decisionsTimeoutMs\":3000,\"inlineTimeoutMs\":500,\"minConfidenceToApply\":0.55,\"minConfidenceToAutoAct\":0.72,\"dailyCallBudgetPerPsp\":0,\"dailyInputTokenCapPerPsp\":0,\"bandsVersion\":\"provisional-v1\",\"circuitState\":\"CLOSED\",\"circuitFailureRate\":-1.0,\"callsLast24h\":0,\"fallbacksLast24h\":0,\"inputTokensLast24h\":0,\"spendLast24hUsd\":0,\"engines\":[{\"engineCode\":\"TRANSACTION_RISK\",\"enabled\":true"
+          }
+        },
+        {
+          "ok": true,
+          "message": "no PSP-facing response names the AI provider (13 responses scanned)",
+          "severity": null,
+          "evidence": {
+            "samples": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "area": "auth",
+      "title": "Login / me / logout / session",
+      "status": "FAIL",
+      "durationSeconds": 2.08,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "bad password -> 401",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"password\": \"wrong-password\"}",
+            "status": 401,
+            "ms": 263.6,
+            "response": "{\"message\":\"Invalid username or password\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "login returns user bound to PSP",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 466.6,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:43:23.866339\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":33},\"pspId\":7,\"id\":20,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.user.r1016174257\"},\"token\":\"F2B5B94BE9A99D556070A074B85A8BE5\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "session cookie issued",
+          "severity": null
+        },
+        {
+          "ok": true,
+          "message": "/auth/me",
+          "severity": null,
+          "evidence": {
+            "request": "GET /auth/me",
+            "requestBody": null,
+            "status": 200,
+            "ms": 293.5,
+            "response": "{\"firstName\":\"Card\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:43:23.866339\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":33},\"pspId\":7,\"id\":20,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.user.r1016174257\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "/auth/session/check valid",
+          "severity": null,
+          "evidence": {
+            "request": "GET /auth/session/check",
+            "requestBody": null,
+            "status": 200,
+            "ms": 60.0,
+            "response": "{\"valid\":true,\"lastAccessedTime\":1792161940475,\"maxInactiveInterval\":1800,\"timeRemaining\":1799,\"username\":\"sim.card.user.r1016174257\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "logout",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/logout",
+            "requestBody": null,
+            "status": 200,
+            "ms": 40.5,
+            "response": "{\"message\":\"Logged out successfully\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "session invalid after logout",
+          "severity": null,
+          "evidence": {
+            "request": "GET /auth/me",
+            "requestBody": null,
+            "status": 403,
+            "ms": 147.6,
+            "response": "{\"timestamp\":\"2026-10-16T14:45:40.647+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/auth/me\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "unauthenticated /alerts refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /alerts",
+            "requestBody": null,
+            "status": 403,
+            "ms": 125.8,
+            "response": "{\"timestamp\":\"2026-10-16T14:45:40.847+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/alerts\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "plain-HTTP login refused (require-ssl)",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 302,
+            "ms": 54.3,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "login returns a token (docs/PSP_API_GUIDE.md \u00a72 contract)",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.card.user.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 509.8,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Card\",\"lastName\":\"User\",\"createdAt\":\"2026-10-16T17:43:23.866339\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\"],\"name\":\"PSP_USER\",\"id\":33},\"pspId\":7,\"id\":20,\"psp\":{\"code\":\"SIMCARD_R1016174257\",\"name\":\"SimCard Acquiring\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":7},\"email\":\"sim.card.user.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.card.user.r1016174257\"},\"token\":\"28974144395B926B7872305F45D5E02F\"}"
+          }
+        },
+        {
+          "ok": false,
+          "message": "Authorization: Bearer <token> authenticates (docs contract)",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "GET /auth/me",
+            "requestBody": null,
+            "status": 403,
+            "ms": 113.6,
+            "response": "{\"timestamp\":\"2026-10-16T14:45:41.525+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/auth/me\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B2",
+      "area": "auth",
+      "title": "Hard-coded / demo credentials are not usable in production profile",
+      "status": "FAIL",
+      "durationSeconds": 3.54,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": false,
+          "message": "'admin' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"admin\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 443.3,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Platform\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:22:10.161477\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"OVERRIDE_SCREENING_MATCH\",\"VIEW_SCREENING_RESULTS\",\"MANAGE_SKILLS\",\"PSP_SETTINGS_EDIT\",\"APPROVE_SAR\",\"ADD_CASE_NOTES\",\"ESCALATE_CASES\",\"MODIFY_RISK_SCORES\",\"MANAGE_ROLES\",\"CONFIGURE_SYSTEM\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"VIEW_AUDIT_LOGS\",\"MANAGE_PSP_THEME\",\"ASSIGN_CASES\",\"PSP_SETTINGS_VIEW\",\"AMEND_SAR\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"REJECT_S"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'super.admin' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"super.admin\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 602.0,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Hokeka\",\"lastName\":\"Super Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"OVERRIDE_SCREENING_MATCH\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"MODIFY_RISK_SCORES\",\"MANAGE_ROLES\",\"REOPEN_CASES\",\"CONFIGURE_SYSTEM\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"VIEW_AUDIT_LOGS\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"REJECT_SAR\",\"VIEW_SA"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'platform.admin' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"platform.admin\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 442.7,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Hokeka\",\"lastName\":\"Platform Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"MANAGE_USERS\",\"VIEW_AUDIT_LOGS\",\"VIEW_SCREENING_RESULTS\",\"PSP_UI_EDIT\",\"PSP_SETTINGS_VIEW\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"MANAGE_ROLES\",\"REPORT_VIEW\",\"CONFIGURE_SYSTEM\",\"MANAGE_PSP\"],\"name\":\"PLATFORM_ADMIN\",\"id\":2},\"pspId\":1,\"id\":2,\"psp\":{\"code\":\"HOKEKA_PLATFORM\",\"name\":\"Hokeka\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":1},\"email\":\"platform.admin@hokeka.com\",\"enabled\":true,\"username\":\"platform.ad"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'velocity.admin' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"velocity.admin\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 400.9,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Velocity\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITELIST_ENTITY\",\"REPORT_VIEW\",\"EXPORT_DATA\",\"VIEW_PII\",\"CLOSE_CASES\",\"F"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'compliance' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"compliance\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 377.8,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Compliance\",\"lastName\":\"Officer\",\"createdAt\":\"2026-10-16T17:22:10.476693\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"name\":\"COMPLIANCE_OFFICER\",\"id\":29},\"pspId\":0,\"id\":10,\"email\":\"compliance@hokeka.com\",\"enabled\":true,\"username\":\"compliance\"},\"token\":\"823CAB139DD4627AA7E4B3A6BDBB0C94\"}"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'analyst' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"analyst\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 388.5,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Risk\",\"lastName\":\"Analyst\",\"createdAt\":\"2026-10-16T17:22:11.296903\",\"role\":{\"permissions\":[\"VIEW_TRANSACTION_DETAILS\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\"],\"name\":\"ANALYST\",\"id\":31},\"pspId\":0,\"id\":12,\"email\":\"analyst@hokeka.com\",\"enabled\":true,\"username\":\"analyst\"},\"token\":\"0E94C679E427F7432976C94B05CF3A79\"}"
+          }
+        },
+        {
+          "ok": false,
+          "message": "'viewer' / 'Hokeka2026!' must not log in on the production profile",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"viewer\", \"password\": \"Hokeka2026!\"}",
+            "status": 200,
+            "ms": 591.5,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"View\",\"lastName\":\"Only\",\"createdAt\":\"2026-10-16T17:22:11.659177\",\"role\":{\"permissions\":[\"VIEW_SAR\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\"],\"name\":\"VIEWER\",\"id\":32},\"pspId\":0,\"id\":13,\"email\":\"viewer@hokeka.com\",\"enabled\":true,\"username\":\"viewer\"},\"token\":\"D58F77504FA4EC81CE0740BA71EE69B3\"}"
+          }
+        },
+        {
+          "ok": false,
+          "message": "admin logs in with SEED_ADMIN_PASSWORD (operator-controlled secret)",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"admin\", \"password\": \"SimAdmin!6bcd6516585c362a\"}",
+            "status": 401,
+            "ms": 292.1,
+            "response": "{\"message\":\"Invalid username or password\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "area": "auth",
+      "title": "Password reset + change password",
+      "status": "PASS",
+      "durationSeconds": 133.12,
+      "error": null,
+      "notes": [
+        "reset tokens stored for user: 1"
+      ],
+      "checks": [
+        {
+          "ok": true,
+          "message": "reset request returns 200 for known and unknown users",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/password-reset/request",
+            "requestBody": "{\"identifier\": \"sim.momo.user.r1016174257\"}",
+            "status": 200,
+            "ms": 1047.5,
+            "response": "{\"message\":\"If the account exists, a reset link has been sent.\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "reset response does not reveal whether the user exists",
+          "severity": null,
+          "evidence": {
+            "known": "{\"message\":\"If the account exists, a reset link has been sent.\"}",
+            "unknown": "{\"message\":\"If the account exists, a reset link has been sent.\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "invalid reset token rejected",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/password-reset/confirm",
+            "requestBody": "{\"token\": \"not-a-real-token\"}",
+            "status": 400,
+            "ms": 139.8,
+            "response": "{\"error\":\"bad_request\",\"message\":\"Invalid or expired reset token\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "emergency reset disabled / refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/password-reset/emergency",
+            "requestBody": "{\"identifier\": \"sim.momo.user.r1016174257\"}",
+            "status": 403,
+            "ms": 1420.2,
+            "response": "{\"error\":\"forbidden\",\"message\":\"Emergency reset is disabled\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "change password with wrong current password refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /users/me/password",
+            "requestBody": "{\"currentPassword\": \"wrong\", \"newPassword\": \"SimUser!2026-x9#2\"}",
+            "status": 400,
+            "ms": 973.3,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "change own password",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /users/me/password",
+            "requestBody": "{\"currentPassword\": \"SimUser!2026-x9\", \"newPassword\": \"SimUser!2026-x9#2\"}",
+            "status": 200,
+            "ms": 1165.1,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "login with new password",
+          "severity": null
+        },
+        {
+          "ok": true,
+          "message": "restore password",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /users/me/password",
+            "requestBody": "{\"currentPassword\": \"SimUser!2026-x9#2\", \"newPassword\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 651.3,
+            "response": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "C1",
+      "area": "rbac",
+      "title": "PSP users cannot reach platform endpoints",
+      "status": "PASS",
+      "durationSeconds": 4.96,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "user: GET /admin/psp-api-keys?pspId=7 refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-api-keys?pspId=7",
+            "requestBody": null,
+            "status": 403,
+            "ms": 312.9,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:58.4950706\",\"path\":\"/api/v1/admin/psp-api-keys\",\"method\":\"GET\",\"traceId\":\"bff04f47-c186-4bd6-af3a-4b35e22729c1\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: POST /psps/register refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 93.5,
+            "response": "{\"timestamp\":\"2026-10-16T14:47:58.591+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/psps/register\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: PUT /psps/7/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/status",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 91.3,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:58.6821373\",\"path\":\"/api/v1/psps/7/status\",\"method\":\"PUT\",\"traceId\":\"b3ce67d6-42bb-4b77-92ce-ae3415170e9b\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: GET /admin/onboarding/invites refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/onboarding/invites",
+            "requestBody": null,
+            "status": 405,
+            "ms": 375.4,
+            "response": "{\"status\":\"METHOD_NOT_ALLOWED\",\"message\":\"HTTP method 'GET' is not supported for this endpoint\",\"errorCode\":\"ERR_METHOD_NOT_ALLOWED_001\",\"httpStatus\":405,\"timestamp\":\"2026-10-16T17:47:59.0567377\",\"path\":\"/api/v1/admin/onboarding/invites\",\"method\":\"GET\",\"details\":{\"supportedMethods\":[\"POST\"],\"requestedMethod\":\"GET\"},\"traceId\":\"1c40aef4-bd65-4935-af89-e2a76b823a68\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: PUT /psps/7/signal-settings refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/signal-settings",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 136.1,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.1935822\",\"path\":\"/api/v1/psps/7/signal-settings\",\"method\":\"PUT\",\"traceId\":\"7dd4a72e-4a77-4c7f-a5f5-cfc758731b45\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: GET /settings/system refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /settings/system",
+            "requestBody": null,
+            "status": 403,
+            "ms": 60.7,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.2555982\",\"path\":\"/api/v1/settings/system\",\"method\":\"GET\",\"traceId\":\"d87c502e-f707-4e46-abbb-c97a6517bda3\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: GET /ai/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /ai/status",
+            "requestBody": null,
+            "status": 403,
+            "ms": 40.1,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.2949916\",\"path\":\"/api/v1/ai/status\",\"method\":\"GET\",\"traceId\":\"4f955613-1cfb-4317-bdc1-de81d7ffd978\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: PUT /ai/engines/FRAUD_SCORING refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /ai/engines/FRAUD_SCORING",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 130.6,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.4259821\",\"path\":\"/api/v1/ai/engines/FRAUD_SCORING\",\"method\":\"PUT\",\"traceId\":\"516d3a49-15c3-484f-961d-5ed4796c6ad1\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: GET /admin/psp-billing/summary refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-billing/summary",
+            "requestBody": null,
+            "status": 403,
+            "ms": 133.7,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.5603085\",\"path\":\"/api/v1/admin/psp-billing/summary\",\"method\":\"GET\",\"traceId\":\"130ed194-9c91-4f4f-acd1-8b8aac915c88\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: POST /billing/invoices/generate refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /billing/invoices/generate",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 158.4,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.6798581\",\"path\":\"/api/v1/billing/invoices/generate\",\"method\":\"POST\",\"traceId\":\"e71ce28b-5dcf-4047-9f65-4e2b6d3a0e6b\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "user: GET /admin/decision-orchestrator refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/decision-orchestrator",
+            "requestBody": null,
+            "status": 403,
+            "ms": 98.9,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.8152216\",\"path\":\"/api/v1/admin/decision-orchestrator\",\"method\":\"GET\",\"traceId\":\"35489539-eb93-45d8-a46e-6cfcb808783d\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /admin/psp-api-keys?pspId=7 refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-api-keys?pspId=7",
+            "requestBody": null,
+            "status": 403,
+            "ms": 174.0,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:47:59.9914685\",\"path\":\"/api/v1/admin/psp-api-keys\",\"method\":\"GET\",\"traceId\":\"9859e42e-b71a-42bc-9a38-addca900762a\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: POST /psps/register refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 129.8,
+            "response": "{\"timestamp\":\"2026-10-16T14:48:00.068+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/psps/register\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: PUT /psps/7/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/status",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 131.8,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:00.25262\",\"path\":\"/api/v1/psps/7/status\",\"method\":\"PUT\",\"traceId\":\"6d9ebb88-2542-4294-a119-ed43b9b10c7d\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /admin/onboarding/invites refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/onboarding/invites",
+            "requestBody": null,
+            "status": 405,
+            "ms": 465.1,
+            "response": "{\"status\":\"METHOD_NOT_ALLOWED\",\"message\":\"HTTP method 'GET' is not supported for this endpoint\",\"errorCode\":\"ERR_METHOD_NOT_ALLOWED_001\",\"httpStatus\":405,\"timestamp\":\"2026-10-16T17:48:00.7174695\",\"path\":\"/api/v1/admin/onboarding/invites\",\"method\":\"GET\",\"details\":{\"supportedMethods\":[\"POST\"],\"requestedMethod\":\"GET\"},\"traceId\":\"7e8e1a67-8958-4d5f-a78c-1e3f92543b37\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: PUT /psps/7/signal-settings refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/signal-settings",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 129.2,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:00.8472814\",\"path\":\"/api/v1/psps/7/signal-settings\",\"method\":\"PUT\",\"traceId\":\"df9cc3c9-fccd-4b70-9653-6ac7c9499163\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /settings/system refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /settings/system",
+            "requestBody": null,
+            "status": 403,
+            "ms": 41.4,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:00.8896164\",\"path\":\"/api/v1/settings/system\",\"method\":\"GET\",\"traceId\":\"89a71d25-c4b9-4a71-81ad-c87a1697f351\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /ai/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /ai/status",
+            "requestBody": null,
+            "status": 403,
+            "ms": 51.9,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:00.9410135\",\"path\":\"/api/v1/ai/status\",\"method\":\"GET\",\"traceId\":\"c2a67792-559e-4935-9584-d7b795032266\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: PUT /ai/engines/FRAUD_SCORING refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /ai/engines/FRAUD_SCORING",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 227.1,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.1678288\",\"path\":\"/api/v1/ai/engines/FRAUD_SCORING\",\"method\":\"PUT\",\"traceId\":\"9d5dd572-8f43-467e-a44e-235581d22662\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /admin/psp-billing/summary refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-billing/summary",
+            "requestBody": null,
+            "status": 403,
+            "ms": 98.5,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.2666736\",\"path\":\"/api/v1/admin/psp-billing/summary\",\"method\":\"GET\",\"traceId\":\"f413774f-5ed1-4858-ab51-d5448c157b44\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: POST /billing/invoices/generate refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /billing/invoices/generate",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 133.5,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.3942186\",\"path\":\"/api/v1/billing/invoices/generate\",\"method\":\"POST\",\"traceId\":\"3eead1b9-a9b3-4e96-a300-4b8a93acebe0\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "analyst: GET /admin/decision-orchestrator refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/decision-orchestrator",
+            "requestBody": null,
+            "status": 403,
+            "ms": 141.2,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.5413057\",\"path\":\"/api/v1/admin/decision-orchestrator\",\"method\":\"GET\",\"traceId\":\"44d69009-22b7-4187-b322-e66dbca36e9e\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /admin/psp-api-keys?pspId=7 refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-api-keys?pspId=7",
+            "requestBody": null,
+            "status": 403,
+            "ms": 113.6,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.6552319\",\"path\":\"/api/v1/admin/psp-api-keys\",\"method\":\"GET\",\"traceId\":\"1a558529-0cdf-46ac-b459-85932b9e2837\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: POST /psps/register refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 89.5,
+            "response": "{\"timestamp\":\"2026-10-16T14:48:01.743+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/psps/register\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: PUT /psps/7/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/status",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 103.6,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:01.8477327\",\"path\":\"/api/v1/psps/7/status\",\"method\":\"PUT\",\"traceId\":\"f44c4323-d8a7-40d5-9f81-714afd44cf74\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /admin/onboarding/invites refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/onboarding/invites",
+            "requestBody": null,
+            "status": 405,
+            "ms": 279.0,
+            "response": "{\"status\":\"METHOD_NOT_ALLOWED\",\"message\":\"HTTP method 'GET' is not supported for this endpoint\",\"errorCode\":\"ERR_METHOD_NOT_ALLOWED_001\",\"httpStatus\":405,\"timestamp\":\"2026-10-16T17:48:02.1285385\",\"path\":\"/api/v1/admin/onboarding/invites\",\"method\":\"GET\",\"details\":{\"supportedMethods\":[\"POST\"],\"requestedMethod\":\"GET\"},\"traceId\":\"02716e8b-c80c-4a49-bf4e-0131185dfa69\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: PUT /psps/7/signal-settings refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/signal-settings",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 153.5,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.2762335\",\"path\":\"/api/v1/psps/7/signal-settings\",\"method\":\"PUT\",\"traceId\":\"ab076882-b7a1-49ea-92da-38f9730c0691\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /settings/system refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /settings/system",
+            "requestBody": null,
+            "status": 403,
+            "ms": 51.3,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.3291173\",\"path\":\"/api/v1/settings/system\",\"method\":\"GET\",\"traceId\":\"44950e3c-9e36-4370-8a68-f440818b8cad\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /ai/status refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /ai/status",
+            "requestBody": null,
+            "status": 403,
+            "ms": 52.9,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.3858483\",\"path\":\"/api/v1/ai/status\",\"method\":\"GET\",\"traceId\":\"d21da3bc-dafe-4d87-9f3b-b7130019817c\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: PUT /ai/engines/FRAUD_SCORING refused",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /ai/engines/FRAUD_SCORING",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 202.3,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.5888647\",\"path\":\"/api/v1/ai/engines/FRAUD_SCORING\",\"method\":\"PUT\",\"traceId\":\"6ee918d3-709e-4e54-bf0e-a621d9241ba3\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /admin/psp-billing/summary refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-billing/summary",
+            "requestBody": null,
+            "status": 403,
+            "ms": 76.3,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.6645458\",\"path\":\"/api/v1/admin/psp-billing/summary\",\"method\":\"GET\",\"traceId\":\"8c9fcb2c-6065-4e76-9d8c-b8e41a707712\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: POST /billing/invoices/generate refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /billing/invoices/generate",
+            "requestBody": "{}",
+            "status": 403,
+            "ms": 113.7,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.7529865\",\"path\":\"/api/v1/billing/invoices/generate\",\"method\":\"POST\",\"traceId\":\"925161ff-e98a-4e5a-b5a8-50d9b9cefdbe\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "admin: GET /admin/decision-orchestrator refused",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/decision-orchestrator",
+            "requestBody": null,
+            "status": 403,
+            "ms": 174.8,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:02.9541869\",\"path\":\"/api/v1/admin/decision-orchestrator\",\"method\":\"GET\",\"traceId\":\"f768997b-fdc3-42c6-8d74-6f42a0eb5dce\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP user cannot list all PSPs",
+          "severity": null,
+          "evidence": {
+            "request": "GET /psps",
+            "requestBody": null,
+            "status": 403,
+            "ms": 53.6,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:03.0078281\",\"path\":\"/api/v1/psps\",\"method\":\"GET\",\"traceId\":\"7750bb89-24e7-42dd-9d0e-15e3bee5efee\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP_USER without MANAGE_RULES cannot create rules",
+          "severity": null,
+          "evidence": {
+            "request": "POST /rules",
+            "requestBody": "{\"name\": \"x\", \"ruleType\": \"JSON\", \"ruleJson\": \"{}\", \"action\": \"ALLOW\"}",
+            "status": 403,
+            "ms": 136.0,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:03.1422424\",\"path\":\"/api/v1/rules\",\"method\":\"POST\",\"traceId\":\"00f40f4c-363e-4238-871c-e5844460f742\"}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "D1",
+      "area": "onboarding",
+      "title": "Invite-only onboarding",
+      "status": "PASS",
+      "durationSeconds": 4.69,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "platform admin creates invite",
+          "severity": null,
+          "evidence": {
+            "request": "POST /admin/onboarding/invites",
+            "requestBody": "{\"pspId\": 9, \"role\": \"PSP_ANALYST\", \"expiresAt\": \"2026-10-18T17:48:03\"}",
+            "status": 200,
+            "ms": 1966.3,
+            "response": "{\"inviteId\":1,\"token\":\"8dc2af00-baa6-4e96-9b6e-441d8715e607.21d71dc7-87ed-415a-b9f5-7e7e0b0a4685\",\"expiresAt\":\"2026-10-18T17:48:03\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "register with invite",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/register-with-invite",
+            "requestBody": "{\"username\": \"sim.vasp.invited.r1016174257\", \"email\": \"sim.vasp.invited.r1016174257@sim.hokeka.test\", \"firstName\": \"In\", \"lastName\": \"Vited\", \"password\": \"SimUser!2026-x9\", \"inviteToken\": \"8dc2af00-baa6-4e96-9b6e-441d8715e607.21d71dc7-87ed-415a-b9f5-7e7e0b0a4685\"}",
+            "status": 200,
+            "ms": 1718.3,
+            "response": "{\"user\":{\"firstName\":\"In\",\"lastName\":\"Vited\",\"createdAt\":\"2026-10-16T17:48:05.9465372\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"name\":\"PSP_ANALYST\",\"id\":25},\"pspId\":9,\"id\":29,\"psp\":{\"code\":\"SIMVASP_R1016174257\",\"name\":\"SimChain\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":9},\"email\":\"sim.vasp.invited.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.vasp.invited.r1016174257\"},\"success\":true}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "invited user bound to invite PSP",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/login",
+            "requestBody": "{\"username\": \"sim.vasp.invited.r1016174257\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 200,
+            "ms": 448.5,
+            "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"In\",\"lastName\":\"Vited\",\"createdAt\":\"2026-10-16T17:48:05.946537\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"VIEW_CASES\",\"ADD_CASE_NOTES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"REPORT_VIEW\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\"],\"name\":\"PSP_ANALYST\",\"id\":25},\"pspId\":9,\"id\":29,\"psp\":{\"code\":\"SIMVASP_R1016174257\",\"name\":\"SimChain\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":9},\"email\":\"sim.vasp.invited.r1016174257@sim.hokeka.test\",\"enabled\":true,\"username\":\"sim.vasp.invited.r1016174257\"},\"token\":\"02060BE4CE04B10AA8488A"
+          }
+        },
+        {
+          "ok": true,
+          "message": "invite cannot be reused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/register-with-invite",
+            "requestBody": "{\"username\": \"sim.vasp.invited.r1016174257x\", \"email\": \"xsim.vasp.invited.r1016174257@sim.hokeka.test\", \"firstName\": \"a\", \"lastName\": \"b\", \"password\": \"SimUser!2026-x9\", \"inviteToken\": \"8dc2af00-baa6-4e96-9b6e-441d8715e607.21d71dc7-87ed-415a-b9f5-7e7e0b0a4685\"}",
+            "status": 403,
+            "ms": 218.5,
+            "response": "{\"message\":\"Invite is invalid, expired, or already used\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "anonymous self-registration refused (invite-only)",
+          "severity": null,
+          "evidence": {
+            "request": "POST /auth/register",
+            "requestBody": "{\"username\": \"selfsignupr1016174257\", \"email\": \"sr1016174257@x.test\", \"firstName\": \"a\", \"lastName\": \"b\", \"password\": \"SimUser!2026-x9\"}",
+            "status": 403,
+            "ms": 68.9,
+            "response": "{\"timestamp\":\"2026-10-16T14:48:07.565+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/auth/register\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "anonymous PSP registration refused",
+          "severity": null,
+          "evidence": {
+            "request": "POST /psps/register",
+            "requestBody": "{\"pspCode\": \"ANONr1016174257\"}",
+            "status": 403,
+            "ms": 139.3,
+            "response": "{\"timestamp\":\"2026-10-16T14:48:07.704+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/psps/register\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin cannot mint invites (or for another PSP)",
+          "severity": null,
+          "evidence": {
+            "request": "POST /admin/onboarding/invites",
+            "requestBody": "{\"pspId\": 9, \"role\": \"PSP_ADMIN\", \"expiresAt\": \"2026-10-18T17:48:03\"}",
+            "status": 403,
+            "ms": 131.2,
+            "response": "{\"status\":\"FORBIDDEN\",\"message\":\"You do not have permission to access this resource\",\"errorCode\":\"ERR_ACCESS_DENIED_001\",\"httpStatus\":403,\"timestamp\":\"2026-10-16T17:48:07.8366942\",\"path\":\"/api/v1/admin/onboarding/invites\",\"method\":\"POST\",\"traceId\":\"db093d06-68bc-4f17-b32e-3df1607d70cd\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "new PSP starts PENDING until activated",
+          "severity": null,
+          "evidence": {
+            "status": "PENDING"
+          }
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "area": "onboarding",
+      "title": "PSP API keys lifecycle and use",
+      "status": "FAIL",
+      "durationSeconds": 10.8,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "issue API key",
+          "severity": null,
+          "evidence": {
+            "request": "POST /admin/psp-api-keys?pspId=7",
+            "requestBody": null,
+            "status": 200,
+            "ms": 677.7,
+            "response": "{\"id\":1,\"keyPrefix\":\"hka_OeEx9RDk\",\"plaintextKey\":\"hka_OeEx9RDkYawCUANGg3S6VI4yTMPsMojeMe7WK2YiBqY\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "list keys hides plaintext",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-api-keys?pspId=7",
+            "requestBody": null,
+            "status": 200,
+            "ms": 295.5,
+            "response": "[{\"id\":1,\"keyPrefix\":\"hka_OeEx9RDk\",\"createdBy\":9,\"createdAt\":\"2026-10-16T17:48:07.940871\"}]"
+          }
+        },
+        {
+          "ok": true,
+          "message": "plaintext key not stored in DB",
+          "severity": null,
+          "evidence": {
+            "matches": "0"
+          }
+        },
+        {
+          "ok": false,
+          "message": "issued API key authenticates PSP ingest (X-Api-Key or Bearer)",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "POST /transactions/ingest",
+            "requestBody": "{\"merchantId\": \"1\", \"amountCents\": 1500, \"currency\": \"USD\", \"pan\": \"4873955523526895\", \"terminalId\": \"T-card-01\", \"ipAddress\": \"198.51.100.157\", \"countryCode\": \"KE\", \"channelType\": \"ECOM\", \"direction\": \"INBOUND\", \"clientReference\": \"r1016174257-1f357b1ca543\", \"acquirerResponse\": \"00\"}",
+            "status": 403,
+            "ms": 197.9,
+            "response": "{\"timestamp\":\"2026-10-16T14:48:17.544+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/transactions/ingest\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "rotate key",
+          "severity": null,
+          "evidence": {
+            "request": "POST /admin/psp-api-keys/1/rotate",
+            "requestBody": null,
+            "status": 200,
+            "ms": 618.9,
+            "response": "{\"id\":2,\"keyPrefix\":\"hka_I-fCeHRG\",\"plaintextKey\":\"hka_I-fCeHRGyOimzcLQHxEs5BGljnRA4Bam3Qmty_9RllU\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "revoke key",
+          "severity": null,
+          "evidence": {
+            "request": "DELETE /admin/psp-api-keys/1",
+            "requestBody": null,
+            "status": 204,
+            "ms": 308.7,
+            "response": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "area": "onboarding",
+      "title": "PSP settings & signal taxonomy mode",
+      "status": "PASS",
+      "durationSeconds": 3.62,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": true,
+          "message": "set card signal mode REPORTING_ONLY",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/signal-settings",
+            "requestBody": "{\"mode\": \"REPORTING_ONLY\"}",
+            "status": 200,
+            "ms": 511.4,
+            "response": "{\"pspId\":7,\"mode\":\"REPORTING_ONLY\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "card PSP admin reads own signal mode",
+          "severity": null,
+          "evidence": {
+            "request": "GET /psps/7/signal-settings",
+            "requestBody": null,
+            "status": 200,
+            "ms": 360.4,
+            "response": "{\"pspId\":7,\"mode\":\"REPORTING_ONLY\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "set momo signal mode INFLUENCE_DECISION",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/8/signal-settings",
+            "requestBody": "{\"mode\": \"INFLUENCE_DECISION\"}",
+            "status": 200,
+            "ms": 235.5,
+            "response": "{\"pspId\":8,\"mode\":\"INFLUENCE_DECISION\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "momo PSP admin reads own signal mode",
+          "severity": null,
+          "evidence": {
+            "request": "GET /psps/8/signal-settings",
+            "requestBody": null,
+            "status": 200,
+            "ms": 175.4,
+            "response": "{\"pspId\":8,\"mode\":\"INFLUENCE_DECISION\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "set vasp signal mode ALERT_ROUTING",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/9/signal-settings",
+            "requestBody": "{\"mode\": \"ALERT_ROUTING\"}",
+            "status": 200,
+            "ms": 416.2,
+            "response": "{\"pspId\":9,\"mode\":\"ALERT_ROUTING\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "vasp PSP admin reads own signal mode",
+          "severity": null,
+          "evidence": {
+            "request": "GET /psps/9/signal-settings",
+            "requestBody": null,
+            "status": 200,
+            "ms": 318.9,
+            "response": "{\"pspId\":9,\"mode\":\"ALERT_ROUTING\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "invalid signal mode rejected with 400",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7/signal-settings",
+            "requestBody": "{\"mode\": \"NOT_A_MODE\"}",
+            "status": 400,
+            "ms": 209.6,
+            "response": ""
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin GET /settings",
+          "severity": null,
+          "evidence": {
+            "request": "GET /settings",
+            "requestBody": null,
+            "status": 200,
+            "ms": 384.0,
+            "response": "{\"theme\":\"light\",\"notifications\":true,\"autoRefresh\":true,\"refreshInterval\":30,\"timezone\":\"UTC\",\"dateFormat\":\"YYYY-MM-DD\",\"itemsPerPage\":50}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "GET /psps/me returns own PSP",
+          "severity": null,
+          "evidence": {
+            "request": "GET /psps/me",
+            "requestBody": null,
+            "status": 200,
+            "ms": 22.2,
+            "response": "{\"id\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"currency\":\"USD\",\"paymentTerms\":30,\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"brandingTheme\":\"default\",\"createdAt\":\"2026-10-16T17:43:00.538468\",\"updatedAt\":\"2026-10-16T17:43:17.578281\",\"onboardedAt\":\"2026-10-16T17:43:00.538468\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin updates own PSP profile",
+          "severity": null,
+          "evidence": {
+            "request": "PUT /psps/7",
+            "requestBody": "{\"contactPhone\": \"+254700000001\", \"primaryColor\": \"#123456\"}",
+            "status": 200,
+            "ms": 223.7,
+            "response": "{\"id\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"legalName\":\"SimCard Acquiring Ltd r1016174257\",\"tradingName\":\"SimCard Acquiring\",\"country\":\"KE\",\"contactEmail\":\"ops@card.r1016174257.sim.test\",\"contactPhone\":\"+254700000001\",\"status\":\"ACTIVE\",\"isTestMode\":false,\"kycEnabled\":true,\"billingPlan\":\"PAY_AS_YOU_GO\",\"billingCycle\":\"MONTHLY\",\"currency\":\"USD\",\"paymentTerms\":30,\"cbkReportingEnabled\":false,\"cbkEnvironment\":\"preprod\",\"primaryColor\":\"#123456\",\"brandingTheme\":\"default\",\"createdAt\":\"2026-10-16T17:43:00.538468\",\"updatedAt\":\"2026-10-16T17:48:21.3862428\",\"onboardedAt\":\"2026-10-16T17:43:00.538468\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "platform admin GET /settings/system",
+          "severity": null,
+          "evidence": {
+            "request": "GET /settings/system",
+            "requestBody": null,
+            "status": 200,
+            "ms": 757.5,
+            "response": "{\"riskThresholdMedium\":50,\"debugLogging\":false,\"allowCrossBorderTxns\":true,\"maintenanceMode\":false,\"auditRetentionDays\":90,\"riskThresholdHigh\":80}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "D4",
+      "area": "billing",
+      "title": "Billing, usage, subscriptions, invoices",
+      "status": "FAIL",
+      "durationSeconds": 9.29,
+      "error": null,
+      "notes": [],
+      "checks": [
+        {
+          "ok": false,
+          "message": "PSP admin GET /billing/rates",
+          "severity": "FAIL",
+          "evidence": {
+            "request": "GET /billing/rates",
+            "requestBody": null,
+            "status": 400,
+            "ms": 48.4,
+            "response": "{\"status\":\"BAD_REQUEST\",\"message\":\"Required parameter 'pspId' is missing\",\"errorCode\":\"ERR_MISSING_PARAM_001\",\"httpStatus\":400,\"timestamp\":\"2026-10-16T17:48:22.3030742\",\"path\":\"/api/v1/billing/rates\",\"method\":\"GET\",\"details\":{\"parameterType\":\"Long\",\"parameterName\":\"pspId\"},\"traceId\":\"44032ada-0703-4ebc-885e-9005e81d0c3d\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin GET /billing/usage/7/current",
+          "severity": null,
+          "evidence": {
+            "request": "GET /billing/usage/7/current",
+            "requestBody": null,
+            "status": 200,
+            "ms": 1024.7,
+            "response": "{\"pspId\":7,\"period\":\"2026-10 (live)\",\"totalRequests\":0,\"billableRequests\":0,\"totalCostUsd\":0,\"breakdown\":[]}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin GET /subscriptions/psp/7",
+          "severity": null,
+          "evidence": {
+            "request": "GET /subscriptions/psp/7",
+            "requestBody": null,
+            "status": 200,
+            "ms": 291.5,
+            "response": "{\"subscriptionId\":3,\"pspId\":7,\"pspCode\":\"SIMCARD_R1016174257\",\"tierCode\":\"STARTER\",\"tierName\":\"Starter\",\"monthlyFeeUsd\":49.00,\"includedChecks\":0,\"billingCycle\":\"MONTHLY\",\"billingCurrency\":\"USD\",\"discountPercentage\":0.00,\"contractStart\":\"2026-10-16\",\"status\":\"TRIAL\",\"trialEndsAt\":\"2026-10-30\",\"createdAt\":\"2026-10-16T17:43:11.824323\",\"updatedAt\":\"2026-10-16T17:43:11.824323\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin GET /entitlements/me",
+          "severity": null,
+          "evidence": {
+            "request": "GET /entitlements/me",
+            "requestBody": null,
+            "status": 200,
+            "ms": 248.4,
+            "response": "{\"planCode\":\"STARTER\",\"features\":[\"email_support\",\"kyc\",\"basic_reporting\",\"aml_screening\"],\"usedThisMonth\":0,\"unlimited\":true}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "PSP admin GET /billing/invoices",
+          "severity": null,
+          "evidence": {
+            "request": "GET /billing/invoices",
+            "requestBody": null,
+            "status": 200,
+            "ms": 650.6,
+            "response": "[]"
+          }
+        },
+        {
+          "ok": true,
+          "message": "platform billing summary",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-billing/summary",
+            "requestBody": null,
+            "status": 200,
+            "ms": 3045.7,
+            "response": "[{\"pspId\":1,\"pspCode\":\"HOKEKA_PLATFORM\",\"legalName\":\"Hokeka Inc.\",\"tradingName\":\"Hokeka\",\"contactEmail\":\"platform@hokeka.com\",\"subscriptionStatus\":\"NONE\",\"totalRequests\":0,\"billableRequests\":0,\"currentMonthCost\":0,\"latestInvoiceAmount\":0,\"overdueInvoiceCount\":0,\"createdAt\":\"2026-10-16T17:08:26.369351\"},{\"pspId\":2,\"pspCode\":\"DEMO_VELOCITY\",\"legalName\":\"Velocity Payments LLC\",\"tradingName\":\"Velocity Pay\",\"contactEmail\":\"admin@velocitypay.demo\",\"subscriptionStatus\":\"NONE\",\"totalRequests\":0,\"billableRequests\":0,\"currentMonthCost\":0,\"latestInvoiceAmount\":0,\"overdueInvoiceCount\":0,\"createdAt\":\"2026-"
+          }
+        },
+        {
+          "ok": true,
+          "message": "platform per-PSP usage",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psp-billing/7/usage",
+            "requestBody": null,
+            "status": 200,
+            "ms": 580.5,
+            "response": "{\"pspId\":7,\"pspName\":\"SimCard Acquiring Ltd r1016174257\",\"period\":\"2026-10\",\"totalRequests\":0,\"billableRequests\":0,\"totalCost\":0,\"serviceBreakdown\":[],\"subscriptionStatus\":\"TRIAL\",\"pricingTier\":\"STARTER\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "generate invoice for PSP",
+          "severity": null,
+          "evidence": {
+            "request": "POST /admin/psp-billing/7/invoice/generate",
+            "requestBody": "{}",
+            "status": 200,
+            "ms": 1027.9,
+            "response": "{\"invoiceId\":1,\"invoiceNumber\":\"INV-SIMCARD_R1016174257-20261001-b047\",\"totalAmount\":0,\"currency\":\"USD\",\"status\":\"SENT\",\"period\":\"2026-10\"}"
+          }
+        },
+        {
+          "ok": true,
+          "message": "invoice PDF renders",
+          "severity": null,
+          "evidence": {
+            "request": "GET /billing/invoices/1/pdf",
+            "requestBody": null,
+            "status": 200,
+            "ms": 1822.4,
+            "response": "<10044 bytes application/pdf>"
+          }
+        },
+        {
+          "ok": true,
+          "message": "list billing rates for PSP",
+          "severity": null,
+          "evidence": {
+            "request": "GET /admin/psps/7/billing-rates",
+            "requestBody": null,
+            "status": 200,
+            "ms": 544.2,
+            "response": "[]"
+          }
+        }
+      ]
+    }
+  ]
+}
