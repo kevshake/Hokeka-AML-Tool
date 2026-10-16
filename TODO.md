@@ -1,6 +1,15 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-10-16_
 
+## Wave 72 — Full PSP simulation: Edge + Control Plane, live readiness (2026-10-16)
+
+- [ ] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch
+- [ ] Build a simulation environment (Docker data services + Control Plane + aml-microservice + Edge Node) and a reusable multi-PSP simulator under `scripts/sim/`
+- [ ] Run every functional scenario (onboarding, auth/RBAC, API keys, edge enrollment, bundle pull, edge pre-auth + cloud dual-post ingest, rules, velocity, sanctions/PEP, alerts, cases, SAR/STR/CTR, exports, AI shadow, billing, metrics) and record each failure with its root cause
+- [ ] Fix every failure at the root (no stubs), with regression tests
+- [ ] Re-run all simulations until green
+- [ ] Live-readiness report
+
 ## Wave 71 — Resume from Grok Bot history (2026-10-16)
 
 Recovered from the Grok Bot "Hokeka-AML_Tool" transcripts. origin/main = `4f16021e7` (#42); PRs #10–#42 merged (Laya AI #28, WP-01 #29, WP-0A/02/03 #31, exports #35, deploy readiness #34, API docs #37/#38). Older unchecked boxes below Wave 59 are largely stale — verify against code before working them.
