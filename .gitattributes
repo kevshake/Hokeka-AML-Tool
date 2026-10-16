@@ -1,0 +1,4 @@
+# Contract schemas are compared byte for byte (TunnelSchemaDriftTest) and hashed, so they
+# must keep LF line endings on every checkout, whatever core.autocrlf says.
+docs/contracts/** text eol=lf
+BACKEND/src/main/resources/contracts/** text eol=lf
