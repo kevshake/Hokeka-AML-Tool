@@ -1,4 +1,5 @@
 import { isPlatformAdmin, type UserAccessContext } from "./userAccess";
+import { canViewDataSettings } from "./dataResidency";
 
 export interface SettingsTabDef {
   id: string;
@@ -9,9 +10,16 @@ export interface SettingsTabDef {
 export function getSettingsTabsForUser(user: UserAccessContext): SettingsTabDef[] {
   const isPspUser = !!user && (user.pspId ?? 0) > 0;
   if (isPspUser) {
+    // Data residency tabs come last so the Billing / Webhooks indices stay stable.
     return [
       { id: "billing", label: "Billing" },
       { id: "webhooks", label: "Webhooks" },
+      ...(canViewDataSettings(user)
+        ? [
+            { id: "data-retention", label: "Data Retention" },
+            { id: "data-sharing", label: "Support & Data Sharing" },
+          ]
+        : []),
     ];
   }
 

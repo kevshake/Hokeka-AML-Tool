@@ -65,6 +65,13 @@ public class EdgeNode {
     @Column(name = "edge_id", length = 128)
     private String edgeId;
 
+    /**
+     * Edge Site the node belongs to (V262; data residency contract §1). Null for a single-node site,
+     * whose site id is the node's {@code edgeId} — see {@link #effectiveSiteId()}.
+     */
+    @Column(name = "site_id", length = 64)
+    private String siteId;
+
     @Column(name = "display_name", nullable = false, length = 255)
     private String displayName;
 
@@ -149,6 +156,17 @@ public class EdgeNode {
 
     public String getEdgeId() { return edgeId; }
     public void setEdgeId(String edgeId) { this.edgeId = edgeId; }
+
+    /** Registered Edge Site id, or null for a single-node site. */
+    public String getSiteId() { return siteId; }
+
+    /** Assigns the node to an Edge Site (null = its own single-node site). */
+    public void setSiteId(String siteId) { this.siteId = siteId; }
+
+    /** The node's site id: the registered site, or its own {@code edgeId} for a single-node site. */
+    public String effectiveSiteId() {
+        return siteId != null && !siteId.isBlank() ? siteId : edgeId;
+    }
 
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }

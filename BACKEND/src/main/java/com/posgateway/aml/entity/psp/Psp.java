@@ -168,6 +168,31 @@ public class Psp {
     @Column(name = "terminated_at")
     private LocalDateTime terminatedAt;
 
+    // Data residency settings (V261, docs/EDGE_DATA_RESIDENCY_CONTRACT.md sections 8-10). Changed only
+    // through PspDataSettingsService (maker-checker), never by binding a request body onto the entity.
+
+    /** Retention in force, 5..25 years (DB CHECK); the Edge and the cloud purge follow it. */
+    @Column(name = "retention_years", nullable = false)
+    private Integer retentionYears = 5;
+
+    /** When the in-force retention value took effect. */
+    @Column(name = "retention_effective_since", nullable = false)
+    private java.time.Instant retentionEffectiveSince = java.time.Instant.now();
+
+    /** PSP consent for Hokeka support staff to pull its Edge data. */
+    @Column(name = "support_access_enabled", nullable = false)
+    private Boolean supportAccessEnabled = false;
+
+    @Column(name = "support_access_changed_at", nullable = false)
+    private java.time.Instant supportAccessChangedAt = java.time.Instant.now();
+
+    /** PSP opt-in to cross-PSP indicators drawn from filed SARs. */
+    @Column(name = "cross_psp_opt_in", nullable = false)
+    private Boolean crossPspOptIn = false;
+
+    @Column(name = "cross_psp_opt_in_changed_at", nullable = false)
+    private java.time.Instant crossPspOptInChangedAt = java.time.Instant.now();
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -545,6 +570,66 @@ public class Psp {
 
     public void setTerminatedAt(LocalDateTime terminatedAt) {
         this.terminatedAt = terminatedAt;
+    }
+
+    /** Retention in force in years (never below the 5-year floor). */
+    public Integer getRetentionYears() {
+        return retentionYears;
+    }
+
+    /** Sets the in-force retention; callers are PspDataSettingsService approvals only. */
+    public void setRetentionYears(Integer retentionYears) {
+        this.retentionYears = retentionYears;
+    }
+
+    /** Instant the in-force retention value took effect. */
+    public java.time.Instant getRetentionEffectiveSince() {
+        return retentionEffectiveSince;
+    }
+
+    /** Records when the in-force retention value took effect. */
+    public void setRetentionEffectiveSince(java.time.Instant retentionEffectiveSince) {
+        this.retentionEffectiveSince = retentionEffectiveSince;
+    }
+
+    /** Whether the PSP currently consents to Hokeka support access. */
+    public Boolean getSupportAccessEnabled() {
+        return supportAccessEnabled;
+    }
+
+    /** Sets support-access consent; callers are PspDataSettingsService only. */
+    public void setSupportAccessEnabled(Boolean supportAccessEnabled) {
+        this.supportAccessEnabled = supportAccessEnabled;
+    }
+
+    /** When support-access consent last changed. */
+    public java.time.Instant getSupportAccessChangedAt() {
+        return supportAccessChangedAt;
+    }
+
+    /** Records when support-access consent last changed. */
+    public void setSupportAccessChangedAt(java.time.Instant supportAccessChangedAt) {
+        this.supportAccessChangedAt = supportAccessChangedAt;
+    }
+
+    /** Whether the PSP opted in to cross-PSP indicators. */
+    public Boolean getCrossPspOptIn() {
+        return crossPspOptIn;
+    }
+
+    /** Sets the cross-PSP opt-in; callers are PspDataSettingsService only. */
+    public void setCrossPspOptIn(Boolean crossPspOptIn) {
+        this.crossPspOptIn = crossPspOptIn;
+    }
+
+    /** When the cross-PSP opt-in last changed. */
+    public java.time.Instant getCrossPspOptInChangedAt() {
+        return crossPspOptInChangedAt;
+    }
+
+    /** Records when the cross-PSP opt-in last changed. */
+    public void setCrossPspOptInChangedAt(java.time.Instant crossPspOptInChangedAt) {
+        this.crossPspOptInChangedAt = crossPspOptInChangedAt;
     }
 
     public LocalDateTime getCreatedAt() {

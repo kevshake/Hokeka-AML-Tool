@@ -67,10 +67,17 @@ public class EdgeAssessmentService {
         if (node.getPspId() == null) {
             throw new IllegalArgumentException("enrolled edge has no psp");
         }
+        // Data residency contract §4.5: a v1 envelope must carry an empty featureSnapshot; the feature
+        // bag is transaction data (class T) and must never be stored in the cloud.
+        if (request.featureSnapshot() != null && !request.featureSnapshot().isEmpty()) {
+            throw new IllegalArgumentException("featureSnapshot must be empty: transaction features stay on the Edge");
+        }
         String edgeAssessmentId = request.edgeAssessmentId().trim();
         UUID edgeId = parseEdgeAssessmentId(edgeAssessmentId);
         Assessment assessment = assessments.findByEdgeAssessmentId(edgeId).orElse(null);
-        boolean duplicate = assessment != null && hasEdgeFindings(assessment);
+        // A decision record v2 for the same id already holds the authoritative decision.
+        boolean duplicate = assessment != null
+                && (hasEdgeFindings(assessment) || Integer.valueOf(2).equals(assessment.getRecordVersion()));
         if (duplicate) {
             if (assessment.getPspId() != null && !assessment.getPspId().equals(node.getPspId())) {
                 throw new EdgeAssessmentConflictException("edge assessment belongs to another psp");
