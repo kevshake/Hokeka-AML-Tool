@@ -35,8 +35,15 @@ import java.util.Objects;
 /**
  * Audit Log Service
  * Handles the creation and storage of immutable audit logs
+ *
+ * <p>{@code @Primary}: {@link com.posgateway.aml.service.compliance.EnhancedAuditService} extends this
+ * class, so every {@code AuditLogService}-typed injection point sees two candidates. Without a primary
+ * bean Spring falls back to matching the parameter name ("auditLogService"), and any consumer that
+ * names its parameter differently fails the whole context at boot. The base service is the intended
+ * default; consumers that need the request-context variant inject {@code EnhancedAuditService} by type.
  */
 @Service
+@org.springframework.context.annotation.Primary
 public class AuditLogService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuditLogService.class);
