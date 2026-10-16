@@ -73,6 +73,25 @@ hokeka:
     partition-months-ahead: ${EDGE_LEDGER_PARTITION_MONTHS_AHEAD:3}
     retry-buffer-size: ${EDGE_LEDGER_RETRY_BUFFER_SIZE:10000}
     outbox-batch-size: ${EDGE_LEDGER_OUTBOX_BATCH_SIZE:500}
+    # Separate read pool for Edge Tunnel requests (never starves the evaluate path).
+    read-pool-size: ${EDGE_LEDGER_READ_POOL_SIZE:4}
+    # Retention (contract §6.3, §8.2): effective = max(config retention.years, this floor). Below 5 is
+    # ignored with a warning. Nothing is purged before the first Edge config document is accepted.
+    retention-min-years: ${EDGE_RETENTION_MIN_YEARS:5}
+    # Daily purge at this site-local time; EDGE_SITE_TIMEZONE is an IANA id (blank = host zone).
+    purge-time: "${EDGE_PURGE_TIME:02:00}"
+    site-timezone: ${EDGE_SITE_TIMEZONE:}
+  # Edge Tunnel client (contract §7). Local settings can only narrow what the Control Plane allows.
+  tunnel:
+    # false = never connect: the Console shows this site offline (§7.6.1).
+    enabled: ${EDGE_TUNNEL_ENABLED:true}
+    # Comma-separated ops this node serves; blank = every implemented op.
+    ops: ${EDGE_TUNNEL_OPS:}
+    # Blank = derived from CONTROLPLANE_URL (https://host → wss://host/api/v1/edge/tunnel).
+    url: ${EDGE_TUNNEL_URL:}
+    max-inflight: ${EDGE_TUNNEL_MAX_INFLIGHT:16}
+    # Blank = the jar's Implementation-Version.
+    agent-version: ${EDGE_AGENT_VERSION:}
 
 management:
   endpoints:

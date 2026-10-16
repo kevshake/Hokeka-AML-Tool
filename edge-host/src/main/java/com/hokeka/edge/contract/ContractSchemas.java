@@ -110,6 +110,64 @@ public final class ContractSchemas {
     }
 
     /**
+     * One schema violation, located by an RFC 6901 JSON pointer into the instance. For
+     * {@code required} and {@code additionalProperties} the pointer names the missing or extra
+     * member itself (e.g. {@code /params/panHash}), so it can be reported as the tunnel error
+     * {@code param} (contract §7.5). Never carries the offending value.
+     *
+     * @param pointer JSON pointer of the violating location ({@code ""} for the root)
+     * @param keyword the failing schema keyword, e.g. {@code maximum}, {@code enum}
+     */
+    public record Violation(String pointer, String keyword) {
+    }
+
+    /**
+     * Validates {@code instance} and returns its violations as JSON pointers, sorted by pointer.
+     *
+     * @param schemaPath schema path relative to {@code docs/contracts}; may carry a JSON-pointer
+     *                   fragment, e.g. {@code tunnel/ops/ledger.backfill.params.schema.json#/$defs/backfillRow}
+     * @param instance   the JSON instance
+     * @return violations; empty when valid
+     */
+    public List<Violation> violations(String schemaPath, JsonNode instance) {
+        JsonSchema schema = cache.computeIfAbsent(schemaPath,
+                p -> factory.getSchema(SchemaLocation.of(BASE_IRI + p), config));
+        Set<ValidationMessage> messages = schema.validate(instance);
+        if (messages.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Violation> out = new ArrayList<>(messages.size());
+        for (ValidationMessage m : messages) {
+            String pointer = pointer(m.getInstanceLocation());
+            String keyword = m.getType() == null ? "" : m.getType();
+            if (("required".equals(keyword) || "additionalProperties".equals(keyword)) && m.getProperty() != null) {
+                pointer = pointer + "/" + escapePointer(m.getProperty());
+            }
+            out.add(new Violation(pointer, keyword));
+        }
+        out.sort(java.util.Comparator.comparing(Violation::pointer).thenComparing(Violation::keyword));
+        return out;
+    }
+
+    /** RFC 6901 pointer of a validator path ({@code $.a[0].b} → {@code /a/0/b}). */
+    static String pointer(JsonNodePath path) {
+        if (path == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < path.getNameCount(); i++) {
+            Object element = path.getElement(i);
+            sb.append('/').append(element instanceof Integer n ? n.toString() : escapePointer(String.valueOf(element)));
+        }
+        return sb.toString();
+    }
+
+    /** RFC 6901 escaping of one reference token. */
+    static String escapePointer(String token) {
+        return token.replace("~", "~0").replace("/", "~1");
+    }
+
+    /**
      * Same as {@link #validate} but returns the validator's full messages, which can quote the
      * instance value. For tests that assert the reason recorded in
      * {@code tunnel/examples/expected-failures.json}; never log these in production.

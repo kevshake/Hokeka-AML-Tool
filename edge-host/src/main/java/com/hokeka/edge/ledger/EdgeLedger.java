@@ -108,6 +108,9 @@ public class EdgeLedger implements AutoCloseable {
     private final LedgerProperties properties;
     private final ObjectMapper mapper;
     private final HikariDataSource dataSource;
+    private final String nodeId;
+    private final String schema;
+    private volatile HikariDataSource readDataSource;
     private final AtomicReference<State> state = new AtomicReference<>();
     private volatile String stateReason;
     private volatile int schemaVersion = 0;
@@ -123,6 +126,8 @@ public class EdgeLedger implements AutoCloseable {
     public EdgeLedger(LedgerProperties properties, ObjectMapper mapper, String nodeId) {
         this.properties = properties;
         this.mapper = mapper;
+        this.nodeId = nodeId == null ? "" : nodeId.trim();
+        this.schema = properties.getSchema() == null ? "" : properties.getSchema().trim();
         List<String> missing = properties.missingSettings();
         if (!missing.isEmpty()) {
             this.dataSource = null;
@@ -140,6 +145,39 @@ public class EdgeLedger implements AutoCloseable {
         this.dataSource = new HikariDataSource(hikariConfig(properties, schema, nodeId));
         state.set(State.DOWN);
         stateReason = "not initialised yet";
+    }
+
+    /**
+     * The tunnel read pool (contract §7.6): created on first use, separate from the evaluate-path
+     * pool, read-only, and without the write-path socket timeout — tunnel statements are bounded by
+     * a per-request {@code statement_timeout} instead (§7.5 deadline). Null when not configured.
+     */
+    public DataSource readDataSource() {
+        if (dataSource == null) {
+            return null;
+        }
+        HikariDataSource read = readDataSource;
+        if (read == null) {
+            synchronized (this) {
+                read = readDataSource;
+                if (read == null) {
+                    HikariConfig c = hikariConfig(properties, schema, nodeId);
+                    c.setPoolName("edge-ledger-read");
+                    c.setMaximumPoolSize(Math.max(1, properties.getReadPoolSize()));
+                    c.setMinimumIdle(0);
+                    c.setReadOnly(true);
+                    c.addDataSourceProperty("socketTimeout", 0);
+                    read = new HikariDataSource(c);
+                    readDataSource = read;
+                }
+            }
+        }
+        return read;
+    }
+
+    /** This node's edge id, as given at construction ({@code ""} when unset). */
+    public String nodeId() {
+        return nodeId;
     }
 
     /** Pool settings: lazy start, short checkout and socket timeouts so a stalled DB fails fast. */
@@ -560,6 +598,10 @@ public class EdgeLedger implements AutoCloseable {
     /** Closes the pool. */
     @Override
     public void close() {
+        HikariDataSource read = readDataSource;
+        if (read != null) {
+            read.close();
+        }
         if (dataSource != null) {
             dataSource.close();
         }
