@@ -42,6 +42,9 @@ export ADVERSE_MEDIA_ENABLED=false
 export LOG_FILE_PATH="$RESULTS/logs/control-plane-app.log"
 export RATE_LIMIT_RPM="${RATE_LIMIT_RPM:-1000000}"
 export RATE_LIMIT_BURST="${RATE_LIMIT_BURST:-100000}"
+# Per-PSP tenant limit (saas.quota.requests-per-minute, default 120/min shared by all of a PSP's
+# Console sessions). The sim drives volume ingest through PSP admin sessions, so raise it too.
+export SAAS_QUOTA_REQUESTSPERMINUTE="${SAAS_QUOTA_REQUESTSPERMINUTE:-1000000}"
 if [[ "${SIM_KEEP_AUTH_RATE_LIMIT:-0}" != "1" ]]; then export RATE_LIMIT_AUTH_RPM="${RATE_LIMIT_AUTH_RPM:-100000}"; fi
 export LAYA_API_KEY=""            # AI layer must degrade gracefully with no key
 export HOKEKA_AI_SHADOW_MODE=true

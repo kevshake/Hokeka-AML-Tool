@@ -1361,6 +1361,12 @@ def e5(ctx, sc):
 # ───────────────────────────────────────────── main ─────────────────────────────────────────────
 
 def main():
+    # Console output may be a cp1252 pipe on Windows; never let a check label (≥, —) crash a run.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:%s/api/v1" % os.environ.get("SIM_CP_PORT", "2637"))
     ap.add_argument("--proxy", default="https://localhost:%s" % os.environ.get("SIM_PROXY_PORT", "8444"))
