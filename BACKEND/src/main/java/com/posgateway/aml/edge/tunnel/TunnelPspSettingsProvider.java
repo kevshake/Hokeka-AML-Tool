@@ -9,9 +9,8 @@ import java.util.Set;
  * {@code tunnel.maxInflightPerSession}, {@code currentConfigVersion}, and close 4403 when the
  * config disables the tunnel.
  *
- * <p>Work package R3 owns the config document; its provider bean is expected to be
- * {@code @Primary}. Until a PSP has a stored config document, {@link ContractDefaultTunnelSettings}
- * answers with the §6.1 defaults.
+ * <p>Work package R3 owns the config document; production uses {@link ResidencyTunnelPspSettings},
+ * which reads it (and gets the §6.1 defaults for a PSP without stored edge settings).
  */
 public interface TunnelPspSettingsProvider {
 

@@ -181,6 +181,18 @@ public class EdgeTunnelConfiguration {
     }
 
     /**
+     * R3 residency events → tunnel: {@code notify config.updated} plus re-applying the tunnel
+     * section on a new config version, and cancelling platform pulls when support access is
+     * withdrawn. Both run after the publishing transaction commits.
+     */
+    @Bean
+    public TunnelResidencyEventListener tunnelResidencyEventListener(TunnelNotifier notifier, TunnelMessaging messaging,
+                                                                     EdgeDataGateway gateway,
+                                                                     SupportAccessPolicy supportAccess) {
+        return new TunnelResidencyEventListener(notifier, messaging, gateway, supportAccess);
+    }
+
+    /**
      * Binds the relay handlers (before any listener container starts) and runs the housekeeping
      * tick; on shutdown closes every local session with 4000 so Edges reconnect elsewhere.
      */
@@ -188,7 +200,10 @@ public class EdgeTunnelConfiguration {
     public SmartLifecycle tunnelLifecycle(TunnelMessaging messaging, TunnelSessionHub hub, EdgeTunnelClient client,
                                           EdgeDataGateway gateway, TunnelTimers tunnelTimers,
                                           TunnelProperties props) {
-        messaging.bind(hub::onHolderMessage, client::onOriginMessage, gateway::onBroadcast);
+        messaging.bind(hub::onHolderMessage, client::onOriginMessage, m -> {
+            gateway.onBroadcast(m);
+            hub.onBroadcast(m);
+        });
         return new SmartLifecycle() {
             private volatile ScheduledFuture<?> tick;
 

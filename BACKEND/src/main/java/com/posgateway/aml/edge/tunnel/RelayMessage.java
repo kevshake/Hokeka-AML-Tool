@@ -48,7 +48,9 @@ public record RelayMessage(Kind kind, String sessionId, String corrId, String or
         /** holder → origin: the session closed before the request finished. */
         SESSION_CLOSED,
         /** broadcast: support access was switched off for {@code pspId}; cancel platform pulls. */
-        SUPPORT_REVOKED
+        SUPPORT_REVOKED,
+        /** broadcast: a new Edge config was issued for {@code pspId}; re-apply its tunnel section to held sessions. */
+        CONFIG_CHANGED
     }
 
     /** Holder-bound REQUEST. */
@@ -85,5 +87,10 @@ public record RelayMessage(Kind kind, String sessionId, String corrId, String or
     /** Broadcast SUPPORT_REVOKED. */
     static RelayMessage supportRevoked(long pspId) {
         return new RelayMessage(Kind.SUPPORT_REVOKED, null, null, null, null, null, null, null, pspId);
+    }
+
+    /** Broadcast CONFIG_CHANGED. */
+    static RelayMessage configChanged(long pspId) {
+        return new RelayMessage(Kind.CONFIG_CHANGED, null, null, null, null, null, null, null, pspId);
     }
 }

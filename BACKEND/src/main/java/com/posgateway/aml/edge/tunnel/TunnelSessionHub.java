@@ -221,7 +221,16 @@ public class TunnelSessionHub {
             close(s, CLOSE_FORBIDDEN, "not authorised");
             return;
         }
-        TunnelPspSettingsProvider.TunnelPspSettings cfg = settings.settings(s.pspId);
+        TunnelPspSettingsProvider.TunnelPspSettings cfg;
+        try {
+            cfg = settings.settings(s.pspId);
+        } catch (RuntimeException e) {
+            // Fail closed: without the PSP's config document the cloud cannot know what is allowed.
+            log.warn("Tunnel hello from {} refused: tunnel settings of PSP {} unavailable ({})", s.edgeId, s.pspId,
+                    e.getClass().getSimpleName());
+            close(s, CLOSE_INTERNAL, "internal error");
+            return;
+        }
         if (!cfg.tunnelEnabled()) {
             close(s, CLOSE_FORBIDDEN, "tunnel disabled");
             return;
@@ -236,15 +245,11 @@ public class TunnelSessionHub {
             close(s, CLOSE_VERSION, "no common protocol version");
             return;
         }
-        Set<String> ops = new LinkedHashSet<>();
+        Set<String> offered = new LinkedHashSet<>();
         for (JsonNode op : body.get("opsEnabled")) {
-            String name = op.asText();
-            boolean allowed = cfg.opsAllowed().contains(name)
-                    && (!TunnelOp.LEDGER_BACKFILL.wire().equals(name) || cfg.backfillAllowed());
-            if (allowed) {
-                ops.add(name);
-            }
+            offered.add(op.asText());
         }
+        Set<String> ops = effectiveOps(offered, cfg);
         int maxInflight = Math.min(body.get("maxInflight").asInt(),
                 Math.min(cfg.maxInflightPerSession(), props.getMaxInflight()));
         String sessionId = TunnelFrameCodec.newId();
@@ -276,6 +281,7 @@ public class TunnelSessionHub {
         }
         s.sessionId = sessionId;
         s.opsEffective = Set.copyOf(ops);
+        s.opsOffered = Set.copyOf(offered);
         s.maxInflight = maxInflight;
         s.connectedAt = now;
         s.lastPongAt = now;
@@ -302,6 +308,22 @@ public class TunnelSessionHub {
                         e.getClass().getSimpleName());
             }
         }
+    }
+
+    /**
+     * §7.2 {@code opsEffective} = {@code hello.opsEnabled} ∩ {@code tunnel.opsAllowed}, in offer
+     * order; {@code ledger.backfill} additionally needs {@code tunnel.backfillAllowed}.
+     */
+    static Set<String> effectiveOps(Set<String> offered, TunnelPspSettingsProvider.TunnelPspSettings cfg) {
+        Set<String> ops = new LinkedHashSet<>();
+        for (String name : offered) {
+            boolean allowed = cfg.opsAllowed().contains(name)
+                    && (!TunnelOp.LEDGER_BACKFILL.wire().equals(name) || cfg.backfillAllowed());
+            if (allowed) {
+                ops.add(name);
+            }
+        }
+        return ops;
     }
 
     /** Current bundle version for {@code hello.ack}; -1 when no bundle can be compiled yet. */
@@ -535,7 +557,17 @@ public class TunnelSessionHub {
             }
             if (s.lastNodeCheck.plusMillis(props.getNodeRecheckIntervalMs()).isBefore(now)) {
                 s.lastNodeCheck = now;
-                if (directory.authorized(s.edgeId).isEmpty() || !settings.settings(s.pspId).tunnelEnabled()) {
+                boolean revoked;
+                try {
+                    revoked = directory.authorized(s.edgeId).isEmpty() || !settings.settings(s.pspId).tunnelEnabled();
+                } catch (RuntimeException e) {
+                    // One PSP's lookup failure must not stop the tick for every other session; the
+                    // next re-check retries, and requests stay limited to the session's opsEffective.
+                    log.warn("Tunnel session {}: node/config re-check failed ({})", s.sessionId,
+                            e.getClass().getSimpleName());
+                    revoked = false;
+                }
+                if (revoked) {
                     close(s, CLOSE_FORBIDDEN, "not authorised");
                     continue;
                 }
@@ -555,6 +587,76 @@ public class TunnelSessionHub {
                 log.warn("Tunnel registry reap failed: {}", e.getClass().getSimpleName());
             }
         }
+    }
+
+    // ── config changes (broadcast) ───────────────────────────────────────────────────────────────
+
+    /** Broadcast consumer: a new Edge config was issued for a PSP (see {@link #applyConfig}). */
+    void onBroadcast(RelayMessage m) {
+        if (m.kind() == RelayMessage.Kind.CONFIG_CHANGED && m.pspId() != null) {
+            applyConfig(m.pspId());
+        }
+    }
+
+    /**
+     * Re-applies a PSP's current {@code tunnel} section to the sessions held here (§6.2, §7.2):
+     * tunnel disabled → close 4403; ops no longer allowed → removed from {@code opsEffective} at
+     * once, so later requests for them are refused {@code OP_NOT_ALLOWED}; a lower
+     * {@code maxInflightPerSession} → the lower cap applies to new requests. Ops newly allowed
+     * that the Edge offered cannot be added mid-session (hello.ack is the only place they are
+     * agreed), so such a session is closed 1000 and the Edge's reconnect handshake picks them up.
+     *
+     * @return number of sessions of the PSP this instance holds that were checked
+     */
+    int applyConfig(long pspId) {
+        List<LocalTunnelSession> held = new ArrayList<>();
+        for (LocalTunnelSession s : bySession.values()) {
+            if (s.pspId == pspId && s.state() == LocalTunnelSession.State.OPEN) {
+                held.add(s);
+            }
+        }
+        if (held.isEmpty()) {
+            return 0;
+        }
+        TunnelPspSettingsProvider.TunnelPspSettings cfg;
+        try {
+            cfg = settings.settings(pspId);
+        } catch (RuntimeException e) {
+            log.warn("Tunnel config change of PSP {} not applied: settings unavailable ({}); the Edge re-polls",
+                    pspId, e.getClass().getSimpleName());
+            return 0;
+        }
+        for (LocalTunnelSession s : held) {
+            if (!cfg.tunnelEnabled()) {
+                close(s, CLOSE_FORBIDDEN, "tunnel disabled");
+                continue;
+            }
+            Set<String> wanted = effectiveOps(s.opsOffered, cfg);
+            if (!s.opsEffective.containsAll(wanted)) {
+                log.info("Tunnel session {}: config version {} allows more ops; closing so the Edge re-handshakes",
+                        s.sessionId, cfg.configVersion());
+                close(s, CLOSE_NORMAL, "config changed");
+                continue;
+            }
+            if (!wanted.equals(s.opsEffective)) {
+                s.opsEffective = Set.copyOf(wanted);
+                log.info("Tunnel session {}: config version {} narrowed opsEffective to {}", s.sessionId,
+                        cfg.configVersion(), wanted);
+            }
+            int cap = Math.min(s.maxInflight, cfg.maxInflightPerSession());
+            if (cap < s.maxInflight) {
+                s.maxInflight = cap;
+                log.info("Tunnel session {}: config version {} lowered maxInflight to {}", s.sessionId,
+                        cfg.configVersion(), cap);
+            }
+        }
+        return held.size();
+    }
+
+    /** Ops the session may carry now (tests and operational checks). */
+    Optional<Set<String>> opsEffective(String sessionId) {
+        LocalTunnelSession s = bySession.get(sessionId);
+        return s == null ? Optional.empty() : Optional.of(s.opsEffective);
     }
 
     /** Instance shutdown: close every session with 4000 so Edges reconnect elsewhere at once. */

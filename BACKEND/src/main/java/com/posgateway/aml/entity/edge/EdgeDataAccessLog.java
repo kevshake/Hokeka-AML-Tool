@@ -68,6 +68,8 @@ public class EdgeDataAccessLog {
     @Column(name = "params_summary", nullable = false, columnDefinition = "TEXT", updatable = false)
     private String paramsSummary;
 
+    // V263 declares CHAR(64) (bpchar): map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(name = "params_digest", nullable = false, length = 64, updatable = false)
     private String paramsDigest;
 

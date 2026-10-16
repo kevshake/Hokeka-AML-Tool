@@ -30,15 +30,15 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 
 - [x] Implementation plan + work packages: `docs/architecture/EDGE_DATA_RESIDENCY_PLAN.md`. Owner decisions: port detections to the Edge before deleting cloud ones; cross-PSP sharing is opt-in SAR indicators only; back-fill existing cloud data to the Edge, then purge; support access only when the PSP allows it, audited.
 - [x] R0 spec + JSON schemas (`docs/contracts/`): `docs/EDGE_DATA_RESIDENCY_CONTRACT.md` (Appendix A lists the decisions the plan left open, for owner review); 39 schemas, 91 fixtures, `py docs/contracts/validate.py` passes
-- [ ] Lane 1: R1 Edge ledger + durable outbox · R3 retention/config doc · R4 cloud tunnel server · R7 decision record v2 · R14a docs drafts
+- [x] Lane 1: R1 Edge ledger + durable outbox · R3 retention/config doc · R4 cloud tunnel server · R7 decision record v2 · R14a docs drafts
   - [x] R1 Edge ledger + durable outbox (merged 22fde3d95; edge-host 198 tests, 0 failures; p99 +2 ms latency gate still to be measured on a quiet Linux host)
   - [x] R4 cloud tunnel server (merged 021ef992e; 146 tunnel tests pass)
   - [x] R3 + R7 retention/config doc + decision record v2 (merged 3fadba33b; BACKEND 807 tests 0 failures; FRONTEND typecheck/lint/vitest pass)
-  - [ ] Lane 1 integration: real per-PSP tunnel settings, config.updated notify, site_id single source, support-access revocation cuts tunnel sessions; full suite on merged branch
+  - [x] Lane 1 integration: real per-PSP tunnel settings, config.updated notify, site_id single source, support-access revocation cuts tunnel sessions; full suite on merged branch (merged; BACKEND 978 tests, 0 failures, 2 Docker-env errors; fresh PG V1–V263 validate passes)
   - [x] R14a docs drafts (merged f6b6a1248; 23 docs, 0 broken links; dual-post install guide 06 deleted)
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
   - [ ] R2 + R5 Edge purge/holds/config consumer + tunnel client (agent running)
-  - [ ] R8 refs-by-ID (starts after lane 1 integration)
+  - [ ] R8 refs-by-ID
   - [ ] R10a Edge typologies
   - [ ] R10b Edge sanctions matcher
   - [ ] R10c remove PII feature-bag POST

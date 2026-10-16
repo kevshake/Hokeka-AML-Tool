@@ -35,7 +35,6 @@ class DecisionRecordIngestServiceTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private DecisionRecordStore store;
-    private EdgeSiteResolver sites;
     private DecisionRecordIngestService service;
     private EdgeNode node;
 
@@ -43,26 +42,22 @@ class DecisionRecordIngestServiceTest {
     void setUp() {
         store = mock(DecisionRecordStore.class);
         when(store.store(any(), any(), anyString())).thenReturn(DecisionRecordStore.Outcome.ACCEPTED);
-        sites = mock(EdgeSiteResolver.class);
-        service = new DecisionRecordIngestService(store, sites);
+        service = new DecisionRecordIngestService(store);
         node = new EdgeNode();
         node.setId(7L);
         node.setPspId(12L);
         node.setEdgeId("acme-eu-1");
         node.setStatus(EdgeNodeStatus.ACTIVE);
-        when(sites.siteOf(node)).thenReturn("acme-eu");
+        node.setSiteId("acme-eu");
     }
 
     @Test
-    void siteResolverFallsBackToTheEdgeIdWithoutARegisteredSite() {
-        org.springframework.jdbc.core.JdbcTemplate jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
-        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(0);
-        assertEquals("acme-eu-1", new EdgeSiteResolver(jdbc).siteOf(node), "no site_id column yet (before V263)");
-        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
-        when(jdbc.queryForList(anyString(), eq(String.class), eq(7L))).thenReturn(java.util.Collections.singletonList(null));
-        assertEquals("acme-eu-1", new EdgeSiteResolver(jdbc).siteOf(node), "single-node site");
-        when(jdbc.queryForList(anyString(), eq(String.class), eq(7L))).thenReturn(List.of("acme-eu"));
-        assertEquals("acme-eu", new EdgeSiteResolver(jdbc).siteOf(node), "registered site");
+    void siteFallsBackToTheEdgeIdWithoutARegisteredSite() {
+        assertEquals("acme-eu", node.effectiveSiteId(), "registered site");
+        node.setSiteId(null);
+        assertEquals("acme-eu-1", node.effectiveSiteId(), "single-node site (no site_id)");
+        node.setSiteId("  ");
+        assertEquals("acme-eu-1", node.effectiveSiteId(), "blank site_id is a single-node site");
     }
 
     @Test
@@ -114,7 +109,7 @@ class DecisionRecordIngestServiceTest {
 
     @Test
     void singleNodeSiteDefaultsToTheEdgeId() {
-        when(sites.siteOf(node)).thenReturn("acme-eu-1");
+        node.setSiteId(null);
         ObjectNode record = (ObjectNode) ContractFixtures.fixture("decision-record-v2--alert.json");
         record.put("siteId", "acme-eu-1");
         ObjectNode batch = batchOf(record);
