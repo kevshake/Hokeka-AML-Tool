@@ -1,7 +1,6 @@
 package com.posgateway.aml.entity.rules;
 
 import jakarta.persistence.*;
-import lombok.Data;
 import org.hibernate.envers.Audited;
 
 import java.time.LocalDateTime;

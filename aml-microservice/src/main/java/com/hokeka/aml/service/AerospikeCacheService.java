@@ -24,7 +24,7 @@ import java.util.Map;
  * Namespace layout per architecture plan:
  *   namespace: aml_cache
  *     set: risk_profile   — CRA scores (TTL: 30 min)
- *     set: velocity       — velocity counters (TTL: 7 days)
+ *     set: velocity       — fixed-window velocity buckets (TTL: 2 x aml.velocity.window-seconds)
  *     set: device         — device reputation (TTL: 1h / 24h)
  *     set: ip_reputation  — IP scores (TTL: 30 min)
  */
@@ -48,10 +48,20 @@ public class AerospikeCacheService {
 
     // TTLs in seconds
     private static final int TTL_RISK_PROFILE  = 1800;  // 30 min
-    private static final int TTL_VELOCITY      = 604800; // 7 days
+    // Velocity buckets carry their own TTL (2 x window) — see velocityBucketTtlSeconds().
     private static final int TTL_DEVICE_CLEAN  = 3600;  // 1 hour
     private static final int TTL_DEVICE_FLAGGED = 86400; // 24 hours
     private static final int TTL_IP_REPUTATION = 1800;  // 30 min
+
+    /**
+     * Velocity window length (W49-13). Counters are bucketed per window instead of living in one
+     * record whose TTL is refreshed on every write.
+     */
+    @Value("${aml.velocity.window-seconds:3600}")
+    private long velocityWindowSeconds = 3600L;
+
+    /** Time source for velocity bucketing; replaceable in tests. */
+    private java.time.Clock clock = java.time.Clock.systemUTC();
 
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
@@ -91,46 +101,114 @@ public class AerospikeCacheService {
     // Velocity
     // ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Records one transaction into the customer's velocity counter using fixed-window buckets
+     * (W49-13 fix). Previously a single record per customer was incremented with
+     * {@code expiration = 7 days} on every write, so the TTL slid forward on each transaction and
+     * an active customer's counters never reset — the "velocity" was an unbounded lifetime total.
+     *
+     * <p>Now each event lands in the bucket {@code customerId|floor(tsMs / windowMs)}. A bucket is
+     * only ever written during its own window, so refreshing its TTL on write cannot keep it alive
+     * past {@code windowEnd + bucketTtl}; it expires on its own after the window closes. The TTL is
+     * two windows so {@link #getVelocity} can still read the previous bucket for the sliding
+     * estimate.
+     */
     public void recordVelocity(String customerId, Map<String, Object> event) {
         if (!isConnected() || customerId == null || customerId.isBlank()) return;
         try {
-            Key key = new Key(namespace, SET_VELOCITY, customerId);
-            WritePolicy wp = new WritePolicy();
-            wp.expiration = TTL_VELOCITY;
-            // Extract last timestamp safely (avoid ternary type resolution in Bin arg)
-            Object rawTs = event != null ? event.getOrDefault("tsMs", System.currentTimeMillis()) : System.currentTimeMillis();
-            long lastTs = rawTs instanceof Number n ? n.longValue() : System.currentTimeMillis();
-            // Actual transaction amount to accumulate (was hardcoded 0, so the running total
-            // never grew and amount-velocity rules always read 0).
+            // Event timestamp decides the bucket; fall back to "now" when absent or malformed.
+            long nowMs = clock.millis();
+            Object rawTs = event != null ? event.getOrDefault("tsMs", nowMs) : nowMs;
+            long tsMs = rawTs instanceof Number n ? n.longValue() : nowMs;
+            // Actual transaction amount to accumulate (minor units when the caller sends amountCents).
             Object rawAmt = event != null
                     ? event.getOrDefault("amountCents", event.getOrDefault("amount", 0L)) : 0L;
             long amount = rawAmt instanceof Number n2 ? n2.longValue() : 0L;
-            // Accumulate a TX count, total amount, and last timestamp
+
+            long windowMs = velocityWindowMs();
+            long bucket = Math.floorDiv(tsMs, windowMs);
+            Key key = velocityKey(customerId, bucket);
+            WritePolicy wp = new WritePolicy();
+            wp.expiration = velocityBucketTtlSeconds();
             aerospikeClient.operate(wp, key,
                     new com.aerospike.client.Operation[]{
                             com.aerospike.client.Operation.add(new Bin("txn_count", 1L)),
-                            // Bin holds the accumulated transaction amount — named clearly so a
-                            // future reader can't mistake it for an elapsed-ms value (W49-12).
+                            // Accumulated transaction amount (named so it can't be mistaken for ms; W49-12).
                             com.aerospike.client.Operation.add(new Bin("total_amount", amount)),
-                            com.aerospike.client.Operation.put(new Bin("last_ts_ms", lastTs))
+                            com.aerospike.client.Operation.put(new Bin("last_ts_ms", tsMs)),
+                            com.aerospike.client.Operation.put(new Bin("window_start_ms", bucket * windowMs))
                     });
-            log.debug("Velocity event recorded for customerId={}", customerId);
+            log.debug("Velocity event recorded for customerId={} bucket={}", customerId, bucket);
         } catch (Exception e) {
             log.warn("Aerospike velocity write failed for customerId={}: {}", customerId, e.getMessage());
         }
     }
 
+    /**
+     * Reads the customer's velocity for the configured window.
+     *
+     * <p>Returns {@code txn_count} / {@code total_amount} for the current fixed window, plus a
+     * sliding-window estimate ({@code sliding_txn_count}, {@code sliding_total_amount}) that
+     * weights the previous bucket by the fraction of it still inside the trailing window — the
+     * standard sliding-window-counter approximation. Returns {@code null} (HTTP 404 upstream)
+     * when neither bucket exists, i.e. no activity in the last two windows.
+     */
     public Map<String, Object> getVelocity(String customerId) {
         if (!isConnected() || customerId == null || customerId.isBlank()) return null;
         try {
-            Key key = new Key(namespace, SET_VELOCITY, customerId);
-            Record rec = aerospikeClient.get(null, key);
-            if (rec == null) return null;
-            return toMap(rec);
+            long windowMs = velocityWindowMs();
+            long nowMs = clock.millis();
+            long bucket = Math.floorDiv(nowMs, windowMs);
+            Record current = aerospikeClient.get(null, velocityKey(customerId, bucket));
+            Record previous = aerospikeClient.get(null, velocityKey(customerId, bucket - 1));
+            if (current == null && previous == null) return null;
+
+            long curCount = binLong(current, "txn_count");
+            long curAmount = binLong(current, "total_amount");
+            long prevCount = binLong(previous, "txn_count");
+            long prevAmount = binLong(previous, "total_amount");
+            // Portion of the previous bucket that still overlaps the trailing window [now-window, now].
+            double elapsed = (double) (nowMs - bucket * windowMs) / windowMs;
+            double prevWeight = Math.max(0.0, 1.0 - elapsed);
+
+            Map<String, Object> m = new HashMap<>();
+            m.put("txn_count", curCount);
+            m.put("total_amount", curAmount);
+            m.put("window_ms", windowMs);
+            m.put("window_start_ms", bucket * windowMs);
+            m.put("sliding_txn_count", Math.round(curCount + prevCount * prevWeight));
+            m.put("sliding_total_amount", Math.round(curAmount + prevAmount * prevWeight));
+            long lastTs = Math.max(binLong(current, "last_ts_ms"), binLong(previous, "last_ts_ms"));
+            if (lastTs > 0) m.put("last_ts_ms", lastTs);
+            return m;
         } catch (Exception e) {
             log.warn("Aerospike velocity read failed for customerId={}: {}", customerId, e.getMessage());
             return null;
         }
+    }
+
+    /** Aerospike key of one velocity bucket: {@code <customerId>|<bucketIndex>}. */
+    private Key velocityKey(String customerId, long bucket) {
+        return new Key(namespace, SET_VELOCITY, customerId + "|" + bucket);
+    }
+
+    /** Configured velocity window in ms; a non-positive config falls back to one hour. */
+    private long velocityWindowMs() {
+        long seconds = velocityWindowSeconds > 0 ? velocityWindowSeconds : 3600L;
+        return seconds * 1000L;
+    }
+
+    /** Bucket TTL (seconds): two windows, so the previous bucket stays readable for the sliding estimate. */
+    private int velocityBucketTtlSeconds() {
+        long seconds = velocityWindowMs() / 1000L * 2L;
+        return (int) Math.min(Integer.MAX_VALUE, seconds);
+    }
+
+    /** Reads a numeric bin as long; missing record/bin or non-numeric value counts as 0. */
+    private static long binLong(Record rec, String bin) {
+        if (rec == null || rec.bins == null) return 0L;
+        Object v = rec.bins.get(bin);
+        return v instanceof Number n ? n.longValue() : 0L;
     }
 
     // ──────────────────────────────────────────────────────────────────
