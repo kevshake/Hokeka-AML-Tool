@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/cursor.schema.json",
+  "title": "Site cursor (decoded)",
+  "description": "page.cursor / nextCursor is base64url (no padding) of this JSON. It is a documented keyset, not an opaque token, so the Control Plane can mint a site cursor from the last item it consumed when merging several sites. k = [evaluatedAt, edgeAssessmentId] of the last item returned; the next page holds items strictly after k in (evaluatedAt desc, edgeAssessmentId desc) order. q = SHA-256 hex of the RFC 8785 (JCS) canonical JSON of the op params; the Edge rejects a cursor whose q differs from the request's (INVALID_CURSOR).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "k", "q"],
+  "properties": {
+    "v": { "const": 1 },
+    "k": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "../common.schema.json#/$defs/instant" },
+        { "$ref": "../common.schema.json#/$defs/uuid" }
+      ]
+    },
+    "q": { "$ref": "../common.schema.json#/$defs/sha256Hex" }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/filing.extract.params.schema.json",
+  "title": "filing.extract params",
+  "description": "Data needed to file a SAR/STR/CTR. For CTR each id is an anchor evaluation with ctrRequired=true and the Edge also returns that card's cash aggregate for the anchor's business day (CTR_AGGREGATE items). The cloud stores the result only inside the filed document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "filingRef", "edgeAssessmentIds"],
+  "properties": {
+    "kind": { "enum": ["SAR", "STR", "CTR"] },
+    "filingRef": { "$ref": "../../common.schema.json#/$defs/workflowRef" },
+    "edgeAssessmentIds": {
+      "type": "array",
+      "items": { "$ref": "../../common.schema.json#/$defs/uuid" },
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true
+    }
+  }
+}

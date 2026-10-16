@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/notify/config.updated.schema.json",
+  "title": "notify config.updated",
+  "description": "A newer Edge config document exists; the Edge SHOULD fetch GET /api/v1/edge/config within 5 s instead of waiting for its next poll.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "configVersion"],
+  "properties": {
+    "type": { "const": "config.updated" },
+    "configVersion": { "type": "integer", "minimum": 1 }
+  }
+}

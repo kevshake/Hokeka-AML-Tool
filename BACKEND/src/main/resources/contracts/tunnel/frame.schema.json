@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/frame.schema.json",
+  "title": "Edge Tunnel frame envelope v1",
+  "description": "Outer JSON text frame on the Edge Tunnel WebSocket (max 1 MiB encoded). Every frame except ping/pong carries an HSE-1 envelope in 'sealed' (standard base64). The outer type/id/corrId/nonce/ts are routing hints only: the receiver MUST compare them with the frame binding inside the sealed plaintext (sealed-plaintext.schema.json) and drop the frame on any mismatch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "type", "id", "ts"],
+  "properties": {
+    "v": { "const": 1 },
+    "type": {
+      "enum": ["hello", "hello.ack", "request", "response", "chunk", "cancel", "credit", "notify", "error", "ping", "pong"]
+    },
+    "id": { "$ref": "../common.schema.json#/$defs/uuid" },
+    "corrId": { "$ref": "../common.schema.json#/$defs/uuid" },
+    "ts": { "$ref": "../common.schema.json#/$defs/epochMillis" },
+    "nonce": { "$ref": "../common.schema.json#/$defs/nonce" },
+    "sealed": {
+      "type": "string",
+      "minLength": 160,
+      "maxLength": 1048000,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    }
+  },
+  "allOf": [
+    {
+      "description": "ping/pong are the only unsealed frames and carry nothing but the header.",
+      "if": { "properties": { "type": { "enum": ["ping", "pong"] } }, "required": ["type"] },
+      "then": { "not": { "anyOf": [{ "required": ["sealed"] }, { "required": ["nonce"] }] } },
+      "else": { "required": ["nonce", "sealed"] }
+    },
+    {
+      "description": "Frames that answer or steer another frame name it in corrId.",
+      "if": { "properties": { "type": { "enum": ["hello.ack", "response", "chunk", "cancel", "credit", "pong"] } }, "required": ["type"] },
+      "then": { "required": ["corrId"] }
+    },
+    {
+      "description": "Frames that start an exchange never carry corrId.",
+      "if": { "properties": { "type": { "enum": ["hello", "request", "ping"] } }, "required": ["type"] },
+      "then": { "not": { "required": ["corrId"] } }
+    }
+  ]
+}

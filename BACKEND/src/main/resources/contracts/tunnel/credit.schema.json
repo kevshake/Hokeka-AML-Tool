@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/credit.schema.json",
+  "title": "credit body (cloud -> Edge)",
+  "description": "Grants the export.stream named by the frame's corrId permission to send 'grant' more chunk frames. Context 'hokeka.tunnel.credit'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["grant"],
+  "properties": {
+    "grant": { "type": "integer", "minimum": 1, "maximum": 64 }
+  }
+}

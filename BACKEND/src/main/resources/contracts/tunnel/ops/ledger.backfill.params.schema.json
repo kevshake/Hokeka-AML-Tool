@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/ledger.backfill.params.schema.json",
+  "title": "ledger.backfill params",
+  "description": "One-off import of legacy cloud transaction rows into the Edge Ledger (contract section 11). The only op that writes: it inserts rows with origin=BACKFILL idempotently (by edgeAssessmentId) and never updates or deletes. Phases: BEGIN, BATCH (<= 500 rows, frame <= 1 MiB), COMMIT (verify counts and digest), ABORT. Data flows cloud -> Edge, so rows MAY carry panHash; they are sealed to the Edge and never echoed back.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "backfillId", "sourceFrom", "sourceTo", "expectedRows", "retentionCutoff"],
+      "properties": {
+        "phase": { "const": "BEGIN" },
+        "backfillId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+        "sourceFrom": { "$ref": "../../common.schema.json#/$defs/instant" },
+        "sourceTo": { "$ref": "../../common.schema.json#/$defs/instant" },
+        "expectedRows": { "$ref": "../../common.schema.json#/$defs/count" },
+        "retentionCutoff": {
+          "description": "Rows evaluated before this instant are past retention and are not sent.",
+          "$ref": "../../common.schema.json#/$defs/instant"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "backfillId", "batchSeq", "rows"],
+      "properties": {
+        "phase": { "const": "BATCH" },
+        "backfillId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+        "batchSeq": { "type": "integer", "minimum": 0 },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/backfillRow" }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "backfillId", "expectedRows", "expectedIdDigest"],
+      "properties": {
+        "phase": { "const": "COMMIT" },
+        "backfillId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+        "expectedRows": { "$ref": "../../common.schema.json#/$defs/count" },
+        "expectedIdDigest": {
+          "description": "SHA-256 hex over the sorted, newline-joined legacyTransactionId values of every row sent in this backfill.",
+          "$ref": "../../common.schema.json#/$defs/sha256Hex"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "backfillId", "reason"],
+      "properties": {
+        "phase": { "const": "ABORT" },
+        "backfillId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+        "reason": { "enum": ["OPERATOR", "VERIFY_MISMATCH", "SOURCE_ERROR"] }
+      }
+    }
+  ],
+  "$defs": {
+    "backfillRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacyTransactionId", "edgeAssessmentId", "evaluatedAt", "decision", "score",
+        "triggeredRuleIds", "ruleVersionIds", "reasons", "ctrRequired", "features"
+      ],
+      "properties": {
+        "legacyTransactionId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$", "x-hokeka-luhnReject": true },
+        "edgeAssessmentId": {
+          "description": "The cloud assessment id if the legacy transaction had one, otherwise UUIDv5(namespace 6f1c2a5e-0b7d-5d43-9a8e-1f3c4b2a6d90, '<pspId>:<legacyTransactionId>').",
+          "$ref": "../../common.schema.json#/$defs/uuid"
+        },
+        "txnRef": { "$ref": "../../common.schema.json#/$defs/txnRef" },
+        "evaluatedAt": { "$ref": "../../common.schema.json#/$defs/instant" },
+        "panHash": { "type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9:+/=_-]+$", "x-hokeka-luhnReject": true },
+        "amountMinor": { "$ref": "../../common.schema.json#/$defs/amountMinor" },
+        "currency": { "$ref": "../../common.schema.json#/$defs/currency" },
+        "merchantId": { "$ref": "../../common.schema.json#/$defs/merchantId" },
+        "mcc": { "$ref": "../../common.schema.json#/$defs/mcc" },
+        "countryCode": { "$ref": "../../common.schema.json#/$defs/countryCode" },
+        "channel": { "$ref": "../../common.schema.json#/$defs/channel" },
+        "features": { "$ref": "../../common.schema.json#/$defs/features" },
+        "decision": { "$ref": "../../common.schema.json#/$defs/decision" },
+        "score": { "$ref": "../../common.schema.json#/$defs/score" },
+        "triggeredRuleIds": { "$ref": "../../common.schema.json#/$defs/ruleIdList" },
+        "ruleVersionIds": { "$ref": "../../common.schema.json#/$defs/ruleIdList" },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 512, "x-hokeka-luhnReject": true },
+          "maxItems": 512
+        },
+        "ctrRequired": { "type": "boolean" },
+        "sanctionsHits": {
+          "type": "array",
+          "items": { "$ref": "../../common.schema.json#/$defs/sanctionsHitDetail" },
+          "maxItems": 64
+        }
+      }
+    }
+  }
+}

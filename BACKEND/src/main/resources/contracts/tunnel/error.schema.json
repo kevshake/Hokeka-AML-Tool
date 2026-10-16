@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/error.schema.json",
+  "title": "error body",
+  "description": "Terminal answer to a request (frame corrId = request id) or a session-level fault (no corrId). Also the shape of the Control Plane's JSON error to the Console for tunnel-backed endpoints. Context 'hokeka.tunnel.error'. message is operator text and MUST NOT contain any transaction value (amount, reference, merchant, feature value).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "httpStatus", "message", "retryable"],
+  "properties": {
+    "code": {
+      "enum": [
+        "INVALID_PARAMS",
+        "INVALID_CURSOR",
+        "PAGE_LIMIT_EXCEEDED",
+        "UNSUPPORTED_FRAME",
+        "FRAME_TOO_LARGE",
+        "SEAL_INVALID",
+        "REPLAY_DETECTED",
+        "BINDING_MISMATCH",
+        "OP_NOT_ALLOWED",
+        "TENANT_MISMATCH",
+        "SUPPORT_ACCESS_DISABLED",
+        "BACKFILL_NOT_ALLOWED",
+        "NOT_FOUND",
+        "CANCELLED",
+        "CREDIT_VIOLATION",
+        "STREAM_STALLED",
+        "BACKFILL_REJECTED",
+        "EDGE_BUSY",
+        "LEDGER_UNAVAILABLE",
+        "EDGE_OFFLINE",
+        "DEADLINE_EXCEEDED",
+        "EDGE_TIMEOUT",
+        "UNSUPPORTED_VERSION",
+        "INTERNAL"
+      ]
+    },
+    "httpStatus": { "enum": [400, 401, 403, 404, 408, 409, 413, 426, 429, 499, 500, 503, 504] },
+    "message": { "type": "string", "maxLength": 512, "x-hokeka-luhnReject": true },
+    "retryable": { "type": "boolean" },
+    "retryAfterMs": { "type": "integer", "minimum": 0, "maximum": 600000 },
+    "lastSeenAt": { "$ref": "../common.schema.json#/$defs/instant" },
+    "siteId": { "$ref": "../common.schema.json#/$defs/siteId" },
+    "param": {
+      "description": "INVALID_PARAMS: JSON pointer of the offending parameter (never its value).",
+      "type": "string",
+      "pattern": "^(/[A-Za-z0-9_.~-]*)*$",
+      "maxLength": 256
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "code": { "enum": ["INVALID_PARAMS", "INVALID_CURSOR", "PAGE_LIMIT_EXCEEDED", "UNSUPPORTED_FRAME", "CREDIT_VIOLATION"] } } }, "then": { "properties": { "httpStatus": { "const": 400 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "enum": ["SEAL_INVALID", "REPLAY_DETECTED", "BINDING_MISMATCH"] } } }, "then": { "properties": { "httpStatus": { "const": 401 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "enum": ["OP_NOT_ALLOWED", "TENANT_MISMATCH", "SUPPORT_ACCESS_DISABLED", "BACKFILL_NOT_ALLOWED"] } } }, "then": { "properties": { "httpStatus": { "const": 403 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "const": "NOT_FOUND" } } }, "then": { "properties": { "httpStatus": { "const": 404 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "const": "STREAM_STALLED" } } }, "then": { "properties": { "httpStatus": { "const": 408 } } } },
+    { "if": { "properties": { "code": { "const": "BACKFILL_REJECTED" } } }, "then": { "properties": { "httpStatus": { "const": 409 } } } },
+    { "if": { "properties": { "code": { "const": "FRAME_TOO_LARGE" } } }, "then": { "properties": { "httpStatus": { "const": 413 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "const": "UNSUPPORTED_VERSION" } } }, "then": { "properties": { "httpStatus": { "const": 426 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "const": "EDGE_BUSY" } } }, "then": { "required": ["retryAfterMs"], "properties": { "httpStatus": { "const": 429 }, "retryable": { "const": true } } } },
+    { "if": { "properties": { "code": { "const": "CANCELLED" } } }, "then": { "properties": { "httpStatus": { "const": 499 }, "retryable": { "const": false } } } },
+    { "if": { "properties": { "code": { "const": "INTERNAL" } } }, "then": { "properties": { "httpStatus": { "const": 500 } } } },
+    { "if": { "properties": { "code": { "const": "LEDGER_UNAVAILABLE" } } }, "then": { "properties": { "httpStatus": { "const": 503 }, "retryable": { "const": true } } } },
+    { "if": { "properties": { "code": { "const": "EDGE_OFFLINE" } } }, "then": { "required": ["lastSeenAt"], "properties": { "httpStatus": { "const": 503 }, "retryable": { "const": true } } } },
+    { "if": { "properties": { "code": { "enum": ["DEADLINE_EXCEEDED", "EDGE_TIMEOUT"] } } }, "then": { "properties": { "httpStatus": { "const": 504 }, "retryable": { "const": true } } } }
+  ]
+}

@@ -178,9 +178,13 @@ public class SecurityConfig {
                                                 .requestMatchers(
                                                                 "/edge/enroll", "/edge/bundle", "/edge/metrics",
                                                                 "/edge/decision", "/edge/assessments",
+                                                                // Edge Tunnel WebSocket upgrade: mTLS identity +
+                                                                // ACTIVE node checked by TunnelHandshakeInterceptor
+                                                                // before the 101 (EDGE_DATA_RESIDENCY_CONTRACT §7.1).
+                                                                "/edge/tunnel",
                                                                 "/api/v1/edge/enroll", "/api/v1/edge/bundle",
                                                                 "/api/v1/edge/metrics", "/api/v1/edge/decision",
-                                                                "/api/v1/edge/assessments")
+                                                                "/api/v1/edge/assessments", "/api/v1/edge/tunnel")
                                                 .permitAll()
                                                 .requestMatchers("/edge/**", "/api/v1/edge/**").authenticated()
                                                 // On-prem PSP service auth (client credentials in body; no user session).

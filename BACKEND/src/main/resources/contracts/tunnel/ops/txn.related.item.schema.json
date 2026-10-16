@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/txn.related.item.schema.json",
+  "title": "txn.related item",
+  "description": "One linked evaluation: the link type, the hop, the evaluation it was reached through (the anchor for hop 1) and its summary. The link key value is never present.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["link", "hop", "viaEdgeAssessmentId", "transaction"],
+  "properties": {
+    "link": { "enum": ["CARD", "MERCHANT", "DEVICE", "ACCOUNT", "IP"] },
+    "hop": { "type": "integer", "minimum": 1, "maximum": 2 },
+    "viaEdgeAssessmentId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+    "transaction": { "$ref": "../../common.schema.json#/$defs/transactionSummary" }
+  }
+}

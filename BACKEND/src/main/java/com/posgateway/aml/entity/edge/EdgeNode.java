@@ -65,6 +65,14 @@ public class EdgeNode {
     @Column(name = "edge_id", length = 128)
     private String edgeId;
 
+    /**
+     * Edge Site this node belongs to (EDGE_DATA_RESIDENCY_CONTRACT.md §1): nodes of one site share
+     * one Edge Ledger. Assigned by the Control Plane; {@code null} means a single-node site whose
+     * id is the node's {@link #edgeId} (see {@link #effectiveSiteId()}).
+     */
+    @Column(name = "site_id", length = 64)
+    private String siteId;
+
     @Column(name = "display_name", nullable = false, length = 255)
     private String displayName;
 
@@ -149,6 +157,14 @@ public class EdgeNode {
 
     public String getEdgeId() { return edgeId; }
     public void setEdgeId(String edgeId) { this.edgeId = edgeId; }
+
+    public String getSiteId() { return siteId; }
+    public void setSiteId(String siteId) { this.siteId = siteId; }
+
+    /** The node's registered site: {@link #siteId}, defaulting to {@link #edgeId} (contract §1). */
+    public String effectiveSiteId() {
+        return siteId == null || siteId.isBlank() ? edgeId : siteId;
+    }
 
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }

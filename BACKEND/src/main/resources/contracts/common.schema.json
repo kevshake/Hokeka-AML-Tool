@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/common.schema.json",
+  "title": "Hokeka Edge data residency: shared definitions",
+  "description": "Shared $defs used by every schema in docs/contracts. Normative text: docs/EDGE_DATA_RESIDENCY_CONTRACT.md. 'x-hokeka-luhnReject' is a Hokeka extension keyword (ignored by generic validators, enforced by docs/contracts/validate.py and by both runtimes): a string that, after removing spaces and hyphens, is 13-19 digits and passes the Luhn check is rejected as a probable PAN.",
+  "$defs": {
+    "uuid": {
+      "description": "Canonical lowercase RFC 4122 UUID.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "instant": {
+      "description": "RFC 3339 UTC instant, optional fractional seconds (at most milliseconds are meaningful).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    },
+    "instantSeconds": {
+      "description": "RFC 3339 UTC instant truncated to the second (no fractional part).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "instantHour": {
+      "description": "RFC 3339 UTC instant aligned to a clock hour.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:00:00Z$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "epochMillis": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nonce": {
+      "description": "22-char base64url (no padding) over 16 random bytes; same form as ReplayGuard.newNonce() / EdgeReplayGuard.newNonce().",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22}$"
+    },
+    "sha256Hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bundleHash": {
+      "description": "Rule bundle manifest hash as produced by EdgeRuleCompiler.manifestHash().",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "edgeId": {
+      "description": "Edge node id; equals the CN of the node's mTLS client certificate (EdgeIdentityResolver).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "siteId": {
+      "description": "Edge Site id: a group of Edge Nodes sharing one Edge Ledger. Assigned by the Control Plane; defaults to the edgeId of a single-node site.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "pspId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "merchantId": {
+      "description": "Cloud-onboarded merchant id (master data).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$",
+      "x-hokeka-luhnReject": true
+    },
+    "txnRef": {
+      "description": "The PSP's opaque transaction reference (txn_id on /edge/evaluate). Printable ASCII, no spaces, at most 128 chars, never PAN-like.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\x21-\\x7E]+$",
+      "x-hokeka-luhnReject": true
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "countryCode": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "mcc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}$"
+    },
+    "channel": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,31}$"
+    },
+    "amountMinor": {
+      "description": "Amount in currency minor units (amount_cents on /edge/evaluate).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decimalString": {
+      "description": "Non-negative decimal as a string, so FX rates never pass through binary floating point.",
+      "type": "string",
+      "pattern": "^[0-9]{1,12}(\\.[0-9]{1,12})?$"
+    },
+    "decision": {
+      "enum": ["ALLOW", "ALERT", "HOLD", "BLOCK"]
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ruleId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ruleIdList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ruleId" },
+      "maxItems": 512,
+      "uniqueItems": true
+    },
+    "bundleVersion": {
+      "description": "-1 before the first verified bundle (EdgeEvaluation.ruleBundleVersion).",
+      "type": "integer",
+      "minimum": -1
+    },
+    "evaluator": {
+      "description": "Which evaluator produced the decision. 'none' = a fail-closed gate answered before any rule ran.",
+      "enum": ["native", "java", "none"]
+    },
+    "ledgerEvaluator": {
+      "description": "evaluator values that can appear on Edge Ledger rows; 'cloud-legacy' marks rows imported by ledger.backfill.",
+      "enum": ["native", "java", "none", "cloud-legacy"]
+    },
+    "failClosedCode": {
+      "enum": [
+        "NODE_NOT_AUTHORIZED",
+        "NO_BUNDLE",
+        "FEATURE_STORE_UNAVAILABLE",
+        "LEDGER_UNAVAILABLE",
+        "EVALUATOR_FAULT"
+      ]
+    },
+    "watchlistEntryId": {
+      "description": "Public sanctions/PEP list entry id, '<listId>:<entryId>', e.g. 'ofac-sdn:36216'. Never a name.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._/-]{0,95}$"
+    },
+    "typologyCode": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,63}$"
+    },
+    "op": {
+      "enum": [
+        "txn.search",
+        "txn.get",
+        "txn.batchGet",
+        "txn.related",
+        "filing.extract",
+        "export.stream",
+        "ledger.backfill",
+        "ledger.health"
+      ]
+    },
+    "opList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/op" },
+      "uniqueItems": true,
+      "maxItems": 8
+    },
+    "userRef": {
+      "description": "Cloud user id, or 'system:<job>' for SYSTEM actors.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+    },
+    "workflowRef": {
+      "description": "Cloud workflow record id (case, alert, SAR/STR/CTR filing).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+    },
+    "featureName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "not": {
+        "enum": [
+          "pan", "pan_hash", "card_number", "pan_masked_full", "cvv", "cvv2", "cvc", "cvc2",
+          "track1", "track2", "track_data", "pin", "pin_block", "expiry", "exp_date", "card_expiry"
+        ]
+      }
+    },
+    "features": {
+      "description": "The evaluated feature bag as stored in edge_evaluations.features: flat, snake_case, scalar values, with card secrets and pan_hash stripped. Returned over the tunnel only in detail items.",
+      "type": "object",
+      "maxProperties": 256,
+      "propertyNames": { "$ref": "#/$defs/featureName" },
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"],
+        "maxLength": 512,
+        "x-hokeka-luhnReject": true
+      }
+    },
+    "sanctionsHitDetail": {
+      "description": "One local sanctions/PEP match, as held in edge_evaluations.sanctions_hits. matchedValue is the matched name/account and is tunnel-transient (class T).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entryId", "score", "matchedOn"],
+      "properties": {
+        "entryId": { "$ref": "#/$defs/watchlistEntryId" },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "matchedOn": { "enum": ["COUNTERPARTY_NAME", "COUNTERPARTY_ACCOUNT", "BENEFICIARY_NAME", "MERCHANT"] },
+        "matchedValue": { "type": "string", "maxLength": 256 },
+        "listVersion": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "searchFilter": {
+      "description": "Filter shared by txn.search and export.stream. Results are always ordered (evaluatedAt desc, edgeAssessmentId desc).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/instant" },
+        "to": { "$ref": "#/$defs/instant" },
+        "merchantId": { "$ref": "#/$defs/merchantId" },
+        "decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/decision" },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "ruleId": { "$ref": "#/$defs/ruleId" },
+        "txnRef": { "$ref": "#/$defs/txnRef" },
+        "minScore": { "$ref": "#/$defs/score" },
+        "ctrRequired": { "type": "boolean" },
+        "sanctionsHit": { "type": "boolean" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit"],
+      "properties": {
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "cursor": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,2048}$" }
+      }
+    },
+    "actor": {
+      "description": "Who the Control Plane is acting for. The Edge re-checks pspId, kind and support access against its own config.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "userId", "role", "pspId", "purpose"],
+      "properties": {
+        "kind": { "enum": ["PSP_USER", "PLATFORM_USER", "SYSTEM"] },
+        "userId": { "$ref": "#/$defs/userRef" },
+        "role": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" },
+        "pspId": { "$ref": "#/$defs/pspId" },
+        "purpose": {
+          "enum": [
+            "ALERT_REVIEW",
+            "CASE_INVESTIGATION",
+            "SAR_FILING",
+            "CTR_FILING",
+            "TRANSACTION_MONITORING",
+            "CUSTOMER_REVIEW",
+            "NETWORK_ANALYSIS",
+            "DATA_EXPORT",
+            "SUPPORT_ACCESS",
+            "LEDGER_BACKFILL",
+            "LEDGER_OPERATIONS"
+          ]
+        },
+        "caseId": { "$ref": "#/$defs/workflowRef" },
+        "alertId": { "$ref": "#/$defs/workflowRef" },
+        "filingRef": { "$ref": "#/$defs/workflowRef" },
+        "supportReason": { "type": "string", "minLength": 10, "maxLength": 500 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "PLATFORM_USER" } }, "required": ["kind"] },
+          "then": {
+            "required": ["supportReason"],
+            "properties": { "purpose": { "const": "SUPPORT_ACCESS" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "PSP_USER" } }, "required": ["kind"] },
+          "then": {
+            "not": { "required": ["supportReason"] },
+            "properties": { "purpose": { "not": { "enum": ["SUPPORT_ACCESS", "LEDGER_BACKFILL", "LEDGER_OPERATIONS"] } } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "SYSTEM" } }, "required": ["kind"] },
+          "then": {
+            "properties": {
+              "userId": { "pattern": "^system:" },
+              "purpose": { "enum": ["LEDGER_BACKFILL", "LEDGER_OPERATIONS", "SAR_FILING", "CTR_FILING"] }
+            }
+          }
+        }
+      ]
+    },
+    "transactionSummary": {
+      "description": "List/search view of one Edge Ledger evaluation. Never carries pan_hash or any card secret. With an export projection only edgeAssessmentId, evaluatedAt, siteId, decision are guaranteed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edgeAssessmentId", "evaluatedAt", "siteId", "decision"],
+      "properties": {
+        "edgeAssessmentId": { "$ref": "#/$defs/uuid" },
+        "txnRef": { "$ref": "#/$defs/txnRef" },
+        "siteId": { "$ref": "#/$defs/siteId" },
+        "nodeId": { "$ref": "#/$defs/edgeId" },
+        "evaluatedAt": { "$ref": "#/$defs/instant" },
+        "decision": { "$ref": "#/$defs/decision" },
+        "score": { "$ref": "#/$defs/score" },
+        "merchantId": { "$ref": "#/$defs/merchantId" },
+        "mcc": { "$ref": "#/$defs/mcc" },
+        "amountMinor": { "$ref": "#/$defs/amountMinor" },
+        "currency": { "$ref": "#/$defs/currency" },
+        "countryCode": { "$ref": "#/$defs/countryCode" },
+        "channel": { "$ref": "#/$defs/channel" },
+        "triggeredRuleIds": { "$ref": "#/$defs/ruleIdList" },
+        "ctrRequired": { "type": "boolean" },
+        "sanctionsHit": { "type": "boolean" },
+        "origin": { "enum": ["LIVE", "BACKFILL"] }
+      }
+    },
+    "transactionDetail": {
+      "description": "Full view of one Edge Ledger evaluation (txn.get, txn.batchGet, filing.extract). Never carries pan_hash or any card secret.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edgeAssessmentId", "evaluatedAt", "siteId", "nodeId", "decision", "score",
+        "triggeredRuleIds", "ruleVersionIds", "reasons", "bundleVersion", "evaluator",
+        "ctrRequired", "sanctionsHit", "features", "origin", "legalHold"
+      ],
+      "properties": {
+        "edgeAssessmentId": { "$ref": "#/$defs/uuid" },
+        "txnRef": { "$ref": "#/$defs/txnRef" },
+        "siteId": { "$ref": "#/$defs/siteId" },
+        "nodeId": { "$ref": "#/$defs/edgeId" },
+        "evaluatedAt": { "$ref": "#/$defs/instant" },
+        "decision": { "$ref": "#/$defs/decision" },
+        "score": { "$ref": "#/$defs/score" },
+        "merchantId": { "$ref": "#/$defs/merchantId" },
+        "mcc": { "$ref": "#/$defs/mcc" },
+        "amountMinor": { "$ref": "#/$defs/amountMinor" },
+        "currency": { "$ref": "#/$defs/currency" },
+        "countryCode": { "$ref": "#/$defs/countryCode" },
+        "channel": { "$ref": "#/$defs/channel" },
+        "triggeredRuleIds": { "$ref": "#/$defs/ruleIdList" },
+        "ruleVersionIds": { "$ref": "#/$defs/ruleIdList" },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 512, "x-hokeka-luhnReject": true },
+          "maxItems": 512
+        },
+        "bundleVersion": { "$ref": "#/$defs/bundleVersion" },
+        "bundleHash": { "$ref": "#/$defs/bundleHash" },
+        "evaluator": { "$ref": "#/$defs/ledgerEvaluator" },
+        "latencyUs": { "type": "integer", "minimum": 0 },
+        "failClosedCode": { "$ref": "#/$defs/failClosedCode" },
+        "ctrRequired": { "type": "boolean" },
+        "sanctionsHit": { "type": "boolean" },
+        "sanctionsHits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sanctionsHitDetail" },
+          "maxItems": 64
+        },
+        "typologyCodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typologyCode" },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "features": { "$ref": "#/$defs/features" },
+        "origin": { "enum": ["LIVE", "BACKFILL"] },
+        "legalHold": { "type": "boolean" }
+      }
+    }
+  }
+}
