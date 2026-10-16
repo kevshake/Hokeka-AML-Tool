@@ -49,6 +49,10 @@ public class TransactionRequestDTO {
     @Size(max = 320, message = "Customer email must not exceed 320 characters")
     private String customerEmail;
 
+    /** When set, cloud ingest adopts the edge decision instead of re-running the decision engine. */
+    @Size(max = 128, message = "Edge assessment id must not exceed 128 characters")
+    private String edgeAssessmentId;
+
     // Getters and Setters
     public String getMerchantId() {
         return merchantId;
@@ -150,5 +154,13 @@ public class TransactionRequestDTO {
     }
     public String getCustomerEmail() { return customerEmail; }
     public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+
+    public String getEdgeAssessmentId() {
+        return edgeAssessmentId;
+    }
+
+    public void setEdgeAssessmentId(String edgeAssessmentId) {
+        this.edgeAssessmentId = edgeAssessmentId;
+    }
 }
 
