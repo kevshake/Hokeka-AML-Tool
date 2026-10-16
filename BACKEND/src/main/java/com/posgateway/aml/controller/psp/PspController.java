@@ -42,16 +42,20 @@ public class PspController {
     private final PspMapper pspMapper;
     private final PspRepository pspRepository;
     private final CbkProperties cbkProperties;
+    private final com.posgateway.aml.service.security.PspIsolationService pspIsolationService;
 
     public PspController(PspService pspService,
                          PspMapper pspMapper,
                          PspRepository pspRepository,
-                         CbkProperties cbkProperties) {
+                         CbkProperties cbkProperties,
+                         com.posgateway.aml.service.security.PspIsolationService pspIsolationService) {
         this.pspService = pspService;
         this.pspMapper = pspMapper;
         this.pspRepository = pspRepository;
         this.cbkProperties = cbkProperties;
+        this.pspIsolationService = pspIsolationService;
     }
+
 
 
     @GetMapping
@@ -275,8 +279,16 @@ public class PspController {
         return r;
     }
 
-    private boolean canAccessPsp(User currentUser, Long pspId) {
+    /**
+     * True when the caller may act on {@code pspId}: platform administrators (SUPER_ADMIN,
+     * PLATFORM_ADMIN, APP_CONTROLLER, or ADMIN on the platform sentinel PSP) on every PSP — they
+     * are bound to the HOKEKA_PLATFORM sentinel row, which previously made this check compare
+     * against the sentinel id and refuse every real PSP — users without a PSP likewise, and
+     * everyone else only on their own PSP.
+     */
+    boolean canAccessPsp(User currentUser, Long pspId) {
         if (currentUser == null || pspId == null) return false;
+        if (pspIsolationService.isPlatformAdministrator(currentUser)) return true;
         if (currentUser.getPsp() == null) return true;
         return pspId.equals(currentUser.getPsp().getPspId());
     }

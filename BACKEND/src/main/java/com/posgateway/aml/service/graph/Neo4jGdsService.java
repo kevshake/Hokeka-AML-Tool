@@ -42,10 +42,43 @@ public class Neo4jGdsService {
     // Graph projection name
     private static final String GRAPH_NAME = "aml-merchant-graph";
 
+    /** Detected once per process: null = not determined yet (Neo4j unreachable so far). */
+    private volatile Boolean gdsAvailable;
+
     @Autowired
     public Neo4jGdsService(Driver neo4jDriver, RedisTemplate<String, Object> redisTemplate) {
         this.neo4jDriver = neo4jDriver;
         this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * Whether the Graph Data Science plugin is installed. Detected once with
+     * {@code SHOW PROCEDURES} and cached; when absent a single WARN is logged and every GDS algorithm
+     * is skipped (previously each scheduled run logged one ERROR per algorithm). A failed detection
+     * (Neo4j unreachable) is not cached, so the next run tries again.
+     */
+    public boolean isGdsAvailable() {
+        Boolean known = gdsAvailable;
+        if (known != null) {
+            return known;
+        }
+        try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
+            Result result = session.run(
+                    "SHOW PROCEDURES YIELD name WHERE name = 'gds.graph.project' RETURN count(name) AS c");
+            boolean present = result.hasNext() && result.next().get("c").asLong(0) > 0;
+            gdsAvailable = present;
+            if (present) {
+                logger.info("Neo4j Graph Data Science plugin detected; graph analytics enabled");
+            } else {
+                logger.warn("Neo4j Graph Data Science plugin is not installed: PageRank, community detection, "
+                        + "betweenness, triangle count and clustering metrics are skipped. Install the GDS "
+                        + "plugin on the Neo4j server to enable them.");
+            }
+            return present;
+        } catch (Exception e) {
+            logger.debug("Could not detect the Neo4j GDS plugin yet: {}", e.getMessage());
+            return false;
+        }
     }
 
     private String metricsKey(String merchantId) {
@@ -60,6 +93,9 @@ public class Neo4jGdsService {
      * Create/refresh the in-memory graph projection for GDS algorithms.
      */
     public void createGraphProjection() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             // Drop existing projection if it exists
             session.run("CALL gds.graph.drop($name, false)", Map.of("name", GRAPH_NAME));
@@ -103,6 +139,9 @@ public class Neo4jGdsService {
      * High PageRank = merchant connected to many other high-value merchants.
      */
     public void runPageRank() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     CALL gds.pageRank.write($graphName, {
@@ -135,6 +174,9 @@ public class Neo4jGdsService {
      * Merchants in same community = likely related activity.
      */
     public void runCommunityDetection() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     CALL gds.louvain.write($graphName, {
@@ -165,6 +207,9 @@ public class Neo4jGdsService {
      * High betweenness = merchant acts as intermediary in many paths.
      */
     public void runBetweennessCentrality() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     CALL gds.betweenness.write($graphName, {
@@ -194,6 +239,9 @@ public class Neo4jGdsService {
      * High triangle count = tight knit groups.
      */
     public void runTriangleCount() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     CALL gds.triangleCount.write($graphName, {
@@ -224,6 +272,9 @@ public class Neo4jGdsService {
      * Measures how close neighbors are to being a clique.
      */
     public void runLocalClusteringCoefficient() {
+        if (!isGdsAvailable()) {
+            return;
+        }
         try (Session session = neo4jDriver.session(SessionConfig.defaultConfig())) {
             String cypher = """
                     CALL gds.localClusteringCoefficient.write($graphName, {
@@ -319,17 +370,19 @@ public class Neo4jGdsService {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. Create/refresh graph projection
-            createGraphProjection();
+            if (isGdsAvailable()) {
+                // 1. Create/refresh graph projection
+                createGraphProjection();
 
-            // 2. Run all algorithms
-            runPageRank();
-            runCommunityDetection();
-            runBetweennessCentrality();
-            // Note: Degree centrality is typically computed as part of node properties,
-            // skipping separate call
-            runTriangleCount();
-            runLocalClusteringCoefficient();
+                // 2. Run all algorithms
+                runPageRank();
+                runCommunityDetection();
+                runBetweennessCentrality();
+                // Note: Degree centrality is typically computed as part of node properties,
+                // skipping separate call
+                runTriangleCount();
+                runLocalClusteringCoefficient();
+            }
 
             // 3. Cache all metrics in Aerospike
             cacheAllMerchantMetrics();

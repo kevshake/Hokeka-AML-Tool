@@ -24,7 +24,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 // @Slf4j removed
 // @RequiredArgsConstructor removed
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
+/**
+ * SAR register. Tipping-off control: only compliance roles may read or change SARs — MLRO and
+ * COMPLIANCE_OFFICER (PSP-scoped officers see their PSP's SARs only) plus platform administrators
+ * (SUPER_ADMIN / ADMIN / PLATFORM_ADMIN via the role hierarchy). PSP operators (PSP_USER) and PSP
+ * administrators are refused with 403.
+ */
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PLATFORM_ADMIN','MLRO','COMPLIANCE_OFFICER')")
 @RestController
 @RequestMapping("/compliance/sar")
 public class ComplianceReportingController {
@@ -96,6 +102,12 @@ public class ComplianceReportingController {
     @GetMapping("/{id}/xml")
     public ResponseEntity<String> downloadSarXml(@PathVariable Long id) {
         log.info("Download SAR XML: {}", id);
+        // Tenant check before rendering: a PSP-scoped officer may only export their PSP's SAR.
+        SuspiciousActivityReport sar = sarRepository.findById(id).orElse(null);
+        if (sar == null || !(pspIsolationService.isPlatformAdministrator()
+                || pspIsolationService.getCurrentUserPspId().equals(sar.getPspId()))) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
         String xml = reportingService.generateFincenXml(id);
 
         return ResponseEntity.ok()

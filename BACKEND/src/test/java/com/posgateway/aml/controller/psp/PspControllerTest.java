@@ -34,7 +34,8 @@ class PspControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new PspController(pspService, pspMapper, pspRepository, cbkProperties);
+        controller = new PspController(pspService, pspMapper, pspRepository, cbkProperties,
+                new com.posgateway.aml.service.security.PspIsolationService(null));
     }
 
     @Test
@@ -91,5 +92,27 @@ class PspControllerTest {
         Psp psp = new Psp();
         psp.setPspId(pspId);
         return User.builder().psp(psp).build();
+    }
+
+    @Test
+    void platformSuperAdminOnSentinelPspCanAccessEveryPsp() {
+        com.posgateway.aml.entity.Role role = new com.posgateway.aml.entity.Role();
+        role.setName("SUPER_ADMIN");
+        Psp sentinel = new Psp();
+        sentinel.setPspId(1L);
+        sentinel.setPspCode("HOKEKA_PLATFORM");
+        User superAdmin = User.builder().username("super.admin").email("s@x").passwordHash("")
+                .role(role).psp(sentinel).build();
+
+        assertTrue(controller.canAccessPsp(superAdmin, 2L));
+        assertTrue(controller.canAccessPsp(superAdmin, 99L));
+
+        com.posgateway.aml.entity.Role pspAdmin = new com.posgateway.aml.entity.Role();
+        pspAdmin.setName("PSP_ADMIN");
+        Psp own = new Psp();
+        own.setPspId(5L);
+        User tenant = User.builder().username("t").email("t@x").passwordHash("").role(pspAdmin).psp(own).build();
+        assertTrue(controller.canAccessPsp(tenant, 5L));
+        assertFalse(controller.canAccessPsp(tenant, 2L));
     }
 }
