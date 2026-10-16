@@ -142,9 +142,15 @@ public class CaseEnrichmentService {
         // caller's persistence context — touching its lazy `notes` collection directly would
         // throw LazyInitializationException. Re-load a managed instance inside this thread's
         // transaction before mutating the collection.
-        ComplianceCase managed = (cCase != null && cCase.getId() != null)
-                ? caseRepository.findById(cCase.getId()).orElse(cCase) : cCase;
+        // Never fall back to the detached instance: if the case cannot be re-loaded (no id yet, or
+        // deleted since the async task was queued) its lazy collection is unusable, so skip the note.
+        if (cCase == null || cCase.getId() == null) {
+            logger.warn("Skipping system note: case has no persistent id (async enrichment)");
+            return;
+        }
+        ComplianceCase managed = caseRepository.findById(cCase.getId()).orElse(null);
         if (managed == null) {
+            logger.warn("Skipping system note: case {} no longer exists", cCase.getId());
             return;
         }
         CaseNote note = new CaseNote();
@@ -152,6 +158,10 @@ public class CaseEnrichmentService {
         note.setContent(text);
         note.setCreatedAt(LocalDateTime.now());
         note.setInternal(true);
+        // A case built in memory (not yet hydrated by Hibernate) may carry a null collection.
+        if (managed.getNotes() == null) {
+            managed.setNotes(new java.util.ArrayList<>());
+        }
         managed.getNotes().add(note);
         caseRepository.save(managed);
     }

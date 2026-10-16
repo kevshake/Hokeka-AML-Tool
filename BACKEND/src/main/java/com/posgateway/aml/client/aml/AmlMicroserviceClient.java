@@ -240,10 +240,11 @@ public class AmlMicroserviceClient {
     // ─────────────────────────────────────────────────────────────────────────
     // P3-B: velocity counter cache write
     // PUT /internal/v1/cache/velocity/{customerId}
-    // Body: { "ts_ms": long, "amount_cents": long, "country": "..." }
-    // The microservice maintains a sliding-window counter in Aerospike set
-    // {@code velocity}; reads happen via getVelocity below or directly from
-    // the rule engine running inside the microservice.
+    // Body: { "tsMs": long, "amountCents": long, "country": "..." }
+    // The microservice buckets events into fixed windows (aml.velocity.window-seconds,
+    // default 1h) in Aerospike set {@code velocity}; getVelocity returns the current
+    // window's txn_count/total_amount plus a sliding-window estimate
+    // (sliding_txn_count / sliding_total_amount).
     // ─────────────────────────────────────────────────────────────────────────
     @CircuitBreaker(name = CB_NAME, fallbackMethod = "cacheGenericFallback")
     public void recordVelocityEvent(String customerId, java.util.Map<String, Object> event) {
