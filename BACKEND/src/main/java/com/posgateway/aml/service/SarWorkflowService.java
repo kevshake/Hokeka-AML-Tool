@@ -32,18 +32,21 @@ public class SarWorkflowService {
     private final AuditLogService auditLogService;
     private final RegulatoryDeadlineService regulatoryDeadlineService;
     private final ComplianceCalendarService complianceCalendarService;
+    private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
 
     @Autowired
     public SarWorkflowService(SuspiciousActivityReportRepository sarRepository,
             PermissionService permissionService,
             AuditLogService auditLogService,
             RegulatoryDeadlineService regulatoryDeadlineService,
-            ComplianceCalendarService complianceCalendarService) {
+            ComplianceCalendarService complianceCalendarService,
+            com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService) {
         this.sarRepository = sarRepository;
         this.permissionService = permissionService;
         this.auditLogService = auditLogService;
         this.regulatoryDeadlineService = regulatoryDeadlineService;
         this.complianceCalendarService = complianceCalendarService;
+        this.complianceEntityLinkService = complianceEntityLinkService;
     }
 
     private static final DateTimeFormatter SAR_REF_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -101,6 +104,9 @@ public class SarWorkflowService {
                 saved.getSarReference() + " filing deadline (" + saved.getDeadlinePolicyCode() + ")",
                 saved.getJurisdiction(), saved.getPspId(), "SAR", saved.getId());
         auditLogService.logAction(creator, "CREATE_SAR", "SAR", String.valueOf(saved.getId()), null, saved, null, null);
+        if (saved.getComplianceCase() != null) {
+            complianceEntityLinkService.linkSarToCaseAlerts(saved.getId(), saved.getComplianceCase().getId(), null);
+        }
         return saved;
     }
 

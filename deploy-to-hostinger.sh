@@ -10,6 +10,8 @@ SSH_KEY=${3:-"~/.ssh/id_rsa"}
 REPO_DIR="/opt/aml-fraud-detector"
 
 echo "=== Deploying to Hostinger VPS: $VPS_IP ==="
+echo "NOTE: On the VPS, prefer: sudo ./scripts/install/hokeka-install.sh --role control-plane --yes"
+echo "      (see docs/install/07-first-run-bootstrap.md). This script is rsync/SSH bootstrap only."
 
 # 1. SSH and prepare the server
 ssh -i "$SSH_KEY" "$SSH_USER@$VPS_IP" << 'REMOTE'

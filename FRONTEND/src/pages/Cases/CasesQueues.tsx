@@ -2,6 +2,8 @@ import { Loader2 } from "lucide-react";
 import { useCases } from "../../features/api/queries";
 import type { CaseStatus, Priority } from "../../types";
 import TwBadge from "../../components/Common/TwBadge";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 const statusConfig: Record<CaseStatus, { label: string; glow: "info" | "warning" | "danger" | "success" | "gold" }> = {
   NEW: { label: "New", glow: "info" },
@@ -65,10 +67,17 @@ function QueueColumn({ status }: { status: CaseStatus }) {
 }
 
 export default function CasesQueues() {
+  const { exportFilterMap } = useUrlTableState();
+
   return (
     <div>
-      <span className="hokeka-section-label">Workflow</span>
-      <h3 className="mt-1 mb-4 font-display text-lg font-semibold tracking-tight text-ink">Case queues</h3>
+      <div className="mb-4 flex items-end justify-between">
+        <div>
+          <span className="hokeka-section-label">Workflow</span>
+          <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-ink">Case queues</h3>
+        </div>
+        <ConsoleListExportMenu viewType="CASES" filters={exportFilterMap} />
+      </div>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {QUEUE_STATUSES.map((status) => (
           <QueueColumn key={status} status={status} />

@@ -58,6 +58,13 @@ Extended sizing, disk layout, and network detail: [`docs/edge-client-install-gui
 | **Native** | `--native` | Linux estates that prohibit containers |
 | **Windows** | `install.ps1` | Windows Server — container path only (no native Aerospike on Windows) |
 
+On a **fresh Linux or Windows host**, install prerequisites first with the unified bootstrap ([07 — First-run bootstrap](07-first-run-bootstrap.md)):
+
+```bash
+sudo ./scripts/install/hokeka-install.sh --role edge --yes -- \
+  --pspid <PSP_ID> --edgeid <EDGE_ID> --controlplane <URL> --enrollment-code <CODE>
+```
+
 ---
 
 ## Installation steps
@@ -187,7 +194,7 @@ Complete [06 — PSP API dual-post integration](06-psp-api-dual-post-integration
 
 ### Hokeka AI decisioning (Edge → Control Plane only)
 
-> The Linux Edge installer (`install.sh`) does **not** install a local AI/Laya service — by design. See [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md).
+> The Linux Edge installer (`install.sh`) does **not** install a local AI service — by design. Every Hokeka AI recommendation is produced on the Control Plane.
 
 Edge Nodes **never** hold AI vendor credentials. Borderline pre-auth decisions (`ALERT`/`HOLD`) may request a **Hokeka AI** advisory via `POST /api/v1/edge/decision` over the existing mTLS channel. The Control Plane performs all AI decisioning; responses contain only verdict, confidence, reasons, and advisory status.
 

@@ -7,7 +7,12 @@ import MonitoringAlertsPanel from "../../components/monitoring/MonitoringAlertsP
 import { useSanctionsDownloadStatus, useSanctionsHealth, useSanctionsListVersions } from "../../features/api/queries";
 import { useTriggerSanctionsDownload } from "../../features/api/mutations";
 import { useAuth } from "../../contexts/AuthContext";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import { isPlatformAdmin } from "../../lib/userAccess";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
+import { canPerformAction } from "../../lib/consoleRbac";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 export default function ScreeningPage() {
   const [name, setName] = useState("");
@@ -19,7 +24,9 @@ export default function ScreeningPage() {
   const { data: listVersions = [] } = useSanctionsListVersions();
   const { data: downloadStatus } = useSanctionsDownloadStatus();
   const triggerDownload = useTriggerSanctionsDownload();
-  const canManageIngest = ["SUPER_ADMIN", "ADMIN", "COMPLIANCE_OFFICER", "MLRO"].includes(user?.role?.name?.toUpperCase() || "");
+  const isOperator = isPlatformAdmin(user);
+  const canManageIngest = canPerformAction(user, "screening.ingest");
+  const { exportFilterMap } = useUrlTableState();
 
   const handleScreening = async () => {
     if (!name.trim()) { setError("Please enter a name to screen"); return; }
@@ -50,29 +57,43 @@ export default function ScreeningPage() {
           <div>
             <p className="font-medium">Screening engine degraded</p>
             <p className="mt-1 text-amber-200/90">{health.message}</p>
-            <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded (`sanctions.download.enabled=true`).</p>
+            {isOperator ? (
+              <p className="mt-1 text-xs text-amber-200/70">Ensure aml-microservice is running and sanctions data is loaded.</p>
+            ) : null}
           </div>
         </div>
       )}
       {downloadStatus && (
         <div className="mb-4 rounded-lg border border-white/10 bg-[var(--surface-2)] px-4 py-3 text-xs text-glass-muted">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
-              <p className="mt-1">PEP tags applied at ingest ({downloadStatus.pepClassificationAtIngest ? "role.pep / role.rca" : "off"}).
-                {downloadStatus.lastSuccessfulUpdate ? ` Last success: ${downloadStatus.lastSuccessfulUpdate}.` : " No successful ingest recorded."}</p>
-              {!downloadStatus.enabled && <p className="mt-1 text-amber-200">Set SANCTIONS_DOWNLOAD_ENABLED=true and sanctions.opensanctions.url for live watchlist data.</p>}
+          {isOperator ? (
+            <div className="flex flex-col gap-3 min-[481px]:flex-row min-[481px]:flex-wrap min-[481px]:items-center min-[481px]:justify-between">
+              <div>
+                <p className="font-medium text-white">OpenSanctions ingest: {downloadStatus.enabled ? "enabled" : "disabled"}</p>
+                <p className="mt-1">
+                  PEP tags applied at ingest ({downloadStatus.pepClassificationAtIngest ? "role.pep / role.rca" : "off"}).
+                  {downloadStatus.lastSuccessfulUpdate ? ` Last success: ${downloadStatus.lastSuccessfulUpdate}.` : " No successful ingest recorded."}
+                </p>
+                {!downloadStatus.enabled && (
+                  <p className="mt-1 text-amber-200">Enable sanctions download in Control Plane configuration for live watchlist data.</p>
+                )}
+              </div>
+              {canManageIngest && downloadStatus.enabled && (
+                <button
+                  onClick={() => triggerDownload.mutate()}
+                  disabled={triggerDownload.isPending}
+                  className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50"
+                >
+                  {triggerDownload.isPending ? "Triggering..." : "Trigger ingest"}
+                </button>
+              )}
             </div>
-            {canManageIngest && downloadStatus.enabled && (
-              <button
-                onClick={() => triggerDownload.mutate()}
-                disabled={triggerDownload.isPending}
-                className="rounded bg-burgundy-700 px-3 py-2 text-xs text-white hover:bg-burgundy-800 disabled:opacity-50"
-              >
-                {triggerDownload.isPending ? "Triggering..." : "Trigger ingest"}
-              </button>
-            )}
-          </div>
+          ) : (
+            <p className="text-sm text-white/90">
+              Watchlist status:{" "}
+              <span className="font-medium">{downloadStatus.enabled ? "Available" : "Unavailable"}</span>
+              {downloadStatus.lastSuccessfulUpdate ? ` · Last updated ${downloadStatus.lastSuccessfulUpdate}` : ""}
+            </p>
+          )}
         </div>
       )}
       {listVersions.length > 0 && (
@@ -86,18 +107,18 @@ export default function ScreeningPage() {
           <h3 className="text-base font-semibold text-white">Sanctions Screening</h3>
         </div>
 
-        <div className="mb-4 flex gap-3">
+        <div className="mb-4 flex max-[480px]:flex-col max-[480px]:gap-2 min-[481px]:flex-row min-[481px]:gap-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleScreening()}
             placeholder="Enter a name to screen against sanctions lists..."
-            className="flex-1 rounded-lg border border-white/10 bg-[var(--surface-3)] px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-burgundy-700"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[var(--surface-3)] px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 max-[480px]:w-full"
           />
           <button
             onClick={handleScreening}
             disabled={loading}
-            className="flex min-w-[130px] items-center justify-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy-800 disabled:opacity-50"
+            className="flex min-h-[42px] w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-burgundy-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy-800 disabled:opacity-50 min-[481px]:w-auto min-[481px]:min-w-[130px]"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             {loading ? "Screening..." : "Screen"}
@@ -143,7 +164,7 @@ export default function ScreeningPage() {
             ) : (
               <div className="space-y-1">
                 {Object.entries(result).map(([key, val]) => (
-                  key !== "matches" && key !== "matchFound" && key !== "jevScreeningHitId" ? (
+                  key !== "matches" && key !== "matchFound" && key !== "aiScreeningHitId" ? (
                     <div key={key} className="flex gap-2 text-sm">
                       <span className="min-w-[120px] text-xs font-semibold uppercase tracking-wider text-glass-muted">
                         {key.replace(/([A-Z])/g, " $1").trim()}
@@ -156,11 +177,11 @@ export default function ScreeningPage() {
                 ))}
               </div>
             )}
-            {result.jevScreeningHitId ? (
+            {result.aiScreeningHitId ? (
               <div className="mt-4">
                 <AiVerdictPanel
-                  auditPath={`jev/audit/screening/${result.jevScreeningHitId}`}
-                  title="Hokeka Intelligence"
+                  auditPath={`ai/audit/screening/${result.aiScreeningHitId}`}
+                  title="Hokeka AI recommendation"
                   pollUntilFound
                 />
               </div>
@@ -169,8 +190,25 @@ export default function ScreeningPage() {
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <MonitoringAlertsPanel />
+        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+          <div className="mb-3 flex justify-end">
+            <ConsoleListExportMenu
+              viewType="SCREENING_ACTIVITY"
+              filters={{
+                ...exportFilterMap,
+                ...(result?.merchantId ? { merchantId: String(result.merchantId) } : {}),
+              }}
+            />
+          </div>
+          <ScreeningActivityPanel merchantId={result?.merchantId ? String(result.merchantId) : undefined} />
+          {!result?.merchantId ? (
+            <p className="text-sm text-white/45">
+              Run a name screen above or open a transaction record to view persisted screening activity for your tenant.
+            </p>
+          ) : null}
+        </div>
       </div>
     </HokekaPageShell>
   );

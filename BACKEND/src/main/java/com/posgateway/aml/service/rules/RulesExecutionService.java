@@ -36,6 +36,9 @@ public class RulesExecutionService {
     private final FeatureStoreService featureStore;
     private final com.posgateway.aml.compliance.RegulatoryComplianceService regulatoryComplianceService;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
+
     @Autowired
     public RulesExecutionService(RuleDefinitionRepository ruleRepository,
                                  DroolsRulesService droolsService,
@@ -128,6 +131,13 @@ public class RulesExecutionService {
             }
             if (compliance.isStrRequired()) scoreAdjustment += 20.0;
             if ("HOLD".equals(compliance.getDecision())) scoreAdjustment += 10.0;
+            if (assessmentEngineRecorder != null) {
+                assessmentEngineRecorder.recordRegulatoryCompliance(
+                        compliance.isStrRequired(),
+                        compliance.isCtrRequired(),
+                        compliance.getDecision(),
+                        regulatoryEvidence);
+            }
         }
         for (RuleDefinition rule : allRules) {
             boolean triggered = false;
@@ -149,7 +159,23 @@ public class RulesExecutionService {
             } finally {
                 long executionTimeMicros = Math.max(1L, (System.nanoTime() - ruleStartedAt) / 1_000L);
                 effectivenessService.recordExecution(
-                        rule.getId(), evaluationPspId, String.valueOf(txnId), executionTimeMicros, executionResult);
+                        rule.getId(),
+                        rule.getCurrentVersionId(),
+                        null,
+                        evaluationPspId,
+                        String.valueOf(txnId),
+                        executionTimeMicros,
+                        executionResult);
+            }
+
+            if (assessmentEngineRecorder != null) {
+                String proposed = triggered ? normalizeRuleAction(rule.getAction()) : "ALLOW";
+                assessmentEngineRecorder.recordRule(
+                        rule,
+                        triggered,
+                        proposed != null ? proposed : "HOLD",
+                        Math.max(1L, (System.nanoTime() - ruleStartedAt) / 1_000L),
+                        Map.of("result", executionResult.name()));
             }
 
             if (evaluationFailed) {
@@ -216,15 +242,18 @@ public class RulesExecutionService {
             return current;
         }
         String normalized = candidate.toUpperCase();
-        if ("BLOCK".equals(normalized) || "SUSPEND".equals(normalized)) {
+        if ("BLOCK".equals(normalized)) {
             return "BLOCK";
         }
-        if ("HOLD".equals(normalized) && !"BLOCK".equals(current)) {
+        if ("SUSPEND".equals(normalized) && !"BLOCK".equals(current)) {
+            return "SUSPEND";
+        }
+        if ("HOLD".equals(normalized) && !"BLOCK".equals(current) && !"SUSPEND".equals(current)) {
             return "HOLD";
         }
-        if (("ALERT".equals(normalized) || "FLAG".equals(normalized) || "REVIEW".equals(normalized))
+        if (("FLAG".equals(normalized) || "ALERT".equals(normalized) || "REVIEW".equals(normalized))
                 && "ALLOW".equals(current)) {
-            return "REVIEW";
+            return "FLAG";
         }
         return current;
     }
@@ -233,9 +262,10 @@ public class RulesExecutionService {
         if (action == null || action.isBlank()) return null;
         return switch (action.trim().toUpperCase()) {
             case "ALLOW" -> "ALLOW";
-            case "ALERT", "FLAG", "REVIEW" -> "REVIEW";
+            case "ALERT", "FLAG", "REVIEW" -> "FLAG";
             case "HOLD" -> "HOLD";
-            case "BLOCK", "SUSPEND" -> "BLOCK";
+            case "SUSPEND" -> "SUSPEND";
+            case "BLOCK" -> "BLOCK";
             default -> null;
         };
     }

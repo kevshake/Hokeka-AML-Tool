@@ -20,7 +20,7 @@ import {
   type UnderwritingOutcome,
 } from "../../features/api/queries";
 import { useRunG2WebsiteScan, useRunMerchantVerification } from "../../features/api/mutations";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 
 type Tab = "overview" | "ownership" | "intelligence" | "verification" | "edd" | "documents" | "network";
 
@@ -280,8 +280,7 @@ export default function KycMerchantDetailPage() {
               {edd && edd.status !== "NOT_STARTED" ? (
                 <div className="mt-4">
                   <AiVerdictPanel
-                    auditPath={`jev/audit/merchant/${id}?engine=KYC_EDD`}
-                    title="Hokeka Intelligence"
+                    auditPath={`ai/audit/merchant/${id}?engine=KYC_EDD`}
                   />
                 </div>
               ) : null}
@@ -319,7 +318,7 @@ function VerificationTab({ merchantId, signals, g2Scans, g2Rules, loading, lastO
       <div>
         <h2 className="text-base font-semibold text-white">Underwriting &amp; IDV evidence</h2>
         <p className="text-sm text-glass-muted">
-          Internal IDV auto-approve plus fail-closed external adapters (Smile ID, Match Pro, VMSS). Sumsub was removed; screening uses the platform engine.
+          Internal IDV auto-approve plus fail-closed external adapters (Smile ID, Match Pro, VMSS). Screening uses the platform engine.
         </p>
       </div>
       {canRun && <div className="flex flex-wrap gap-2">
@@ -361,8 +360,7 @@ function VerificationTab({ merchantId, signals, g2Scans, g2Rules, loading, lastO
     {g2Rules.length > 0 && <div className="mt-6"><h3 className="mb-2 text-sm font-semibold text-white">G2 transaction-laundering rules (Easy Rules engine)</h3><div className="flex flex-wrap gap-2">{g2Rules.map((rule) => <TwBadge key={rule} variant="info">{rule.replaceAll("_", " ")}</TwBadge>)}</div></div>}
     <div className="mt-6">
       <AiVerdictPanel
-        auditPath={`jev/audit/merchant/${merchantId}?engine=G2_CONTENT`}
-        title="Hokeka Intelligence"
+        auditPath={`ai/audit/merchant/${merchantId}?engine=G2_CONTENT`}
       />
     </div>
     <h3 className="mb-2 mt-6 text-sm font-semibold text-white">G2 website scan history</h3>
@@ -453,8 +451,7 @@ function IntelligenceTab({ merchantId, checks, loading, canRun, pending, onRun }
     {checks.some((c) => c.adverseMediaStatus === "HITS") ? (
       <div className="mt-6">
         <AiVerdictPanel
-          auditPath={`jev/audit/merchant/${merchantId}?engine=ADVERSE_MEDIA`}
-          title="Hokeka Intelligence"
+          auditPath={`ai/audit/merchant/${merchantId}?engine=ADVERSE_MEDIA`}
         />
       </div>
     ) : null}

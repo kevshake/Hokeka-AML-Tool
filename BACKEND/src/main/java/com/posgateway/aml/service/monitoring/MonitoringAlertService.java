@@ -21,11 +21,14 @@ public class MonitoringAlertService {
 
     private final MonitoringAlertRepository monitoringAlertRepository;
     private final PspIsolationService pspIsolationService;
+    private final MonitoringAlertBridgeService monitoringAlertBridgeService;
 
     public MonitoringAlertService(MonitoringAlertRepository monitoringAlertRepository,
-                                  PspIsolationService pspIsolationService) {
+                                  PspIsolationService pspIsolationService,
+                                  MonitoringAlertBridgeService monitoringAlertBridgeService) {
         this.monitoringAlertRepository = monitoringAlertRepository;
         this.pspIsolationService = pspIsolationService;
+        this.monitoringAlertBridgeService = monitoringAlertBridgeService;
     }
 
     @Transactional
@@ -35,7 +38,11 @@ public class MonitoringAlertService {
         alert.setAlertType("RISK_CHANGE");
         alert.setAlertSeverity(severityFor(result));
         alert.setAlertDetails(buildDetails(merchant, result));
-        return monitoringAlertRepository.save(alert);
+        MonitoringAlert saved = monitoringAlertRepository.save(alert);
+        if ("CRITICAL".equals(saved.getAlertSeverity()) || "WARN".equals(saved.getAlertSeverity())) {
+            monitoringAlertBridgeService.bridgeToFraudAlert(saved, merchant);
+        }
+        return saved;
     }
 
     @Transactional(readOnly = true)

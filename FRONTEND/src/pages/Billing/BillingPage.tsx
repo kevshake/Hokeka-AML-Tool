@@ -83,7 +83,10 @@ import type { Invoice, Subscription, SubscriptionRequest } from "../../types/bil
 import type { Psp } from "../../types";
 import { getApiUrl } from "../../config/api";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
-import { withAlpha } from "../../theme/tokens"
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { formatCount, formatCurrency } from "../../lib/formatDisplay";
+import { withAlpha } from "../../theme/tokens";
+import { glassPanelSx, glassTableContainerSx } from "../../theme/muiGlass";
 
 const ACCENT = "var(--gold)";
 
@@ -122,8 +125,8 @@ function StatusChip({ status, colorMap }: { status: string; colorMap: Record<str
   );
 }
 
-function fmt(amount: number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+function fmt(amount: number | null | undefined, currency = "USD") {
+  return formatCurrency(amount, currency);
 }
 
 function fmtDate(iso?: string) {
@@ -143,7 +146,7 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, icon, color, subtitle }: KpiCardProps) {
   return (
-    <Card sx={{ border: "1px solid var(--line-control)", borderRadius: 2, flex: 1 }}>
+    <Card sx={{ border: "1px solid var(--glass-border)", borderRadius: "var(--radius)", flex: 1 }}>
       <CardContent sx={{ pb: "16px !important" }}>
         <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <Box>
@@ -203,7 +206,7 @@ function RevenueTab() {
           value={fmt(summary.currentMonthRevenuePaid, currency)}
           icon={<MoneyIcon />}
           color="var(--success)"
-          subtitle={`${summary.paidInvoicesThisMonth} invoices paid`}
+          subtitle={`${formatCount(summary.paidInvoicesThisMonth)} invoices paid`}
         />
         <KpiCard
           title="Expected Revenue"
@@ -216,35 +219,41 @@ function RevenueTab() {
           value={fmt(summary.overdueAmount, currency)}
           icon={<WarningIcon />}
           color="var(--danger)"
-          subtitle={`${summary.overdueInvoicesCount} overdue invoices`}
+          subtitle={`${formatCount(summary.overdueInvoicesCount)} overdue invoices`}
         />
         <KpiCard
           title="Active Subscriptions"
-          value={String(summary.activeSubscriptions)}
+          value={formatCount(summary.activeSubscriptions)}
           icon={<CreditCardIcon />}
           color={ACCENT}
         />
       </Box>
 
       {/* Revenue Chart */}
-      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, p: 2, mb: 3 }}>
+      <Paper sx={{ ...glassPanelSx, p: 2, mb: 3 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
           Current Month Revenue Breakdown
         </Typography>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--line-control)" />
-            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-            <RechartsTooltip formatter={(v) => typeof v === "number" ? fmt(v, currency) : "—"} />
-            <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {chartData.every((row) => !Number(row.value)) ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: "center" }}>
+            No revenue recorded for the current month yet.
+          </Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line-control)" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`} />
+              <RechartsTooltip formatter={(v) => typeof v === "number" ? fmt(v, currency) : "—"} />
+              <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Paper>
 
       {/* Overdue Invoices Alert */}
       {overdue.length > 0 && (
-        <Paper sx={{ border: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)", borderRadius: 2, p: 2 }}>
+        <Paper sx={{ ...glassPanelSx, border: "1px solid color-mix(in srgb, var(--danger) 28%, var(--glass-border))", p: 2 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "var(--danger)" }}>
             Overdue Invoices ({overdue.length})
           </Typography>
@@ -405,7 +414,7 @@ function SubscriptionsTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load subscriptions.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={glassTableContainerSx}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -646,15 +655,14 @@ interface MarkPaidForm {
 
 function InvoicesTab() {
   const { data: psps = [] } = useAllPsps();
-  const [filterPspId, setFilterPspId] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("");
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const { state: tableState, setFilter, setPage, setPageSize } = useUrlTableState();
+  const filterPspId = tableState.filters.pspId ?? "";
+  const filterStatus = tableState.filters.status ?? "";
 
   const { data: invoicesPage, isLoading, isError } = useInvoices({
     pspId: filterPspId ? Number(filterPspId) : undefined,
-    page,
-    size: rowsPerPage,
+    page: tableState.page,
+    size: tableState.size,
   });
 
   const rows: Invoice[] = invoicesPage?.content ?? (Array.isArray(invoicesPage) ? (invoicesPage as Invoice[]) : []);
@@ -772,7 +780,7 @@ function InvoicesTab() {
         <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>PSP</InputLabel>
-            <Select value={filterPspId} label="PSP" onChange={(e) => { setFilterPspId(e.target.value); setPage(0); }}>
+            <Select value={filterPspId} label="PSP" onChange={(e) => setFilter("pspId", e.target.value)}>
               <MenuItem value="">All PSPs</MenuItem>
               {(psps as Psp[]).map((p) => {
                 const id = String(p.id ?? (p as unknown as { pspId?: number }).pspId ?? "");
@@ -783,7 +791,7 @@ function InvoicesTab() {
 
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Status</InputLabel>
-            <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}>
+            <Select value={filterStatus} label="Status" onChange={(e) => setFilter("status", e.target.value)}>
               <MenuItem value="">All</MenuItem>
               {["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"].map((s) => (
                 <MenuItem key={s} value={s}>{s}</MenuItem>
@@ -804,7 +812,7 @@ function InvoicesTab() {
 
       {isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to load invoices.</Alert>}
 
-      <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+      <TableContainer component={Paper} sx={glassTableContainerSx}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -898,10 +906,10 @@ function InvoicesTab() {
           rowsPerPageOptions={[10, 25, 50]}
           component="div"
           count={total}
-          rowsPerPage={rowsPerPage}
-          page={page}
+          rowsPerPage={tableState.size}
+          page={tableState.page}
           onPageChange={(_, p) => setPage(p)}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+          onRowsPerPageChange={(e) => setPageSize(parseInt(e.target.value, 10))}
         />
       </TableContainer>
 
@@ -1042,7 +1050,7 @@ function RosterTab() {
   }
 
   return (
-    <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+    <TableContainer component={Paper} sx={glassTableContainerSx}>
       <Table size="small">
         <TableHead>
           <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1195,7 +1203,7 @@ function UsageTab() {
 
           {/* Breakdown Table */}
           {usage.breakdown && usage.breakdown.length > 0 && (
-            <TableContainer component={Paper} sx={{ border: "1px solid var(--line-control)", borderRadius: 2 }}>
+            <TableContainer component={Paper} sx={glassTableContainerSx}>
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "var(--surface-3)" }}>
@@ -1238,7 +1246,7 @@ export default function BillingPage() {
   return (
     <HokekaPageShell title="Billing" subtitle="Revenue, subscriptions, invoices, and usage management" noCard>
     <Box>
-      <Paper sx={{ border: "1px solid var(--line-control)", borderRadius: 2, mb: 0 }}>
+      <Paper sx={{ ...glassPanelSx, mb: 0 }}>
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}

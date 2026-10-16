@@ -31,7 +31,7 @@ This directory contains detailed documentation for every feature, page, and work
 
 | Document | Description |
 |---|---|
-| [Sanctions Compliance](SANCTIONS_COMPLIANCE.md) | OFAC, UN, EU sanctions screening, Aerospike cache, fuzzy matching |
+| [AML Screening](AML_SCREENING.md) | OFAC, UN, EU sanctions screening, Aerospike cache, fuzzy matching, PEP |
 | [Regulatory Cash Reporting And Sanctions Recall](REGULATORY_CASH_REPORTING_AND_SANCTIONS_RECALL.md) | Cash-only Kenya CTR evidence, approved regulatory FX, current FATF status, and Aerospike candidate recall |
 | [Regulatory Reporting](REGULATORY_REPORTING.md) | Dynamic report runtime, schedules, delivery evidence, CTR/LCTR/IFTR, goAML SAR, PDF/CSV/XML/XLSX |
 | [Regulatory Deadline and Rule Governance](REGULATORY_GOVERNANCE.md) | Suspicion-based deadlines, SAR maker-checker, immutable rule versions and approval |
@@ -67,7 +67,7 @@ This directory contains detailed documentation for every feature, page, and work
 | Record Detail | `/records/:recordType/:recordId` | [Record Traceability and Report Provenance](RECORD_TRACEABILITY.md) |
 | Alerts | `/alerts` | [Alert Management](ALERT_MANAGEMENT.md) |
 | Cases | `/cases` | [Case Management](CASE_MANAGEMENT.md) |
-| Transaction Monitoring | `/monitoring` | [Transaction Monitoring](TRANSACTION_MONITORING.md) |
+| Transaction Monitoring | `/transaction-monitoring` | [Transaction Monitoring](TRANSACTION_MONITORING.md) |
 | Screening | `/screening` | [AML Screening](AML_SCREENING.md) |
 | Merchant KYC | `/kyc-documents` | [Corporate Intelligence and FIX Market Ingestion](CORPORATE_INTELLIGENCE_AND_FIX.md) |
 | Risk Analytics | `/risk-analytics` | [Dashboard & Analytics](DASHBOARD_ANALYTICS.md) |
@@ -80,8 +80,14 @@ This directory contains detailed documentation for every feature, page, and work
 | Settings | `/settings` | [PSP Management](PSP_MANAGEMENT.md) |
 | Messages | `/messages` | [Notifications](NOTIFICATIONS.md) |
 | Compliance Calendar | `/compliance-calendar` | [Regulatory Reporting](REGULATORY_REPORTING.md) |
-| Audit Logs | `/audit-logs` | [User Management](USER_MANAGEMENT.md) |
-| Rules | `/rules` | [Fraud Detection](FRAUD_DETECTION.md) |
-| Rules Generation | `/rules-generation` | [Fraud Detection](FRAUD_DETECTION.md) |
+| Audit Logs | `/audit` | [User Management](USER_MANAGEMENT.md) |
+| Risk Rules (CRUD + AI generation) | `/rules-generation` | [Fraud Detection](FRAUD_DETECTION.md) |
+| Compliance Calendar | `/compliance-calendar` | [Regulatory Reporting](REGULATORY_REPORTING.md) |
+| Transaction Limits | `/limits-aml` | [Tenant-Scoped Limits and Enforcement](LIMITS_AND_SCOPE_ENFORCEMENT.md) |
+| Chargebacks | `/chargebacks` | [Fraud Detection](FRAUD_DETECTION.md) |
+| Edge Nodes | `/edge-nodes` | [API Integration Guide](API_INTEGRATION.md) |
+| Merchants | `/merchants` | [PSP Management](PSP_MANAGEMENT.md) |
+| Organization (PSP self-service) | `/organization` | [PSP Management](PSP_MANAGEMENT.md) |
+| Runtime Errors | `/runtime-errors` | [Dashboard & Analytics](DASHBOARD_ANALYTICS.md) |
 | Profile | `/profile` | [User Management](USER_MANAGEMENT.md) |
 | Analytics | `/analytics` | [Dashboard & Analytics](DASHBOARD_ANALYTICS.md) |

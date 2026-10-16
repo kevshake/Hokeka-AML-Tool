@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type {
   Case,
@@ -90,6 +90,7 @@ export const useCases = (params?: string | CaseQueryParams) => {
       apiClient.get<PageResponse<Case>>(
         `compliance/cases${queryString ? `?${queryString}` : ""}`
       ),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -117,14 +118,41 @@ export const useCaseNetwork = (caseId: number) => {
   });
 };
 
+export interface GraphAnalysisStatus {
+  enabled: boolean;
+  available: boolean;
+  reason?: string | null;
+}
+
+export const useGraphAnalysisStatus = () => {
+  return useQuery<GraphAnalysisStatus>({
+    queryKey: ["network", "graph-analysis", "status"],
+    queryFn: () => apiClient.get<GraphAnalysisStatus>("network/graph-analysis/status"),
+    staleTime: 60_000,
+  });
+};
+
 // SAR Reports
-export const useSarReports = (status?: string) => {
-  return useQuery<SarReport[]>({
-    queryKey: ["sar", status],
+export interface SarQueryParams {
+  page?: number;
+  size?: number;
+  status?: string;
+}
+
+export const useSarReports = (params?: string | SarQueryParams) => {
+  const queryParams = typeof params === "string" ? { status: params } : params || {};
+  const queryString = Object.entries(queryParams)
+    .filter(([_, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+    .join("&");
+
+  return useQuery<SarReport[] | PageResponse<SarReport>>({
+    queryKey: ["sar", queryParams],
     queryFn: () =>
-      apiClient.get<SarReport[]>(
-        `compliance/sar${status ? `?status=${status}` : ""}`
+      apiClient.get<SarReport[] | PageResponse<SarReport>>(
+        `compliance/sar${queryString ? `?${queryString}` : ""}`
       ),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -133,6 +161,7 @@ export interface AlertQueryParams {
   page?: number;
   size?: number;
   status?: string;
+  cursor?: string;
 }
 
 export const useAlerts = (params?: AlertQueryParams) => {
@@ -146,8 +175,21 @@ export const useAlerts = (params?: AlertQueryParams) => {
 
   return useQuery<PageResponse<Alert>>({
     queryKey: ["alerts", queryParams],
-    queryFn: () =>
-      apiClient.get<PageResponse<Alert>>(`alerts${queryString ? `?${queryString}` : ""}`),
+    queryFn: async () => {
+      const raw = await apiClient.get<PageResponse<Alert> & { content?: Alert[] }>(
+        `alerts${queryString ? `?${queryString}` : ""}`,
+      );
+      return {
+        content: raw.content ?? [],
+        totalElements: raw.totalElements ?? raw.content?.length ?? 0,
+        totalPages: raw.totalPages ?? 1,
+        size: raw.size ?? queryParams.size ?? 25,
+        number: raw.number ?? queryParams.page ?? 0,
+        nextCursor: raw.nextCursor ?? null,
+        hasNext: raw.hasNext ?? Boolean(raw.nextCursor),
+      };
+    },
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -156,6 +198,7 @@ export interface TransactionQueryParams {
   page?: number;
   size?: number;
   pspId?: number;
+  cursor?: string;
 }
 
 export const useTransactions = (params?: number | TransactionQueryParams) => {
@@ -172,10 +215,21 @@ export const useTransactions = (params?: number | TransactionQueryParams) => {
 
   return useQuery<PageResponse<Transaction>>({
     queryKey: ["transactions", queryParams],
-    queryFn: () =>
-      apiClient.get<PageResponse<Transaction>>(
-        `transactions${queryString ? `?${queryString}` : ""}`
-      ),
+    queryFn: async () => {
+      const raw = await apiClient.get<PageResponse<Transaction>>(
+        `transactions${queryString ? `?${queryString}` : ""}`,
+      );
+      return {
+        content: raw.content ?? [],
+        totalElements: raw.totalElements ?? raw.content?.length ?? 0,
+        totalPages: raw.totalPages ?? 1,
+        size: raw.size ?? queryParams.size ?? 25,
+        number: raw.number ?? queryParams.page ?? 0,
+        nextCursor: raw.nextCursor ?? null,
+        hasNext: raw.hasNext ?? Boolean(raw.nextCursor),
+      };
+    },
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -185,6 +239,9 @@ export interface MerchantQueryParams {
   page?: number;
   size?: number;
   pspId?: number;
+  q?: string;
+  status?: string;
+  riskLevel?: string;
 }
 
 export const useMerchants = (params?: MerchantQueryParams) => {
@@ -200,6 +257,7 @@ export const useMerchants = (params?: MerchantQueryParams) => {
     queryKey: ["merchants", queryParams],
     queryFn: () =>
       apiClient.get<PageResponse<Merchant>>(`merchants${queryString ? `?${queryString}` : ""}`),
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -246,6 +304,7 @@ export interface AuditLogQueryParams {
   pspId?: number;
   start?: string;
   end?: string;
+  cursor?: string;
 }
 
 export const useAuditLogs = (params?: number | AuditLogQueryParams) => {
@@ -259,8 +318,21 @@ export const useAuditLogs = (params?: number | AuditLogQueryParams) => {
 
   return useQuery<PageResponse<AuditLog>>({
     queryKey: ["audit", queryParams],
-    queryFn: () =>
-      apiClient.get<PageResponse<AuditLog>>(`audit/logs${queryString ? `?${queryString}` : ""}`),
+    queryFn: async () => {
+      const raw = await apiClient.get<PageResponse<AuditLog>>(
+        `audit/logs${queryString ? `?${queryString}` : ""}`,
+      );
+      return {
+        content: raw.content ?? [],
+        totalElements: raw.totalElements ?? raw.content?.length ?? 0,
+        totalPages: raw.totalPages ?? 1,
+        size: raw.size ?? queryParams.size ?? 25,
+        number: raw.number ?? queryParams.page ?? 0,
+        nextCursor: raw.nextCursor ?? null,
+        hasNext: raw.hasNext ?? Boolean(raw.nextCursor),
+      };
+    },
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -436,6 +508,7 @@ export interface MonitoringTransactionQueryParams {
   size?: number;
   riskLevel?: string;
   decision?: string;
+  cursor?: string;
 }
 
 export const useMonitoringTransactions = (params?: MonitoringTransactionQueryParams) => {
@@ -487,14 +560,34 @@ export const useRuleEffectiveness = (id: number) => {
   });
 };
 
-export const useChargebackDisputes = (merchantId?: number) => {
-  return useQuery({
-    queryKey: ["chargeback", "disputes", merchantId ?? "all"],
+export interface ChargebackDisputeQueryParams {
+  page?: number;
+  size?: number;
+  merchantId?: number;
+}
+
+export const useChargebackDisputes = (params?: number | ChargebackDisputeQueryParams) => {
+  const queryParams = typeof params === "number" ? { merchantId: params } : params || {};
+  const queryString = new URLSearchParams(
+    Object.entries(queryParams)
+      .filter((entry): entry is [string, number] => entry[1] !== undefined)
+      .map(([key, value]) => [key, String(value)]),
+  ).toString();
+
+  return useQuery<PageResponse<any>>({
+    queryKey: ["chargeback", "disputes", queryParams],
     queryFn: () =>
       apiClient
-        .get<any[]>(`chargeback/disputes${merchantId ? `?merchantId=${merchantId}` : ""}`)
-        .catch(() => []),
+        .get<PageResponse<any>>(`chargeback/disputes${queryString ? `?${queryString}` : ""}`)
+        .catch(() => ({
+          content: [],
+          totalElements: 0,
+          totalPages: 1,
+          size: queryParams.size ?? 25,
+          number: queryParams.page ?? 0,
+        })),
     refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
   });
 };
 

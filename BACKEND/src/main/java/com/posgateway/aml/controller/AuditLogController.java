@@ -27,10 +27,14 @@ public class AuditLogController {
 
     private final AuditLogRepository auditLogRepository;
     private final AuditLogService auditLogService;
+    private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
 
-    public AuditLogController(AuditLogRepository auditLogRepository, AuditLogService auditLogService) {
+    public AuditLogController(AuditLogRepository auditLogRepository,
+                              AuditLogService auditLogService,
+                              com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
         this.auditLogRepository = auditLogRepository;
         this.auditLogService = auditLogService;
+        this.keysetSliceService = keysetSliceService;
     }
 
     @GetMapping("/entity")
@@ -78,9 +82,10 @@ public class AuditLogController {
      */
     @GetMapping
     @PreAuthorize("hasAuthority('VIEW_AUDIT_LOGS')")
-    public ResponseEntity<org.springframework.data.domain.Page<AuditLog>> getAllAuditLogs(
+    public ResponseEntity<?> getAllAuditLogs(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size,
+            @RequestParam(required = false) String cursor,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String actionType,
             @RequestParam(required = false) String entityType,
@@ -148,10 +153,16 @@ public class AuditLogController {
             spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("timestamp"), end));
         } 
 
-        org.springframework.data.domain.Page<AuditLog> pageResult = auditLogRepository
-                .findAll(spec, PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "timestamp")));
-
-        return ResponseEntity.ok(pageResult);
+        return ResponseEntity.ok(keysetSliceService.slice(
+                auditLogRepository,
+                spec,
+                safePage,
+                safeSize,
+                cursor,
+                "timestamp",
+                "id",
+                AuditLog::getTimestamp,
+                AuditLog::getId));
     }
 
     /**

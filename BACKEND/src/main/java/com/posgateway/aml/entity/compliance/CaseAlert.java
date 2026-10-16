@@ -43,6 +43,10 @@ public class CaseAlert {
     @Column(nullable = false)
     private LocalDateTime triggeredAt;
 
+    /** FK to canonical alerts.alert_id — stops case alert copies from drifting from source truth. */
+    @Column(name = "source_alert_id")
+    private Long sourceAlertId;
+
     public CaseAlert() {
     }
 
@@ -148,5 +152,15 @@ public class CaseAlert {
 
     public void setTriggeredAt(LocalDateTime triggeredAt) {
         this.triggeredAt = triggeredAt;
+    }
+
+    /** Returns the canonical alerts row this case alert row was copied from. */
+    public Long getSourceAlertId() {
+        return sourceAlertId;
+    }
+
+    /** Persists the FK back to the canonical alerts table for provenance. */
+    public void setSourceAlertId(Long sourceAlertId) {
+        this.sourceAlertId = sourceAlertId;
     }
 }

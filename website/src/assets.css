@@ -1,2 +1,29 @@
-.hero { background-image: url('/hero-financial-district.jpg'); }
-.cta { background-image: url('/cta-architecture.jpg'); }
+.hero {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(55% 45% at 20% 20%, rgb(211 179 113 / 0.22), transparent 60%),
+    radial-gradient(45% 40% at 80% 30%, rgb(117 183 171 / 0.16), transparent 62%),
+    linear-gradient(180deg, #050707 0%, #080909 55%, #0c0e0d 100%);
+}
+.hero.hero-bg-ready {
+  background-image: linear-gradient(180deg, rgb(8 9 9 / 0.72), rgb(8 9 9 / 0.88)),
+    url('/hero-financial-district-mobile.webp'),
+    radial-gradient(55% 45% at 20% 20%, rgb(211 179 113 / 0.18), transparent 60%);
+  background-size: cover;
+  background-position: center;
+}
+@media (min-width: 960px) {
+  .hero.hero-bg-ready {
+    background-image: linear-gradient(180deg, rgb(8 9 9 / 0.72), rgb(8 9 9 / 0.88)),
+      url('/hero-financial-district.webp');
+  }
+}
+.cta {
+  background-color: var(--bg);
+}
+.cta.cta-bg-ready {
+  background-image: linear-gradient(180deg, rgb(8 9 9 / 0.85), rgb(8 9 9 / 0.78)),
+    url('/cta-architecture.jpg');
+  background-size: cover;
+  background-position: center;
+}

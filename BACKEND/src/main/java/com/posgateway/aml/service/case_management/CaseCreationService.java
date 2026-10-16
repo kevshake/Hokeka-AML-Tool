@@ -41,7 +41,7 @@ public class CaseCreationService {
     private final RuleDefinitionRepository ruleDefinitionRepository;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
     @Autowired
     public CaseCreationService(ComplianceCaseRepository complianceCaseRepository,
@@ -70,11 +70,13 @@ public class CaseCreationService {
         // Derive a version string from the rule's last-updated timestamp.
         // Pattern: "v<year>.<month>" (e.g. "v2026.5").
         // Falls back to "v0.0" when the rule is not found in the DB.
-        String ruleVersion = ruleDefinitionRepository.findFirstByNameOrderByIdAsc(ruleName)
-                .map(RuleDefinition::getUpdatedAt)
-                .map(ts -> "v" + ts.getYear() + "." + ts.getMonthValue())
-                .orElse("v0.0");
-        createOrUpdateCase(merchantIdLong, tx.getPspId(), "RULE_VIOLATION", ruleName, null,
+        var ruleOpt = ruleDefinitionRepository.findFirstByNameOrderByIdAsc(ruleName);
+        String ruleVersion = ruleOpt
+                .map(RuleDefinition::getCurrentVersionId)
+                .map(String::valueOf)
+                .orElse("unversioned");
+        String ruleId = ruleOpt.map(r -> r.getId() != null ? String.valueOf(r.getId()) : null).orElse(null);
+        createOrUpdateCase(merchantIdLong, tx.getPspId(), "RULE_VIOLATION", ruleName, ruleId,
                 null, ruleVersion, 1.0, ruleDescription, tx);
     }
 
@@ -273,15 +275,15 @@ public class CaseCreationService {
         cCase.setUpdatedAt(LocalDateTime.now());
         complianceCaseRepository.save(cCase);
 
-        if (jevEngineAdvisor != null) {
+        if (aiEngineAdvisor != null) {
             Map<String, Object> caseFeatures = new HashMap<>();
             caseFeatures.put("alertType", alertType);
             caseFeatures.put("ruleName", ruleName);
             caseFeatures.put("score", score);
             caseFeatures.put("description", description);
             caseFeatures.put("priority", cCase.getPriority() != null ? cCase.getPriority().name() : null);
-            jevEngineAdvisor.adviseAsync(
-                    com.posgateway.aml.service.jev.JevEngineType.CASE_TRIAGE,
+            aiEngineAdvisor.adviseAsync(
+                    com.posgateway.aml.service.ai.decision.AiEngineType.CASE_TRIAGE,
                     cCase.getPspId(),
                     cCase.getStatus() != null ? cCase.getStatus().name() : "NEW",
                     caseFeatures,

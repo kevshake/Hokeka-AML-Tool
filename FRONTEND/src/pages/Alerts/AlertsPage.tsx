@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { Link } from "react-router-dom";
 import { useAlerts } from "../../features/api/queries";
 import { useUpdateAlertStatus } from "../../features/api/mutations";
@@ -10,13 +12,16 @@ import GlassCard from "../../components/Common/GlassCard";
 import GlassModal from "../../components/Common/GlassModal";
 import GlassButton from "../../components/Common/GlassButton";
 import TwBadge from "../../components/Common/TwBadge";
-import TwPagination from "../../components/Common/TwPagination";
+import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
+import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
 import TwSnackbar from "../../components/Common/TwSnackbar";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import AlertDispositionPanel from "../../components/Alerts/AlertDispositionPanel";
+import { useAuth } from "../../contexts/AuthContext";
+import { canPerformAction } from "../../lib/consoleRbac";
 import {
   CheckCheck,
   ChevronDown,
-  Download,
   Eye,
   Loader2,
   RotateCcw,
@@ -40,8 +45,11 @@ function alertStatusVariant(status: string): "warning" | "danger" | "info" | "su
 }
 
 export default function AlertsPage() {
+  const { user } = useAuth();
+  const canTriage = canPerformAction(user, "alert.updateStatus");
+  const canExport = canPerformAction(user, "alert.export");
   const [defaultRows] = useResponsivePagination();
-  const [page, setPage] = useState({ index: 0, size: defaultRows });
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState(defaultRows);
   const [viewAlert, setViewAlert] = useState<Alert | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -49,9 +57,11 @@ export default function AlertsPage() {
     open: false, message: "", severity: "success",
   });
 
-  const { data: alerts, isLoading, isError, error } = useAlerts({
-    page: page.index,
-    size: page.size,
+  const { data: alerts, isLoading, isError, error, isFetching } = useAlerts({
+    page: tableState.page,
+    size: tableState.size,
+    status: tableState.filters.status,
+    cursor: tableState.cursor,
   });
 
   const updateStatus = useUpdateAlertStatus();
@@ -86,30 +96,6 @@ export default function AlertsPage() {
     }
   };
 
-  const handleExportCSV = () => {
-    if (!content.length) return;
-    const headers = ["ID", "Type", "Priority", "Status", "Description", "Transaction ID", "Case ID", "Created", "Resolved"];
-    const rows = content.map(a => [
-      a.id,
-      a.alertType,
-      a.priority,
-      a.status,
-      (a.description || "").replace(/,/g, ";"),
-      a.transactionId ?? "",
-      a.caseId ?? "",
-      new Date(a.createdAt).toISOString().split("T")[0],
-      a.resolvedAt ? new Date(a.resolvedAt).toISOString().split("T")[0] : "",
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `alerts-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const allSelected = content.length > 0 && selected.size === content.length;
   const someSelected = selected.size > 0 && selected.size < content.length;
 
@@ -118,10 +104,16 @@ export default function AlertsPage() {
       <GlassCard padding="md" glowVariant="red" static>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4">
         <div className="flex items-center gap-3">
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
-            <Download size={14} />
-            Export CSV
-          </GlassButton>
+          {canExport && (
+            <ConsoleListExportMenu
+              viewType="ALERTS"
+              filters={exportFilterMap}
+              disabled={!totalElements}
+            />
+          )}
+          {isFetching && !isLoading && (
+            <span className="text-xs text-glass-muted">Updating…</span>
+          )}
           {selected.size > 0 && (
             <span className="text-xs text-glass-muted">{selected.size} selected</span>
           )}
@@ -129,7 +121,7 @@ export default function AlertsPage() {
 
         <div className="relative">
           <button
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || !canTriage}
             onClick={() => setBulkOpen(!bulkOpen)}
             className="hokeka-btn-primary disabled:opacity-45"
           >
@@ -192,64 +184,74 @@ export default function AlertsPage() {
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {content.map((alert) => (
-                  <tr
-                    key={alert.id}
-                    className={selected.has(alert.id) ? "bg-burgundy-800/40" : undefined}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(alert.id)}
-                        onChange={(e) => handleSelectOne(alert.id, e.target.checked)}
-                        className="rounded border-hairline accent-gold"
-                      />
-                    </td>
-                    <td>#{alert.id}</td>
-                    <td>{alert.alertType}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <TwBadge variant={priorityVariant(alert.priority)}>{alert.priority}</TwBadge>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <TwBadge variant={alertStatusVariant(alert.status)}>{alert.status}</TwBadge>
-                    </td>
-                    <td className="max-w-xs truncate text-ink-muted">
-                      {alert.description || <span className="text-glass-muted">-</span>}
-                    </td>
-                    <td className="text-glass-muted">
-                      {new Date(alert.createdAt).toLocaleDateString()}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => setViewAlert(alert)}
-                        className="flex items-center gap-1 text-xs text-gold hover:underline"
-                      >
-                        <Eye size={14} /> View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!content.length && (
+              {content.length > 0 ? (
+                <VirtualizedTableBody
+                  rowCount={content.length}
+                  maxHeight={520}
+                  renderRow={(index) => {
+                    const alert = content[index];
+                    return (
+                      <table className="hokeka-table w-full">
+                        <tbody>
+                          <tr className={selected.has(alert.id) ? "bg-burgundy-800/40" : undefined}>
+                            <td className="w-10">
+                              <input
+                                type="checkbox"
+                                checked={selected.has(alert.id)}
+                                onChange={(e) => handleSelectOne(alert.id, e.target.checked)}
+                                className="rounded border-hairline accent-gold"
+                              />
+                            </td>
+                            <td>#{alert.id}</td>
+                            <td>{alert.alertType}</td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <TwBadge variant={priorityVariant(alert.priority)}>{alert.priority}</TwBadge>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <TwBadge variant={alertStatusVariant(alert.status)}>{alert.status}</TwBadge>
+                            </td>
+                            <td className="max-w-xs truncate text-ink-muted">
+                              {alert.description || <span className="text-glass-muted">-</span>}
+                            </td>
+                            <td className="text-glass-muted">
+                              {new Date(alert.createdAt).toLocaleDateString()}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => setViewAlert(alert)}
+                                className="flex items-center gap-1 text-xs text-gold hover:underline"
+                              >
+                                <Eye size={14} /> View
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    );
+                  }}
+                />
+              ) : (
+                <tbody>
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-sm text-glass-muted">
                       No alerts found
                     </td>
                   </tr>
-                )}
-              </tbody>
+                </tbody>
+              )}
             </table>
           )}
       </div>
 
-        <TwPagination
-          page={page.index}
+        <TwKeysetPagination
+          page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
-          rowsPerPage={page.size}
-          onPageChange={(newPage) => { setPage(prev => ({ ...prev, index: newPage })); setSelected(new Set()); }}
-          onRowsPerPageChange={(newSize) => { setPage({ index: 0, size: newSize }); setSelected(new Set()); }}
+          rowsPerPage={tableState.size}
+          nextCursor={alerts?.nextCursor}
+          onPageChange={(newPage, cursor) => { setPage(newPage, cursor); setSelected(new Set()); }}
+          onRowsPerPageChange={(newSize) => { setPageSize(newSize); setSelected(new Set()); }}
         />
       </GlassCard>
 
@@ -317,7 +319,13 @@ export default function AlertsPage() {
               )}
             </div>
             {viewAlert.id ? (
-              <AiVerdictPanel auditPath={`jev/audit/alert/${viewAlert.id}`} />
+              <>
+                <AlertDispositionPanel alert={viewAlert} onResolved={() => setViewAlert(null)} />
+                <AiVerdictPanel
+                  auditPath={`ai/audit/alert/${viewAlert.id}`}
+                  title="Hokeka AI recommendation"
+                />
+              </>
             ) : null}
           </div>
         )}

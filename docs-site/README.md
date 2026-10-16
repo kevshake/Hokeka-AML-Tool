@@ -1,6 +1,9 @@
-# Hokeka AML — Install Docs Site
+# Hokeka AML — Documentation Site
 
-Browsable web app for the installation process map in [`docs/install/`](../docs/install/). Markdown is imported at **build time** from those source files — there is no duplicated prose in this package.
+Browsable web app for:
+
+1. **Install suite** — process map in [`docs/install/`](../docs/install/) (markdown imported at build time).
+2. **Management API** — OpenAPI-driven operator/admin reference at `/management-api`, generated from springdoc group `management` on the Control Plane.
 
 ## Prerequisites
 
@@ -30,10 +33,26 @@ Built assets land in `docs-site/dist/`. Deploy that folder to any static host (n
 
 ## Features
 
-- **Live markdown** — all pages under `docs/install/*.md` (README + processes 01–07). Process 07 is operator-only (`VITE_INCLUDE_OPERATOR_DOCS=true`), same as Console and Control Plane.
-- **Full-text search** — client-side FlexSearch index across titles and body text
+- **Install markdown** — all pages under `docs/install/*.md` (README + processes 01–06)
+- **Management API reference** — per-endpoint pages (method, servers, params, types, JSON examples, cURL/Python/JS/Go/Java/PHP/C#/Ruby, Try it panel)
+- **Full-text search** — install docs + management endpoint search
 - **Catalog** — sort by install order, title, or audience; filter by audience and tag
 - **Illustrations** — hero images in `public/illustrations/` on matching pages and the overview
+
+## Management OpenAPI
+
+Regenerate `public/management-api/openapi.json` before release:
+
+```bash
+cd BACKEND
+export MANAGEMENT_OPENAPI_EXPORT=true
+export DATABASE_URL=jdbc:postgresql://localhost:5432/hokeka
+export DATABASE_USERNAME=test
+export DATABASE_PASSWORD=test
+mvn test -Dtest=ManagementOpenApiExportIT -DfailIfNoSpecifiedTests=false
+```
+
+CI (`docs-site` job) runs the same export against a Postgres service, then `npm run build` verifies the spec (`scripts/verify-management-openapi.mjs`).
 
 ## Product naming
 

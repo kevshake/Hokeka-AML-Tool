@@ -14,6 +14,7 @@ import DashboardRiskBadge from '../dashboard/DashboardRiskBadge'
 import { DashboardEmpty, DashboardError, DashboardLoading } from '../dashboard/DashboardState'
 import { useLiveAlerts } from '../../hooks/useDashboard'
 import type { Alert } from '../../types'
+import { alertEntityLabel, alertHeadline, alertSubline } from '../../lib/dashboardFormatters'
 
 function alertIconFor(type: string | undefined): { icon: LucideIcon; className: string } {
   const t = (type ?? '').toUpperCase()
@@ -22,7 +23,7 @@ function alertIconFor(type: string | undefined): { icon: LucideIcon; className: 
   if (t.includes('VELOCITY')) return { icon: Activity, className: 'bg-[var(--db-warning-soft)] text-[var(--db-warning)]' }
   if (t.includes('COUNTRY') || t.includes('GEO')) return { icon: Globe, className: 'bg-[var(--db-info-soft)] text-[var(--db-info)]' }
   if (t.includes('CASH') || t.includes('DEPOSIT')) return { icon: Banknote, className: 'bg-[var(--db-danger-soft)] text-[var(--db-danger)]' }
-  return { icon: Bell, className: 'bg-[#f2f4f7] text-[var(--db-text-secondary)]' }
+  return { icon: Bell, className: 'bg-[var(--surface-3)] text-[var(--db-text-secondary)]' }
 }
 
 function timeAgo(iso?: string) {
@@ -41,7 +42,7 @@ function statusChip(status?: string) {
     case 'OPEN':
       return { label: 'New', className: 'db-chip db-chip--danger' }
     case 'INVESTIGATING':
-      return { label: 'Investigating', className: 'db-chip db-chip--warning' }
+      return { label: 'Investigating', className: 'db-chip db-chip--info' }
     case 'RESOLVED':
       return { label: 'Resolved', className: 'db-chip db-chip--success' }
     default:
@@ -69,7 +70,12 @@ export default function LiveAlertQueue() {
       ) : error ? (
         <DashboardError message="Live alerts could not be loaded." />
       ) : alerts.length === 0 ? (
-        <DashboardEmpty message="No open alerts in the queue." />
+        <DashboardEmpty
+          message="No open alerts in the queue."
+          hint="New alerts from monitoring will appear here."
+          actionLabel="View alert workspace"
+          actionTo="/alerts"
+        />
       ) : (
         <div className="-mx-1 min-h-0 flex-1 overflow-auto">
           <table className="db-table min-w-[560px]">
@@ -99,10 +105,10 @@ export default function LiveAlertQueue() {
                         </span>
                         <div className="min-w-0">
                           <p className="truncate font-medium text-[var(--db-text)]">
-                            {a.alertType || 'Alert'}
+                            {alertHeadline(a)}
                           </p>
                           <p className="truncate text-[10px] text-[var(--db-text-muted)]">
-                            {a.description || `#${a.id}`}
+                            {alertSubline(a)}
                           </p>
                         </div>
                       </div>
@@ -117,7 +123,7 @@ export default function LiveAlertQueue() {
                           Case #{a.caseId}
                         </Link>
                       ) : (
-                        '—'
+                        <span className="text-[var(--db-text-muted)]">{alertEntityLabel(a)}</span>
                       )}
                     </td>
                     <td>

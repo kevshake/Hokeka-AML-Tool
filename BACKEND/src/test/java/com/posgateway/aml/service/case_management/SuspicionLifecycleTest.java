@@ -101,7 +101,8 @@ class SuspicionLifecycleTest {
 
         AlertToCaseService service = new AlertToCaseService(alerts, cases, mock(MerchantRepository.class),
                 mock(WorkflowAutomationService.class), mock(CaseActivityService.class),
-                mock(CaseEscalationService.class));
+                mock(CaseEscalationService.class),
+                mock(com.posgateway.aml.service.compliance.ComplianceEntityLinkService.class));
         Optional<ComplianceCase> created = service.resolveAlertToCase(70L, AlertDisposition.ESCALATED, "hit", null);
 
         assertNotNull(created.orElseThrow().getSuspicionFormedAt());

@@ -13,7 +13,10 @@ import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import { Download, Eye, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Eye, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
 
 type Owner = CreateMerchantRequest["beneficialOwners"][number];
 
@@ -64,8 +67,10 @@ const pspLabel = (psp: Psp): string =>
 export default function MerchantsPage() {
   const { user } = useAuth();
   const platformAdmin = isPlatformAdmin(user?.role?.name);
-  const [page, setPage] = useState({ index: 0, size: 25 });
-  const [pspFilter, setPspFilter] = useState("");
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const [search, setSearch] = useState(tableState.filters.q ?? "");
+  const debouncedSearch = useDebouncedUrlFilter(search);
+  const pspFilter = tableState.filters.pspId ?? "";
   const [viewMerchant, setViewMerchant] = useState<Merchant | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [formData, setFormData] = useState<CreateMerchantRequest>(emptyForm);
@@ -77,12 +82,21 @@ export default function MerchantsPage() {
 
   const filterPspId = pspFilter ? Number(pspFilter) : undefined;
   const { data: merchants, isLoading, isError, error } = useMerchants({
-    page: page.index,
-    size: page.size,
+    page: tableState.page,
+    size: tableState.size,
     pspId: filterPspId,
+    q: tableState.filters.q,
+    status: tableState.filters.status,
+    riskLevel: tableState.filters.riskLevel,
   });
   const { data: psps = [] } = useAllPsps();
   const createMerchant = useCreateMerchant();
+
+  useEffect(() => {
+    if (debouncedSearch !== (tableState.filters.q ?? "")) {
+      setFilter("q", debouncedSearch);
+    }
+  }, [debouncedSearch, setFilter, tableState.filters.q]);
 
   useEffect(() => {
     if (psps.length === 1 && !formData.pspId) {
@@ -121,46 +135,6 @@ export default function MerchantsPage() {
   }, [tenantPsps]);
 
   const showPspColumn = platformAdmin || tenantPsps.length > 1;
-
-  const handleExportCSV = () => {
-    if (!content.length) return;
-    const headers = [
-      "Merchant ID",
-      "Legal Name",
-      "Trading Name",
-      "Country",
-      "MCC",
-      "Risk Level",
-      "Risk Score",
-      "KRS",
-      "CRA",
-      "KYC Status",
-      "CBK Sector",
-      "CBK Account Configured",
-    ];
-    const rows = content.map((merchant) => [
-      merchant.merchantId,
-      (merchant.legalName || "").replace(/,/g, ";"),
-      (merchant.tradingName || "").replace(/,/g, ";"),
-      merchant.country || "",
-      merchant.mcc || "",
-      merchant.riskLevel || "",
-      merchant.riskScore ?? "",
-      formatScore(merchant.krs),
-      formatScore(merchant.cra),
-      merchant.kycStatus || "",
-      merchant.cbkEconomicSectorCode || "",
-      merchant.cbkSettlementAccountConfigured ? "YES" : "NO",
-    ]);
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `merchants-${new Date().toISOString().split("T")[0]}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const updateOwner = <K extends keyof Owner>(index: number, field: K, value: Owner[K]) => {
     setFormData((current) => ({
@@ -234,16 +208,44 @@ export default function MerchantsPage() {
                 label="Filter by PSP"
                 value={pspFilter}
                 options={pspFilterOptions}
-                onChange={(event) => {
-                  setPspFilter(event.target.value);
-                  setPage((current) => ({ ...current, index: 0 }));
-                }}
+                onChange={(event) => setFilter("pspId", event.target.value)}
               />
             </div>
           )}
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
-            <Download size={14} /> Export CSV
-          </GlassButton>
+          <TwInput
+            label="Search"
+            value={search}
+            placeholder="Name or merchant ID"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <TwSelect
+            label="Status"
+            value={tableState.filters.status ?? ""}
+            options={[
+              { value: "", label: "All statuses" },
+              { value: "ACTIVE", label: "Active" },
+              { value: "INACTIVE", label: "Inactive" },
+              { value: "SUSPENDED", label: "Suspended" },
+            ]}
+            onChange={(event) => setFilter("status", event.target.value)}
+          />
+          <TwSelect
+            label="Risk"
+            value={tableState.filters.riskLevel ?? ""}
+            options={[
+              { value: "", label: "All risk levels" },
+              ...["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((riskLevel) => ({
+                value: riskLevel,
+                label: riskLevel,
+              })),
+            ]}
+            onChange={(event) => setFilter("riskLevel", event.target.value)}
+          />
+          <ConsoleListExportMenu
+            viewType="MERCHANTS"
+            filters={exportFilterMap}
+            disabled={!merchants?.totalElements}
+          />
         </div>
         <button type="button" onClick={() => setAddOpen(true)} className="hokeka-btn-primary">
           <Plus size={14} /> Onboard Merchant
@@ -345,12 +347,12 @@ export default function MerchantsPage() {
           )}
       </div>
         <TwPagination
-          page={page.index}
+          page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
-          rowsPerPage={page.size}
-          onPageChange={(nextPage) => setPage((current) => ({ ...current, index: nextPage }))}
-          onRowsPerPageChange={(size) => setPage({ index: 0, size })}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
         />
       </GlassCard>
 

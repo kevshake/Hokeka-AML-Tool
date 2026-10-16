@@ -60,12 +60,15 @@ class EdgeBundleServiceTest {
         assertEquals("EQ", r0.get("condition").get("op").asText());
         assertTrue(r0.get("condition").get("value").asBoolean());
 
-        // Emit the interop vector for the Rust `hse-crypto` test (best-effort; never fails the test).
+        // Emit the interop vector when HSE_REGENERATE_INTEROP_VECTOR=true (CI); local runs must not rewrite the committed file.
         writeInteropVector(sealed, edge, cpSigner, context, plaintext);
     }
 
     private void writeInteropVector(byte[] sealed, KeyPair edge, KeyPair cpSigner, String context,
                                     byte[] plaintext) {
+        if (!"true".equalsIgnoreCase(System.getenv("HSE_REGENERATE_INTEROP_VECTOR"))) {
+            return;
+        }
         try {
             byte[] edgePrivScalar = ((XECPrivateKey) edge.getPrivate()).getScalar().orElseThrow();
             byte[] cpPubRaw = rawEd25519Public((EdECPublicKey) cpSigner.getPublic());

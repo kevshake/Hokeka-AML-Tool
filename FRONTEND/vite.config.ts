@@ -1,9 +1,15 @@
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react()],
+    resolve: {
+        alias: {
+            '@hokeka/design-tokens': path.resolve(__dirname, '../design-tokens/index.ts'),
+        },
+    },
     server: {
         port: 5173,
         allowedHosts: ['hokeka.com', 'www.hokeka.com', 'fraud.hokeka.com', 'localhost', '127.0.0.1', 'testaml.hokeka.com', 'aml.hokeka.com', 'testapi.hokeka.com', 'api.hokeka.com'],

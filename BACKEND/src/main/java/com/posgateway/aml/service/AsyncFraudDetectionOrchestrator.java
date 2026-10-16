@@ -27,6 +27,7 @@ public class AsyncFraudDetectionOrchestrator {
     private final FeatureExtractionService featureExtractionService;
     private final ScoringService scoringService;
     private final DecisionEngine decisionEngine;
+    private final com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook;
 
     @Value("${throughput.enable.async.processing:true}")
     private boolean asyncEnabled;
@@ -34,10 +35,12 @@ public class AsyncFraudDetectionOrchestrator {
     @Autowired
     public AsyncFraudDetectionOrchestrator(FeatureExtractionService featureExtractionService,
                                           ScoringService scoringService,
-                                          DecisionEngine decisionEngine) {
+                                          DecisionEngine decisionEngine,
+                                          com.posgateway.aml.service.assessment.FraudPipelineAssessmentHook assessmentHook) {
         this.featureExtractionService = featureExtractionService;
         this.scoringService = scoringService;
         this.decisionEngine = decisionEngine;
+        this.assessmentHook = assessmentHook;
     }
 
     /**
@@ -52,25 +55,33 @@ public class AsyncFraudDetectionOrchestrator {
         logger.debug("Processing transaction {} asynchronously", transaction.getTxnId());
 
         long startTime = System.currentTimeMillis();
+        com.posgateway.aml.service.assessment.AssessmentRecordingScope.Scope assessmentScope =
+                assessmentHook.begin(transaction);
 
         try {
             // Step 1: Extract features (can be parallelized)
-            CompletableFuture<Map<String, Object>> featuresFuture = 
-                CompletableFuture.supplyAsync(() -> 
-                    featureExtractionService.extractFeatures(transaction));
+            CompletableFuture<Map<String, Object>> featuresFuture =
+                CompletableFuture.supplyAsync(() ->
+                    com.posgateway.aml.service.assessment.AssessmentRecordingScope.callInScopeUnchecked(
+                            assessmentScope,
+                            () -> featureExtractionService.extractFeatures(transaction)));
 
             // Step 2: Score transaction (depends on features)
             CompletableFuture<ScoringResult> scoringFuture = featuresFuture.thenCompose(features ->
                 CompletableFuture.supplyAsync(() ->
-                    scoringService.scoreTransaction(transaction.getTxnId(), features)));
+                    com.posgateway.aml.service.assessment.AssessmentRecordingScope.callInScopeUnchecked(
+                            assessmentScope,
+                            () -> scoringService.scoreTransaction(transaction.getTxnId(), features))));
 
             // Step 3: Make decision (depends on score). Pass scoring latency so it
             // is persisted on transaction_features for monitoring percentiles.
             CompletableFuture<DecisionResult> decisionFuture = scoringFuture.thenCompose(scoringResult ->
                 featuresFuture.thenCompose(features ->
                     CompletableFuture.supplyAsync(() ->
-                        decisionEngine.evaluate(transaction, scoringResult.getScore(), features,
-                                scoringResult.getLatencyMs(), scoringResult.getRiskDetails()))));
+                        com.posgateway.aml.service.assessment.AssessmentRecordingScope.callInScopeUnchecked(
+                                assessmentScope,
+                                () -> decisionEngine.evaluate(transaction, scoringResult.getScore(), features,
+                                        scoringResult.getLatencyMs(), scoringResult.getRiskDetails())))));
 
             // Combine results
             return decisionFuture.thenCombine(scoringFuture, (decision, scoringResult) -> {
@@ -82,6 +93,10 @@ public class AsyncFraudDetectionOrchestrator {
                 result.setAction(decision.getAction());
                 result.setReasons(decision.getReasons());
                 result.setLatencyMs(latencyMs);
+                if (assessmentScope != null) {
+                    result.setAssessmentId(assessmentScope.assessmentId());
+                    assessmentHook.finalize(assessmentScope.assessmentId(), decision.getAction(), latencyMs);
+                }
 
                 logger.debug("Async fraud detection completed for transaction {}: action={}, score={}, latency={}ms",
                     transaction.getTxnId(), decision.getAction(), scoringResult.getScore(), latencyMs);
@@ -124,6 +139,7 @@ public class AsyncFraudDetectionOrchestrator {
         private String action;
         private java.util.List<String> reasons;
         private Long latencyMs;
+        private java.util.UUID assessmentId;
 
         // Getters and Setters
         public Long getTxnId() {
@@ -164,6 +180,14 @@ public class AsyncFraudDetectionOrchestrator {
 
         public void setLatencyMs(Long latencyMs) {
             this.latencyMs = latencyMs;
+        }
+
+        public java.util.UUID getAssessmentId() {
+            return assessmentId;
+        }
+
+        public void setAssessmentId(java.util.UUID assessmentId) {
+            this.assessmentId = assessmentId;
         }
     }
 }

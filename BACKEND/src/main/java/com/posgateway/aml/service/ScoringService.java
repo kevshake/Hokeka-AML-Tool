@@ -29,15 +29,18 @@ public class ScoringService {
     private final com.posgateway.aml.client.aml.AmlMicroserviceClient amlMicroserviceClient;
 
     @Autowired(required = false)
-    private com.posgateway.aml.service.jev.JevEngineAdvisor jevEngineAdvisor;
+    private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
 
     @Value("${scoring.service.enabled:true}")
     private boolean scoringEnabled;
 
-    @Value("${jev.fraud-scoring.borderline-low:0.35}")
+    @Value("${hokeka.ai.fraud-scoring.borderline-low:0.35}")
     private double fraudScoringBorderlineLow;
 
-    @Value("${jev.fraud-scoring.borderline-high:0.70}")
+    @Value("${hokeka.ai.fraud-scoring.borderline-high:0.70}")
     private double fraudScoringBorderlineHigh;
 
     @Value("${scoring.service.url:http://localhost:8000}")
@@ -122,8 +125,8 @@ public class ScoringService {
                             rulesExecutionService.evaluateRules(txnId, features, cachedScore);
                     applyRuleResultToScore(ruleResult, riskDetails);
                     cachedScore = resolveScoreAfterRules(cachedScore, ruleResult);
-                    maybeConsultJevForFraudScoring(txnId, cachedScore, features, riskDetails);
-                    return new ScoringResult(txnId, cachedScore, resp.processingTimeMs(), riskDetails);
+                    maybeConsultAiForFraudScoring(txnId, cachedScore, features, riskDetails);
+                    return attachMlFinding(new ScoringResult(txnId, cachedScore, resp.processingTimeMs(), riskDetails));
                 }
             } catch (Exception e) {
                 logger.debug("Aerospike L1 cache check failed for txn {}: {} — falling through",
@@ -146,7 +149,7 @@ public class ScoringService {
                 Map<String, Object> cachedRiskDetails = detailsObj instanceof Map
                         ? (Map<String, Object>) detailsObj : new HashMap<>();
                 logger.debug("Cache HIT for txn {} - score: {}", txnId, cachedScore);
-                return new ScoringResult(txnId, cachedScore, cachedLatency, cachedRiskDetails);
+                return attachMlFinding(new ScoringResult(txnId, cachedScore, cachedLatency, cachedRiskDetails));
             }
         }
 
@@ -254,8 +257,8 @@ public class ScoringService {
                 }
 
                 logger.info("Transaction {} scored: score={}, latency={}ms", txnId, score, latencyMs);
-                maybeConsultJevForFraudScoring(txnId, score, features, riskDetails);
-                return new ScoringResult(txnId, score, latencyMs, riskDetails);
+                maybeConsultAiForFraudScoring(txnId, score, features, riskDetails);
+                return attachMlFinding(new ScoringResult(txnId, score, latencyMs, riskDetails));
             }
 
             logger.warn("Empty response from scoring service for transaction {}", txnId);
@@ -288,7 +291,7 @@ public class ScoringService {
         score = resolveScoreAfterRules(score, ruleResult);
         riskDetails.put("ml_score", score);
         riskDetails.put("model_explanation_status", "NOT_APPLICABLE_RULES_ONLY");
-        return new ScoringResult(txnId, score, latencyMs, riskDetails);
+        return attachMlFinding(new ScoringResult(txnId, score, latencyMs, riskDetails));
     }
 
     private ScoringResult evaluateRulesWithScoringUnavailable(
@@ -300,7 +303,30 @@ public class ScoringService {
         Map<String, Object> riskDetails = rulesOnly.getRiskDetails();
         forceHoldUnlessBlocked(riskDetails, "ML_SCORING_UNAVAILABLE: manual review required");
         riskDetails.put("model_explanation_status", "UNAVAILABLE");
-        return new ScoringResult(txnId, Math.max(rulesOnly.getScore(), 0.85), latencyMs, riskDetails);
+        return attachMlFinding(new ScoringResult(txnId, Math.max(rulesOnly.getScore(), 0.85), latencyMs, riskDetails));
+    }
+
+    private ScoringResult attachMlFinding(ScoringResult result) {
+        if (assessmentEngineRecorder == null || result == null) {
+            return result;
+        }
+        Map<String, Object> riskDetails = result.getRiskDetails();
+        String modelVersion = "rules-only";
+        if (riskDetails != null) {
+            if (riskDetails.get("model_version") != null) {
+                modelVersion = String.valueOf(riskDetails.get("model_version"));
+            } else if (riskDetails.get("model_explanation_status") != null) {
+                modelVersion = String.valueOf(riskDetails.get("model_explanation_status"));
+            } else if (!scoringEnabled) {
+                modelVersion = "ml-disabled";
+            }
+        }
+        assessmentEngineRecorder.recordMlScore(
+                result.getTxnId(),
+                result.getScore() != null ? result.getScore() : 0.0,
+                modelVersion,
+                riskDetails);
+        return result;
     }
 
     private void copyModelEvidence(Map<String, Object> response, Map<String, Object> riskDetails) {
@@ -348,28 +374,28 @@ public class ScoringService {
         riskDetails.put("rule_score_total", ruleResult.getScoreImpact());
     }
 
-    private void maybeConsultJevForFraudScoring(Long txnId,
+    private void maybeConsultAiForFraudScoring(Long txnId,
                                                 Double score,
                                                 Map<String, Object> features,
                                                 Map<String, Object> riskDetails) {
-        if (jevEngineAdvisor == null || score == null || txnId == null) {
+        if (aiEngineAdvisor == null || score == null || txnId == null) {
             return;
         }
         if (score < fraudScoringBorderlineLow || score >= fraudScoringBorderlineHigh) {
             return;
         }
-        Map<String, Object> jevFeatures = new HashMap<>();
-        jevFeatures.put("score", score);
-        jevFeatures.put("borderlineBand", fraudScoringBorderlineLow + "-" + fraudScoringBorderlineHigh);
+        Map<String, Object> aiFeatures = new HashMap<>();
+        aiFeatures.put("score", score);
+        aiFeatures.put("borderlineBand", fraudScoringBorderlineLow + "-" + fraudScoringBorderlineHigh);
         if (features != null) {
-            jevFeatures.putAll(features);
+            aiFeatures.putAll(features);
         }
         if (riskDetails != null) {
-            jevFeatures.put("rule_decision", riskDetails.get("rule_decision"));
-            jevFeatures.put("rules_triggered", riskDetails.get("rules_triggered"));
-            jevFeatures.put("ml_score", riskDetails.get("ml_score"));
-            jevFeatures.put("source", riskDetails.get("source"));
-            jevFeatures.put("cache_layer", riskDetails.get("cache_layer"));
+            aiFeatures.put("rule_decision", riskDetails.get("rule_decision"));
+            aiFeatures.put("rules_triggered", riskDetails.get("rules_triggered"));
+            aiFeatures.put("ml_score", riskDetails.get("ml_score"));
+            aiFeatures.put("source", riskDetails.get("source"));
+            aiFeatures.put("cache_layer", riskDetails.get("cache_layer"));
         }
         Long pspId = null;
         Object rawPspId = features != null ? features.getOrDefault("pspId", features.get("psp_id")) : null;
@@ -379,11 +405,11 @@ public class ScoringService {
         String baseline = riskDetails != null && riskDetails.get("rule_decision") != null
                 ? String.valueOf(riskDetails.get("rule_decision"))
                 : "REVIEW";
-        jevEngineAdvisor.adviseAsync(
-                com.posgateway.aml.service.jev.JevEngineType.FRAUD_SCORING,
+        aiEngineAdvisor.adviseAsync(
+                com.posgateway.aml.service.ai.decision.AiEngineType.FRAUD_SCORING,
                 pspId,
                 baseline,
-                jevFeatures,
+                aiFeatures,
                 txnId,
                 null,
                 null,

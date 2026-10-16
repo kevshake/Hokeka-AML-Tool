@@ -12,6 +12,8 @@ import {
 } from "../../features/api/queries";
 import { useIngestMobileMoneyTransaction } from "../../features/api/mutations";
 import type { MobileMoneyEntityType, MobileMoneyEventType } from "../../types/mobileMoney";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 const eventTypes: MobileMoneyEventType[] = [
   "CASH_IN", "CASH_OUT", "P2P_TRANSFER", "MERCHANT_PAYMENT", "BILL_PAYMENT", "REFUND", "REVERSAL",
@@ -59,16 +61,15 @@ function optionalText(value: string) {
 }
 
 export default function MobileMoneyPage() {
-  const [tab, setTab] = useState(0);
-  const [transactionPage, setTransactionPage] = useState(0);
-  const [profilePage, setProfilePage] = useState(0);
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const tab = Number(tableState.filters.tab ?? 0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [selected, setSelected] = useState<{ type: MobileMoneyEntityType; reference: string } | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const transactions = useMobileMoneyTransactions(transactionPage, 25);
-  const profiles = useMobileMoneyRiskProfiles(profilePage, 25);
+  const transactions = useMobileMoneyTransactions(tableState.page, tableState.size);
+  const profiles = useMobileMoneyRiskProfiles(tableState.page, tableState.size);
   const customers = useMultiAssetCustomers("", 0, 100);
   const network = useMobileMoneyNetwork(selected?.type ?? null, selected?.reference ?? null);
   const ingest = useIngestMobileMoneyTransaction();
@@ -115,11 +116,18 @@ export default function MobileMoneyPage() {
   return <HokekaPageShell title="Mobile Money Intelligence" subtitle="Wallet, device, SIM, agent, merchant, and network risk" noCard>
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2, flexWrap: "wrap" }}>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+        <Tabs value={tab} onChange={(_, value) => setFilter("tab", String(value))}>
           <Tab icon={<Smartphone size={17} />} iconPosition="start" label={`Activity (${transactions.data?.totalElements ?? 0})`} />
           <Tab icon={<Network size={17} />} iconPosition="start" label={`Entity risk (${profiles.data?.totalElements ?? 0})`} />
         </Tabs>
-        <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setDialogOpen(true)}>Transaction</Button>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <ConsoleListExportMenu
+            viewType="TRANSACTIONS"
+            filters={{ ...exportFilterMap, productDomain: "E_MONEY_MOBILE_MONEY" }}
+            disabled={!transactions.data?.totalElements}
+          />
+          <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setDialogOpen(true)}>Transaction</Button>
+        </Box>
       </Box>
 
       {tab === 0 && <Paper variant="outlined">
@@ -135,14 +143,14 @@ export default function MobileMoneyPage() {
             <TableCell><Link to={`/records/MOBILE_MONEY_TRANSACTION_CONTEXT/${item.id}`}><Typography variant="body2" color="primary" fontFamily="monospace">{item.externalTransactionId}</Typography></Link><Link to={`/records/MULTI_ASSET_TRANSACTION/${item.transactionId}`}><Typography variant="caption" color="text.secondary">Transaction #{item.transactionId}</Typography></Link></TableCell>
             <TableCell><Link to={`/records/MULTI_ASSET_CUSTOMER/${item.customerId}`}>{item.customerName}</Link></TableCell>
             <TableCell>{item.eventType.replaceAll("_", " ")}{item.crossBorder && <Chip size="small" label="Cross-border" sx={{ ml: 1 }} />}</TableCell>
-            <TableCell><Button size="small" startIcon={<Search size={14} />} onClick={() => { setSelected({ type: "WALLET", reference: item.walletReference }); setTab(1); }}>{item.walletReference}</Button><Typography variant="caption" display="block" color="text.secondary">{item.counterpartyWalletReference || "No counterparty wallet"}</Typography></TableCell>
+            <TableCell><Button size="small" startIcon={<Search size={14} />} onClick={() => { setSelected({ type: "WALLET", reference: item.walletReference }); setFilter("tab", "1"); }}>{item.walletReference}</Button><Typography variant="caption" display="block" color="text.secondary">{item.counterpartyWalletReference || "No counterparty wallet"}</Typography></TableCell>
             <TableCell>{item.agentReference || item.merchantReference || "-"}</TableCell>
             <TableCell>{item.amount.toLocaleString()} {item.currency}</TableCell>
             <TableCell><Chip size="small" label={item.riskScore} color={item.riskScore >= 70 ? "error" : item.riskScore >= 40 ? "warning" : "default"} /></TableCell>
             <TableCell>{item.decision}</TableCell>
           </TableRow>)}
         </TableBody></Table></TableContainer>
-        <TablePagination component="div" count={transactions.data?.totalElements ?? 0} page={transactionPage} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, page) => setTransactionPage(page)} />
+        <TablePagination component="div" count={transactions.data?.totalElements ?? 0} page={tableState.page} rowsPerPage={tableState.size} rowsPerPageOptions={[10, 25, 50]} onPageChange={(_, page) => setPage(page)} onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))} />
       </Paper>}
 
       {tab === 1 && <Box sx={{ display: "grid", gap: 2 }}>
@@ -161,7 +169,7 @@ export default function MobileMoneyPage() {
             <TableCell align="right"><Button size="small" startIcon={<Network size={15} />} onClick={() => setSelected({ type: profile.entityType, reference: profile.entityReference })}>Network</Button></TableCell>
           </TableRow>)}
         </TableBody></Table></TableContainer>
-        <TablePagination component="div" count={profiles.data?.totalElements ?? 0} page={profilePage} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, page) => setProfilePage(page)} />
+        <TablePagination component="div" count={profiles.data?.totalElements ?? 0} page={tableState.page} rowsPerPage={tableState.size} rowsPerPageOptions={[10, 25, 50]} onPageChange={(_, page) => setPage(page)} onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))} />
         </Paper>
 
         {selected && <Paper variant="outlined" sx={{ p: 2 }}>

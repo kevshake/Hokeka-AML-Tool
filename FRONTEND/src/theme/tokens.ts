@@ -1,77 +1,59 @@
 /* ============================================================================
-   Hokeka design tokens — single source of truth for the dashboard.
+   Console theme layer — runtime brand resolution + MUI CSS variable emission.
 
-   Mirrors the marketing site (`website/src/index.css`): dark editorial finance
-   aesthetic, gold accent, teal signal colour, hairline rules, 3px radii,
-   Manrope headings over DM Sans body copy.
-
-   Consumed by:
-     - src/contexts/ThemeContext.tsx  (MUI theme + runtime CSS variables)
-     - src/theme/globals.css          (static CSS custom property defaults)
-     - tailwind.config.ts             (reads the same CSS variables)
-
-   Every foreground/background pair used for text has been contrast-checked;
-   measured ratios are noted inline. Body text targets WCAG AA 4.5:1, large
-   text and non-text UI boundaries target 3:1.
+   Canonical palette lives in repo-root `design-tokens/` (CSS + TS + JSON).
+   This module adds PSP brand overrides and `buildCssVariables()` for ThemeContext.
    ========================================================================== */
 
-/* -------------------------------------------------------------------------- */
-/* Colour maths                                                               */
-/* -------------------------------------------------------------------------- */
+import {
+    colors,
+    decision,
+    DEFAULT_PRIMARY,
+    DEFAULT_SECONDARY,
+    fonts,
+    motion,
+    radii,
+    risk,
+    riskSoft,
+    semantic,
+    shadows,
+    softSurface,
+    typeScale,
+} from "@hokeka/design-tokens";
+import {
+    contrastRatio,
+    darken,
+    hexToRgb,
+    lighten,
+    mix,
+    relativeLuminance,
+    rgbChannels,
+    type Rgb,
+} from "@hokeka/design-tokens";
 
-export interface Rgb {
-    r: number;
-    g: number;
-    b: number;
-}
-
-export function hexToRgb(hex: string): Rgb | null {
-    const normalised = hex.trim().replace(/^#/, "");
-    const expanded =
-        normalised.length === 3
-            ? normalised
-                  .split("")
-                  .map((c) => c + c)
-                  .join("")
-            : normalised;
-    if (!/^[0-9a-f]{6}$/i.test(expanded)) return null;
-    return {
-        r: parseInt(expanded.slice(0, 2), 16),
-        g: parseInt(expanded.slice(2, 4), 16),
-        b: parseInt(expanded.slice(4, 6), 16),
-    };
-}
-
-function toHex(rgb: Rgb): string {
-    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
-    return `#${[rgb.r, rgb.g, rgb.b].map((v) => clamp(v).toString(16).padStart(2, "0")).join("")}`;
-}
-
-/** Space-separated RGB channels, for `rgb(var(--x) / <alpha-value>)` in Tailwind. */
-export function rgbChannels(hex: string, fallback = "211 179 113"): string {
-    const rgb = hexToRgb(hex);
-    return rgb ? `${rgb.r} ${rgb.g} ${rgb.b}` : fallback;
-}
-
-/** Linear blend of two hex colours. `amount` 0 → a, 1 → b. */
-export function mix(a: string, b: string, amount: number): string {
-    const ca = hexToRgb(a);
-    const cb = hexToRgb(b);
-    if (!ca || !cb) return a;
-    return toHex({
-        r: ca.r + (cb.r - ca.r) * amount,
-        g: ca.g + (cb.g - ca.g) * amount,
-        b: ca.b + (cb.b - ca.b) * amount,
-    });
-}
-
-export function lighten(hex: string, amount: number): string {
-    return mix(hex, "#ffffff", amount);
-}
-
-export function darken(hex: string, amount: number): string {
-    return mix(hex, "#000000", amount);
-}
+export type { Rgb };
+export {
+    colors,
+    decision,
+    DEFAULT_PRIMARY,
+    DEFAULT_SECONDARY,
+    fonts,
+    motion,
+    radii,
+    risk,
+    riskSoft,
+    semantic,
+    shadows,
+    softSurface,
+    typeScale,
+    contrastRatio,
+    darken,
+    hexToRgb,
+    lighten,
+    mix,
+    relativeLuminance,
+    rgbChannels,
+};
 
 /**
  * Tokens that also publish an `-rgb` channel triplet. Lets `withAlpha` emit
@@ -121,25 +103,6 @@ export function withAlpha(colour: string, alpha: number): string {
     return `color-mix(in srgb, ${colour} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
-/** Relative luminance per WCAG 2.1. */
-export function relativeLuminance(hex: string): number {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return 0;
-    const channel = (v: number) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    };
-    return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
-}
-
-/** WCAG contrast ratio between two opaque colours (1 → 21). */
-export function contrastRatio(a: string, b: string): number {
-    const la = relativeLuminance(a);
-    const lb = relativeLuminance(b);
-    const [hi, lo] = la > lb ? [la, lb] : [lb, la];
-    return (hi + 0.05) / (lo + 0.05);
-}
-
 /** Pick whichever of ink/near-black reads better on `background`. */
 export function readableTextOn(background: string): string {
     return contrastRatio(colors.ink, background) >= contrastRatio(colors.bg, background)
@@ -162,110 +125,6 @@ export function ensureContrast(colour: string, background: string, minRatio = 4.
     }
     return candidate;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Core palette — lifted verbatim from website/src/index.css                   */
-/* -------------------------------------------------------------------------- */
-
-export const colors = {
-    /* Grounds. surface0 → surface4 is the elevation ramp. */
-    bg: "#080909", //  --bg
-    bg2: "#0c0e0d", //  --bg-2
-    surface0: "#080909",
-    surface1: "#0c0e0d",
-    surface2: "#121514", // website .product-frame
-    surface3: "#191c1b", // website .product-nav .active / .activity-head
-    surface4: "#232624", // hover / raised
-
-    /* Ink. */
-    ink: "#f5f2eb", //  --ink        17.83:1 on bg
-    muted: "#a8aba8", //  --muted      8.60:1 on bg, 6.59:1 on surface4
-    muted2: "#858986", //  --muted-2    5.62:1 on bg (disabled/decorative only)
-
-    /* Brand. */
-    gold: "#d3b371", //  --gold        9.93:1 on bg
-    goldBright: "#e1c684", //  --gold-bright 11.97:1 on bg
-    goldDeep: "#74511e", //  --gold-deep   (fills on light grounds only)
-    teal: "#75b7ab", //  --teal        8.66:1 on bg
-    amber: "#e2b25d", //  --amber       10.22:1 on bg
-
-    /* Hairlines — website uses --line #ffffff1f (12% white). */
-    line: "rgba(255, 255, 255, 0.12)",
-    lineStrong: "rgba(255, 255, 255, 0.22)",
-    /** Boundary for interactive controls; 3.02:1 against bg, clears WCAG 1.4.11. */
-    lineControl: "rgba(255, 255, 255, 0.34)",
-} as const;
-
-/* -------------------------------------------------------------------------- */
-/* Semantic colours                                                           */
-/* -------------------------------------------------------------------------- */
-
-/**
- * How much of a signal hue is tinted into `surface2` to make its badge/alert
- * background. These backgrounds are deliberately OPAQUE rather than an alpha
- * tint: an alpha tint composites against whatever row surface is underneath,
- * so a hovered row (surface4) silently lightens the badge and eats contrast.
- * With an opaque background the token-on-background ratio is deterministic and
- * every pair below is measured, not assumed.
- */
-const SOFT_TINT = 0.2;
-
-/** Badge/alert background for a signal hue. Guaranteed ≥4.6:1 for its own text. */
-export function softSurface(colour: string): string {
-    return mix("#121514", colour, SOFT_TINT);
-}
-
-/**
- * Chosen to sit inside the gold/teal editorial family rather than MUI's
- * defaults: teal for positive, the site's amber for caution, a warm coral that
- * belongs to the same earthy range as gold for danger, and a muted steel blue
- * for neutral information (the only cool hue, so it never reads as a warning).
- */
-export const semantic = {
-    success: "#75b7ab", //  8.66:1 on bg / 6.64:1 on surface4 / 5.28:1 on its soft bg
-    successSoft: softSurface("#75b7ab"),
-    warning: "#e2b25d", // 10.22:1 on bg / 7.83:1 on surface4 / 5.95:1 on its soft bg
-    warningSoft: softSurface("#e2b25d"),
-    error: "#e8776b", //  6.91:1 on bg / 5.30:1 on surface4 / 4.64:1 on its soft bg
-    errorSoft: softSurface("#e8776b"),
-    info: "#84a9c4", //  8.03:1 on bg / 6.15:1 on surface4 / 4.99:1 on its soft bg
-    infoSoft: softSurface("#84a9c4"),
-    neutral: "#a8aba8",
-    neutralSoft: softSurface("#a8aba8"),
-} as const;
-
-/**
- * Risk score / alert severity. Sequential warm ramp, teal at the safe end.
- *
- * `unknown` is NOT `muted2`: these badges carry meaning, so they cannot use the
- * disabled-text token (which measures 4.31:1 on surface4 and is only allowed to
- * because WCAG 1.4.3 exempts inactive controls). It gets its own neutral that
- * clears 4.5:1 on every surface AND on its own badge background.
- */
-export const risk = {
-    critical: "#e8776b", //  6.91:1 on bg / 5.30:1 on surface4
-    high: "#e08a4f", //  7.52:1 on bg / 5.76:1 on surface4
-    medium: "#e2b25d", // 10.22:1 on bg / 7.83:1 on surface4
-    low: "#75b7ab", //  8.66:1 on bg / 6.64:1 on surface4
-    unknown: "#a0a4a1", //  7.90:1 on bg / 6.05:1 on surface4
-} as const;
-
-export const riskSoft = {
-    critical: softSurface(risk.critical),
-    high: softSurface(risk.high),
-    medium: softSurface(risk.medium),
-    low: softSurface(risk.low),
-    unknown: softSurface(risk.unknown),
-} as const;
-
-/** Decision outcomes surfaced by the rules engine. */
-export const decision = {
-    ALLOW: "#75b7ab",
-    ALERT: "#e2b25d",
-    REVIEW: "#d3b371",
-    HOLD: "#e08a4f",
-    BLOCK: "#e8776b",
-} as const;
 
 export type RiskKey = keyof typeof risk;
 export type DecisionKey = keyof typeof decision;
@@ -293,71 +152,6 @@ export function decisionColor(value: string | null | undefined): string {
     const key = (value ?? "").trim().toUpperCase() as DecisionKey;
     return decision[key] ?? risk.unknown;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Shape, motion, elevation                                                   */
-/* -------------------------------------------------------------------------- */
-
-export const radii = {
-    xs: "2px",
-    /** --radius on the marketing site. */
-    base: "3px",
-    md: "4px",
-    lg: "5px",
-    xl: "6px",
-    xxl: "8px",
-    pill: "9999px",
-} as const;
-
-export const motion = {
-    /** --ease on the marketing site. */
-    ease: "cubic-bezier(.22, 1, .36, 1)",
-    fast: "150ms",
-    base: "250ms",
-    slow: "400ms",
-} as const;
-
-export const shadows = {
-    none: "none",
-    /** Hairline lift, for chips and inputs. */
-    xs: "0 1px 2px rgba(0, 0, 0, 0.45)",
-    /** Cards at rest. */
-    sm: "0 10px 30px -18px rgba(0, 0, 0, 0.9)",
-    /** Cards on hover (website .asset-card:hover). */
-    md: "0 26px 50px -30px rgba(0, 0, 0, 0.75)",
-    /** Menus, popovers. */
-    lg: "0 24px 60px -24px rgba(0, 0, 0, 0.85)",
-    /** Dialogs (website .product-frame). */
-    xl: "0 40px 100px -30px rgba(0, 0, 0, 0.72)",
-    /** Gold halo under primary buttons (website .button:hover). */
-    gold: "0 14px 34px -12px rgba(211, 179, 113, 0.6)",
-    teal: "0 14px 34px -14px rgba(117, 183, 171, 0.5)",
-} as const;
-
-/* -------------------------------------------------------------------------- */
-/* Typography                                                                 */
-/* -------------------------------------------------------------------------- */
-
-export const fonts = {
-    display: "'Manrope', 'Inter', system-ui, sans-serif",
-    body: "'DM Sans', 'Inter', system-ui, sans-serif",
-    mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-} as const;
-
-export const typeScale = {
-    h1: { size: "2.75rem", weight: 600, lineHeight: 1.05, letterSpacing: "-0.02em" },
-    h2: { size: "2.125rem", weight: 600, lineHeight: 1.08, letterSpacing: "-0.018em" },
-    h3: { size: "1.6875rem", weight: 500, lineHeight: 1.15, letterSpacing: "-0.015em" },
-    h4: { size: "1.375rem", weight: 500, lineHeight: 1.22, letterSpacing: "-0.012em" },
-    h5: { size: "1.125rem", weight: 600, lineHeight: 1.3, letterSpacing: "-0.01em" },
-    h6: { size: "0.9375rem", weight: 600, lineHeight: 1.35, letterSpacing: "-0.006em" },
-    body1: { size: "0.9063rem", weight: 400, lineHeight: 1.65, letterSpacing: "0" },
-    body2: { size: "0.8125rem", weight: 400, lineHeight: 1.6, letterSpacing: "0" },
-    caption: { size: "0.7188rem", weight: 400, lineHeight: 1.5, letterSpacing: "0.01em" },
-    /** The website's `.eyebrow`: gold, uppercase, generously tracked. */
-    overline: { size: "0.6875rem", weight: 600, lineHeight: 1.4, letterSpacing: "0.16em" },
-    button: { size: "0.8125rem", weight: 600, lineHeight: 1.2, letterSpacing: "0.01em" },
-} as const;
 
 /* -------------------------------------------------------------------------- */
 /* Brand resolution (platform default + per-PSP overrides)                    */
@@ -405,10 +199,6 @@ function ensureBadgeContrast(colour: string, minRatio = 4.5): string {
     }
     return candidate;
 }
-
-/** Platform-admin / Hokeka default. */
-export const DEFAULT_PRIMARY = colors.gold;
-export const DEFAULT_SECONDARY = colors.teal;
 
 const NEUTRAL_SURFACES: [string, string, string, string, string] = [
     colors.surface0,

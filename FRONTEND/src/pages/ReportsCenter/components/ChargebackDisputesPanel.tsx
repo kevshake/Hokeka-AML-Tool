@@ -14,7 +14,8 @@ import { useChargebackDisputes } from "../../../features/api/queries";
 import { Link } from "react-router-dom";
 
 export default function ChargebackDisputesPanel() {
-  const { data: disputes = [], isLoading } = useChargebackDisputes();
+  const { data: disputesPage, isLoading } = useChargebackDisputes({ page: 0, size: 20 });
+  const disputes = disputesPage?.content ?? [];
 
   return (
     <Paper sx={{ p: 2, mt: 3, borderRadius: "var(--radius)" }}>

@@ -137,9 +137,12 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 ## 9. Prioritized remediation
 
 **P0 — can produce a wrong AML outcome on a live path**
-1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds.
-2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`.
-3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill.
+
+_Console routes for P0 verification: see `docs/UI_COVERAGE_MATRIX.md` (`/screening`, `/transaction-monitoring`)._
+
+1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds. **Console:** `/screening`.
+2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`. **Console:** `/screening`.
+3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill. **Console:** `/transaction-monitoring`.
 
 **P1 — reachable stub / inert control ("dummy code")**
 4. ~~`TransactionLimitService.setTemporaryLimit` persisted nothing~~ ✅ **FIXED** (V200 + enforcement).
@@ -162,3 +165,17 @@ Shared-settlement / bust-out / self-funding scenarios · richer expected-profile
 ---
 
 _Completed remediations: **Sumsub KYC vendor removed** (fabricated endpoints; screening now on the independent engine) and **temporary-limit control wired live** (#4). Both compile-verified._
+
+---
+
+## WP-01 (2026-10-07): Assessment + Finding ledger (shadow)
+
+| Gap IDs | Status | Note |
+|---|---|---|
+| K1 AssessmentContext | 🟡 Partial | `assessments` + ingest-scoped TXN assessments; full context snapshot / event triggers deferred to WP-07+ |
+| K2 Common Finding | 🟡 Partial | `findings` table + `FindingRecorder`; limits, list, screening, cross-PSP, rules, regulatory, risk (KRS/TRS/CRA), ML, AI shadow |
+| K3 Provenance / versions | 🟡 Partial | `versions` JSON on assessment; `rule_version_id` on `rule_execution_logs`; bundle manifest deferred WP-04 |
+| Q11 Explain per transaction | 🟡 Partial | `GET /transactions/{id}/assessment`, `GET /assessments/{id}`; Console panel deferred WP-01b |
+| E12 Rule execution provenance | 🟡 Partial | `rule_version_id` + `assessment_id` on execution logs |
+
+Decision engine behaviour unchanged (shadow). **WP-02 readiness (all blockers + unified fix plan):** [`docs/WP-02-READINESS-AND-BLOCKERS.md`](WP-02-READINESS-AND-BLOCKERS.md).

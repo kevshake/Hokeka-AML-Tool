@@ -71,13 +71,13 @@ export const DOC_META: Record<string, DocMetaConfig> = {
     installOrder: 5,
     illustration: "dual-post.png",
   },
-  "07-ai-decision-layer-client-install.md": {
-    slug: "07-ai-decision-layer-client-install",
-    shortTitle: "AI Decision Layer",
-    audiences: ["Control Plane"],
-    tags: ["jev", "edge", "install", "control-plane"],
-    installOrder: 6,
-    operatorOnly: true,
+  "07-first-run-bootstrap.md": {
+    slug: "07-first-run-bootstrap",
+    shortTitle: "First-run bootstrap",
+    audiences: ["Overview"],
+    tags: ["bootstrap", "install", "docker", "idempotent"],
+    installOrder: 0,
+    illustration: "arch-overview.png",
   },
 };
 

@@ -48,9 +48,16 @@ public class ComplianceReportingController {
      * GET /api/v1/compliance/sar
      */
     @GetMapping
-    public ResponseEntity<List<SarResponse>> getAllSars(
-            @RequestParam(required = false) String status) {
-        log.info("Get all SAR reports (status filter: {})", status);
+    public ResponseEntity<?> getAllSars(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        log.info("Get SAR reports (status filter: {}, page: {}, size: {})", status, page, size);
+        if (page != null || size != null) {
+            int safePage = page != null ? page : 0;
+            int safeSize = size != null ? size : 25;
+            return ResponseEntity.ok(reportingService.getSarsPage(status, safePage, safeSize));
+        }
         return ResponseEntity.ok(reportingService.getAllSars(status));
     }
 

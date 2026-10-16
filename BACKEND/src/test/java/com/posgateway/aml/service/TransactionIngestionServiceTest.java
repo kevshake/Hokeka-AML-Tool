@@ -71,7 +71,7 @@ class TransactionIngestionServiceTest {
         assertNotEquals(request.getPan(), saved.getPanHash());
         assertEquals("KES", saved.getCurrency());
         assertEquals("CRITICAL", saved.getRiskLevel());
-        assertEquals("BLOCK", saved.getDecision());
+        org.junit.jupiter.api.Assertions.assertNull(saved.getDecision(), "Decision is set by DecisionEngine after scoring");
         assertEquals(true, saved.isCashTransaction());
         assertEquals("CUSTOMER-TOKEN-7", saved.getCustomerAccountReference());
         assertEquals("customer@example.com", saved.getCustomerEmail());

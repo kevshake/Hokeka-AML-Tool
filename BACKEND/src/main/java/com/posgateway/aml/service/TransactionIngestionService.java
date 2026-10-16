@@ -114,7 +114,8 @@ public class TransactionIngestionService {
         Double trs = riskScoringService.calculateTrs(originCountry, merchant.getCountry(), amountUnits);
         transaction.setTrs(trs);
 
-        Double newCra = riskScoringService.updateCra(merchant.getCra(), trs);
+        Double newCra = riskScoringService.updateCra(
+                com.posgateway.aml.service.risk.CraScale.normalizeToHundred(merchant.getCra()), trs);
         transaction.setCra(newCra);
         merchant.setCra(newCra);
         merchant.setKrs(krs);
@@ -148,8 +149,10 @@ public class TransactionIngestionService {
         transaction.setAcquirerResponse(transactionRequest.getAcquirerResponse());
         transaction.setDirection(transactionRequest.getDirection()); // Store Direction
 
-        // TRS stays as data. DecisionEngine owns the decision; do not pre-decide from TRS.
-        transaction.setRiskLevel(calculateRiskLevel(transaction));
+        // Risk level from TRS only; final decision is set by DecisionEngine / orchestrator after scoring.
+        String riskLevel = calculateRiskLevel(transaction);
+        transaction.setRiskLevel(riskLevel);
+        transaction.setDecision(null);
 
         TransactionEntity saved = transactionRepository.save(transaction);
 
@@ -163,8 +166,8 @@ public class TransactionIngestionService {
                 saved.getAmountCents(),
                 saved.getTerminalId());
 
-        logger.info("Transaction ingested successfully: txnId={}, merchantId={}, riskLevel={}, decision={}",
-                saved.getTxnId(), saved.getMerchantId(), saved.getRiskLevel(), saved.getDecision());
+        logger.info("Transaction ingested successfully: txnId={}, merchantId={}, riskLevel={} (decision pending)",
+                saved.getTxnId(), saved.getMerchantId(), riskLevel);
 
         return saved;
     }

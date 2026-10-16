@@ -20,10 +20,15 @@
         "strict": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
-        "noFallthroughCasesInSwitch": true
+        "noFallthroughCasesInSwitch": true,
+        "baseUrl": ".",
+        "paths": {
+            "@hokeka/design-tokens": ["../design-tokens/index.ts"]
+        }
     },
     "include": [
-        "src"
+        "src",
+        "../design-tokens/**/*.ts"
     ],
     "references": [
         {

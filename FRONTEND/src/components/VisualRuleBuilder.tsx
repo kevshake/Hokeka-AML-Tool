@@ -44,7 +44,9 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     'pan_hash', 'ml_score', 'page_rank', 'connection_count', 'pan_txn_count_1h',
     'krs', 'cra', 'trs'
   ];
-  const operatorNames: Record<string, string> = {
+  const operators = ['>=', '<=', '>', '<', '==', '!=', 'contains', 'in'];
+
+  const canonicalOperator: Record<string, string> = {
     '>=': 'GREATER_THAN_OR_EQUAL',
     '<=': 'LESS_THAN_OR_EQUAL',
     '>': 'GREATER_THAN',
@@ -52,33 +54,45 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     '==': 'EQUALS',
     '!=': 'NOT_EQUALS',
     contains: 'CONTAINS',
-    in: 'IN'
+    in: 'IN',
   };
 
-  const operators = ['>=', '<=', '>', '<', '==', '!=', 'contains', 'in'];
+  const edgeField = (field: string) => (field === 'country' ? 'country_code' : field);
+
+  const coerceValue = (raw: string) => {
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    if (raw !== '' && !Number.isNaN(Number(raw))) return Number(raw);
+    return raw;
+  };
+
+  /** Shape both the Control Plane DRL converter and the Edge rule compiler accept. */
+  const canonicalJson = (ruleGroups: RuleGroup[]) => {
+    const parts = ruleGroups.map((group) => {
+      const leaves = group.conditions.map((cond) => ({
+        field: edgeField(cond.field),
+        operator: canonicalOperator[cond.operator] ?? cond.operator,
+        value: coerceValue(cond.value),
+      }));
+      return leaves.length === 1 ? leaves[0] : { all: leaves };
+    });
+    let condition: unknown = parts[0];
+    for (let i = 1; i < parts.length; i += 1) {
+      const key = ruleGroups[i].logic === 'OR' ? 'any' : 'all';
+      condition = { [key]: [condition, parts[i]] };
+    }
+    return { conditions: condition };
+  };
 
   const updateExpression = (newGroups: RuleGroup[]) => {
     let expression = '';
-    const clauses = newGroups.map((group) => {
-      const leaves = group.conditions.map((cond) => {
-        const numeric = cond.value.trim() !== '' && !Number.isNaN(Number(cond.value));
-        return {
-          field: cond.field,
-          operator: operatorNames[cond.operator] ?? cond.operator,
-          value: numeric ? Number(cond.value) : cond.value
-        };
-      });
-      return group.logic === 'OR' ? { any: leaves } : { all: leaves };
-    });
-    const json = {
-      conditions: clauses.length === 1 ? clauses[0] : { all: clauses }
-    };
+    const json = canonicalJson(newGroups);
 
     newGroups.forEach((group, gIndex) => {
       if (gIndex > 0) expression += ` ${group.logic} `;
       expression += '(';
       group.conditions.forEach((cond, cIndex) => {
-        if (cIndex > 0) expression += ` ${group.logic} `;
+        if (cIndex > 0) expression += ' AND ';
         expression += `#tx.${cond.field} ${cond.operator} ${cond.value}`;
       });
       expression += ')';
@@ -223,31 +237,16 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
       {onSave && (
         <Button
           variant="contained"
-          onClick={() => {
-            const clauses = groups.map((group) => {
-              const leaves = group.conditions.map((cond) => {
-                const numeric = cond.value.trim() !== '' && !Number.isNaN(Number(cond.value));
-                return {
-                  field: cond.field,
-                  operator: operatorNames[cond.operator] ?? cond.operator,
-                  value: numeric ? Number(cond.value) : cond.value
-                };
-              });
-              return group.logic === 'OR' ? { any: leaves } : { all: leaves };
-            });
-            const edgeIr = {
-              conditions: clauses.length === 1 ? clauses[0] : { all: clauses }
-            };
+          onClick={() =>
             onSave({
               ruleName: "Visual Rule",
               ruleExpression: groups
-                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(` ${g.logic} `)})`)
+                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`)
                 .join(` ${groups[0]?.logic ?? "OR"} `),
               ruleType: "SPEL",
-              ruleJson: JSON.stringify(edgeIr),
-              edgeDeployable: true,
-            });
-          }}
+              ruleJson: JSON.stringify(canonicalJson(groups)),
+            })
+          }
           sx={{ ml: 2 }}
         >
         Save Rule

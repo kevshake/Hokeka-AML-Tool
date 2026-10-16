@@ -54,11 +54,14 @@ JavaMailSender is optional — when absent the service gracefully degrades.
 
 ## In-App Messages
 
-**MessagesPage**: System notification inbox:
+**MessagesPage** (`/messages`): System notification inbox:
+- Reachable from the sidebar **Messages** item and the header bell (unread badge from `GET /messages/unread/count`)
 - Unread indicators (blue dot)
 - Subject, body, timestamp
 - Read/unread toggle on click
 - Empty state illustration
+
+Legacy bookmarks: `/monitoring` → `/transaction-monitoring`, `/audit-logs` → `/audit`, `/rules` → `/rules-generation`.
 
 ## Compliance Deadline Notifications
 

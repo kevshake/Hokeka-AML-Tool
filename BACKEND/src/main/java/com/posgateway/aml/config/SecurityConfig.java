@@ -122,6 +122,7 @@ public class SecurityConfig {
                                                 // Password reset endpoints must be accessible even when not authenticated
                                                 .requestMatchers("/auth/password-reset/**", "/api/v1/auth/password-reset/**").permitAll()
                                                 .requestMatchers("/api/v1/merchants/health").permitAll()
+                                                .requestMatchers("/public/website/**", "/api/v1/public/website/**").permitAll()
                                                 .requestMatchers("/api/v1/pricing/**").permitAll()
                                                 // Safaricom Daraja M-Pesa callback — must be publicly accessible
                                                 .requestMatchers("/api/v1/billing/payments/mpesa/callback",

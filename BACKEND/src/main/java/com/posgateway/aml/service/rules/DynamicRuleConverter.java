@@ -18,6 +18,7 @@ public class DynamicRuleConverter {
     private static final Map<String, String> FIELD_MAP = new HashMap<>();
     static {
         FIELD_MAP.put("amount", "amount");
+        FIELD_MAP.put("country", "countryCode");
         FIELD_MAP.put("country_code", "countryCode");
         FIELD_MAP.put("countryCode", "countryCode");
         FIELD_MAP.put("merchant_id", "merchantId");
@@ -51,9 +52,10 @@ public class DynamicRuleConverter {
         try {
             String safeRuleName = sanitizeRuleName(ruleName);
             JsonNode root = objectMapper.readTree(jsonRule);
-            String condition = buildCondition(root.path("conditions"));
+            JsonNode conditions = root.has("conditions") ? root.get("conditions") : root;
+            String condition = buildCondition(conditions);
             if (condition.isBlank()) {
-                condition = "this != null";
+                throw new IllegalArgumentException("rule JSON has no compilable conditions");
             }
 
             StringBuilder drl = new StringBuilder();
@@ -85,10 +87,32 @@ public class DynamicRuleConverter {
         if (node.has("any")) {
             return "(" + joinConditions(node.get("any").elements(), " || ") + ")";
         }
+        if (node.has("groups") && node.get("groups").isArray()) {
+            return compileAuthoringGroups(node.get("groups"));
+        }
         if (node.has("field")) {
             return buildLeafCondition(node);
         }
         return "";
+    }
+
+    /** Visual-builder groups: conditions inside a group are AND; later groups join with their logic. */
+    private String compileAuthoringGroups(JsonNode groups) {
+        String acc = null;
+        for (JsonNode group : groups) {
+            String inner = joinConditions(group.path("conditions").elements(), " && ");
+            if (inner.isBlank()) {
+                continue;
+            }
+            inner = "(" + inner + ")";
+            if (acc == null) {
+                acc = inner;
+            } else {
+                String joiner = "OR".equalsIgnoreCase(group.path("logic").asText("AND")) ? " || " : " && ";
+                acc = "(" + acc + joiner + inner + ")";
+            }
+        }
+        return acc == null ? "" : acc;
     }
 
     private String joinConditions(Iterator<JsonNode> nodes, String delimiter) {
@@ -112,7 +136,7 @@ public class DynamicRuleConverter {
             throw new IllegalArgumentException("Unsupported dynamic rule field: " + sourceField);
         }
 
-        String operator = condition.path("operator").asText("EQUALS").toUpperCase();
+        String operator = canonicalOperator(condition.path("operator").asText("EQUALS"));
         JsonNode value = condition.get("value");
 
         return switch (operator) {
@@ -129,9 +153,28 @@ public class DynamicRuleConverter {
         };
     }
 
+    private static String canonicalOperator(String raw) {
+        String op = raw == null ? "EQUALS" : raw.trim().toUpperCase();
+        return switch (op) {
+            case ">=", "GTE", "GE", "GREATER_THAN_OR_EQUAL" -> "GREATER_THAN_OR_EQUAL";
+            case ">", "GT", "GREATER_THAN" -> "GREATER_THAN";
+            case "<=", "LTE", "LE", "LESS_THAN_OR_EQUAL" -> "LESS_THAN_OR_EQUAL";
+            case "<", "LT", "LESS_THAN" -> "LESS_THAN";
+            case "==", "=", "EQ", "EQUALS" -> "EQUALS";
+            case "!=", "<>", "NE", "NOT_EQUALS" -> "NOT_EQUALS";
+            case "CONTAINS" -> "CONTAINS";
+            case "IN" -> "IN";
+            case "NOT_IN", "NOT IN" -> "NOT_IN";
+            default -> op;
+        };
+    }
+
     private String formatListValue(String factField, JsonNode value) {
-        if (value == null || !value.isArray()) {
-            throw new IllegalArgumentException("IN/NOT_IN operators require an array value");
+        if (value == null || value.isNull()) {
+            throw new IllegalArgumentException("IN/NOT_IN operators require a value");
+        }
+        if (!value.isArray()) {
+            return formatValue(factField, value);
         }
         StringBuilder result = new StringBuilder();
         for (JsonNode item : value) {

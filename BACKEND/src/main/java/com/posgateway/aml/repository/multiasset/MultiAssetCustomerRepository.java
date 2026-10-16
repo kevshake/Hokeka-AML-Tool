@@ -12,4 +12,7 @@ public interface MultiAssetCustomerRepository extends JpaRepository<MultiAssetCu
     Optional<MultiAssetCustomer> findByPspIdAndExternalCustomerId(Long pspId, String externalCustomerId);
     Page<MultiAssetCustomer> findByPspId(Long pspId, Pageable pageable);
     Page<MultiAssetCustomer> findByPspIdAndDisplayNameContainingIgnoreCase(Long pspId, String name, Pageable pageable);
+
+    /** Platform-wide customer search for Console exports when no PSP tenant filter applies. */
+    Page<MultiAssetCustomer> findByDisplayNameContainingIgnoreCase(String name, Pageable pageable);
 }

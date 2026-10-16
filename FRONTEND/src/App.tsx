@@ -6,8 +6,10 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { isPlatformAdmin } from "./pages/EdgeNodes/edgeMeta";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
+import PermissionRoute from "./components/Auth/PermissionRoute";
 import HokekaLayout from "./layouts/HokekaLayout";
 import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
+import { LEGACY_CONSOLE_ROUTE_ALIASES } from "./lib/documentedConsoleRoutes";
 
 import LoginPage from "./pages/Auth/LoginPage";
 import SignupPage from "./pages/Auth/SignupPage";
@@ -45,6 +47,7 @@ const MarketSurveillancePage = lazy(() => import("./pages/MarketSurveillance/Mar
 const MobileMoneyPage = lazy(() => import("./pages/MobileMoney/MobileMoneyPage"));
 const WalletIntelligencePage = lazy(() => import("./pages/WalletIntelligence/WalletIntelligencePage"));
 const RecordDetailPage = lazy(() => import("./pages/RecordDetail/RecordDetailPage"));
+const NetworkAnalysisPage = lazy(() => import("./pages/Network/NetworkAnalysisPage"));
 
 /**
  * `/billing` is the PLATFORM revenue console (cross-tenant totals, admin-only endpoints). A PSP user
@@ -100,6 +103,7 @@ function App() {
                     <HokekaLayout>
                       <RouteErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
+                          <PermissionRoute>
                           <Routes>
                             <Route index element={<Navigate to="/dashboard" replace />} />
                             <Route path="dashboard" element={<DashboardPage />} />
@@ -113,6 +117,7 @@ function App() {
                             <Route path="market-surveillance" element={<MarketSurveillancePage />} />
                             <Route path="mobile-money" element={<MobileMoneyPage />} />
                             <Route path="wallet-intelligence" element={<WalletIntelligencePage />} />
+                            <Route path="network" element={<NetworkAnalysisPage />} />
                             <Route path="records/:recordType/:recordId" element={<RecordDetailPage />} />
                             <Route path="screening" element={<ScreeningPage />} />
                             <Route path="profile" element={<ProfilePage />} />
@@ -122,6 +127,16 @@ function App() {
                             <Route path="reports" element={<ReportsCenterPage />} />
                             <Route path="chargebacks" element={<ChargebacksPage />} />
                             <Route path="reports-center" element={<Navigate to="/reports" replace />} />
+                            {LEGACY_CONSOLE_ROUTE_ALIASES.map(({ from, to }) => {
+                              const legacySegment = from.replace(/^\//, "");
+                              return (
+                                <Route
+                                  key={from}
+                                  path={legacySegment}
+                                  element={<Navigate to={to} replace />}
+                                />
+                              );
+                            })}
                             <Route path="audit" element={<AuditLogsPage />} />
                             <Route path="runtime-errors" element={<RuntimeErrorsPage />} />
                             <Route path="rules-generation" element={<RulesGenerationPage />} />
@@ -136,6 +151,7 @@ function App() {
                             <Route path="limits-aml" element={<LimitsAmlPage />} />
                             <Route path="billing" element={<BillingRoute />} />
                           </Routes>
+                          </PermissionRoute>
                         </Suspense>
                       </RouteErrorBoundary>
                     </HokekaLayout>

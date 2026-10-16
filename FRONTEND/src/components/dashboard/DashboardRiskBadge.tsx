@@ -19,7 +19,10 @@ export default function DashboardRiskBadge({
           ? 'db-risk-badge--low'
           : 'db-risk-badge--medium'
 
+  const label = (level ?? '').trim()
   return (
-    <span className={cn('db-risk-badge', tone, className)}>{level || '—'}</span>
+    <span className={cn('db-risk-badge', label ? tone : 'db-risk-badge--medium', className)}>
+      {label || 'Not scored'}
+    </span>
   )
 }

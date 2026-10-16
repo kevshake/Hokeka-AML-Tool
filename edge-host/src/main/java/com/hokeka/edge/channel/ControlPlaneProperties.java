@@ -50,6 +50,12 @@ public class ControlPlaneProperties {
     /** Where this edge's own X25519 + Ed25519 private keys live (mode 600, generated at first boot). */
     private String identityFile = "/opt/hokeka/secrets/edge-identity.json";
 
+    /**
+     * On-disk copy of the last verified rule IR. Empty means {@code rule-bundle.ir} beside
+     * {@link #identityFile}. This copy is what a restart loads when Aerospike is down.
+     */
+    private String bundleFile = "";
+
     /** Replay-guard window and nonce cache size (contract §4: ≥ 10 000 entries, 300 s skew). */
     private Duration maxClockSkew = Duration.ofSeconds(300);
     private int nonceCacheSize = 10_000;
@@ -191,6 +197,14 @@ public class ControlPlaneProperties {
 
     public void setIdentityFile(String identityFile) {
         this.identityFile = identityFile;
+    }
+
+    public String getBundleFile() {
+        return bundleFile;
+    }
+
+    public void setBundleFile(String bundleFile) {
+        this.bundleFile = bundleFile;
     }
 
     public Duration getMaxClockSkew() {

@@ -15,6 +15,17 @@
 
 This short section is current; the legacy bare-metal procedure after it is not.
 
+### Decision orchestrator runtime toggle
+
+Default property: `hokeka.decision.orchestrator=shadow` (`legacy`, `shadow`, or `live`). Platform
+operators with `CONFIGURE_SYSTEM` can flip modes at runtime without restart:
+
+- `GET /api/v1/admin/decision-orchestrator`
+- `PUT /api/v1/admin/decision-orchestrator` body `{"mode":"live"}`
+
+Automated verification: `node scripts/live-decision-orchestrator-toggle-smoke.mjs`. Full checklist:
+[`docs/deploy/DEPLOYMENT-READINESS-RUNBOOK.md`](../docs/deploy/DEPLOYMENT-READINESS-RUNBOOK.md).
+
 ### Internal AML API key
 
 The backend and `aml-ms-prod` authenticate with one shared random value. On the Hostinger VPS, write

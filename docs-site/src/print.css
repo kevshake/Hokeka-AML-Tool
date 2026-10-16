@@ -1,0 +1,63 @@
+/* Light export / print stylesheet — token roles only (no forked palette). */
+
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #f5f2eb;
+    --surface-1: #ffffff;
+    --surface-2: #fbfaf6;
+    --surface-3: #f0eeea;
+    --ink: #121514;
+    --text-primary: #121514;
+    --text-secondary: #3d403e;
+    --line: rgba(18, 21, 20, 0.12);
+    --glass-border: rgba(18, 21, 20, 0.14);
+    --gold: #74511e;
+    --gold-bright: #8a6324;
+  }
+
+  body {
+    background: var(--bg) !important;
+    color: var(--ink) !important;
+    font-size: 11pt;
+  }
+
+  .docs-header,
+  .docs-search,
+  .docs-sidebar,
+  .no-print {
+    display: none !important;
+  }
+
+  .docs-main,
+  .markdown-body {
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: var(--text-secondary);
+  }
+
+  pre,
+  code {
+    border: 1px solid var(--line) !important;
+    background: var(--surface-2) !important;
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid-page;
+    color: var(--ink) !important;
+  }
+
+  table {
+    break-inside: avoid;
+  }
+}

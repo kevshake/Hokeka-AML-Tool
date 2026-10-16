@@ -54,7 +54,7 @@ public class RiskScoringService {
     // ── Composite KRS weights ────────────────────────────────────────────────
     @Value("${risk.weights.krs.country-residence:0.5}")
     private double wCountryResidence;
-    @Value("${risk.weights.krs.mcc:0.3}")
+    @Value("${risk.weights.krs.mcc:${risk.weights.krs.nationality:0.3}}")
     private double wMcc;
     @Value("${risk.weights.krs.age:0.2}")
     private double wAge;
@@ -179,15 +179,24 @@ public class RiskScoringService {
         return trs;
     }
 
-    /** Rolling-average update of CRA from a new TRS observation. */
+    /**
+     * Rolling-average update of CRA from a new TRS observation on the unified 0–100 scale.
+     */
     public Double updateCra(Double currentCra, Double newTrs) {
-        if (currentCra == null || currentCra == 0.0) return newTrs;
-        double newCra = (currentCra + newTrs) / 2.0;
+        double normalizedCurrent = CraScale.normalizeToHundred(currentCra);
+        double normalizedTrs = newTrs != null ? CraScale.clampHundred(newTrs) : 0.0;
+        if (normalizedCurrent == 0.0) {
+            return normalizedTrs;
+        }
+        double newCra = CraScale.clampHundred((normalizedCurrent + normalizedTrs) / 2.0);
         meterRegistry.gauge("aml.risk.cra", Tags.of("type", "rolling_avg"), newCra);
         return newCra;
     }
 
-    /** Test-only blend. Not on the ingest path. */
+    /**
+     * Legacy blended score used only in unit tests; production ingest uses {@link #updateCra} and {@link #calculateCra}.
+     */
+    @Deprecated(forRemoval = false)
     public Map<String, Object> calculateOverallRisk(String txnId, Map<String, Object> features, Map<String, Object> riskDetails) {
         // 1. Calculate KRS from the persisted merchant profile when merchant_id is present.
         double krsScore = resolveMerchant(features)
@@ -313,7 +322,7 @@ public class RiskScoringService {
                             int countryScore, int pepSancScore, int industryScore,
                             int volumeScore, int alertScore, int ageScore) {
         try {
-            merchant.setCra(cra); // merchants.cra is 0–100, same scale as ingest
+            merchant.setCra(CraScale.clampHundred(cra));
             merchant.setRiskLevel(level);
             merchantRepository.save(merchant);
 

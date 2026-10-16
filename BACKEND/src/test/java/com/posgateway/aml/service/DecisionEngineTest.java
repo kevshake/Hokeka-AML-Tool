@@ -10,6 +10,7 @@ import com.posgateway.aml.service.kafka.KafkaOutboxService;
 import com.posgateway.aml.service.limits.TransactionLimitEnforcementService;
 import com.posgateway.aml.service.psp.WebhookOutboxService;
 import com.posgateway.aml.service.sanctions.RealTimeTransactionScreeningService;
+import com.posgateway.aml.service.decision.DecisionOrchestratorModeService;
 import com.posgateway.aml.service.security.PaymentBlacklistService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +28,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DecisionEngineTest {
+
+    /** Forces unit tests through the legacy short-circuit path (no live orchestrator side effects). */
+    private static void useLegacyOrchestratorMode(DecisionEngine engine) {
+        ReflectionTestUtils.setField(
+                engine, "orchestratorModeService", new DecisionOrchestratorModeService("legacy"));
+    }
 
     @Test
     void persistsFinalDecisionAndRegulatoryEvidenceOnTransactionAndAlert() {
@@ -52,6 +59,7 @@ class DecisionEngineTest {
                 configService, alertRepository, featuresRepository, transactionRepository,
                 new ObjectMapper(), outboxService, limitService, blacklistService);
         ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
+        useLegacyOrchestratorMode(engine);
 
         TransactionEntity transaction = new TransactionEntity();
         transaction.setTxnId(50L);
@@ -117,6 +125,7 @@ class DecisionEngineTest {
                 new ObjectMapper(), outboxService, limitService, blacklistService);
         ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
         ReflectionTestUtils.setField(engine, "webhookOutboxService", webhookOutboxService);
+        useLegacyOrchestratorMode(engine);
 
         TransactionEntity transaction = new TransactionEntity();
         transaction.setTxnId(50L);
@@ -169,6 +178,7 @@ class DecisionEngineTest {
                 configService, alertRepository, featuresRepository, transactionRepository,
                 new ObjectMapper(), outboxService, limitService, blacklistService);
         ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
+        useLegacyOrchestratorMode(engine);
 
         TransactionEntity transaction = new TransactionEntity();
         transaction.setTxnId(51L);

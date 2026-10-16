@@ -22,7 +22,18 @@
 
 ---
 
-## Step 1 — Bootstrap server (optional script)
+## Step 1 — Bootstrap server
+
+**Recommended (on the VPS, idempotent):**
+
+```bash
+cd /opt/aml-fraud-detector   # or your git clone
+sudo ./scripts/install/hokeka-install.sh --role control-plane --yes
+```
+
+This installs Docker + Compose v2, Node LTS, git, generates `/opt/aml-fraud-detector/.env` with strong secrets (values are never printed), starts `docker-compose.prod.yml`, enables `hokeka-control-plane.service`, and checks `http://127.0.0.1:2637/actuator/health`. Details: [07 — First-run bootstrap](07-first-run-bootstrap.md).
+
+**Optional (from your laptop — rsync only):**
 
 ```bash
 ./deploy-to-hostinger.sh <VPS_IP> <SSH_USER> <SSH_KEY_PATH>
@@ -78,31 +89,30 @@ KAFKA_BOOTSTRAP_SERVERS=kafka-prod:29092
 
 `CORS_ALLOWED_ORIGINS` must include every Console origin ([02-console-dashboard.md](02-console-dashboard.md)).
 
-### JEV AI decision layer (Control Plane only)
+### Hokeka AI decision layer (Laya Studio — Control Plane only)
 
-OpenRouter credentials live **only** on the Control Plane VPS — never on Edge Nodes or in the Console bundle.
-(`docker-compose.prod.yml` forwards these into `backend-prod`; empty key/model = JEV disabled.)
-
-> **“Laya AI”:** that name does not appear in this repo. Operator/code name is **JEV**; tenant brand is **Hokeka AI**. See [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md) for why the client Linux Edge installer must not ship AI.
+[Laya Studio](https://laya.studio) credentials live **only** on the Hostinger Control Plane VPS — never on Edge Nodes or in the Console bundle. Until `LAYA_API_KEY` is set, the platform runs rules-only (no AI mutations).
 
 ```bash
-OPENROUTER_API_KEY=<secret>          # required to enable JEV
-JEV_MODEL=<openrouter-model-id>      # required; no hardcoded default — unset = JEV disabled, rules-only fallback
-JEV_FALLBACK_MODEL=                  # optional secondary model
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-JEV_TIMEOUT=15s
-JEV_INLINE_TIMEOUT=500ms
-JEV_MAX_TOKENS=1024
-JEV_TEMPERATURE=0.2
-JEV_HTTP_REFERER=https://hokeka.com  # optional; sent as HTTP-Referer
-JEV_APP_TITLE=Hokeka                  # optional; sent as X-Title
-JEV_DAILY_CALL_BUDGET_PER_PSP=0      # 0 = unlimited
-JEV_DAILY_SPEND_CAP_USD_PER_PSP=0    # 0 = unlimited
+LAYA_API_KEY=lsk_live_…              # required to enable Hokeka AI (dashboard → API keys)
+LAYA_API_BASE_URL=https://api.laya.studio
+LAYA_MODEL=                          # optional: english | multilingual | typed-decisions (blank = auto)
+LAYA_LANG=                           # optional hint, e.g. en or de-CH
+LAYA_DECISIONS_TIMEOUT=3s
+LAYA_ASK_TIMEOUT=30s
+LAYA_MAX_RETRIES=2
+LAYA_MIN_CONFIDENCE_TO_APPLY=0.55    # below → rules + human review
+LAYA_MIN_CONFIDENCE_TO_AUTO_ACT=0.72 # below → no auto-apply when promoted
+HOKEKA_AI_SHADOW_MODE=true           # default log-only
+HOKEKA_AI_PROMOTED=false             # both promoted + shadow off required to apply
+HOKEKA_AI_INLINE_TIMEOUT=500ms
+HOKEKA_AI_DAILY_CALL_BUDGET_PER_PSP=0
+LAYA_DAILY_INPUT_TOKEN_CAP_PER_PSP=0 # 0 = unlimited input tokens / day / PSP
 ```
 
-Health/status (no key exposure): `GET /api/v1/jev/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → JEV AI.
+Health/status (no key exposure): `GET /api/v1/ai/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → Hokeka AI.
 
-Legacy rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) now routes through the same JEV gateway when enabled.
+Optional rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) uses Laya `/v1/ask` on the Control Plane when enabled.
 
 ### Fixed inside compose (not from `.env`)
 

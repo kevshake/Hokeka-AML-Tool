@@ -190,8 +190,12 @@ public class MerchantController {
     public ResponseEntity<org.springframework.data.domain.Page<MerchantOnboardingResponse>> getAllMerchants(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size,
-            @RequestParam(required = false) Long pspId) {
-        log.info("Get all merchants request (page: {}, size: {}, pspId: {})", page, size, pspId);
+            @RequestParam(required = false) Long pspId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String riskLevel,
+            @RequestParam(required = false) String q) {
+        log.info("Get all merchants request (page: {}, size: {}, pspId: {}, status: {}, risk: {}, q: {})",
+                page, size, pspId, status, riskLevel, q);
         try {
             int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
             int safePage = Math.max(0, page);
@@ -212,6 +216,19 @@ public class MerchantController {
                 if (filterPspId != null && filterPspId > 0L) {
                     spec = spec.and((root, query, cb) -> cb.equal(root.get("psp").get("pspId"), filterPspId));
                 }
+            }
+
+            if (status != null && !status.isBlank()) {
+                spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+            }
+            if (riskLevel != null && !riskLevel.isBlank()) {
+                spec = spec.and((root, query, cb) -> cb.equal(root.get("riskLevel"), riskLevel));
+            }
+            if (q != null && !q.isBlank()) {
+                String needle = "%" + q.trim().toLowerCase() + "%";
+                spec = spec.and((root, query, cb) -> cb.or(
+                        cb.like(cb.lower(root.get("legalName")), needle),
+                        cb.like(cb.lower(root.get("tradingName")), needle)));
             }
             
             // Create Pageable with sorting

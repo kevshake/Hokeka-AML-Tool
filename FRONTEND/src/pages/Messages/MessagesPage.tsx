@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwBadge from "../../components/Common/TwBadge";
 import { Loader2, Mail } from "lucide-react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import TwPagination from "../../components/Common/TwPagination";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 interface Message {
   id: string;
@@ -17,11 +20,16 @@ interface Message {
 
 export default function MessagesPage() {
   const queryClient = useQueryClient();
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState();
 
   const { data: messages, isLoading, isError } = useQuery<Message[]>({
     queryKey: ["messages"],
     queryFn: () => apiClient.get<Message[]>("messages"),
   });
+  const visibleMessages = messages?.slice(
+    tableState.page * tableState.size,
+    tableState.page * tableState.size + tableState.size,
+  );
 
   const handleMarkRead = async (message: Message) => {
     if (message.read) return;
@@ -36,6 +44,9 @@ export default function MessagesPage() {
 
   return (
     <HokekaPageShell title="Messages" subtitle="System notifications and team communications" noCard>
+      <div className="flex justify-end pb-3">
+        <ConsoleListExportMenu viewType="MESSAGES" filters={exportFilterMap} disabled={!messages?.length} />
+      </div>
       <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
         {isLoading ? (
           <div className="flex items-center gap-2 p-4 text-sm text-glass-muted">
@@ -45,9 +56,9 @@ export default function MessagesPage() {
           <div className="m-3 rounded-lg border border-red-700/30 bg-red-900/30 px-4 py-3 text-sm text-red-200">
             Failed to load messages. Please try refreshing the page.
           </div>
-        ) : messages && messages.length > 0 ? (
+        ) : visibleMessages && visibleMessages.length > 0 ? (
           <div>
-            {messages.map((message) => (
+            {visibleMessages.map((message) => (
               <button
                 key={message.id}
                 onClick={() => handleMarkRead(message)}
@@ -84,6 +95,14 @@ export default function MessagesPage() {
           </div>
         )}
       </div>
+      <TwPagination
+        page={tableState.page}
+        totalPages={Math.ceil((messages?.length ?? 0) / tableState.size) || 1}
+        totalCount={messages?.length ?? 0}
+        rowsPerPage={tableState.size}
+        onPageChange={setPage}
+        onRowsPerPageChange={setPageSize}
+      />
     </HokekaPageShell>
   );
 }

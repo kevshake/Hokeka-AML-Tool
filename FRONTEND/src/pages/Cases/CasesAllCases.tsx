@@ -10,8 +10,10 @@ import TwBadge from "../../components/Common/TwBadge";
 import TwPagination from "../../components/Common/TwPagination";
 import GlassModal from "../../components/Common/GlassModal";
 import GlassButton from "../../components/Common/GlassButton";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { TwInput, TwSelect } from "../../components/Common/TwInput";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 
 const statusVariant = (status: string): "info" | "warning" | "success" | "danger" | "default" => {
   if (status === "NEW" || status === "ASSIGNED") return "info";
@@ -47,8 +49,8 @@ const PRIORITY_OPTIONS = [
 export default function CasesAllCases() {
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkCaseId = Number(searchParams.get("caseId") || 0);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState({ index: 0, size: 25 });
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState(25);
+  const statusFilter = tableState.filters.status ?? "";
   const [createOpen, setCreateOpen] = useState(false);
   const [newCase, setNewCase] = useState({
     caseReference: "",
@@ -59,8 +61,8 @@ export default function CasesAllCases() {
 
   const { user } = useAuth();
   const { data: cases, isLoading, isError, error } = useCases({
-    page: page.index,
-    size: page.size,
+    page: tableState.page,
+    size: tableState.size,
     status: statusFilter || undefined,
   });
   const deepLinkedCase = useCase(deepLinkCaseId);
@@ -79,28 +81,6 @@ export default function CasesAllCases() {
       setViewCase(deepLinkedCase.data);
     }
   }, [deepLinkCaseId, cases?.content, deepLinkedCase.data]);
-
-  const handleExportCSV = () => {
-    if (!content.length) return;
-    const headers = ["Reference", "Status", "Priority", "Description", "Assigned To", "Created", "Days Open"];
-    const rows = content.map((c) => [
-      c.caseReference,
-      c.status,
-      c.priority,
-      (c.description || "").replace(/,/g, ";"),
-      c.assignedTo ? c.assignedTo.firstName || c.assignedTo.username || "" : "Unassigned",
-      new Date(c.createdAt).toISOString().split("T")[0],
-      String(c.daysOpen ?? ""),
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `cases-${new Date().toISOString().split("T")[0]}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const handleCreateCase = () => {
     if (!newCase.caseReference.trim()) return;
@@ -140,19 +120,14 @@ export default function CasesAllCases() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-glass-muted">{cases?.totalElements || 0} cases total</span>
-          <GlassButton variant="default" size="sm" onClick={handleExportCSV} disabled={!content.length}>
-            Export CSV
-          </GlassButton>
+          <ConsoleListExportMenu viewType="CASES" filters={exportFilterMap} disabled={!cases?.totalElements} />
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <TwSelect
             label="Filter by status"
             value={statusFilter}
             options={STATUS_OPTIONS}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage((prev) => ({ ...prev, index: 0 }));
-            }}
+            onChange={(e) => setFilter("status", e.target.value)}
           />
           <button type="button" onClick={() => setCreateOpen(true)} className="hokeka-btn-primary">
             Create Case
@@ -226,12 +201,12 @@ export default function CasesAllCases() {
       </div>
 
       <TwPagination
-        page={page.index}
+        page={tableState.page}
         totalPages={cases?.totalPages ?? 1}
         totalCount={cases?.totalElements ?? 0}
-        rowsPerPage={page.size}
-        onPageChange={(newPage) => setPage((prev) => ({ ...prev, index: newPage }))}
-        onRowsPerPageChange={(size) => setPage({ index: 0, size })}
+        rowsPerPage={tableState.size}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(size) => setPageSize(size)}
       />
 
       <GlassModal
@@ -364,7 +339,7 @@ export default function CasesAllCases() {
               />
             )}
             <div className="sm:col-span-2">
-              <AiVerdictPanel auditPath={`jev/audit/case/${viewCase.id}`} title="Hokeka Intelligence" />
+              <AiVerdictPanel auditPath={`ai/audit/case/${viewCase.id}`} />
             </div>
           </div>
         )}

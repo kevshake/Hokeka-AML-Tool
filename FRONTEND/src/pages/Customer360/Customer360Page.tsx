@@ -35,6 +35,11 @@ import type {
   MultiAssetTransactionType,
   ProductDomain,
 } from "../../types/multiAsset";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import TwPagination from "../../components/Common/TwPagination";
+import ComplianceLinksPanel from "../../components/compliance/ComplianceLinksPanel";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { useDebouncedUrlFilter } from "../../hooks/useDebouncedUrlFilter";
 
 const assetClasses: AssetClass[] = ["BANKING", "SECURITIES", "E_MONEY", "TOKENIZED_FIAT", "CRYPTO"];
 const accountTypes: Record<AssetClass, AssetAccountType[]> = {
@@ -91,11 +96,23 @@ function EmptyState({ text }: { text: string }) {
 
 export default function Customer360Page() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const [search, setSearch] = useState(tableState.filters.search ?? "");
+  const debouncedSearch = useDebouncedUrlFilter(search);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [dialog, setDialog] = useState<"customer" | "account" | "relationship" | "transaction" | null>(null);
-  const customers = useMultiAssetCustomers(search);
+  const customers = useMultiAssetCustomers(
+    tableState.filters.search ?? "",
+    tableState.page,
+    tableState.size,
+  );
   const customer360 = useCustomer360(selectedId);
+
+  useEffect(() => {
+    if (debouncedSearch !== (tableState.filters.search ?? "")) {
+      setFilter("search", debouncedSearch);
+    }
+  }, [debouncedSearch, setFilter, tableState.filters.search]);
 
   useEffect(() => {
     const first = customers.data?.content[0];
@@ -129,6 +146,11 @@ export default function Customer360Page() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers" className="h-10 w-full border border-white/10 bg-white/5 pl-9 pr-3 text-sm outline-none focus:border-gold/70" />
           </div>
+          <ConsoleListExportMenu
+            viewType="CUSTOMERS"
+            filters={exportFilterMap}
+            disabled={!customers.data?.totalElements}
+          />
           {customers.isLoading && <EmptyState text="Loading customers..." />}
           {customers.isError && <EmptyState text="Customer records could not be loaded." />}
           {!customers.isLoading && !customers.data?.content.length && <EmptyState text="No customers found." />}
@@ -145,6 +167,14 @@ export default function Customer360Page() {
               </button>
             ))}
           </div>
+          <TwPagination
+            page={tableState.page}
+            totalPages={customers.data?.totalPages ?? 1}
+            totalCount={customers.data?.totalElements ?? 0}
+            rowsPerPage={tableState.size}
+            onPageChange={setPage}
+            onRowsPerPageChange={setPageSize}
+          />
         </aside>
 
         <main className="min-w-0 overflow-y-auto p-4 md:p-6">
@@ -177,6 +207,8 @@ function CustomerView({ data }: { data: Customer360 }) {
         <div><p className="text-xs text-white/40">Risk tier</p><p className="mt-1 text-sm font-semibold">{customer.riskTier}</p></div>
       </div>
     </section>
+
+    <ComplianceLinksPanel subjectType="MULTI_ASSET_CUSTOMER" subjectId={String(customer.id)} />
 
     <section>
       <h3 className="mb-3 text-sm font-semibold">Asset exposure</h3>

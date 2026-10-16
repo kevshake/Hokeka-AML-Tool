@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useMonitoringTransactions,
@@ -6,7 +5,10 @@ import {
   useMonitoringRecentActivity,
 } from "../../features/api/queries";
 import TwBadge from "../../components/Common/TwBadge";
-import TwPagination from "../../components/Common/TwPagination";
+import TwKeysetPagination from "../../components/Common/TwKeysetPagination";
+import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 import { Loader2 } from "lucide-react";
 
 const decisionBadge = (decision: string | undefined): "danger" | "success" | "default" => {
@@ -16,10 +18,12 @@ const decisionBadge = (decision: string | undefined): "danger" | "success" | "de
 };
 
 export default function TransactionMonitoringLive() {
-  const [page, setPage] = useState({ index: 0, size: 25 });
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState();
   
   const { data: transactions, isLoading: transactionsLoading } = useMonitoringTransactions({
-    page: page.index, size: page.size,
+    page: tableState.page,
+    size: tableState.size,
+    cursor: tableState.cursor,
   });
   const { data: stats, isLoading: statsLoading } = useMonitoringDashboardStats();
   const { data: recentActivity, isLoading: activityLoading } = useMonitoringRecentActivity();
@@ -34,6 +38,11 @@ export default function TransactionMonitoringLive() {
       <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-ink">
         Live Transaction Monitoring
       </h3>
+      <ConsoleListExportMenu
+        viewType="MONITORING_TRANSACTIONS"
+        filters={exportFilterMap}
+        disabled={!totalElements}
+      />
 
       {stats && !statsLoading && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -72,30 +81,48 @@ export default function TransactionMonitoringLive() {
                     <th>Timestamp</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {content.length > 0 ? content.map((txn: any) => (
-                    <tr key={txn.txnId || txn.transactionId || txn.id}>
-                      <td><Link className="text-gold hover:underline" to={`/records/TRANSACTION/${txn.txnId || txn.transactionId || txn.id}`}>#{txn.txnId || txn.transactionId || txn.id}</Link></td>
-                      <td>{txn.merchantId ? <Link className="text-gold hover:underline" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
-                      <td>{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <TwBadge variant={decisionBadge(txn.decision)}>{txn.decision || "ALLOW"}</TwBadge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
-                        {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "-"}
-                      </td>
-                    </tr>
-                  )) : (
+                {content.length > 0 ? (
+                  <VirtualizedTableBody
+                    rowCount={content.length}
+                    maxHeight={460}
+                    renderRow={(index) => {
+                      const txn = content[index];
+                      const id = txn.txnId || txn.transactionId || txn.id;
+                      return (
+                        <table className="hokeka-table w-full">
+                          <tbody>
+                            <tr>
+                              <td><Link className="text-gold hover:underline" to={`/records/TRANSACTION/${id}`}>#{id}</Link></td>
+                              <td>{txn.merchantId ? <Link className="text-gold hover:underline" to={`/records/MERCHANT/${txn.merchantId}`}>{txn.merchantId}</Link> : "-"}</td>
+                              <td>{txn.amountCents ? `$${(txn.amountCents / 100).toFixed(2)}` : "-"}</td>
+                              <td className="whitespace-nowrap px-4 py-3">
+                                <TwBadge variant={decisionBadge(txn.decision)}>{txn.decision || "ALLOW"}</TwBadge>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-sm text-glass-muted">
+                                {txn.txnTs ? new Date(txn.txnTs).toLocaleString() : "-"}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      );
+                    }}
+                  />
+                ) : (
+                  <tbody>
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-glass-muted">No transactions found</td></tr>
-                  )}
-                </tbody>
+                  </tbody>
+                )}
               </table>
             )}
           </div>
-          <TwPagination
-            page={page.index} totalPages={totalPages} totalCount={totalElements} rowsPerPage={page.size}
-            onPageChange={(p) => setPage(prev => ({ ...prev, index: p }))}
-            onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+          <TwKeysetPagination
+            page={tableState.page}
+            totalPages={totalPages}
+            totalCount={totalElements}
+            rowsPerPage={tableState.size}
+            nextCursor={(transactions as any)?.nextCursor}
+            onPageChange={setPage}
+            onRowsPerPageChange={setPageSize}
           />
         </div>
 

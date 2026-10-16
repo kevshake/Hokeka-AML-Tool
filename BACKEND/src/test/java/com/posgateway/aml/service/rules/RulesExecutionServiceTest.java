@@ -57,7 +57,7 @@ class RulesExecutionServiceTest {
 
         assertEquals(List.of("High Value"), result.getTriggeredRules());
         verify(effectivenessService).recordExecution(
-                eq(42L), eq(7L), eq("100"), anyLong(), eq(RuleExecutionLog.Result.MATCH));
+                eq(42L), eq(null), eq(null), eq(7L), eq("100"), anyLong(), eq(RuleExecutionLog.Result.MATCH));
     }
 
     @Test
@@ -162,7 +162,7 @@ class RulesExecutionServiceTest {
         assertEquals("HOLD", result.getDecision());
         assertTrue(result.getTriggeredRules().contains("RULE_EVALUATION_ERROR:Broken expression"));
         verify(effectivenessService).recordExecution(
-                eq(88L), eq(null), eq("102"), anyLong(), eq(RuleExecutionLog.Result.ERROR));
+                eq(88L), eq(null), eq(null), eq(null), eq("102"), anyLong(), eq(RuleExecutionLog.Result.ERROR));
     }
 
     private void stubAllowCompliance() {

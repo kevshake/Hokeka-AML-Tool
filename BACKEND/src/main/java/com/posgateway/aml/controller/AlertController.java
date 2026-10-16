@@ -41,6 +41,10 @@ public class AlertController {
         private final com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService;
     private final com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge;
     private final UserRepository userRepository;
+    private final com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService;
+    private final com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService;
+    private final com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService;
+    private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
@@ -48,7 +52,11 @@ public class AlertController {
                                RuleEffectivenessService ruleEffectivenessService,
                                                               com.posgateway.aml.service.case_management.AlertToCaseService alertToCaseService,
                                                               com.posgateway.aml.service.case_management.AlertFraudIncidentBridge alertFraudBridge,
-                                                              UserRepository userRepository) {
+                                                              UserRepository userRepository,
+                                                              com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService,
+                                                              com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService,
+                                                              com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService,
+                                                              com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -57,6 +65,10 @@ public class AlertController {
                 this.alertToCaseService = alertToCaseService;
                                 this.alertFraudBridge = alertFraudBridge;
                                 this.userRepository = userRepository;
+                                this.alertDetailQueryService = alertDetailQueryService;
+                                this.alertPrioritizationService = alertPrioritizationService;
+                                this.alertDispositionMakerCheckerService = alertDispositionMakerCheckerService;
+                                this.keysetSliceService = keysetSliceService;
                             }
 
     /**
@@ -70,10 +82,12 @@ public class AlertController {
      * @return Paginated list of alerts
      */
     @GetMapping
-    public ResponseEntity<org.springframework.data.domain.Page<Alert>> getAllAlerts(
+    public ResponseEntity<?> getAllAlerts(
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int size,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String cursor) {
         
         int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
         int safePage = Math.max(0, page);
@@ -111,15 +125,25 @@ public class AlertController {
             }
         }
         
-        // Create Pageable with sorting by created date descending
-        org.springframework.data.domain.Pageable pageable = 
-            PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        
-        // Execute query with pagination
-        org.springframework.data.domain.Page<Alert> pageResult = 
-            alertRepository.findAll(spec, pageable);
-        
-        return ResponseEntity.ok(pageResult);
+        if ("priority".equalsIgnoreCase(sort)) {
+            org.springframework.data.domain.Pageable pageable =
+                    PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            org.springframework.data.domain.Page<Alert> pageResult =
+                    alertRepository.findAll(spec, pageable);
+            java.util.List<Alert> prioritized = alertPrioritizationService.prioritizeAlerts(pageResult.getContent());
+            return ResponseEntity.ok(new org.springframework.data.domain.PageImpl<>(prioritized, pageable, pageResult.getTotalElements()));
+        }
+
+        return ResponseEntity.ok(keysetSliceService.slice(
+                alertRepository,
+                spec,
+                safePage,
+                safeSize,
+                cursor,
+                "createdAt",
+                "alertId",
+                Alert::getCreatedAt,
+                Alert::getAlertId));
     }
 
     /**
@@ -133,31 +157,10 @@ public class AlertController {
         
         return alertRepository.findById(id)
                 .map(alert -> {
-                    // Super Admin (PSP ID 0) can see all alerts
-                    if (userPspId != null && userPspId == 0L) {
-                        return ResponseEntity.ok(alert);
-                    }
-                    
-                    // Directly scoped alerts (including multi-asset alerts) do not require a merchant bridge.
-                    if (alert.getPspId() != null && alert.getPspId().equals(userPspId)) {
-                        return ResponseEntity.ok(alert);
-                    }
-
-                    // PSP User - validate that alert's merchant belongs to their PSP
-                    if (alert.getMerchantId() != null) {
-                        return merchantRepository.findById(alert.getMerchantId())
-                                .map(merchant -> {
-                                    if (merchant.getPsp() != null && merchant.getPsp().getPspId().equals(userPspId)) {
-                                        return ResponseEntity.ok(alert);
-                                    } else {
-                                        return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-                                    }
-                                })
-                                .orElse(ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build());
-                    } else {
-                        // Alert without merchant - only Super Admin can access
+                    if (!hasAlertAccess(alert, userPspId)) {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
+                    return ResponseEntity.ok(alertDetailQueryService.getAlertDetail(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -205,8 +208,19 @@ public class AlertController {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
                     
+                    boolean makerCheckerComplete = true;
                     // Set status based on disposition or default to resolved
                     if (request != null && request.getDisposition() != null) {
+                        org.springframework.security.core.Authentication authReviewer =
+                                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                        String reviewer = authReviewer != null ? authReviewer.getName() : null;
+                        makerCheckerComplete = alertDispositionMakerCheckerService.applyMakerChecker(
+                                alert, request.getDisposition(), reviewer);
+                        if (!makerCheckerComplete) {
+                            alert.setStatus("pending_second_review");
+                            Alert pending = alertRepository.save(alert);
+                            return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED).body(pending);
+                        }
                         alert.setDisposition(request.getDisposition());
                         // Map disposition to status
                         AlertDisposition disp = request.getDisposition();
@@ -363,8 +377,13 @@ public class AlertController {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
                     
-                    alertRepository.deleteById(id);
-                    return ResponseEntity.noContent().build();
+                    alert.setStatus("closed");
+                    alert.setClosedAt(LocalDateTime.now());
+                    alertRepository.save(alert);
+                    return ResponseEntity.ok(Map.of(
+                            "message", "Alert soft-closed; hard DELETE is not permitted",
+                            "alertId", id,
+                            "status", alert.getStatus()));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

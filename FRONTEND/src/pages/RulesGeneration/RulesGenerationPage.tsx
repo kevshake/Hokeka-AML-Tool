@@ -73,11 +73,14 @@ import {
   type GenerateRuleError,
 } from "../../features/api/mutations";
 import type { AmlRule, VelocityRule, RiskThreshold, RuleVersion } from "../../types/rules";
-import AiVerdictPanel from "../../components/Jev/AiVerdictPanel";
-import { withAlpha } from "../../theme/tokens"
+import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import { withAlpha } from "../../theme/tokens";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 export default function RulesGenerationPage() {
   const navigate = useNavigate();
+  const { exportFilterMap } = useUrlTableState();
   const [tab, setTab] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
@@ -328,6 +331,11 @@ export default function RulesGenerationPage() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", mb: 2 }}>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <ConsoleListExportMenu
+            viewType="RULES"
+            filters={{ ...exportFilterMap, filterBy }}
+            label="Export rules"
+          />
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel sx={{ color: "text.secondary" }}>Filter</InputLabel>
             <Select
@@ -577,7 +585,7 @@ export default function RulesGenerationPage() {
             </Box>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -748,7 +756,7 @@ export default function RulesGenerationPage() {
             </Typography>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -891,7 +899,7 @@ export default function RulesGenerationPage() {
             </Typography>
           </Paper>
           <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-            <TableContainer>
+            <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>
@@ -1006,7 +1014,7 @@ export default function RulesGenerationPage() {
 
       {tab === 3 && (
         <Paper sx={{ backgroundColor: "background.paper", border: "1px solid rgba(0,0,0,0.1)" }}>
-          <TableContainer>
+          <TableContainer className="hokeka-mui-table-shell">
             <Table>
               <TableHead>
                 <TableRow>

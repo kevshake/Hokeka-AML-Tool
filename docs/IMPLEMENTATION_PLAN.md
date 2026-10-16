@@ -25,7 +25,7 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
   - Make `RuleFeatureEnrichmentService.enrichBlacklistHits` use `PaymentBlacklistService` (DB TTL-aware + cache) instead of Redis-only.
   - Make `DecisionEngine.takeBlockAction` write the tenant's PSP id.
 - **Modules:** CP.
-- **Migration:** `V236__payment_blacklist_tenant_scope.sql` (add column, backfill from `created_by` user PSP where derivable, else platform-wide; new unique index).
+- **Migration:** `V250__payment_blacklist_tenant_scope.sql` (add column, backfill from `created_by` user PSP where derivable, else platform-wide; new unique index).
 - **API:** none.
 - **Console:** none.
 - **Tests:**
@@ -41,7 +41,7 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
   - Rename the MCC weight property (`nationality` → `mcc`).
   - Delete the unused `calculateOverallRisk` or mark it test-only.
 - **Modules:** CP.
-- **Migration:** `V237__cra_scale_normalize.sql` (rescale values ≤ 1).
+- **Migration:** `V240__cra_scale_normalize.sql` (rescale values ≤ 1; merchants + transactions).
 - **Tests:** CRA identical across both writers; ingest no longer sets a decision.
 - **Size:** S.
 
@@ -143,7 +143,7 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
   - The dual-post `/ingest` accepts `edgeAssessmentId`. The CP links them and runs **adopt mode** (records Edge findings, does not re-decide sync).
   - `EdgeBundleDistributionService` publishes a manifest of rule_version_ids (and later list/risk versions). The bundle version becomes a content hash.
 - **Modules:** Edge (edge-host `EdgeController`, `RuleBundlePoller`, new `AssessmentShipper` next to `MetricsShipper`; `rule-core` Decision gains rule version per hit), CP (`EdgeDecisionService`, `TransactionController`).
-- **Migrations:** `V241__edge_assessment_link.sql` (`assessments.edge_assessment_id` unique, `edge_bundles` manifest table).
+- **Migrations:** `V251__edge_assessment_link.sql` (`assessments.edge_assessment_id` unique, `context_hash` widened to 128, `edge_bundles` manifest table).
 - **API:**
   - `POST /api/v1/edge/assessments` (mTLS, edge enrollment V207);
   - `TransactionRequestDTO.edgeAssessmentId`;

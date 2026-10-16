@@ -7,6 +7,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface AssessmentRepository extends JpaRepository<Assessment, UUID> {
+
     Optional<Assessment> findFirstByTxnIdOrderByCreatedAtDesc(Long txnId);
-    Optional<Assessment> findByEdgeAssessmentId(String edgeAssessmentId);
+
+    Optional<Assessment> findByIdAndPspId(UUID id, Long pspId);
+
+    /** Finds the control-plane assessment linked to an edge-issued assessment id (unique index, V251). */
+    Optional<Assessment> findByEdgeAssessmentId(UUID edgeAssessmentId);
 }
