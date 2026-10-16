@@ -173,7 +173,8 @@ def seed(ctx):
         p["psp_user_role"] = psp_user_role
 
         for ukey, role_id in (("admin", roles.get("PSP_ADMIN")), ("compliance", roles.get("COMPLIANCE_OFFICER")),
-                              ("analyst", roles.get("PSP_ANALYST")), ("user", psp_user_role)):
+                              ("analyst", roles.get("PSP_ANALYST")), ("mlro", roles.get("MLRO")),
+                              ("user", psp_user_role)):
             uname = f"sim.{spec['key']}.{ukey}.{ctx.run_id}"
             r = ctx.admin.post("/users", {"username": uname, "email": f"{uname}@sim.hokeka.test",
                                           "firstName": spec["key"].title(), "lastName": ukey.title(),
@@ -1001,6 +1002,9 @@ def l2(ctx, sc):
     sc.check(r.status in (200, 201), "assign case to self via /cases/{id}/assign", r)
     r = c.post(f"/cases/{cid}/escalate", {"reason": "sim escalation via /cases"})
     sc.check(r.status in (200, 201), "POST /cases/{id}/escalate", r)
+    target = psql(f"select u.psp_id from compliance_cases c join platform_users u on u.id=c.escalated_to_user_id where c.case_id={cid}")
+    sc.check(target == str(p["id"]), "escalation target is in the case's own PSP (the PSP's MLRO)",
+             {"targetPsp": target, "casePsp": p["id"]})
     r = c.post("/compliance/cases/workflow/escalate", {"caseId": cid, "escalatedToUserId": co["id"], "reason": "sim", "userId": co["id"]})
     sc.check(r.status in (200, 201), "workflow escalate", r)
     r = c.post(f"/cases/{cid}/decisions", {"decisionType": "FILE_SAR", "justification": "Structuring pattern confirmed by sim analyst"})
