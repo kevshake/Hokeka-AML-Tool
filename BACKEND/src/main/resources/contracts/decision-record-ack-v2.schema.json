@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/decision-record-ack-v2.schema.json",
+  "title": "Decision record batch acknowledgement v2",
+  "description": "200 response body of POST /api/v1/edge/assessments for a v2 batch. Plain JSON (it carries no Edge data). accepted + duplicates + rejected.length == records.length.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accepted", "duplicates", "rejected"],
+  "properties": {
+    "accepted": { "$ref": "common.schema.json#/$defs/count" },
+    "duplicates": { "$ref": "common.schema.json#/$defs/count" },
+    "rejected": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["edgeAssessmentId", "code"],
+        "properties": {
+          "edgeAssessmentId": { "$ref": "common.schema.json#/$defs/uuid" },
+          "code": { "enum": ["SCHEMA_INVALID", "FORBIDDEN_FIELD", "CONFLICT", "UNKNOWN_SITE", "NODE_MISMATCH"] },
+          "message": { "type": "string", "maxLength": 256 }
+        }
+      }
+    }
+  }
+}

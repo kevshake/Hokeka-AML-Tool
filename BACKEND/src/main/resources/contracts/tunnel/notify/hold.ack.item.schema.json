@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/notify/hold.ack.item.schema.json",
+  "title": "hold.ack item (Edge -> cloud)",
+  "description": "The single item of the response frame (op 'hold.ack') that acknowledges a hold.place or hold.release notify. The cloud re-sends an unacknowledged hold notify after every hello.ack until it is acknowledged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["holdId", "state", "matchedRows", "activeHoldDigest"],
+  "properties": {
+    "holdId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+    "state": { "enum": ["APPLIED", "RELEASED", "UNKNOWN_HOLD"] },
+    "matchedRows": { "$ref": "../../common.schema.json#/$defs/count" },
+    "activeHoldDigest": {
+      "description": "SHA-256 hex over the sorted, newline-joined active hold ids after applying this notify; the cloud compares it with its own set.",
+      "$ref": "../../common.schema.json#/$defs/sha256Hex"
+    }
+  }
+}

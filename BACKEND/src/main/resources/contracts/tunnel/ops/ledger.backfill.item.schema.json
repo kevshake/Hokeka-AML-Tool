@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/ledger.backfill.item.schema.json",
+  "title": "ledger.backfill item",
+  "description": "Acknowledgement of one backfill phase. accepted + duplicates + rejected.length == rows in the batch. At COMMIT the Edge reports what it holds for this backfillId; state VERIFIED only when rowsTotal and idDigest equal the expected values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["backfillId", "phase", "state"],
+  "properties": {
+    "backfillId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+    "phase": { "enum": ["BEGIN", "BATCH", "COMMIT", "ABORT"] },
+    "state": { "enum": ["OPEN", "VERIFIED", "VERIFY_MISMATCH", "ABORTED"] },
+    "batchSeq": { "type": "integer", "minimum": 0 },
+    "accepted": { "$ref": "../../common.schema.json#/$defs/count" },
+    "duplicates": { "$ref": "../../common.schema.json#/$defs/count" },
+    "rejected": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["legacyTransactionId", "code"],
+        "properties": {
+          "legacyTransactionId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$" },
+          "code": { "enum": ["SCHEMA_INVALID", "PAST_RETENTION", "ID_CONFLICT", "TXN_REF_CONFLICT"] }
+        }
+      }
+    },
+    "rowsTotal": { "$ref": "../../common.schema.json#/$defs/count" },
+    "idDigest": { "$ref": "../../common.schema.json#/$defs/sha256Hex" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "BATCH" } }, "required": ["phase"] },
+      "then": { "required": ["batchSeq", "accepted", "duplicates", "rejected"] }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "COMMIT" } }, "required": ["phase"] },
+      "then": { "required": ["rowsTotal", "idDigest"], "properties": { "state": { "enum": ["VERIFIED", "VERIFY_MISMATCH"] } } }
+    }
+  ]
+}

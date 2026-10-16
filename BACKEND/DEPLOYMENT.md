@@ -239,10 +239,21 @@ sudo certbot renew --dry-run
 sudo cp nginx/fraud-detector-api.conf /etc/nginx/sites-available/
 sudo ln -s /etc/nginx/sites-available/fraud-detector-api.conf /etc/nginx/sites-enabled/
 
+# Edge channel vhost (edge.hokeka.com): mTLS (ssl_verify_client on) for /edge/bundle,
+# /edge/config, /edge/metrics, /edge/assessments and the Edge Tunnel WebSocket
+# wss://edge.hokeka.com/api/v1/edge/tunnel (docs/EDGE_DATA_RESIDENCY_CONTRACT.md §7).
+# Needs the Edge client CA at /etc/nginx/hokeka/edge-client-ca.pem — see the file header.
+sudo cp nginx/edge-tunnel.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/edge-tunnel.conf /etc/nginx/sites-enabled/
+
 # Test and reload
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+The tunnel needs Redis on every Control Plane instance (`tunnel:psp:{pspId}` registry and
+pub/sub relay), the same `EDGE_BUNDLE_SIGNING_KEY` / `EDGE_METRICS_INGEST_KEY` everywhere, and a
+distinct `EDGE_TUNNEL_INSTANCE_ID` per instance. `edge.tunnel.enabled=false` turns it off.
 
 ### Step 5: Build and Deploy Application
 

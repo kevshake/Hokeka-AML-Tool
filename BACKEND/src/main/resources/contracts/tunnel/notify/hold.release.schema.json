@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/notify/hold.release.schema.json",
+  "title": "notify hold.release",
+  "description": "Release a legal hold. Rows it protected become purgeable at the next daily purge if they are past retention and no other hold covers them. Idempotent; releasing an unknown hold is acknowledged with state UNKNOWN_HOLD.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "holdId", "releasedAt", "releasedBy", "reasonCode"],
+  "properties": {
+    "type": { "const": "hold.release" },
+    "holdId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+    "releasedAt": { "$ref": "../../common.schema.json#/$defs/instant" },
+    "releasedBy": { "$ref": "../../common.schema.json#/$defs/userRef" },
+    "reasonCode": { "enum": ["CASE_CLOSED", "FILING_RETENTION_ELAPSED", "REGULATOR_RELEASED", "PLACED_IN_ERROR"] }
+  }
+}

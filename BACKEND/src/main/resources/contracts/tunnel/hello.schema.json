@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/hello.schema.json",
+  "title": "hello body (Edge -> cloud)",
+  "description": "First frame the Edge sends after the WebSocket upgrade, sealed to the Control Plane X25519 key with context 'hokeka.tunnel.hello'. edgeId MUST equal the mTLS certificate CN; siteId and pspId MUST equal the Control Plane's records for that node.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "edgeId", "siteId", "pspId", "bootId", "agentVersion", "protocolVersions",
+    "ledgerSchemaVersion", "opsEnabled", "maxInflight", "maxFrameBytes", "bundleVersion", "startedAt"
+  ],
+  "properties": {
+    "edgeId": { "$ref": "../common.schema.json#/$defs/edgeId" },
+    "siteId": { "$ref": "../common.schema.json#/$defs/siteId" },
+    "pspId": { "$ref": "../common.schema.json#/$defs/pspId" },
+    "bootId": {
+      "description": "Random per process start; lets the cloud tell a reconnect from a restart.",
+      "$ref": "../common.schema.json#/$defs/uuid"
+    },
+    "agentVersion": { "type": "string", "pattern": "^[0-9A-Za-z.+_-]{1,64}$" },
+    "protocolVersions": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true
+    },
+    "ledgerSchemaVersion": { "type": "integer", "minimum": 1 },
+    "opsEnabled": {
+      "description": "Ops this node will serve: implemented ops intersected with EDGE_TUNNEL_OPS.",
+      "$ref": "../common.schema.json#/$defs/opList"
+    },
+    "maxInflight": { "type": "integer", "minimum": 1, "maximum": 16 },
+    "maxFrameBytes": { "type": "integer", "minimum": 65536, "maximum": 1048576 },
+    "configVersion": {
+      "description": "Edge config version held; absent if the node has never received one.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "bundleVersion": { "$ref": "../common.schema.json#/$defs/bundleVersion" },
+    "startedAt": { "$ref": "../common.schema.json#/$defs/instant" }
+  }
+}

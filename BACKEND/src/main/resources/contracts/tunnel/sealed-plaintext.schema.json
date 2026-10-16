@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/sealed-plaintext.schema.json",
+  "title": "Edge Tunnel sealed plaintext",
+  "description": "What HSE-1 seals inside a tunnel frame: the unchanged channel replay envelope (edge-channel-contract.md section 4: nonce, issuedAt, edgeId, payload) whose payload is {frame, body}. 'frame' binds the outer header into the authenticated plaintext. edgeId is the sending Edge for Edge->cloud frames and the addressed Edge for cloud->Edge frames. The body schema is selected by frame.type (and, for notify, by body.type).",
+  "type": "object",
+  "required": ["nonce", "issuedAt", "edgeId", "payload"],
+  "properties": {
+    "nonce": { "$ref": "../common.schema.json#/$defs/nonce" },
+    "issuedAt": { "$ref": "../common.schema.json#/$defs/instant" },
+    "edgeId": { "$ref": "../common.schema.json#/$defs/edgeId" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "body"],
+      "properties": {
+        "frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "id"],
+          "properties": {
+            "type": { "enum": ["hello", "hello.ack", "request", "response", "chunk", "cancel", "credit", "notify", "error"] },
+            "id": { "$ref": "../common.schema.json#/$defs/uuid" },
+            "corrId": { "$ref": "../common.schema.json#/$defs/uuid" },
+            "sessionId": { "$ref": "../common.schema.json#/$defs/uuid" }
+          },
+          "allOf": [
+            {
+              "description": "Every frame after hello is bound to the session hello.ack created.",
+              "if": { "properties": { "type": { "const": "hello" } }, "required": ["type"] },
+              "then": { "not": { "required": ["sessionId"] } },
+              "else": { "required": ["sessionId"] }
+            }
+          ]
+        },
+        "body": { "type": "object" }
+      },
+      "allOf": [
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "hello" } } } } }, "then": { "properties": { "body": { "$ref": "hello.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "hello.ack" } } } } }, "then": { "properties": { "body": { "$ref": "hello-ack.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "request" } } } } }, "then": { "properties": { "body": { "$ref": "request.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "enum": ["response", "chunk"] } } } } }, "then": { "properties": { "body": { "$ref": "response.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "cancel" } } } } }, "then": { "properties": { "body": { "$ref": "cancel.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "credit" } } } } }, "then": { "properties": { "body": { "$ref": "credit.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "notify" } } } } }, "then": { "properties": { "body": { "$ref": "notify.schema.json" } } } },
+        { "if": { "properties": { "frame": { "properties": { "type": { "const": "error" } } } } }, "then": { "properties": { "body": { "$ref": "error.schema.json" } } } }
+      ]
+    }
+  }
+}

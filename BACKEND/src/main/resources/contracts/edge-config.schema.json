@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/edge-config.schema.json",
+  "title": "Edge config document v1",
+  "description": "Per-PSP settings the Control Plane distributes to every Edge Node of that PSP: GET /api/v1/edge/config, HSE-1 context 'hokeka.edge.config', signed with the Control Plane Ed25519 key, sealed to the node's pinned X25519 key, wrapped in the channel replay envelope. ETag is the quoted configVersion. Open for forward compatibility only at the top level: an Edge MUST ignore unknown top-level members it does not understand, but every section listed here is closed.",
+  "type": "object",
+  "required": [
+    "v", "configVersion", "pspId", "issuedAt", "retention", "supportAccess",
+    "crossPspIntelligence", "ctr", "limits", "merchantBlocklist", "sanctions", "tunnel"
+  ],
+  "properties": {
+    "v": { "const": 1 },
+    "configVersion": {
+      "description": "Strictly increasing per PSP. An Edge MUST refuse a document whose configVersion is lower than the one it holds.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "pspId": { "$ref": "common.schema.json#/$defs/pspId" },
+    "issuedAt": { "$ref": "common.schema.json#/$defs/instant" },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["years", "effectiveSince"],
+      "properties": {
+        "years": {
+          "description": "Retention in force now. FATF R.11 floor 5, default 5, cap 25.",
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 25,
+          "default": 5
+        },
+        "effectiveSince": { "$ref": "common.schema.json#/$defs/instant" },
+        "pendingChange": {
+          "description": "An approved reduction that is not yet in force (>= 30 days after approval). Informational for the Edge: it purges by 'years' only.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["years", "approvedAt", "effectiveAt"],
+          "properties": {
+            "years": { "type": "integer", "minimum": 5, "maximum": 25 },
+            "approvedAt": { "$ref": "common.schema.json#/$defs/instant" },
+            "effectiveAt": { "$ref": "common.schema.json#/$defs/instant" }
+          }
+        }
+      }
+    },
+    "supportAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "changedAt"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "changedAt": { "$ref": "common.schema.json#/$defs/instant" }
+      }
+    },
+    "crossPspIntelligence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["optIn", "changedAt"],
+      "properties": {
+        "optIn": { "type": "boolean", "default": false },
+        "changedAt": { "$ref": "common.schema.json#/$defs/instant" },
+        "indicatorSetVersion": {
+          "description": "Version of the opt-in indicator set (merchant ids, platform-keyed HMAC device tokens from filed SARs) the Edge should hold; absent when optIn is false.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ctr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "aggregation", "businessDayTimezone", "reportingCurrency", "thresholds", "cashChannels", "fx"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "aggregation": { "const": "CARD_BUSINESS_DAY" },
+        "businessDayTimezone": {
+          "description": "IANA zone id used to cut business days, e.g. Africa/Nairobi.",
+          "type": "string",
+          "pattern": "^[A-Za-z]+(/[A-Za-z0-9_+-]+){0,2}$"
+        },
+        "reportingCurrency": { "$ref": "common.schema.json#/$defs/currency" },
+        "thresholds": {
+          "description": "CTR threshold per reporting currency; the Edge converts every cash amount into reportingCurrency with fx before comparing.",
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["currency", "amountMinor"],
+            "properties": {
+              "currency": { "$ref": "common.schema.json#/$defs/currency" },
+              "amountMinor": { "$ref": "common.schema.json#/$defs/amountMinor" }
+            }
+          }
+        },
+        "cashChannels": {
+          "description": "channel values that count as cash for CTR aggregation.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/channel" },
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "fx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["asOf", "base", "rates"],
+          "properties": {
+            "asOf": { "$ref": "common.schema.json#/$defs/instant" },
+            "base": { "$ref": "common.schema.json#/$defs/currency" },
+            "rates": {
+              "description": "Units of 'base' per one unit of the keyed currency, as a decimal string.",
+              "type": "object",
+              "maxProperties": 400,
+              "propertyNames": { "pattern": "^[A-Z]{3}$" },
+              "additionalProperties": { "$ref": "common.schema.json#/$defs/decimalString" }
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["limitId", "scope", "metric", "window", "max", "action"],
+        "properties": {
+          "limitId": { "type": "integer", "minimum": 1 },
+          "scope": { "enum": ["CARD", "MERCHANT", "PSP"] },
+          "metric": { "enum": ["COUNT", "AMOUNT"] },
+          "window": { "enum": ["PT1H", "P1D", "P7D", "P30D"] },
+          "currency": { "$ref": "common.schema.json#/$defs/currency" },
+          "max": { "type": "integer", "minimum": 0 },
+          "action": { "enum": ["ALERT", "HOLD", "BLOCK"] },
+          "merchantId": { "$ref": "common.schema.json#/$defs/merchantId" },
+          "mcc": { "$ref": "common.schema.json#/$defs/mcc" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "metric": { "const": "AMOUNT" } }, "required": ["metric"] },
+            "then": { "required": ["currency"] }
+          }
+        ]
+      }
+    },
+    "merchantBlocklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "entries"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 0 },
+        "entries": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["merchantId", "reasonCode", "since"],
+            "properties": {
+              "merchantId": { "$ref": "common.schema.json#/$defs/merchantId" },
+              "reasonCode": { "enum": ["SANCTIONED", "REGULATOR_ORDER", "PSP_TERMINATED", "FRAUD_CONFIRMED"] },
+              "since": { "$ref": "common.schema.json#/$defs/instant" }
+            }
+          }
+        }
+      }
+    },
+    "sanctions": {
+      "description": "The sanctions/PEP list snapshot the Edge must screen with. The snapshot itself is a separate sealed document (context 'hokeka.sanctions.list', work package R10b).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listVersion", "listHash", "publishedAt"],
+      "properties": {
+        "listVersion": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$" },
+        "listHash": { "$ref": "common.schema.json#/$defs/sha256Hex" },
+        "publishedAt": { "$ref": "common.schema.json#/$defs/instant" }
+      }
+    },
+    "tunnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "opsAllowed", "backfillAllowed", "maxInflightPerSession"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "opsAllowed": { "$ref": "common.schema.json#/$defs/opList" },
+        "backfillAllowed": { "type": "boolean", "default": false },
+        "maxInflightPerSession": { "type": "integer", "minimum": 1, "maximum": 16 }
+      }
+    }
+  }
+}

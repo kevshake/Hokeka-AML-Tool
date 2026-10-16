@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/notify/bundle.updated.schema.json",
+  "title": "notify bundle.updated",
+  "description": "A newer rule bundle exists; the Edge SHOULD poll GET /api/v1/edge/bundle within 5 s.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "bundleVersion"],
+  "properties": {
+    "type": { "const": "bundle.updated" },
+    "bundleVersion": { "type": "integer", "minimum": 0 }
+  }
+}

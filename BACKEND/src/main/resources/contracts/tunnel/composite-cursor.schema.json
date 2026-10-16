@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/composite-cursor.schema.json",
+  "title": "Composite multi-site cursor (decoded)",
+  "description": "nextCursor the Control Plane returns to the Console for a multi-site PSP: base64url of this JSON followed by '.' and base64url of HMAC-SHA256 over the JSON bytes with a Control Plane secret. sites maps every site of the PSP to its site cursor (base64url of cursor.schema.json), 'START' (nothing consumed yet) or 'DONE' (exhausted).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "q", "sites"],
+  "properties": {
+    "v": { "const": 1 },
+    "q": { "$ref": "../common.schema.json#/$defs/sha256Hex" },
+    "sites": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "propertyNames": { "$ref": "../common.schema.json#/$defs/siteId" },
+      "additionalProperties": {
+        "anyOf": [
+          { "enum": ["START", "DONE"] },
+          { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,2048}$" }
+        ]
+      }
+    }
+  }
+}

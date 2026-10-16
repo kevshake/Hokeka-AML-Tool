@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/decision-record-v2.schema.json",
+  "title": "Decision record v2",
+  "description": "The only per-transaction data that leaves an Edge Site (EDGE_DATA_RESIDENCY_CONTRACT.md section 4). Closed schema: any field not listed here (pan_hash, amount, currency, country, customer/device/IP ids, names, free-text reasons) MUST be rejected by both the Edge (before it enters the outbox) and the Control Plane (on ingest).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v", "edgeAssessmentId", "edgeNodeId", "siteId", "evaluatedAt", "decision", "score",
+    "triggeredRuleIds", "ruleVersionIds", "bundleVersion", "evaluator", "latencyMs",
+    "ctrRequired", "sanctionsHit"
+  ],
+  "properties": {
+    "v": { "const": 2 },
+    "edgeAssessmentId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "txnRef": { "$ref": "common.schema.json#/$defs/txnRef" },
+    "edgeNodeId": { "$ref": "common.schema.json#/$defs/edgeId" },
+    "siteId": { "$ref": "common.schema.json#/$defs/siteId" },
+    "evaluatedAt": { "$ref": "common.schema.json#/$defs/instantSeconds" },
+    "decision": { "$ref": "common.schema.json#/$defs/decision" },
+    "score": { "$ref": "common.schema.json#/$defs/score" },
+    "triggeredRuleIds": { "$ref": "common.schema.json#/$defs/ruleIdList" },
+    "ruleVersionIds": { "$ref": "common.schema.json#/$defs/ruleIdList" },
+    "bundleVersion": { "$ref": "common.schema.json#/$defs/bundleVersion" },
+    "bundleHash": { "$ref": "common.schema.json#/$defs/bundleHash" },
+    "evaluator": { "$ref": "common.schema.json#/$defs/evaluator" },
+    "failClosedCode": { "$ref": "common.schema.json#/$defs/failClosedCode" },
+    "latencyMs": { "type": "integer", "minimum": 0, "maximum": 600000 },
+    "merchantId": { "$ref": "common.schema.json#/$defs/merchantId" },
+    "ctrRequired": { "type": "boolean" },
+    "sanctionsHit": { "type": "boolean" },
+    "watchlistEntryIds": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/watchlistEntryId" },
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "typologyCodes": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/typologyCode" },
+      "maxItems": 64,
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "description": "A sanctions hit names at least one public-list entry; no hit names none.",
+      "if": { "properties": { "sanctionsHit": { "const": true } }, "required": ["sanctionsHit"] },
+      "then": { "required": ["watchlistEntryIds"], "properties": { "watchlistEntryIds": { "minItems": 1 } } },
+      "else": { "properties": { "watchlistEntryIds": { "maxItems": 0 } } }
+    },
+    {
+      "description": "A fail-closed record is a HOLD that no evaluator produced and no rule triggered.",
+      "if": { "required": ["failClosedCode"] },
+      "then": {
+        "properties": {
+          "decision": { "const": "HOLD" },
+          "evaluator": { "const": "none" },
+          "triggeredRuleIds": { "maxItems": 0 }
+        }
+      },
+      "else": { "properties": { "evaluator": { "enum": ["native", "java"] } } }
+    },
+    {
+      "description": "bundleHash is present exactly when a bundle was in force.",
+      "if": { "properties": { "bundleVersion": { "const": -1 } }, "required": ["bundleVersion"] },
+      "then": { "not": { "required": ["bundleHash"] } },
+      "else": { "required": ["bundleHash"] }
+    }
+  ]
+}

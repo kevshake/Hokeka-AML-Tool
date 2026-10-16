@@ -74,6 +74,8 @@ public class PspActivationFilter extends OncePerRequestFilter {
             "/edge/decision",
             "/edge/assessments",
             "/edge/config",
+            // Edge Tunnel WebSocket (mTLS + ACTIVE node, TunnelHandshakeInterceptor).
+            "/edge/tunnel",
             // On-prem machine-to-machine lease endpoints (client credentials in body).
             "/onprem/auth/**",
             // Swagger / OpenAPI

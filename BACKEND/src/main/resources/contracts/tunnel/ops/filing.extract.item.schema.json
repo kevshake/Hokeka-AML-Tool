@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/filing.extract.item.schema.json",
+  "title": "filing.extract item",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "transaction"],
+      "properties": {
+        "kind": { "const": "TRANSACTION" },
+        "transaction": { "$ref": "../../common.schema.json#/$defs/transactionDetail" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "anchorEdgeAssessmentId", "businessDate", "timezone", "reportingCurrency",
+        "cashTotalMinor", "thresholdMinor", "txnCount", "edgeAssessmentIds", "fxAsOf", "configVersion"
+      ],
+      "properties": {
+        "kind": { "const": "CTR_AGGREGATE" },
+        "anchorEdgeAssessmentId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+        "businessDate": { "$ref": "../../common.schema.json#/$defs/date" },
+        "timezone": { "type": "string", "pattern": "^[A-Za-z]+(/[A-Za-z0-9_+-]+){0,2}$" },
+        "reportingCurrency": { "$ref": "../../common.schema.json#/$defs/currency" },
+        "cashTotalMinor": { "$ref": "../../common.schema.json#/$defs/amountMinor" },
+        "thresholdMinor": { "$ref": "../../common.schema.json#/$defs/amountMinor" },
+        "txnCount": { "type": "integer", "minimum": 1 },
+        "edgeAssessmentIds": {
+          "type": "array",
+          "items": { "$ref": "../../common.schema.json#/$defs/uuid" },
+          "minItems": 1,
+          "maxItems": 10000,
+          "uniqueItems": true
+        },
+        "fxAsOf": { "$ref": "../../common.schema.json#/$defs/instant" },
+        "configVersion": { "type": "integer", "minimum": 1 }
+      }
+    }
+  ]
+}

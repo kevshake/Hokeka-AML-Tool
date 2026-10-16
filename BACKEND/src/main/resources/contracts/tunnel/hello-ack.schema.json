@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/hello-ack.schema.json",
+  "title": "hello.ack body (cloud -> Edge)",
+  "description": "Accepts a hello, sealed to the node's pinned X25519 key and signed with the Control Plane Ed25519 key (context 'hokeka.tunnel.hello.ack'). Creates the session: every later frame in either direction binds sessionId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sessionId", "cpInstance", "protocolVersion", "serverTime", "opsEffective", "maxInflight",
+    "heartbeatIntervalMs", "idleTimeoutMs", "currentConfigVersion", "currentBundleVersion"
+  ],
+  "properties": {
+    "sessionId": { "$ref": "../common.schema.json#/$defs/uuid" },
+    "cpInstance": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "protocolVersion": { "type": "integer", "minimum": 1 },
+    "serverTime": { "$ref": "../common.schema.json#/$defs/instant" },
+    "opsEffective": {
+      "description": "hello.opsEnabled intersected with the PSP's config tunnel.opsAllowed. The cloud never sends an op outside this list.",
+      "$ref": "../common.schema.json#/$defs/opList"
+    },
+    "maxInflight": { "type": "integer", "minimum": 1, "maximum": 16 },
+    "heartbeatIntervalMs": { "type": "integer", "minimum": 5000, "maximum": 60000 },
+    "idleTimeoutMs": { "type": "integer", "minimum": 15000, "maximum": 300000 },
+    "currentConfigVersion": { "type": "integer", "minimum": 1 },
+    "currentBundleVersion": { "$ref": "../common.schema.json#/$defs/bundleVersion" }
+  }
+}
