@@ -96,4 +96,27 @@ class RoleServiceDefaultRolesTest {
                 .filter(r -> "PSP_ANALYST".equals(r.getName())).findFirst().orElseThrow();
         assertTrue(pspAnalyst.getPermissions().contains(Permission.VIEW_CASES));
     }
+    /**
+     * Regression (sim 2026-10-16): the global COMPLIANCE_OFFICER template (used by every PSP
+     * registered after the demo seed) could not create cases or SARs, nor see SARs.
+     */
+    @Test
+    void complianceOfficerTemplateOwnsCaseAndSarWorkflow() {
+        RoleRepository roleRepository = mock(RoleRepository.class);
+        when(roleRepository.findByNameAndPspIsNull(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.of(new Role()));
+        when(roleRepository.findByNameAndPspIsNull("COMPLIANCE_OFFICER")).thenReturn(Optional.empty());
+        when(roleRepository.save(org.mockito.ArgumentMatchers.any(Role.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        new RoleService(roleRepository).initDefaultRoles();
+
+        ArgumentCaptor<Role> captor = ArgumentCaptor.forClass(Role.class);
+        verify(roleRepository).save(captor.capture());
+        java.util.Set<Permission> perms = captor.getValue().getPermissions();
+        for (Permission p : new Permission[]{Permission.CREATE_CASES, Permission.CREATE_SAR, Permission.VIEW_SAR,
+                Permission.FILE_SAR, Permission.ADD_CASE_NOTES, Permission.CLOSE_CASES}) {
+            assertTrue(perms.contains(p), "COMPLIANCE_OFFICER template must hold " + p);
+        }
+    }
 }

@@ -154,10 +154,18 @@ public class RoleService {
                        Permission.MANAGE_USERS, Permission.MANAGE_RULES, Permission.MANAGE_PSP_THEME,
                        Permission.PSP_SETTINGS_VIEW, Permission.PSP_SETTINGS_EDIT, Permission.PSP_UI_EDIT,
                        Permission.MERCHANT_VIEW, Permission.MERCHANT_EDIT, Permission.REPORT_VIEW));
+        // Same per-PSP definition as V127 ("owns SAR workflow and case decisions"); PSPs registered
+        // after the demo seed resolve their compliance officers to this global template, which
+        // previously lacked CREATE_CASES / CREATE_SAR / VIEW_SAR (V258 widens existing rows).
         initializeSystemRole("COMPLIANCE_OFFICER","Compliance Officer",
-                Set.of(Permission.VIEW_CASES, Permission.VIEW_SCREENING_RESULTS,
-                       Permission.ASSIGN_CASES, Permission.FILE_SAR, Permission.ADD_CASE_EVIDENCE,
-                       Permission.ESCALATE_CASES, Permission.MANAGE_WATCHLISTS));
+                Set.of(Permission.VIEW_CASES, Permission.CREATE_CASES, Permission.ASSIGN_CASES,
+                       Permission.CLOSE_CASES, Permission.ESCALATE_CASES, Permission.REOPEN_CASES,
+                       Permission.ADD_CASE_NOTES, Permission.ADD_CASE_EVIDENCE,
+                       Permission.VIEW_SAR, Permission.CREATE_SAR, Permission.APPROVE_SAR,
+                       Permission.FILE_SAR, Permission.AMEND_SAR,
+                       Permission.VIEW_PII, Permission.VIEW_TRANSACTION_DETAILS,
+                       Permission.VIEW_SCREENING_RESULTS, Permission.MANAGE_WATCHLISTS,
+                       Permission.WHITELIST_ENTITY, Permission.MERCHANT_VIEW, Permission.REPORT_VIEW));
         initializeSystemRole("INVESTIGATOR",      "Investigator",
                 Set.of(Permission.VIEW_CASES, Permission.VIEW_TRANSACTION_DETAILS,
                        Permission.VIEW_SCREENING_RESULTS, Permission.ADD_CASE_EVIDENCE,
