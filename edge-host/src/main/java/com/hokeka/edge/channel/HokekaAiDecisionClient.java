@@ -69,26 +69,41 @@ public class HokekaAiDecisionClient {
             if (response == null || response.isBlank()) {
                 return baseline;
             }
-            JsonNode node = mapper.readTree(response);
-            List<String> aiReasons = extractStringList(node.path("reasons"));
-            List<String> mergedReasons = new java.util.ArrayList<>(baseline.reasons());
-            if (node.path("aiRecommendation").isTextual()) {
-                mergedReasons.add("Hokeka AI recommendation: " + node.path("aiRecommendation").asText()
-                        + (node.path("confidence").isNumber()
-                        ? " (confidence=" + node.path("confidence").asDouble() + ")" : ""));
-            }
-            mergedReasons.addAll(aiReasons);
-
-            // Advisory only — action stays on deterministic baseline
-            return new EdgeRuleInterpreter.Decision(
-                    baseline.action(),
-                    baseline.score(),
-                    baseline.triggeredRuleIds(),
-                    mergedReasons);
+            return mergeAdvisory(baseline, mapper.readTree(response));
         } catch (Exception e) {
             log.debug("Hokeka AI advisory unavailable, using rules baseline: {}", e.getMessage());
             return baseline;
         }
+    }
+
+    /**
+     * Folds the Control Plane's advisory into the baseline decision. Advisory only: the action, score
+     * and triggered rules always stay on the deterministic baseline.
+     *
+     * <p>Only an advisory the AI layer actually produced ({@code aiApplied=true}, {@code fallback=false})
+     * is merged. With no AI configured, or inline mode off, the Control Plane answers a fallback
+     * carrying a placeholder {@code aiRecommendation} (ESCALATE); appending that as
+     * "Hokeka AI recommendation: ESCALATE" told PSP operators an AI had reviewed a transaction it never saw.
+     */
+    static EdgeRuleInterpreter.Decision mergeAdvisory(EdgeRuleInterpreter.Decision baseline, JsonNode node) {
+        if (node == null || !node.path("aiApplied").asBoolean(false) || node.path("fallback").asBoolean(false)) {
+            return baseline;
+        }
+        List<String> mergedReasons = new java.util.ArrayList<>(baseline.reasons());
+        if (node.path("aiRecommendation").isTextual()) {
+            mergedReasons.add("Hokeka AI recommendation: " + node.path("aiRecommendation").asText()
+                    + (node.path("confidence").isNumber()
+                    ? " (confidence=" + node.path("confidence").asDouble() + ")" : ""));
+        }
+        mergedReasons.addAll(extractStringList(node.path("reasons")));
+        // Keep the triggered rule VERSION ids too: the assessment envelope cites them, and the
+        // 4-argument constructor silently reset them to an empty list.
+        return new EdgeRuleInterpreter.Decision(
+                baseline.action(),
+                baseline.score(),
+                baseline.triggeredRuleIds(),
+                mergedReasons,
+                baseline.triggeredRuleVersionIds());
     }
 
     private static boolean isBorderline(EdgeRuleInterpreter.Decision decision) {
