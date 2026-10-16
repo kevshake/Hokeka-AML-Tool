@@ -25,6 +25,8 @@ import BillingTab from "../Psps/tabs/BillingTab";
 import WebhooksTab from "./tabs/WebhooksTab";
 import PlatformAdminTab from "./tabs/PlatformAdminTab";
 import AiSettingsTab from "./tabs/AiSettingsTab";
+import DataRetentionTab from "./tabs/DataRetentionTab";
+import SupportAccessTab from "./tabs/SupportAccessTab";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import GlassCard from "../../components/Common/GlassCard";
 import SettingsTabBar, { type SettingsTabItem } from "../../components/Settings/SettingsTabBar";
@@ -646,6 +648,10 @@ export default function SettingsPage() {
           <WebhooksTab />
         </TabPanel>
       )}
+
+      {isPspUser && renderSettingsPanel("data-retention", <DataRetentionTab pspId={user!.pspId} />)}
+
+      {isPspUser && renderSettingsPanel("data-sharing", <SupportAccessTab pspId={user!.pspId} />)}
     </Box>
     </HokekaPageShell>
   );

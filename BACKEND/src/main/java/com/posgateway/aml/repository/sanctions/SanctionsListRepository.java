@@ -13,4 +13,7 @@ public interface SanctionsListRepository extends JpaRepository<SanctionsList, In
     List<SanctionsList> findByListNameOrderByDownloadedAtDesc(String listName);
 
     Optional<SanctionsList> findByListNameAndVersion(String listName, String version);
+
+    /** The most recently downloaded list snapshot (its version is distributed in the Edge config). */
+    Optional<SanctionsList> findFirstByOrderByDownloadedAtDescListIdDesc();
 }

@@ -202,16 +202,69 @@ public class CaseCreationService {
                 "Neo4j-GDS-v1", null, anomalyScore, description, null);
     }
 
+    /**
+     * Trigger a case from an Edge decision record (data residency contract §4.4). The cloud holds no
+     * transaction row: the case alert references the decision record by {@code edgeAssessmentId} /
+     * {@code txnRef} and the cloud {@code alertId} only (invariant I4). Merges into the merchant's
+     * open case like every other trigger; with no merchant a new case is opened, because merging on
+     * a null merchant would mix unrelated decisions (and tenants) into one case.
+     *
+     * @param sourceAlertId the cloud alert raised from the same decision record
+     * @return the case the alert was added to
+     */
+    @Transactional
+    public ComplianceCase triggerCaseFromEdgeDecision(Long merchantId, Long pspId, String alertType,
+                                                      String ruleName, String ruleId, String ruleVersion,
+                                                      Double score, String description,
+                                                      String edgeAssessmentId, String txnRef,
+                                                      Long sourceAlertId) {
+        if (pspId == null) {
+            throw new IllegalArgumentException("pspId is required for an edge decision case");
+        }
+        Map<String, Object> raw = new java.util.LinkedHashMap<>();
+        raw.put("source", "EDGE_DECISION");
+        raw.put("edgeAssessmentId", edgeAssessmentId);
+        if (txnRef != null) {
+            raw.put("txnRef", txnRef);
+        }
+        raw.put("alertId", sourceAlertId);
+        String rawData;
+        try {
+            rawData = objectMapper.writeValueAsString(raw);
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot serialise edge decision case reference", e);
+        }
+        return createOrUpdateCase(merchantId, pspId, alertType, ruleName, ruleId, null, ruleVersion, score,
+                description, null, rawData, sourceAlertId, merchantId != null);
+    }
+
     private void createOrUpdateCase(Long merchantId, Long pspId, String alertType, String ruleName, String ruleId,
             String modelVersion, String ruleVersion, Double score, String description, TransactionEntity tx) {
+        createOrUpdateCase(merchantId, pspId, alertType, ruleName, ruleId, modelVersion, ruleVersion, score,
+                description, tx, null, null, true);
+    }
+
+    /**
+     * Shared case lifecycle: merge into the merchant's open case (when {@code mergeIntoOpenCase}) or
+     * open a new one, append a case alert, escalate critical types, publish events and webhooks.
+     *
+     * @param rawDataOverride JSON stored as the case alert's raw data instead of the transaction snapshot
+     * @param sourceAlertId   cloud alert this case alert came from, if any
+     */
+    private ComplianceCase createOrUpdateCase(Long merchantId, Long pspId, String alertType, String ruleName,
+            String ruleId, String modelVersion, String ruleVersion, Double score, String description,
+            TransactionEntity tx, String rawDataOverride, Long sourceAlertId, boolean mergeIntoOpenCase) {
         // Use merchantId directly
 
         // ... existing case lookup logic ...
-        List<ComplianceCase> existingCases = complianceCaseRepository.findByMerchantId(merchantId);
+        List<ComplianceCase> existingCases = mergeIntoOpenCase
+                ? complianceCaseRepository.findByMerchantId(merchantId)
+                : List.of();
         Optional<ComplianceCase> openCaseOpt = existingCases.stream()
                 .filter(c -> c.getStatus() != CaseStatus.CLOSED_CLEARED &&
                         c.getStatus() != CaseStatus.CLOSED_SAR_FILED &&
                         c.getStatus() != CaseStatus.CLOSED_BLOCKED)
+                .filter(c -> pspId == null || c.getPspId() == null || pspId.equals(c.getPspId()))
                 .findFirst();
 
         ComplianceCase cCase;
@@ -243,9 +296,12 @@ public class CaseCreationService {
         alert.setScore(score);
         alert.setDescription(description);
         alert.setTriggeredAt(LocalDateTime.now());
+        alert.setSourceAlertId(sourceAlertId);
 
         try {
-            if (tx != null) {
+            if (rawDataOverride != null) {
+                alert.setRawData(rawDataOverride);
+            } else if (tx != null) {
                 alert.setRawData(objectMapper.writeValueAsString(tx));
             } else {
                 alert.setRawData("{\"source\": \"PERIODIC_SCREENING\", \"merchantId\": " + merchantId + "}");
@@ -323,6 +379,7 @@ public class CaseCreationService {
         }
 
         enqueueCaseUpdateWebhook(cCase);
+        return cCase;
     }
 
     /**

@@ -69,7 +69,8 @@ public class CtrFilingBridgeService {
                 created, pending.size());
     }
 
-    static LocalDateTime nextBusinessFriday(LocalDateTime from) {
+    /** The CTR filing due date for a detection at {@code from}: the next business Friday, 17:00. */
+    public static LocalDateTime nextBusinessFriday(LocalDateTime from) {
         LocalDateTime candidate = from.plusDays(1).withHour(17).withMinute(0).withSecond(0).withNano(0);
         while (candidate.getDayOfWeek() == DayOfWeek.SATURDAY
                 || candidate.getDayOfWeek() == DayOfWeek.SUNDAY) {
