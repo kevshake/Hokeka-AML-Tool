@@ -85,6 +85,20 @@ class RuleGovernanceServiceTest {
     }
 
     @Test
+    void reviewingAVersionThatIsNoLongerPendingIsAConflictNot500() {
+        // Regression (sim 2026-10-16): rejecting an already-ACTIVE version threw IllegalStateException,
+        // which the global handler rendered as HTTP 500. It is a state conflict -> 409.
+        service.proposeCreate(rule("Velocity check", true), user(10L, "maker"), null, "New typology");
+        service.approve(7L, user(11L, "reviewer"), null, "Validated");
+
+        assertThatThrownBy(() -> service.reject(7L, user(12L, "other"), "Too late"))
+                .isInstanceOf(com.posgateway.aml.exception.ConflictException.class)
+                .hasMessageContaining("not pending approval")
+                .satisfies(ex -> assertThat(((com.posgateway.aml.exception.ConflictException) ex)
+                        .getStatusCode().value()).isEqualTo(409));
+    }
+
+    @Test
     void approvalRequiresDocumentedReason() {
         service.proposeCreate(rule("Dormant account", false), user(10L, "maker"), null, "New typology");
 

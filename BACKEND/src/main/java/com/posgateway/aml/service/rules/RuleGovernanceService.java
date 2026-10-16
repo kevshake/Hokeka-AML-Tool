@@ -345,7 +345,8 @@ public class RuleGovernanceService {
         RuleVersion version = versionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Rule version not found"));
         if (version.getLifecycleStatus() != RuleLifecycleStatus.PENDING_APPROVAL) {
-            throw new IllegalStateException("Rule version is not pending approval");
+            // 409: approving/rejecting a version that is not pending is a state conflict, not a server error.
+            throw new com.posgateway.aml.exception.ConflictException("Rule version is not pending approval");
         }
         return version;
     }
@@ -357,7 +358,8 @@ public class RuleGovernanceService {
 
     private void ensureNoPendingVersion(RuleDefinition rule) {
         if (rule.getPendingVersionId() != null) {
-            throw new IllegalStateException("Rule already has a pending change proposal");
+            // 409: a second concurrent proposal conflicts with the one awaiting review.
+            throw new com.posgateway.aml.exception.ConflictException("Rule already has a pending change proposal");
         }
     }
 
