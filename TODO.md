@@ -1,6 +1,15 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-10-16_
 
+## Wave 72 — Full PSP simulation: Edge + Control Plane, live readiness (2026-10-16)
+
+- [ ] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch
+- [ ] Build a simulation environment (Docker data services + Control Plane + aml-microservice + Edge Node) and a reusable multi-PSP simulator under `scripts/sim/`
+- [ ] Run every functional scenario (onboarding, auth/RBAC, API keys, edge enrollment, bundle pull, edge pre-auth + cloud dual-post ingest, rules, velocity, sanctions/PEP, alerts, cases, SAR/STR/CTR, exports, AI shadow, billing, metrics) and record each failure with its root cause
+- [ ] Fix every failure at the root (no stubs), with regression tests
+- [ ] Re-run all simulations until green
+- [ ] Live-readiness report
+
 ## Wave 71 — Resume from Grok Bot history (2026-10-16)
 
 Recovered from the Grok Bot "Hokeka-AML_Tool" transcripts. origin/main = `4f16021e7` (#42); PRs #10–#42 merged (Laya AI #28, WP-01 #29, WP-0A/02/03 #31, exports #35, deploy readiness #34, API docs #37/#38). Older unchecked boxes below Wave 59 are largely stale — verify against code before working them.
@@ -11,7 +20,7 @@ Recovered from the Grok Bot "Hokeka-AML_Tool" transcripts. origin/main = `4f1602
 - [ ] WP-04 onward from `docs/IMPLEMENTATION_PLAN.md` (not started).
 - [ ] #30 follow-up: backfill `case_alerts.source_alert_id` for historical rows.
 - [ ] Gap register: P1-7 scheme pack export ignores CSV/PDF type; P1-9 misleading "nightly retrain" comments; P2-10 legacy audit hash-chain backfill; P2-11 settlement/bank numbers in plaintext + `pan_hash` raw-PAN guard; P2-13 CTR auto-transport; P0-2 PEP needs `sanctions.download.enabled`.
-- [ ] Wave 46 code fixes (verify still open): B8-read/B11 PSP-scope controller access; F4–F8 frontend (RuleEditorModal wipes params, NaN parseInt); C2–C8 (M-Pesa `.block()` no timeout, CBK retry idempotency, FRC fail-open, synchronized on interned string); P1–P4 (`findAll` scans, Lombok `@Data` on entities, `@Async` on detached entity); W49-13 velocity sliding window.
+- [x] Wave 46 code fixes re-verified 2026-10-16 (branch wave46-fixes): all B8-read/B11/F4-F8/C2-C8/P1-P4 already fixed in code; W49-13 fixed now; tests added. Original: B8-read/B11 PSP-scope controller access; F4–F8 frontend (RuleEditorModal wipes params, NaN parseInt); C2–C8 (M-Pesa `.block()` no timeout, CBK retry idempotency, FRC fail-open, synchronized on interned string); P1–P4 (`findAll` scans, Lombok `@Data` on entities, `@Async` on detached entity); W49-13 velocity sliding window.
 - [ ] Live E2E (needs Docker Hub access or Java 21 + DB-only Docker; Rust Edge needs VS C++ Build Tools): console role matrix, orchestrator toggle smoke, full compliance chain, Edge dual-post, OpenSanctions full load, keyset benchmark across all lists, export download + async job polling.
 - [ ] Installer #42: real full install on a clean Linux VM/VPS (only `--check` tested in CI).
 - [ ] Go-live switches (user decision): `hokeka.decision.orchestrator=live`, `LAYA_API_KEY` on VPS, AI promotion; calibrate Laya thresholds on labelled dispositions.
@@ -1079,7 +1088,7 @@ _Findings (logged as agents report; fixes applied only in Phase 4):_
 - [x] **W49-12 (LOW) FIXED** `aml-microservice .../AerospikeCacheService.java:105-129` — accumulated amount written
   to a bin misleadingly named `total_ms` (leftover time name); no consumer reads it. Fix: rename bin to
   `total_amount` for clarity (no readers → safe).
-- [ ] **W49-13 (LOW, observational)** same file `:91-116` — velocity counter TTL resets each write (no sliding
+- [x] **W49-13 (LOW) FIXED 2026-10-16 (branch wave46-fixes)** — velocity now bucketed per fixed window (`aml.velocity.window-seconds`, 2-window TTL) + sliding estimate on read. Original: same file `:91-116` — velocity counter TTL resets each write (no sliding
   window) → effectively unbounded for an active customer. No consumer today (see W49-12). Left as a note; not
   a live bug. Revisit if/when an amount-velocity rule consumes this cache.
 
@@ -1164,34 +1173,35 @@ Logic-anomaly agents interrupted by session limit (resets 11:30am) — batches 2
 - [x] **B8 (MED) FIXED** `ReportResultController.saveRow` — restricted to platform admins + rowNumber NPE guard (closes regulatory-row forge). _Read PSP-scoping needs execution→PSP join — still open below._
 - [x] **B9 (MED) FIXED** `AlertAnalyticsController` — restricted to platform roles (no cross-tenant metrics for PSP users) + null-createdAt guard.
 - [x] **B10 (LOW) FIXED** `DashboardController.getCasesByMerchant` — validates merchant belongs to caller's PSP.
-- [ ] **B8-read (MED)** `ReportResultController` GET endpoints — PSP-scope reads via execution→PSP join (still open).
-- [ ] **B11 (LOW)** `controller/BatchController` (37,51) + `controller/MonitoringController` (88) — global recompute jobs reachable by PSP_USER (over-privilege → restrict roles).
+- [x] **B8-read (MED)** `ReportResultController` GET endpoints — PSP-scope reads via execution→PSP join (still open).
+- [x] **B11 (LOW)** `controller/BatchController` (37,51) + `controller/MonitoringController` (88) — global recompute jobs reachable by PSP_USER (over-privilege → restrict roles).
 
 **Frontend (batch 4) — VERIFIED**
 - [x] **F1 (HIGH) FIXED** `UsersTab.tsx` — admin-only guard (useAuth; non-admins get a restricted view).
 - [x] **F2 (HIGH) FIXED** `RolesTab.tsx` — admin-only guard.
 - [x] **F3 (HIGH) FIXED** `RulesGenerationPage.tsx:757` — `rule.maxAmount` null-guarded.
-- [ ] **F4 (MED)** `RulesGenerationPage.tsx:269` `handleDeleteRule` — no try/catch → unhandled rejection, no error UI.
-- [ ] **F5 (MED)** `RolesTab.tsx:139` (+63,201) — `role.permissions.length` unguarded → whole list crashes if permissions null.
-- [ ] **F6 (MED)** `pages/Rules/components/RuleEditorModal.tsx:92` — edit never hydrates `selectedParameters`; Save wipes all rule parameters. 
-- [ ] **F7 (MED)** `pages/Settings/SettingsPage.tsx:225` (+141) — save handlers await mutateAsync with no catch → unhandled rejection.
-- [ ] **F8 (LOW)** `SettingsPage.tsx:506` — `parseInt(e.target.value)` → NaN when field cleared, submitted to backend.
+- [x] **F4 (MED)** `RulesGenerationPage.tsx:269` `handleDeleteRule` — no try/catch → unhandled rejection, no error UI.
+- [x] **F5 (MED)** `RolesTab.tsx:139` (+63,201) — `role.permissions.length` unguarded → whole list crashes if permissions null.
+- [x] **F6 (MED)** `pages/Rules/components/RuleEditorModal.tsx:92` — edit never hydrates `selectedParameters`; Save wipes all rule parameters. 
+- [x] **F7 (MED)** `pages/Settings/SettingsPage.tsx:225` (+141) — save handlers await mutateAsync with no catch → unhandled rejection.
+- [x] **F8 (LOW)** `SettingsPage.tsx:506` — `parseInt(e.target.value)` → NaN when field cleared, submitted to backend.
 
 **Microservice + integration clients (batch 5) — VERIFIED (safety classifier was unavailable; re-verify before fixing)**
 - [x] **C1 (HIGH) FIXED** `PaymentController.mpesaCallback` — requires a shared-secret `token` query param (constant-time compare) that only Safaricom receives via the registered `CallBackURL`; forged callbacks without the token are ack'd but NOT processed. Loud warning when `mpesa.callback.secret` unset. _(Set the secret + register `.../callback?token=SECRET` in prod.)_
-- [ ] **C2 (MED)** `MpesaService:249` — marks PAID with stored attempt amount, ignores callback `Amount` (no under-payment check).
-- [ ] **C3 (MED)** `MpesaService:89,149` — `.block()` with no timeout → thread-pool exhaustion if Daraja stalls.
-- [ ] **C4 (MED)** `integration/cbk/CbkGdiClient` (125,290) — `@Retry` on non-idempotent POST filing, no idempotency key → duplicate regulatory filing.
-- [ ] **C5 (MED)** `client/regulator/FrcSubmissionClient.extractStatus` (242,255) — defaults `RECEIVED` on empty/unparseable 2xx; returns success with null reference (fail-open on parse). Mirror CBK's fail-closed.
-- [ ] **C6 (MED)** `aml-microservice AerospikeCacheService:104` — `Operation.add(new Bin("total_ms", 0L))` always adds zero → amount-velocity totals never accumulate.
-- [ ] **C7 (LOW)** `integration/cbk/CbkTokenService:81` — `synchronized` on interned string (global monitor collision risk).
-- [ ] **C8 (LOW)** `aml-microservice InternalAuthFilter` (53,60) — non-constant-time key compare; fail-open when key blank.
+- [x] **C2 (MED)** `MpesaService:249` — marks PAID with stored attempt amount, ignores callback `Amount` (no under-payment check).
+- [x] **C3 (MED)** `MpesaService:89,149` — `.block()` with no timeout → thread-pool exhaustion if Daraja stalls.
+- [x] **C4 (MED)** `integration/cbk/CbkGdiClient` (125,290) — `@Retry` on non-idempotent POST filing, no idempotency key → duplicate regulatory filing.
+- [x] **C5 (MED)** `client/regulator/FrcSubmissionClient.extractStatus` (242,255) — defaults `RECEIVED` on empty/unparseable 2xx; returns success with null reference (fail-open on parse). Mirror CBK's fail-closed.
+- [x] **C6 (MED)** `aml-microservice AerospikeCacheService:104` — `Operation.add(new Bin("total_ms", 0L))` always adds zero → amount-velocity totals never accumulate.
+- [x] **C7 (LOW)** `integration/cbk/CbkTokenService:81` — `synchronized` on interned string (global monitor collision risk).
+- [x] **C8 (LOW)** `aml-microservice InternalAuthFilter` (53,60) — non-constant-time key compare; fail-open when key blank.
 
 **Persistence (batch 3) — COMPLETE (inline)**
-- [ ] **P1 (MED)** `service/case_management/CaseArchivalService.java:61,115` — `findAll().stream().filter` on scheduled archival → full-table scan; replace with a date/status-bounded query.
-- [ ] **P2 (MED)** `service/MonitoringMetricsService.java:233` — `findAll().stream()` on scheduled metrics → bounded query.
-- [ ] **P3 (LOW-MED)** 9 JPA entities use Lombok `@Data`/`@EqualsAndHashCode` (chargeback/limits/risk/rules) → equals/hashCode over mutable fields; switch to id-based or `@EqualsAndHashCode(onlyExplicitlyIncluded)`.
-- [ ] **P4 (MED)** `service/case_management/CaseEnrichmentService.java:146,176` — `@Async` methods mutate lazy `cCase.getNotes()` on a detached entity → re-load case or save note via repository.
+- [x] **P1 (MED)** `service/case_management/CaseArchivalService.java:61,115` — `findAll().stream().filter` on scheduled archival → full-table scan; replace with a date/status-bounded query.
+- [x] **P2 (MED)** `service/MonitoringMetricsService.java:233` — `findAll().stream()` on scheduled metrics → bounded query.
+- [x] **P3 (LOW-MED)** 9 JPA entities use Lombok `@Data`/`@EqualsAndHashCode` (chargeback/limits/risk/rules) → equals/hashCode over mutable fields; switch to id-based or `@EqualsAndHashCode(onlyExplicitlyIncluded)`.
+- [x] **P4 (MED)** `service/case_management/CaseEnrichmentService.java:146,176` — `@Async` methods mutate lazy `cCase.getNotes()` on a detached entity → re-load case or save note via repository.
+- [ ] **P1-follow-up (NEEDS-DECISION)** `CaseArchivalService` — `uploadToColdStorage` only builds an `s3://` string (no real upload) and `enforceRetentionPolicy` logs "Deleting" but the delete is commented out. Needs object-storage infra + a retention/deletion decision; found 2026-10-16 while re-verifying P1.
 - Verified non-issues: no @Transactional-on-private (false positive), `CaseQueueService.findAll()` small config table, no duplicate Flyway versions.
 
 _Note: agents also re-verified many controllers/clients CLEAN (see docs/SYSTEM-AUDIT-2026-07.md); MerchantController settlement exposure = NOT a leak (DTO masks; entity paths PSP-scoped)._

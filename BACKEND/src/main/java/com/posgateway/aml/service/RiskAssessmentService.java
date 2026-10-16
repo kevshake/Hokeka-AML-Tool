@@ -36,6 +36,7 @@ public class RiskAssessmentService {
     private final com.posgateway.aml.service.analytics.LinkAnalysisService linkAnalysisService;
     private final com.posgateway.aml.service.analytics.BehavioralProfilingService behavioralProfilingService;
     private final CashStructuringDetectionService cashStructuringDetectionService;
+    private final com.posgateway.aml.service.security.PiiLookupHasher piiLookupHasher;
 
     /** Levenshtein threshold above which we treat the names as "different person". */
     private static final int THIRD_PARTY_LEVENSHTEIN_THRESHOLD = 3;
@@ -48,7 +49,8 @@ public class RiskAssessmentService {
             com.posgateway.aml.repository.BeneficialOwnerRepository beneficialOwnerRepository,
             com.posgateway.aml.service.analytics.LinkAnalysisService linkAnalysisService,
             com.posgateway.aml.service.analytics.BehavioralProfilingService behavioralProfilingService,
-            CashStructuringDetectionService cashStructuringDetectionService) {
+            CashStructuringDetectionService cashStructuringDetectionService,
+            com.posgateway.aml.service.security.PiiLookupHasher piiLookupHasher) {
         this.amlService = amlService;
         this.fraudDetectionService = fraudDetectionService;
         this.riskRulesEngine = riskRulesEngine;
@@ -57,6 +59,7 @@ public class RiskAssessmentService {
         this.linkAnalysisService = linkAnalysisService;
         this.behavioralProfilingService = behavioralProfilingService;
         this.cashStructuringDetectionService = cashStructuringDetectionService;
+        this.piiLookupHasher = piiLookupHasher;
     }
 
     /**
@@ -292,10 +295,29 @@ public class RiskAssessmentService {
         };
     }
 
+    /**
+     * Maps the legacy model's account identifier to a value safe for {@code pan_hash}.
+     * {@link Transaction#getAccountNumber()} is documented as already hashed/tokenized and is
+     * passed through; if a caller supplied a raw card number instead, it is replaced with the
+     * same keyed HMAC the ingest path uses, or dropped (null) when no HMAC key is configured,
+     * so a raw PAN never reaches the transaction evidence model.
+     */
+    String cardIdentityKey(String accountNumber) {
+        if (!com.posgateway.aml.util.PanHashGuard.looksLikeRawPan(accountNumber)) {
+            return accountNumber;
+        }
+        if (piiLookupHasher != null && piiLookupHasher.isConfigured()) {
+            return piiLookupHasher.hashIdentifier(accountNumber);
+        }
+        logger.warn("Raw card number supplied as account identifier and PII_LOOKUP_HMAC_KEY is not "
+                + "configured; card-level structuring checks are skipped for this transaction");
+        return null;
+    }
+
     /** Adapts the legacy request model to the canonical transaction evidence model. */
     private TransactionEntity toTransactionEntity(Transaction transaction) {
         TransactionEntity entity = new TransactionEntity();
-        entity.setPanHash(transaction.getAccountNumber());
+        entity.setPanHash(cardIdentityKey(transaction.getAccountNumber()));
         entity.setMerchantId(transaction.getMerchantId());
         entity.setPspId(transaction.getPspId());
         entity.setCurrency(transaction.getCurrencyCode());

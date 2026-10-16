@@ -116,6 +116,14 @@ is required. The Console image uses repository root context so `design-tokens/` 
 
 Production: enable downloader + URL (see `SanctionsListDownloadService` / `EnvVarStartupValidator`).
 
+`sanctions.download.enabled` (`SANCTIONS_DOWNLOAD_ENABLED`, default **false** in every profile, including
+production) gates the scheduled daily OpenSanctions download, its ingest into the aml-microservice
+watchlist and the staleness watchdog. That ingest is the **only automated source of PEP/RCA
+classification**, so with it off screening cannot flag PEPs that were not ingested earlier.
+`PepDataSourceStartupCheck` logs `PEP DATA SOURCE DISABLED` at startup in that case (WARN only — the
+default is not changed and boot is not blocked). Enabling requires `SANCTIONS_DOWNLOAD_ENABLED=true`,
+`SANCTIONS_OPENSANCTIONS_URL`, `AML_MICROSERVICE_BASE_URL` and `AML_MS_INTERNAL_KEY`.
+
 Sample parse benchmark (no network):
 
 ```bash

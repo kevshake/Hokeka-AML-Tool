@@ -70,7 +70,35 @@ public class AuditLog {
     @Column(name = "previous_checksum", updatable = false)
     private String previousChecksum;
 
+    /** Checksum the row held before the hash-chain backfill re-sealed it (written only by the backfill). */
+    @Column(name = "legacy_checksum", insertable = false, updatable = false)
+    private String legacyChecksum;
+
+    /** When the hash-chain backfill sealed this legacy row; null for rows sealed at write time. */
+    @Column(name = "chain_backfilled_at", insertable = false, updatable = false)
+    private LocalDateTime chainBackfilledAt;
+
     public AuditLog() {
+    }
+
+    /** Checksum the row carried before the hash-chain backfill (null if it had none or was never backfilled). */
+    public String getLegacyChecksum() {
+        return legacyChecksum;
+    }
+
+    /** Sets the pre-backfill checksum (populated from the database; used by tests and JDBC mapping). */
+    public void setLegacyChecksum(String legacyChecksum) {
+        this.legacyChecksum = legacyChecksum;
+    }
+
+    /** When this row was sealed by the hash-chain backfill, or null. */
+    public LocalDateTime getChainBackfilledAt() {
+        return chainBackfilledAt;
+    }
+
+    /** Sets the backfill timestamp (populated from the database; used by tests and JDBC mapping). */
+    public void setChainBackfilledAt(LocalDateTime chainBackfilledAt) {
+        this.chainBackfilledAt = chainBackfilledAt;
     }
 
     public AuditLog(Long id, String userId, String username, String userRole, String actionType, String entityType,

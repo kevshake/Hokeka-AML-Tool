@@ -5,7 +5,7 @@ import com.posgateway.aml.entity.User;
 import com.posgateway.aml.entity.compliance.CaseDecision;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.model.CaseStatus;
-import com.posgateway.aml.repository.AuditLogRepository;
+import com.posgateway.aml.service.AuditLogService;
 import com.posgateway.aml.repository.CaseDecisionRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import org.slf4j.Logger;
@@ -33,7 +33,7 @@ public class CaseDecisionService {
 
     private final ComplianceCaseRepository complianceCaseRepository;
     private final CaseDecisionRepository caseDecisionRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final AuditLogService auditLogService;
     private final com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer;
     private final com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
     // private final UserService userService; // Inject real user service in
@@ -42,12 +42,12 @@ public class CaseDecisionService {
     @Autowired
     public CaseDecisionService(ComplianceCaseRepository complianceCaseRepository,
                                CaseDecisionRepository caseDecisionRepository,
-                               AuditLogRepository auditLogRepository,
+                               AuditLogService auditLogService,
                                @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer,
                                @Nullable com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService) {
         this.complianceCaseRepository = complianceCaseRepository;
         this.caseDecisionRepository = caseDecisionRepository;
-        this.auditLogRepository = auditLogRepository;
+        this.auditLogService = auditLogService;
         this.caseEventProducer = caseEventProducer;
         this.webhookOutboxService = webhookOutboxService;
     }
@@ -126,7 +126,8 @@ public class CaseDecisionService {
                 .timestamp(LocalDateTime.now())
                 .build();
 
-        auditLogRepository.save(auditLog);
+        // Seal into the audit hash chain (checksum + previous link) rather than a raw save.
+        auditLogService.sealAndSave(auditLog);
 
         // 5. Publish Kafka Event (if producer is configured/enabled)
         if (caseEventProducer != null) {

@@ -23,6 +23,10 @@ aml:
   # Shared symmetric key required by InternalAuthFilter on /internal/**.
   # Empty => filter disabled (dev only). Production MUST set AML_MS_INTERNAL_KEY.
   internal-auth-key: ${AML_MS_INTERNAL_KEY:}
+  velocity:
+    # W49-13: velocity counters are bucketed per fixed window of this length (seconds);
+    # each bucket expires after two windows, so counts never accumulate forever.
+    window-seconds: ${AML_MS_VELOCITY_WINDOW_SECONDS:3600}
   risk:
     # Comma-separated ISO country codes at each risk tier.
     # Managed in DB for BACKEND; this configuration drives the microservice's

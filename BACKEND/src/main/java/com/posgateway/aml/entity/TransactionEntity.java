@@ -162,6 +162,8 @@ public class TransactionEntity {
             txnTs = LocalDateTime.now();
         }
         TransactionLegacyColumnBridge.applyBeforePersist(this);
+        // Defence in depth for paths that bypass the setter (reflection / copy utilities).
+        com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "transactions.pan_hash");
     }
 
     // Getters and Setters
@@ -185,8 +187,12 @@ public class TransactionEntity {
         return panHash;
     }
 
+    /**
+     * Sets the card identity hash. Rejects anything shaped like a raw PAN (13-19 digits) so
+     * card numbers can never be written into {@code pan_hash}; see {@link com.posgateway.aml.util.PanHashGuard}.
+     */
     public void setPanHash(String panHash) {
-        this.panHash = panHash;
+        this.panHash = com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "transactions.pan_hash");
     }
 
     public String getMerchantId() {

@@ -17,7 +17,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Feedback Controller
- * Handles transaction labeling for model retraining
+ * Records investigator fraud / not-fraud labels on persisted feature rows. Labels are
+ * stored for external model training; no in-platform trainer exists.
  */
 @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
 @RestController
