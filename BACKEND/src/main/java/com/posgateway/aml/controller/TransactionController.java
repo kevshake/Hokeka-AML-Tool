@@ -66,6 +66,8 @@ public class TransactionController {
     private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
     private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
     private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
+    /** Merchant ownership / edge id validation, run before anything is persisted. */
+    private final com.posgateway.aml.service.security.TransactionIngestGuard ingestGuard;
 
     private final AtomicInteger currentConcurrentRequests = new AtomicInteger(0);
 
@@ -94,7 +96,9 @@ public class TransactionController {
             com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
             com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
             com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService,
-            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
+            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService,
+            com.posgateway.aml.service.security.TransactionIngestGuard ingestGuard) {
+        this.ingestGuard = ingestGuard;
         this.ingestionService = ingestionService;
         this.batchIngestionService = batchIngestionService;
         this.fraudOrchestrator = fraudOrchestrator;
@@ -121,13 +125,18 @@ public class TransactionController {
      * @return Fraud detection result
      */
     @PostMapping("/ingest")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER','PSP_INTEGRATION')")
     public CompletableFuture<ResponseEntity<FraudDetectionResponseDTO>> ingestTransaction(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody TransactionRequestDTO requestDTO) {
 
         logger.debug("Received transaction ingestion request from merchant: {}",
                 requestDTO.getMerchantId());
+
+        // Client errors first, before anything is persisted: unknown / foreign merchant -> 404,
+        // malformed merchant id or edgeAssessmentId -> 400 (JSON via GlobalExceptionHandler).
+        ingestGuard.requireIngestableMerchant(requestDTO.getMerchantId());
+        ingestGuard.requireValidEdgeAssessmentId(requestDTO.getEdgeAssessmentId());
 
         try {
             // Rate limiting check
@@ -232,11 +241,16 @@ public class TransactionController {
                 throw e;
             }
 
+        } catch (IllegalArgumentException | SecurityException | AccessDeniedException clientError) {
+            // Validation / tenancy failures raised during ingest are the caller's fault: let
+            // GlobalExceptionHandler render 400/404/403 JSON instead of an empty 500.
+            throw clientError;
         } catch (Exception e) {
             logger.error("Error processing transaction from merchant: {}",
                     requestDTO.getMerchantId(), e);
             return CompletableFuture.completedFuture(
-                    ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                    ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .body(createErrorResponse("Internal error while processing the transaction")));
         }
     }
 
@@ -248,11 +262,17 @@ public class TransactionController {
      * @return List of fraud detection results
      */
     @PostMapping("/ingest/batch")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PSP_ADMIN','PSP_USER','PSP_INTEGRATION')")
     public CompletableFuture<ResponseEntity<List<FraudDetectionResponseDTO>>> batchIngestTransactions(
             @Valid @RequestBody List<TransactionRequestDTO> requestDTOs) {
 
         logger.info("Received batch ingestion request for {} transactions", requestDTOs.size());
+
+        // Every row must target a merchant of the caller's PSP; reject the whole batch otherwise.
+        for (TransactionRequestDTO dto : requestDTOs) {
+            ingestGuard.requireIngestableMerchant(dto.getMerchantId());
+            ingestGuard.requireValidEdgeAssessmentId(dto.getEdgeAssessmentId());
+        }
 
         try {
             // Convert DTOs to service requests
@@ -304,6 +324,8 @@ public class TransactionController {
                         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
                     });
 
+        } catch (IllegalArgumentException | SecurityException | AccessDeniedException clientError) {
+            throw clientError;
         } catch (Exception e) {
             logger.error("Error in batch ingestion", e);
             return CompletableFuture.completedFuture(
@@ -355,7 +377,7 @@ public class TransactionController {
      * GET /api/v1/transactions/{id}/assessment
      */
     @GetMapping("/{id}/assessment")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER', 'PSP_INTEGRATION')")
     public ResponseEntity<AssessmentDetailResponseDTO> getTransactionAssessment(@PathVariable Long id) {
         return ResponseEntity.ok(assessmentQueryService.getLatestByTransactionId(id));
     }

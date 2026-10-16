@@ -27,6 +27,9 @@ public class PspApiKey {
     private LocalDateTime rotatedAt;
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
+    /** Key stops authenticating at this instant; null = no expiry (V256). */
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
 
     public Long getId() { return id; }
     public String getKeyPrefix() { return keyPrefix; }
@@ -42,4 +45,13 @@ public class PspApiKey {
     public void setRotatedAt(LocalDateTime value) { rotatedAt = value; }
     public LocalDateTime getRevokedAt() { return revokedAt; }
     public void setRevokedAt(LocalDateTime value) { revokedAt = value; }
+    /** Expiry instant, or null when the key does not expire. */
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+    /** Sets the expiry instant (null = no expiry). */
+    public void setExpiresAt(LocalDateTime value) { expiresAt = value; }
+
+    /** True while the key may authenticate: not revoked and not past its expiry. */
+    public boolean isUsableAt(LocalDateTime now) {
+        return revokedAt == null && (expiresAt == null || now.isBefore(expiresAt));
+    }
 }

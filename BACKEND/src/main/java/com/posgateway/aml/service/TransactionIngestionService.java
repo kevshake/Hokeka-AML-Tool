@@ -86,8 +86,9 @@ public class TransactionIngestionService {
 
         Long merchantId = parseMerchantId(transactionRequest.getMerchantId());
         com.posgateway.aml.entity.merchant.Merchant merchant = merchantRepository.findById(merchantId)
+                // "not found" wording -> GlobalExceptionHandler answers 404, not a generic 400/500.
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "Unknown merchantId: " + transactionRequest.getMerchantId()));
+                        "Merchant not found: " + transactionRequest.getMerchantId()));
         if (merchant.getPsp() != null) {
             transaction.setPspId(merchant.getPsp().getPspId());
         }

@@ -73,6 +73,10 @@ class ProductionSchemaValidationIntegrationTest {
             password = System.getProperty("schema.it.password", "");
             return;
         }
+        // No explicit database and no Docker for Testcontainers: skip rather than fail (CI has Docker).
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                org.testcontainers.DockerClientFactory.instance().isDockerAvailable(),
+                "Docker not available to Testcontainers; pass -Dschema.it.jdbc-url to run against a database");
         container = new PostgreSQLContainer<>("postgres:16-alpine");
         container.start();
         jdbcUrl = container.getJdbcUrl();

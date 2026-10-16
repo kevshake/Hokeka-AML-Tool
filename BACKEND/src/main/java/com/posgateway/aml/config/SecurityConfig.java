@@ -27,6 +27,7 @@ public class SecurityConfig {
         private final CustomUserDetailsService userDetailsService;
         private final CustomAuthenticationFailureHandler failureHandler;
         private final com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter onboardingInviteFilter;
+        private final com.posgateway.aml.config.security.PspApiKeyAuthenticationFilter pspApiKeyFilter;
 
         /**
          * Refuse plaintext HTTP at the application layer. nginx terminates TLS in the deployed
@@ -44,10 +45,12 @@ public class SecurityConfig {
 
         public SecurityConfig(CustomUserDetailsService userDetailsService,
                         CustomAuthenticationFailureHandler failureHandler,
-                        com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter onboardingInviteFilter) {
+                        com.posgateway.aml.config.security.OnboardingInviteAuthenticationFilter onboardingInviteFilter,
+                        com.posgateway.aml.config.security.PspApiKeyAuthenticationFilter pspApiKeyFilter) {
                 this.userDetailsService = userDetailsService;
                 this.failureHandler = failureHandler;
                 this.onboardingInviteFilter = onboardingInviteFilter;
+                this.pspApiKeyFilter = pspApiKeyFilter;
         }
 
         /**
@@ -116,6 +119,11 @@ public class SecurityConfig {
                 http
                                 .csrf(csrf -> csrf.disable())
                                 .addFilterBefore(onboardingInviteFilter,
+                                                org.springframework.security.web.authentication.AnonymousAuthenticationFilter.class)
+                                // PSP machine API keys (X-Api-Key / Bearer hka_...) on the ingest endpoints only.
+                                // Runs after the session context is restored (SecurityContextHolderFilter), so a
+                                // Console session is never overridden, and before the anonymous filter.
+                                .addFilterBefore(pspApiKeyFilter,
                                                 org.springframework.security.web.authentication.AnonymousAuthenticationFilter.class)
                                 .authenticationProvider(authenticationProvider)
                                 .authorizeHttpRequests(auth -> auth

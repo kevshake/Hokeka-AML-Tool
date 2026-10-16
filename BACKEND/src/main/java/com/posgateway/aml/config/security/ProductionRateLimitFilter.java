@@ -45,6 +45,8 @@ public class ProductionRateLimitFilter implements Filter {
     @Value("${rate.limit.auth-endpoint-rpm:10}")
     private int authRequestsPerMinute;
 
+    private final org.springframework.util.AntPathMatcher machinePathMatcher = new org.springframework.util.AntPathMatcher();
+
     // Cache to track request counts per IP
     private LoadingCache<String, AtomicInteger> requestCountsPerIp;
     
@@ -75,6 +77,15 @@ public class ProductionRateLimitFilter implements Filter {
 
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        // Machine ingest calls that carry a PSP API key are limited per key (and per IP for failed
+        // keys) by PspApiKeyAuthenticationFilter; the 100 RPM per-IP Console limit would otherwise
+        // throttle a PSP's whole integration behind one egress IP.
+        if (PspApiKeyAuthenticationFilter.isMachinePath(httpRequest, machinePathMatcher)
+                && PspApiKeyAuthenticationFilter.extractKey(httpRequest) != null) {
+            chain.doFilter(request, response);
+            return;
+        }
 
         String clientIp = getClientIp(httpRequest);
         String requestUri = httpRequest.getRequestURI();
