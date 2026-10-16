@@ -33,9 +33,11 @@ public class DecisionRecordIngestService {
     public static final String DECISION_RECORDS_CONTEXT = "hokeka.decision.records";
 
     private final DecisionRecordStore store;
+    private final EdgeSiteResolver sites;
 
-    public DecisionRecordIngestService(DecisionRecordStore store) {
+    public DecisionRecordIngestService(DecisionRecordStore store, EdgeSiteResolver sites) {
         this.store = store;
+        this.sites = sites;
     }
 
     /** The batch is not a decision record batch v2 (HTTP 400; nothing was stored). */
@@ -71,7 +73,7 @@ public class DecisionRecordIngestService {
             }
         }
         boolean batchNodeMismatch = !node.getEdgeId().equals(batch.get("edgeId").asText());
-        String site = node.effectiveSiteId();
+        String site = sites.siteOf(node);
         boolean batchSiteMismatch = !site.equals(batch.get("siteId").asText());
 
         int accepted = 0;

@@ -206,6 +206,20 @@ class EdgeConfigServiceTest {
     }
 
     @Test
+    void tunnelSettingsServiceExposesTheDistributedTunnelSectionAndVersion() {
+        PspEdgeSettings settings = PspEdgeSettings.defaultsFor(12L);
+        settings.setTunnelOpsAllowed(List.of("txn.search", "ledger.health"));
+        settings.setTunnelMaxInflight(4);
+        when(edgeSettings.findById(12L)).thenReturn(Optional.of(settings));
+        EdgeTunnelSettingsService.TunnelSettings tunnel = new EdgeTunnelSettingsService(service).settingsFor(12L);
+        assertTrue(tunnel.enabled());
+        assertEquals(List.of("txn.search", "ledger.health"), tunnel.opsAllowed());
+        assertFalse(tunnel.backfillAllowed());
+        assertEquals(4, tunnel.maxInflightPerSession());
+        assertEquals(service.current(12L).version(), tunnel.configVersion());
+    }
+
+    @Test
     void sealingRefusesAnotherPspsDocument() {
         EdgeConfigService.IssuedConfig issuedConfig = service.current(12L);
         com.posgateway.aml.entity.edge.EdgeNode foreign = new com.posgateway.aml.entity.edge.EdgeNode();

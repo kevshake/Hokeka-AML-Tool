@@ -59,7 +59,6 @@ class DecisionRecordStoreTest {
         node = new EdgeNode();
         node.setPspId(12L);
         node.setEdgeId("acme-eu-1");
-        node.setSiteId("acme-eu");
     }
 
     @Test

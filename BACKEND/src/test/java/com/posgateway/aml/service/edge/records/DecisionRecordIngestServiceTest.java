@@ -35,6 +35,7 @@ class DecisionRecordIngestServiceTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private DecisionRecordStore store;
+    private EdgeSiteResolver sites;
     private DecisionRecordIngestService service;
     private EdgeNode node;
 
@@ -42,13 +43,26 @@ class DecisionRecordIngestServiceTest {
     void setUp() {
         store = mock(DecisionRecordStore.class);
         when(store.store(any(), any(), anyString())).thenReturn(DecisionRecordStore.Outcome.ACCEPTED);
-        service = new DecisionRecordIngestService(store);
+        sites = mock(EdgeSiteResolver.class);
+        service = new DecisionRecordIngestService(store, sites);
         node = new EdgeNode();
         node.setId(7L);
         node.setPspId(12L);
         node.setEdgeId("acme-eu-1");
-        node.setSiteId("acme-eu");
         node.setStatus(EdgeNodeStatus.ACTIVE);
+        when(sites.siteOf(node)).thenReturn("acme-eu");
+    }
+
+    @Test
+    void siteResolverFallsBackToTheEdgeIdWithoutARegisteredSite() {
+        org.springframework.jdbc.core.JdbcTemplate jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(0);
+        assertEquals("acme-eu-1", new EdgeSiteResolver(jdbc).siteOf(node), "no site_id column yet (before V263)");
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq(7L))).thenReturn(java.util.Collections.singletonList(null));
+        assertEquals("acme-eu-1", new EdgeSiteResolver(jdbc).siteOf(node), "single-node site");
+        when(jdbc.queryForList(anyString(), eq(String.class), eq(7L))).thenReturn(List.of("acme-eu"));
+        assertEquals("acme-eu", new EdgeSiteResolver(jdbc).siteOf(node), "registered site");
     }
 
     @Test
@@ -100,7 +114,7 @@ class DecisionRecordIngestServiceTest {
 
     @Test
     void singleNodeSiteDefaultsToTheEdgeId() {
-        node.setSiteId(null);
+        when(sites.siteOf(node)).thenReturn("acme-eu-1");
         ObjectNode record = (ObjectNode) ContractFixtures.fixture("decision-record-v2--alert.json");
         record.put("siteId", "acme-eu-1");
         ObjectNode batch = batchOf(record);

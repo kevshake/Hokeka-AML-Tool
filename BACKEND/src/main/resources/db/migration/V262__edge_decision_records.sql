@@ -83,7 +83,4 @@ CREATE INDEX IF NOT EXISTS idx_decision_stats_hourly_psp_hour
 
 COMMENT ON TABLE decision_stats_hourly IS 'Hourly decision counts per PSP/site/merchant, built from Edge decision records (no amounts)';
 
--- ── Edge Site of a node (contract 1: siteId assigned by the Control Plane) ──────────────────────
--- NULL = single-node site, whose siteId defaults to the node's edge_id.
-ALTER TABLE edge_nodes ADD COLUMN IF NOT EXISTS site_id VARCHAR(64);
-ALTER TABLE edge_nodes_aud ADD COLUMN IF NOT EXISTS site_id VARCHAR(64);
+-- edge_nodes.site_id (the node's Edge Site) is added by V263 (work package R4, tunnel server).
