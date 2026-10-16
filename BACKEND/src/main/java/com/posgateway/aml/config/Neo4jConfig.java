@@ -12,6 +12,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.neo4j.core.DatabaseSelectionProvider;
 import org.springframework.data.neo4j.core.transaction.Neo4jTransactionManager;
 import org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories;
+import org.springframework.context.annotation.Primary;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+
+import jakarta.persistence.EntityManagerFactory;
 
 /**
  * Neo4j Configuration for Graph Database.
@@ -41,6 +46,20 @@ public class Neo4jConfig {
         return GraphDatabase.driver(
                 neo4jUri,
                 AuthTokens.basic(neo4jUsername, neo4jPassword));
+    }
+
+    /**
+     * Declaring {@link #neo4jTransactionManager} switches off Spring Boot's auto-configured JPA
+     * {@code transactionManager} (it is {@code @ConditionalOnMissingBean(TransactionManager)}), which
+     * makes the whole context fail with "required a bean named 'transactionManager'" whenever
+     * {@code neo4j.enabled=true} (the production compose setting). Re-declare the JPA manager as the
+     * primary one so plain {@code @Transactional} keeps meaning Postgres; graph writes opt in with
+     * {@code @Transactional("neo4jTransactionManager")}.
+     */
+    @Bean(name = "transactionManager")
+    @Primary
+    public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+        return new JpaTransactionManager(entityManagerFactory);
     }
 
     @Bean(name = "neo4jTransactionManager")

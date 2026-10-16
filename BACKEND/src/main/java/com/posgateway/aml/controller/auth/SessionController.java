@@ -21,8 +21,18 @@ import org.springframework.security.access.prepost.PreAuthorize;
 @RequestMapping("/auth/session")
 public class SessionController {
 
-    @Value("${server.servlet.session.timeout:1800}") // Default 30 minutes in seconds
-    private int sessionTimeoutSeconds;
+    private final int sessionTimeoutSeconds;
+
+    /**
+     * {@code server.servlet.session.timeout} is a Spring Boot {@code Duration} property: production
+     * sets it as {@code 30m}. Parse it the way Boot does (bare numbers = seconds) instead of binding
+     * to {@code int}, which made the production profile fail to start.
+     */
+    public SessionController(@Value("${server.servlet.session.timeout:1800}") String sessionTimeout) {
+        this.sessionTimeoutSeconds = (int) org.springframework.boot.convert.DurationStyle
+                .detectAndParse(sessionTimeout.trim(), java.time.temporal.ChronoUnit.SECONDS)
+                .getSeconds();
+    }
 
     @Value("${server.servlet.session.cookie.max-age:1800}")
     private int cookieMaxAge;
