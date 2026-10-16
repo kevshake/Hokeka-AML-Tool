@@ -29,12 +29,9 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Wires the Edge Tunnel server (work package R4; {@code docs/EDGE_DATA_RESIDENCY_CONTRACT.md} §7):
@@ -67,20 +64,18 @@ public class EdgeTunnelConfiguration {
         return Clock.systemUTC();
     }
 
-    /** Timers: deadlines and the housekeeping tick (daemon threads). */
-    @Bean(destroyMethod = "shutdownNow")
-    public ScheduledExecutorService tunnelScheduler() {
-        AtomicInteger n = new AtomicInteger();
-        return Executors.newScheduledThreadPool(2, r -> {
-            Thread t = new Thread(r, "edge-tunnel-timer-" + n.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        });
+    /** Timers: deadlines and the housekeeping tick (wrapped, see {@link TunnelTimers}). */
+    @Bean(destroyMethod = "close")
+    public TunnelTimers tunnelTimers() {
+        return new TunnelTimers();
     }
 
-    /** String Redis template for the registry and relay (ids and sealed frames only). */
-    @Bean
-    public StringRedisTemplate tunnelRedisTemplate(RedisConnectionFactory connectionFactory) {
+    /**
+     * String template for the registry and relay (ids and sealed frames only). Not a bean: a
+     * {@code StringRedisTemplate} bean would make Spring Boot skip its own
+     * {@code stringRedisTemplate}.
+     */
+    private static StringRedisTemplate tunnelRedis(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
 
@@ -93,14 +88,14 @@ public class EdgeTunnelConfiguration {
 
     /** Redis session registry. */
     @Bean
-    public TunnelRegistry tunnelRegistry(StringRedisTemplate tunnelRedisTemplate, TunnelProperties props) {
-        return new TunnelRegistry(tunnelRedisTemplate, TUNNEL_MAPPER, Duration.ofMillis(props.getRegistryStaleMs()));
+    public TunnelRegistry tunnelRegistry(RedisConnectionFactory connectionFactory, TunnelProperties props) {
+        return new TunnelRegistry(tunnelRedis(connectionFactory), TUNNEL_MAPPER, Duration.ofMillis(props.getRegistryStaleMs()));
     }
 
     /** Cross-instance pub/sub transport, named after this instance. */
     @Bean
-    public TunnelMessaging tunnelMessaging(StringRedisTemplate tunnelRedisTemplate, TunnelProperties props) {
-        return new TunnelMessaging(tunnelRedisTemplate, TUNNEL_MAPPER, resolveInstanceId(props.getInstanceId()));
+    public TunnelMessaging tunnelMessaging(RedisConnectionFactory connectionFactory, TunnelProperties props) {
+        return new TunnelMessaging(tunnelRedis(connectionFactory), TUNNEL_MAPPER, resolveInstanceId(props.getInstanceId()));
     }
 
     /** Subscribes this instance to its holder, reply and broadcast channels. */
@@ -137,9 +132,9 @@ public class EdgeTunnelConfiguration {
     public EdgeTunnelClient edgeTunnelClient(TunnelProperties props, TunnelFrameCodec codec, TunnelRegistry registry,
                                              TunnelNodeDirectory directory, TunnelMessaging messaging,
                                              EdgeControlPlaneKeys cpKeys, Clock tunnelClock,
-                                             ScheduledExecutorService tunnelScheduler) {
+                                             TunnelTimers tunnelTimers) {
         return new EdgeTunnelClient(props, codec, registry, directory, messaging, cpKeys, tunnelClock,
-                tunnelScheduler, TUNNEL_MAPPER);
+                tunnelTimers.executor(), TUNNEL_MAPPER);
     }
 
     /** Cloud access audit writer. */
@@ -191,7 +186,7 @@ public class EdgeTunnelConfiguration {
      */
     @Bean
     public SmartLifecycle tunnelLifecycle(TunnelMessaging messaging, TunnelSessionHub hub, EdgeTunnelClient client,
-                                          EdgeDataGateway gateway, ScheduledExecutorService tunnelScheduler,
+                                          EdgeDataGateway gateway, TunnelTimers tunnelTimers,
                                           TunnelProperties props) {
         messaging.bind(hub::onHolderMessage, client::onOriginMessage, gateway::onBroadcast);
         return new SmartLifecycle() {
@@ -200,7 +195,7 @@ public class EdgeTunnelConfiguration {
             /** Starts the housekeeping tick. */
             @Override
             public void start() {
-                tick = tunnelScheduler.scheduleWithFixedDelay(() -> {
+                tick = tunnelTimers.executor().scheduleWithFixedDelay(() -> {
                     try {
                         hub.housekeeping();
                     } catch (RuntimeException e) {

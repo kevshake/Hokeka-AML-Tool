@@ -230,7 +230,7 @@ class EdgeTunnelIntegrationTest {
         nodes = cpA.getBean(EdgeNodeRepository.class);
         auditRepo = cpA.getBean(EdgeDataAccessLogRepository.class);
         jdbc = cpA.getBean(JdbcTemplate.class);
-        redis = cpA.getBean("tunnelRedisTemplate", StringRedisTemplate.class);
+        redis = new StringRedisTemplate(cpA.getBean(org.springframework.data.redis.connection.RedisConnectionFactory.class));
         ingestPublicB64 = cpA.getBean(EdgeControlPlaneKeys.class).ingestPublicKeyBase64();
         cpSigningPublic = cpA.getBean(EdgeControlPlaneKeys.class).signingPublicKey();
         jdbc.execute("CREATE TABLE IF NOT EXISTS psps (psp_id BIGINT PRIMARY KEY, support_access_enabled BOOLEAN)");
@@ -633,6 +633,17 @@ class EdgeTunnelIntegrationTest {
             String v = (String) redis.opsForHash().get("tunnel:psp:" + psp, e.sessionId);
             return v != null && v.contains("\"inflight\":0");
         }, 5_000, "inflight released");
+    }
+
+    /**
+     * The tunnel must not publish beans that change application-wide defaults: a
+     * ScheduledExecutorService bean would be adopted by {@code @EnableScheduling}, a
+     * StringRedisTemplate bean would suppress Boot's {@code stringRedisTemplate}.
+     */
+    @Test
+    void tunnelDoesNotHijackSchedulingOrRedisTemplateDefaults() {
+        assertThat(cpA.getBeansOfType(java.util.concurrent.ScheduledExecutorService.class)).isEmpty();
+        assertThat(cpA.getBeansOfType(StringRedisTemplate.class)).containsOnlyKeys("stringRedisTemplate");
     }
 
     /** Verifies: offline site answers edge offline with last seen at. */
