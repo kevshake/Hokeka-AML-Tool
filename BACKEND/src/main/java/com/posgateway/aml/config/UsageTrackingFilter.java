@@ -3,6 +3,8 @@ package com.posgateway.aml.config;
 import com.posgateway.aml.dto.psp.ApiUsageEvent;
 import com.posgateway.aml.entity.User;
 import com.posgateway.aml.service.psp.ApiUsageTrackingService;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,8 +16,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
-import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -126,43 +126,84 @@ public class UsageTrackingFilter extends OncePerRequestFilter {
         return false;
     }
 
+    /**
+     * Times the request and records billable usage once its final status is known.
+     *
+     * <p>The response is NOT wrapped: the filter only needs the status code, and wrapping it in a
+     * {@code ContentCachingResponseWrapper} broke every asynchronous endpoint. {@code POST
+     * /transactions/ingest} returns a {@code CompletableFuture}; the initial dispatch returns as soon
+     * as async processing starts, so {@code copyBodyToResponse()} committed an empty 200
+     * ({@code Content-Length: 0}) before the decision existed and the PSP never saw it.
+     *
+     * <p>For an async request, logging is deferred to an {@link AsyncListener} so the recorded status
+     * is the real one. The caller's {@link Authentication} is captured here, on the request thread,
+     * because the security context is not populated on the thread that completes the async request.
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-
-        // Wrap the request/response so we can read the body (consumed once)
-        ContentCachingRequestWrapper req = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper resp = new ContentCachingResponseWrapper(response);
-
         long startNs = System.nanoTime();
-
         try {
-            chain.doFilter(req, resp);
+            chain.doFilter(request, response);
         } finally {
-            long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
-            resolveAndLog(req, resp, elapsedMs);
-            // Ensure the cached response body is written back to the real output stream
-            resp.copyBodyToResponse();
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String path = request.getRequestURI();
+            String method = request.getMethod();
+            if (request.isAsyncStarted()) {
+                request.getAsyncContext().addListener(new AsyncListener() {
+                    @Override
+                    public void onComplete(AsyncEvent event) {
+                        resolveAndLog(path, method, statusOf(event, response), auth, elapsedSince(startNs));
+                    }
+
+                    @Override
+                    public void onTimeout(AsyncEvent event) {
+                        // Completion (onComplete) still follows a timeout; usage is recorded there.
+                    }
+
+                    @Override
+                    public void onError(AsyncEvent event) {
+                        // Completion (onComplete) still follows an error; usage is recorded there.
+                    }
+
+                    @Override
+                    public void onStartAsync(AsyncEvent event) {
+                        // A re-started async cycle gets its own listener registration on that dispatch.
+                    }
+                });
+            } else {
+                resolveAndLog(path, method, response.getStatus(), auth, elapsedSince(startNs));
+            }
         }
     }
 
-    private void resolveAndLog(ContentCachingRequestWrapper req,
-                                ContentCachingResponseWrapper resp,
-                                long elapsedMs) {
-        try {
-            String path = req.getRequestURI();
-            String method = req.getMethod();
-            int status = resp.getStatus();
+    /** Final status of an async request: the supplied response when present, else the original one. */
+    private static int statusOf(AsyncEvent event, HttpServletResponse fallback) {
+        if (event.getSuppliedResponse() instanceof HttpServletResponse supplied) {
+            return supplied.getStatus();
+        }
+        return fallback.getStatus();
+    }
 
+    /** Milliseconds elapsed since {@code startNs} (System.nanoTime based). */
+    private static long elapsedSince(long startNs) {
+        return (System.nanoTime() - startNs) / 1_000_000L;
+    }
+
+    /**
+     * Fires the async usage-log write for a billable request made in a PSP context. Never throws:
+     * usage tracking must not fail or alter the request.
+     */
+    private void resolveAndLog(String path, String method, int status, Authentication auth, long elapsedMs) {
+        try {
             // Determine service type from path + method (only work-performing verbs bill)
             String serviceType = resolveServiceType(path, method);
             if (serviceType == null) return; // unmapped path or non-billable method
 
-            // PSP ID from security context
+            // PSP ID from the caller captured on the request thread
             Long pspId = null;
             Long userId = null;
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.isAuthenticated()
                     && auth.getPrincipal() instanceof User user) {
                 pspId = user.getPsp() != null ? user.getPsp().getPspId() : null;
@@ -186,7 +227,7 @@ public class UsageTrackingFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
             // Usage tracking must never fail the request.
-            log.debug("Usage tracking skipped for {}: {}", req.getRequestURI(), e.getMessage());
+            log.debug("Usage tracking skipped for {}: {}", path, e.getMessage());
         }
     }
 
