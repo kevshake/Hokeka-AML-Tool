@@ -340,15 +340,15 @@ def b1(ctx, sc):
     r = anon.post("/auth/login", {"username": u["username"], "password": USER_PW},
                   headers={"X-Forwarded-Proto": "http"})
     sc.check(r.status in (301, 302, 307, 308, 400, 403), "plain-HTTP login refused (require-ssl)", r)
-    # Bearer token per docs/PSP_API_GUIDE.md
+    # Auth contract per docs/PSP_API_GUIDE.md §2: Console = session cookie; machines = PSP API key.
+    # A Bearer value that is not an hka_ API key (e.g. the session id) must not authenticate.
     c2 = ctx.client("card-user-bearer", psp_scoped=True)
     lr = c2.login(u["username"], USER_PW)
     token = (lr.json or {}).get("token")
-    sc.check(bool(token), "login returns a token (docs/PSP_API_GUIDE.md §2 contract)", lr, severity="WARN")
     if token:
         c3 = ctx.client("card-user-bearer-only", psp_scoped=True)
         r = c3.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
-        sc.check(r.status == 200, "Authorization: Bearer <token> authenticates (docs contract)", r)
+        sc.check(r.status in (401, 403), "non-API-key Bearer value is not accepted (session/API-key contract)", r)
 
 
 @scenario("B2", "auth", "Hard-coded / demo credentials are not usable in production profile")
