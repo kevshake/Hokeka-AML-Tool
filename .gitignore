@@ -102,3 +102,5 @@ BACKEND/run_*.bat
 .release-key/
 *.asc
 !docs/**/*.asc
+
+edge-engine/target-gnu/
