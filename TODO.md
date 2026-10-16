@@ -31,6 +31,10 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 - [x] Implementation plan + work packages: `docs/architecture/EDGE_DATA_RESIDENCY_PLAN.md`. Owner decisions: port detections to the Edge before deleting cloud ones; cross-PSP sharing is opt-in SAR indicators only; back-fill existing cloud data to the Edge, then purge; support access only when the PSP allows it, audited.
 - [x] R0 spec + JSON schemas (`docs/contracts/`): `docs/EDGE_DATA_RESIDENCY_CONTRACT.md` (Appendix A lists the decisions the plan left open, for owner review); 39 schemas, 91 fixtures, `py docs/contracts/validate.py` passes
 - [ ] Lane 1: R1 Edge ledger + durable outbox · R3 retention/config doc · R4 cloud tunnel server · R7 decision record v2 · R14a docs drafts
+  - [x] R1 Edge ledger + durable outbox (merged 22fde3d95; edge-host 198 tests, 0 failures; p99 +2 ms latency gate still to be measured on a quiet Linux host)
+  - [ ] R4 cloud tunnel server
+  - [ ] R3 + R7 retention/config doc + decision record v2
+  - [ ] R14a docs drafts
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
