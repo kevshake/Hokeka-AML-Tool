@@ -1,5 +1,22 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-09-18_
+_Last updated: 2026-10-16_
+
+## Wave 71 — Resume from Grok Bot history (2026-10-16)
+
+Recovered from the Grok Bot "Hokeka-AML_Tool" transcripts. origin/main = `4f16021e7` (#42); PRs #10–#42 merged (Laya AI #28, WP-01 #29, WP-0A/02/03 #31, exports #35, deploy readiness #34, API docs #37/#38). Older unchecked boxes below Wave 59 are largely stale — verify against code before working them.
+
+- [x] **Branch sync (blocker)** — DONE 2026-10-16: merged origin/main → `4d6375a70`; local migrations renumbered V246–V251 (local cra_scale/assessments dropped as covered by main V240/V238); backup at `backup/wp-0a-pre-merge-2026-10-16`. Not pushed. Original note: local-only `wp-0a-risk-score-hygiene` is 2 ahead / 67 behind main; its V234–V241 collide with main's. Rebase onto fresh main and salvage local-only work, renumbered after V245: payment-blacklist tenant scope, edge assessment ingest / `EdgeBundleManifest` (WP-04), z-score + 1m/5m velocity rules, scheme thresholds + MCC risk, suspicion lifecycle timestamps, password-reset Console pages, TippingOffGuard, Aerospike sentinel config, `docs/GAP_ANALYSIS.md` / `ARCHITECTURE_DELTA.md` / `IMPLEMENTATION_PLAN.md`. Drop or rename `docs/install/07-ai-decision-layer-client-install.md` (clashes with main; may disclose the AI provider).
+- [ ] JEV Bot-flagged bugs (verify on main): alert prioritisation checks "WARN" severity the engine never emits; `mlScore` vs `ml_score` key mismatch; sanctions disambiguation unreachable because every match blocks.
+- [ ] WP-01 leftovers: context snapshot/hash + versioned risk config (WP-12); findings retention policy (D-15); open plan decisions (consumers-as-parties, blacklist global vs per-PSP).
+- [ ] WP-04 onward from `docs/IMPLEMENTATION_PLAN.md` (not started).
+- [ ] #30 follow-up: backfill `case_alerts.source_alert_id` for historical rows.
+- [ ] Gap register: P1-7 scheme pack export ignores CSV/PDF type; P1-9 misleading "nightly retrain" comments; P2-10 legacy audit hash-chain backfill; P2-11 settlement/bank numbers in plaintext + `pan_hash` raw-PAN guard; P2-13 CTR auto-transport; P0-2 PEP needs `sanctions.download.enabled`.
+- [ ] Wave 46 code fixes (verify still open): B8-read/B11 PSP-scope controller access; F4–F8 frontend (RuleEditorModal wipes params, NaN parseInt); C2–C8 (M-Pesa `.block()` no timeout, CBK retry idempotency, FRC fail-open, synchronized on interned string); P1–P4 (`findAll` scans, Lombok `@Data` on entities, `@Async` on detached entity); W49-13 velocity sliding window.
+- [ ] Live E2E (needs Docker Hub access or Java 21 + DB-only Docker; Rust Edge needs VS C++ Build Tools): console role matrix, orchestrator toggle smoke, full compliance chain, Edge dual-post, OpenSanctions full load, keyset benchmark across all lists, export download + async job polling.
+- [ ] Installer #42: real full install on a clean Linux VM/VPS (only `--check` tested in CI).
+- [ ] Go-live switches (user decision): `hokeka.decision.orchestrator=live`, `LAYA_API_KEY` on VPS, AI promotion; calibrate Laya thresholds on labelled dispositions.
+- [ ] OPS (user): DNS `packages.hokeka.com`, offline release-key ceremony + pin, repo secrets, VPS env files.
+- [ ] Housekeeping: drop old stashes (`pre-pull-2026-09-26`, `pre-merge-main-2026-10-16` are node_modules-only); clean stale `.git/worktrees/{sfq,tpg,xmx}`.
 
 ## Wave 70 — Locked product decisions (2026-09-18)
 
