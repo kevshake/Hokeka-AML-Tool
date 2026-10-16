@@ -20,18 +20,18 @@ source "$RESULTS/sim-secrets.env"
 set +a
 
 export SPRING_PROFILES_ACTIVE="${SIM_PROFILE:-production}"
-export SERVER_PORT=2637
-export DATABASE_URL="jdbc:postgresql://127.0.0.1:55433/fraud_detector_sim"
+export SERVER_PORT="${SIM_CP_PORT:-2637}"
+export DATABASE_URL="jdbc:postgresql://127.0.0.1:${SIM_PG_PORT:-55433}/fraud_detector_sim"
 export DATABASE_USERNAME=hokeka_sim
 export DATABASE_PASSWORD=hokeka_sim_pw
-export AML_MICROSERVICE_URL="http://127.0.0.1:8091"
+export AML_MICROSERVICE_URL="http://127.0.0.1:${SIM_AML_MS_PORT:-8091}"
 export AML_MICROSERVICE_ENABLED=true
 export KAFKA_ENABLED=true
-export KAFKA_BOOTSTRAP_SERVERS="127.0.0.1:59092"
+export KAFKA_BOOTSTRAP_SERVERS="127.0.0.1:${SIM_KAFKA_PORT:-59092}"
 export REDIS_HOST=127.0.0.1
-export REDIS_PORT=56379
+export REDIS_PORT="${SIM_REDIS_PORT:-56379}"
 export NEO4J_ENABLED=true
-export NEO4J_URI="bolt://127.0.0.1:57687"
+export NEO4J_URI="bolt://127.0.0.1:${SIM_NEO4J_BOLT_PORT:-57687}"
 export NEO4J_USER=neo4j
 export NEO4J_PASSWORD=hokeka_sim_neo4j
 export CORS_ALLOWED_ORIGINS="http://localhost:5173"
@@ -50,4 +50,5 @@ if [[ -n "${EDGE_BUNDLE_SIGNING_KEY:-}" ]]; then export EDGE_BUNDLE_SIGNING_KEY 
 
 JAR="$ROOT/BACKEND/target/aml-fraud-detector-1.0.0-SNAPSHOT.jar"
 cd "$RESULTS/logs"
-exec java -Xms1g -Xmx3g -XX:+UseG1GC -jar "$JAR" > "$RESULTS/logs/control-plane.log" 2>&1
+# Heap caps default small for shared hosts; override with CP_XMS / CP_XMX.
+exec java "-Xms${CP_XMS:-256m}" "-Xmx${CP_XMX:-1200m}" -XX:+UseG1GC -jar "$JAR" > "$RESULTS/logs/control-plane.log" 2>&1

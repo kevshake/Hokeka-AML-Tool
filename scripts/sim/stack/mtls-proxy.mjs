@@ -13,7 +13,7 @@ import path from 'node:path';
 
 const certDir = process.argv[2];
 const port = Number(process.argv[3] || 8444);
-const upstream = new URL(process.argv[4] || 'http://127.0.0.1:2637');
+const upstream = new URL(process.argv[4] || `http://127.0.0.1:${process.env.SIM_CP_PORT || 2637}`);
 if (!certDir) {
   console.error('usage: node mtls-proxy.mjs <certDir> [port] [upstream]');
   process.exit(2);

@@ -305,12 +305,10 @@ def a2(ctx, sc):
 
 @scenario("A3", "schema", "Fresh Flyway schema needs no out-of-band patches")
 def a3(ctx, sc):
-    path = os.path.join(HERE, "results", "db-workarounds.json")
-    if not os.path.exists(path):
-        raise SkipScenario("db_workarounds.py has not been run")
-    with open(path, encoding="utf-8") as fh:
-        defects = json.load(fh).get("defects", [])
-    sc.check(not defects, f"no schema defects needed sim-only patches ({len(defects)} found)",
+    # Detects (read-only) against the live database; the sim never patches the schema any more.
+    import db_workarounds
+    defects = db_workarounds.detect()
+    sc.check(not defects, f"no schema defects in the fresh Flyway schema ({len(defects)} found)",
              {"defects": [d["defect"] for d in defects][:30]})
 
 
@@ -533,11 +531,29 @@ def d2(ctx, sc):
         r2 = anon.post("/transactions/ingest", body, headers={"Authorization": f"Bearer {key}"})
         sc.check(r1.status == 200 or r2.status == 200, "issued API key authenticates PSP ingest (X-Api-Key or Bearer)",
                  r1 if r1.status != 200 else r2)
+        r = anon.post("/transactions/ingest", txn_body(ctx, "momo", 1500), headers={"X-Api-Key": key})
+        sc.check(r.status in (403, 404), "card API key cannot ingest against another PSP's merchant", r)
+        sc.check("JSESSIONID" not in anon.cookies, "API-key ingest creates no HTTP session (stateless machine auth)",
+                 {"cookies": list(anon.cookies)})
+        r = anon.get("/alerts", headers={"X-Api-Key": key})
+        sc.check(r.status in (401, 403), "API key is limited to machine ingest (no Console reads)", r)
+        r = anon.post("/transactions/ingest", txn_body(ctx, "card", 1500), headers={"X-Api-Key": key[:-2] + "zz"})
+        sc.check(r.status == 401, "tampered API key -> 401", r)
     if kid:
         r = ctx.admin.post(f"/admin/psp-api-keys/{kid}/rotate")
         sc.check(r.status in (200, 201) and (r.json or {}).get("plaintextKey") not in (None, key), "rotate key", r)
+        rotated = (r.json or {}).get("plaintextKey")
+        # Rotation issues a NEW key row (new id) and revokes the old one; revoke the rotated key.
+        kid = (r.json or {}).get("id") or kid
+        if rotated and key:
+            r = ctx.client("apikey-old").post("/transactions/ingest", txn_body(ctx, "card", 1500), headers={"X-Api-Key": key})
+            sc.check(r.status == 401, "pre-rotation key no longer authenticates", r)
         r = ctx.admin.delete(f"/admin/psp-api-keys/{kid}")
         sc.check(r.status in (200, 204), "revoke key", r)
+        if rotated:
+            r = ctx.client("apikey-revoked").post("/transactions/ingest", txn_body(ctx, "card", 1500),
+                                                  headers={"X-Api-Key": rotated})
+            sc.check(r.status == 401, "revoked key no longer authenticates", r)
 
 
 @scenario("D3", "onboarding", "PSP settings & signal taxonomy mode")
@@ -565,7 +581,9 @@ def d3(ctx, sc):
 def d4(ctx, sc):
     p = ctx.psp("card")
     c = p["users"]["admin"]["client"]
-    for path in ("/billing/rates", f"/billing/usage/{p['id']}/current", f"/subscriptions/psp/{p['id']}", "/entitlements/me",
+    r = c.get(f"/billing/rates?pspId={ctx.psp('momo')['id']}&serviceType=TRANSACTION_MONITORING")
+    sc.check(r.status in (403, 404), "PSP admin cannot read another PSP's negotiated rate", r)
+    for path in (f"/billing/rates?pspId={p['id']}&serviceType=TRANSACTION_MONITORING", f"/billing/usage/{p['id']}/current", f"/subscriptions/psp/{p['id']}", "/entitlements/me",
                  "/billing/invoices"):
         r = c.get(path)
         sc.check(r.status == 200, f"PSP admin GET {path}", r)
@@ -662,10 +680,16 @@ def r2(ctx, sc):
     sc.check(len(vl) >= 2, "disable creates a new pending version", vr)
     sc.note(f"versions: {[(v.get('id'), v.get('status') or v.get('lifecycleStatus')) for v in vl]}")
     # leave the rule enabled for the edge scenarios: reject the disable
-    if vl:
-        last = vl[-1].get("id")
-        r = ctx.platform_checker.post(f"/rules/governance/versions/{last}/reject", {"reason": "keep enabled for sim"})
+    pending = [v for v in vl if str(v.get("status") or v.get("lifecycleStatus")).upper() == "PENDING_APPROVAL"]
+    active = [v for v in vl if str(v.get("status") or v.get("lifecycleStatus")).upper() == "ACTIVE"]
+    if active:
+        r = ctx.platform_checker.post(f"/rules/governance/versions/{active[0]['id']}/reject", {"reason": "not pending"})
+        sc.check(r.status == 409, "rejecting a non-pending version -> 409 (not 500)", r)
+    if pending:
+        r = ctx.platform_checker.post(f"/rules/governance/versions/{pending[0]['id']}/reject", {"reason": "keep enabled for sim"})
         sc.check(r.status in (200, 201, 204), "checker rejects pending disable", r)
+        rr = maker.get(f"/rules/{rid}")
+        sc.check(rr.status == 200 and (rr.json or {}).get("enabled") is True, "rule still enabled after rejected disable", rr)
 
 
 # ───────────────────────────────────────────── T: transactions / typologies ─────────────────────
@@ -811,17 +835,31 @@ def t8(ctx, sc):
     ip = f"203.0.113.{random.randint(10, 250)}"
     term = f"T-BL-{ctx.run_id}"
     card = ctx.psp("card")
-    psql(f"insert into payment_blacklist_entries(entry_type, entry_value, reason, active, psp_id, platform_wide) "
-         f"values ('ip','{ip}','sim fixture',true,{card['id']},false),('terminal','{term}','sim fixture',true,{card['id']},false)")
-    sc.note(f"fixture: blacklisted ip {ip} and terminal {term} for card PSP {card['id']} (no REST API exists for blacklist)")
+    # Fixtures go through the blacklist REST API as the card PSP's own admin (tenant-scoped write).
+    ca = card["users"]["admin"]["client"]
+    for etype, val in (("ip", ip), ("terminal", term)):
+        r = ca.post("/blacklist", {"entryType": etype, "value": val, "reason": "sim fixture"})
+        sc.check(r.status == 201 and str((r.json or {}).get("pspId")) == str(card["id"]),
+                 f"PSP admin blacklists {etype} via REST (scoped to own PSP)", r)
+    r = ca.post("/blacklist", {"entryType": "ip", "value": ip, "reason": "dup"})
+    sc.check(r.status == 409, "duplicate active entry -> 409", r)
+    r = ca.post("/blacklist", {"entryType": "ip", "value": ip + "9", "reason": "x", "platformWide": True,
+                               "pspId": ctx.psp("momo")["id"]})
+    j = r.json or {}
+    sc.check(r.status in (400, 403) or (r.status == 201 and str(j.get("pspId")) == str(card["id"])
+                                         and not j.get("platformWide")),
+             "PSP admin cannot write platform-wide or another PSP's entry", r)
+    r = ctx.psp("momo")["users"]["admin"]["client"].get("/blacklist?size=200")
+    sc.check(r.status == 200 and not [e for e in items(r) if str(e.get("pspId")) == str(card["id"])],
+             "other PSP cannot see card's blacklist entries", r)
     r = ingest(ctx, "card", txn_body(ctx, "card", 4000, mcc="5411", ipAddress=ip))
     sc.check((r.json or {}).get("action") in ("BLOCK", "HOLD"), "blacklisted IP -> BLOCK/HOLD", r)
     r = ingest(ctx, "card", txn_body(ctx, "card", 4000, mcc="5411", terminalId=term))
     sc.check((r.json or {}).get("action") in ("BLOCK", "HOLD"), "blacklisted terminal -> BLOCK/HOLD", r)
     r = ingest(ctx, "momo", txn_body(ctx, "momo", 4000, ipAddress=ip))
     sc.check((r.json or {}).get("action") == "ALLOW", "same IP at another PSP not blocked (tenant scope)", r)
-    r = ctx.admin.get("/blacklist")
-    sc.check(r.status in (200,), "blacklist management REST API exists", r, severity="WARN")
+    r = ctx.admin.get(f"/blacklist?pspId={card['id']}")
+    sc.check(r.status == 200 and len(items(r)) >= 2, "platform admin lists the PSP's blacklist", r)
 
 
 @scenario("T9", "typology", "Sanctions exact / fuzzy / PEP screening")
@@ -853,12 +891,16 @@ def t9(ctx, sc):
                                               "registrationNumber": f"SANC-{ctx.run_id}", "mcc": "6051",
                                               "contactEmail": "x@sanc.test",
                                               "beneficialOwners": [{"fullName": fixtures.SANCTIONED_EXACT, "dateOfBirth": "1971-03-04",
-                                                                    "nationality": "IR", "ownershipPercentage": 60}]})
+                                                                    "nationality": "IRN", "passportNumber": "P-SIM-0001",
+                                                                    "ownershipPercentage": 60}]})
     j = r.json or {}
     sc.check(j.get("decision") in ("REJECT", "REVIEW") or r.status in (202, 403),
              "onboarding a sanctioned merchant is REJECT/REVIEW", r)
     r = ctx.admin.post("/merchants/onboard", {"pspId": p["id"], "legalName": f"Clean Trading {ctx.run_id}", "country": "KEN",
-                                              "registrationNumber": f"CLEAN-{ctx.run_id}", "mcc": "5411", "contactEmail": "c@clean.test"})
+                                              "registrationNumber": f"CLEAN-{ctx.run_id}", "mcc": "5411", "contactEmail": "c@clean.test",
+                                              "beneficialOwners": [{"fullName": "Wanjiru Kamau-Otieno", "dateOfBirth": "1984-05-12",
+                                                                    "nationality": "KEN", "nationalId": f"KE-{ctx.run_id}",
+                                                                    "ownershipPercentage": 100}]})
     sc.check(r.status in (200, 201, 202), "onboarding a clean merchant succeeds", r)
 
 
@@ -897,7 +939,8 @@ def keyset_walk(sc, client, path, label, pages=6, size=10):
         cursor = j.get("nextCursor")
         if not j.get("hasNext") or not cursor:
             break
-    sc.check("nextCursor" in (first.json or {}) if first else False, f"{label}: keyset response shape (nextCursor)", first)
+    # nextCursor is omitted (non_null JSON) on the last page, so the shape check is on hasNext.
+    sc.check("hasNext" in (first.json or {}) if first else False, f"{label}: keyset response shape (hasNext/nextCursor)", first)
     sc.check(dupes == 0, f"{label}: no duplicates across {n} keyset pages ({len(seen)} rows)", {"dupes": dupes})
 
 
@@ -1020,8 +1063,9 @@ def l3(ctx, sc):
         if fmt == "CSV":
             ct = r.header("Content-Type") or ""
             sc.check("csv" in ct or "text" in ct, "scheme pack CSV content type", r)
-    r = a.post("/reports/generate", {"reportType": "TXN_001", "outputFormat": "PDF", "dateFrom": str(today - dt.timedelta(days=1)),
-                                     "dateTo": str(today), "parameters": {}})
+    # ReportGenerateRequest.dateFrom/dateTo are LocalDateTime (ISO date-time), like the Console sends.
+    r = a.post("/reports/generate", {"reportType": "TXN_001", "outputFormat": "PDF", "dateFrom": f"{today - dt.timedelta(days=1)}T00:00:00",
+                                     "dateTo": f"{today}T23:59:59", "parameters": {}})
     sc.check(r.status in (200, 201, 202), "report engine generate TXN_001", r)
     ex = (r.json or {}).get("executionId")
     if ex:
@@ -1095,13 +1139,13 @@ def launch_edge(ctx, key, node_view, code, edge_id):
         "EDGE_MTLS_KEYSTORE": pki["client_p12"], "EDGE_MTLS_KEYSTORE_PASSWORD": pki["password"],
         "EDGE_MTLS_TRUSTSTORE": pki["truststore"], "EDGE_MTLS_TRUSTSTORE_PASSWORD": pki["password"],
         "EDGE_IDENTITY_FILE": os.path.join(work, "edge-identity.json"),
-        "FEATURESTORE_HOST": "127.0.0.1", "FEATURESTORE_PORT": "53000", "FEATURESTORE_NAMESPACE": "hokeka",
+        "FEATURESTORE_HOST": "127.0.0.1", "FEATURESTORE_PORT": os.environ.get("SIM_AEROSPIKE_PORT", "53000"), "FEATURESTORE_NAMESPACE": "hokeka",
         "EDGE_RETENTION_DAYS": "90", "EDGE_BUNDLE_POLL_INTERVAL": "5s", "EDGE_METRICS_INTERVAL": "10s",
     })
     jar = os.path.join(ROOT, "edge-host", "target", "edge-host-0.1.0.jar")
     lib = ctx.args.edge_native_dir
     logf = open(os.path.join(HERE, "results", "logs", f"edge-{edge_id}.log"), "w", encoding="utf-8")
-    proc = subprocess.Popen(["java", "-Xmx512m", f"-Djava.library.path={lib}", "-jar", jar], env=env, stdout=logf,
+    proc = subprocess.Popen(["java", "-Xmx" + os.environ.get("EDGE_XMX", "384m"), f"-Djava.library.path={lib}", "-jar", jar], env=env, stdout=logf,
                             stderr=subprocess.STDOUT, cwd=work)
     ctx.edge.update({"proc": proc, "edge_id": edge_id, "pki": pki, "port": port, "key": key, "log": logf.name,
                      "base": f"https://127.0.0.1:{port}"})
@@ -1160,7 +1204,9 @@ def e1(ctx, sc):
     if proc.poll() is not None:
         sc.check(False, "edge-host process alive", {"exit": proc.returncode, "logTail": edge_log(ctx)[-2500:]})
         return
-    active = wait_until(lambda: (ctx.admin.get(f"/edge/nodes/{nid}").json or {}).get("status") == "ACTIVE", timeout=90, interval=3)
+    # GET /edge/nodes/{id} answers {"node": {...}, "recentMetrics": [...]}.
+    active = wait_until(lambda: ((ctx.admin.get(f"/edge/nodes/{nid}").json or {}).get("node") or {}).get("status") == "ACTIVE",
+                        timeout=90, interval=3)
     nv = ctx.admin.get(f"/edge/nodes/{nid}")
     sc.check(bool(active), "node ACTIVE after enrollment", nv)
     sc.check("/api/v1/edge/enroll -> 202" in proxy_log(), "enroll call went through mTLS front end (202)", {"proxy": proxy_log()[-800:]})
@@ -1254,18 +1300,19 @@ def e4(ctx, sc):
                                     "merchant_id": str(m["id"]), "currency": "USD", "mcc": "5732"})
     ej = ev.json or {}
     sc.check(ev.status == 200, "edge evaluate", ev)
-    eaid = ej.get("edgeAssessmentId") or str(uuid.uuid4())
-    if "edgeAssessmentId" not in ej:
-        sc.note("edge returned no edgeAssessmentId — sim minted one and posted the assessment itself")
+    eaid = ej.get("edgeAssessmentId")
+    sc.check(bool(eaid) and re.match(r"^[0-9a-f-]{36}$", str(eaid)) is not None, "edge minted a UUID edgeAssessmentId", ev)
+    if not eaid:
+        return
+    # The Edge Host ships the transaction-free decision envelope itself (EdgeAssessmentShipper, mTLS).
+    shipped = wait_until(lambda: psql(f"select count(*) from assessments where edge_assessment_id='{eaid}'") == "1",
+                         timeout=40, interval=2)
+    lines = [l for l in proxy_log().splitlines() if "/edge/assessments" in l]
+    sc.check(bool(shipped), "edge shipped its assessment envelope to the CP over mTLS",
+             {"proxy": lines[-4:], "edgeLog": edge_log(ctx)[-600:]})
+    sc.check(any("-> 20" in l for l in lines), "CP accepted /api/v1/edge/assessments (2xx)", {"proxy": lines[-4:]})
     mt = ctx.client("edge-mtls", base=ctx.proxy + "/api/v1", ssl_context=edge_ssl_context(ctx.edge["pki"], ctx.edge["edge_id"]))
     mt.forwarded_https = False
-    r = mt.post("/edge/assessments", {"edgeAssessmentId": eaid, "bundleManifestHash": "sim", "ruleVersionIds": [],
-                                     "findings": [{"ruleId": str(x), "action": ej.get("action"), "score": ej.get("score"), "triggered": True,
-                                                   "explanation": "edge"} for x in (ej.get("triggeredRuleIds") or [])],
-                                     "decision": ej.get("action"), "score": ej.get("score"),
-                                     "featureSnapshot": {"amount_cents": RULE_AMOUNT + 70_000}, "latencyMs": 3},
-                headers={"X-Hokeka-Edge-Id": ctx.edge["edge_id"]})
-    sc.check(r.status in (200, 201, 202), "edge assessment accepted over mTLS", r)
     body = txn_body(ctx, key, RULE_AMOUNT + 70_000, mcc="5732", clientReference=txn_ref, edgeAssessmentId=eaid)
     ig = ingest(ctx, key, body)
     ij = ig.json or {}
@@ -1313,8 +1360,8 @@ def e5(ctx, sc):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="http://127.0.0.1:2637/api/v1")
-    ap.add_argument("--proxy", default="https://localhost:8444")
+    ap.add_argument("--base", default="http://127.0.0.1:%s/api/v1" % os.environ.get("SIM_CP_PORT", "2637"))
+    ap.add_argument("--proxy", default="https://localhost:%s" % os.environ.get("SIM_PROXY_PORT", "8444"))
     ap.add_argument("--run-id")
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--no-edge", action="store_true")

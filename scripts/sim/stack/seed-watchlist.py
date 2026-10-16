@@ -33,7 +33,7 @@ def call(base, method, path, key, body=None):
 
 
 def main():
-    base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8091"
+    base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:" + os.environ.get("SIM_AML_MS_PORT", "8091")
     key = secrets_env()["AML_MS_INTERNAL_KEY"]
     print("ingest:", call(base, "POST", "/internal/v1/sanctions/ingest", key, {"entities": fixtures.WATCHLIST}))
     print("count:", call(base, "GET", "/internal/v1/sanctions/count", key))

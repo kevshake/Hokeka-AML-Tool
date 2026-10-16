@@ -4,8 +4,7 @@ scripts/sim/results/db-workarounds.json so the simulator reports it as a product
 patch exists only so the rest of the simulation can run. Never run this against a real database.
 
 Checks:
-  1. Hibernate Envers needs sequence `revinfo_seq` (DefaultRevisionEntity, pooled, increment 50);
-     Flyway only creates `revinfo` with an identity column.
+  1. The Envers revision table `revinfo` has a generated `rev` key (the revision entity maps it).
   2. Every *_aud table must carry the columns of its base table (Envers writes all audited columns).
 
 Usage: py scripts/sim/stack/db_workarounds.py [--apply]
@@ -27,12 +26,15 @@ def psql(sql):
     return [l for l in p.stdout.splitlines() if l.strip()]
 
 
-def main():
-    apply = "--apply" in sys.argv
+def detect():
+    """Read-only: returns the schema defects found in the live sim database (no writes)."""
     found = []
-    if not psql("select 1 from information_schema.sequences where sequence_schema='public' and sequence_name='revinfo_seq'"):
-        found.append({"defect": "missing sequence revinfo_seq (Envers DefaultRevisionEntity)",
-                      "fix": "CREATE SEQUENCE IF NOT EXISTS revinfo_seq START WITH 1 INCREMENT BY 50;"})
+    # Since V254 the Envers revision entity maps revinfo's identity column (no revinfo_seq), so the
+    # check is that revinfo exists with an identity/default-generated primary key.
+    if not psql("select 1 from information_schema.columns where table_schema='public' and table_name='revinfo' "
+                "and column_name='rev' and (is_identity='YES' or column_default is not null)"):
+        found.append({"defect": "revinfo.rev is not identity/default-generated (Envers revision entity)",
+                      "fix": "-- needs a Flyway migration; no sim patch"})
     drift = psql("""
 select a.table_name||'|'||c.column_name||'|'||case when c.data_type='USER-DEFINED' then c.udt_name else c.data_type end
 from information_schema.tables a
@@ -44,6 +46,62 @@ order by 1""")
         t, col, typ = row.split("|")
         found.append({"defect": f"{t} lacks column {col} present on {t[:-4]}",
                       "fix": f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ};"})
+    found += unmapped_not_null()
+    return found
+
+
+ENTITY_DIR = os.path.join(HERE, "..", "..", "..", "BACKEND", "src", "main", "java", "com", "posgateway", "aml", "entity")
+
+
+def _snake(name):
+    import re
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def entity_columns():
+    """table -> column names mapped by @Entity classes (explicit name="..." plus snake_case fields)."""
+    import re
+    tables = {}
+    for d, _, files in os.walk(ENTITY_DIR):
+        for f in files:
+            if not f.endswith(".java"):
+                continue
+            src = open(os.path.join(d, f), encoding="utf-8", errors="replace").read()
+            m = re.search(r'@Table\(\s*name\s*=\s*"([^"]+)"', src)
+            if not m or "@Entity" not in src:
+                continue
+            cols = set(re.findall(r'name\s*=\s*"([a-z0-9_]+)"', src))
+            cols.update(_snake(x) for x in re.findall(r"private\s+[\w<>, .]+\s+(\w+)\s*[;=]", src))
+            tables.setdefault(m.group(1), set()).update(cols)
+    return tables
+
+
+def unmapped_not_null():
+    """NOT NULL columns without a default that the owning entity never writes: every insert fails."""
+    tables = entity_columns()
+    rows = psql("""
+select c.table_name||'|'||c.column_name from information_schema.columns c
+join information_schema.tables t on t.table_name=c.table_name and t.table_schema=c.table_schema
+where c.table_schema='public' and t.table_type='BASE TABLE' and c.is_nullable='NO'
+  and c.column_default is null and c.is_identity='NO'""")
+    out = []
+    for row in rows:
+        t, c = row.split("|")
+        if t in tables and c not in tables[t] and c != "id" and not has_fill_trigger(t):
+            out.append({"defect": f"{t}.{c} is NOT NULL without default but not mapped by its entity (inserts fail)",
+                        "fix": "-- needs a Flyway migration; no sim patch"})
+    return out
+
+
+def has_fill_trigger(table):
+    """Tables whose unmapped NOT NULL column is filled by a BEFORE INSERT trigger (e.g. V255)."""
+    return bool(psql(f"select 1 from pg_trigger g join pg_class k on k.oid=g.tgrelid "
+                     f"where k.relname='{table}' and not g.tgisinternal"))
+
+
+def main():
+    apply = "--apply" in sys.argv
+    found = detect()
     applied = []
     if apply and found:
         for f in found:

@@ -2,6 +2,8 @@
 # run from the worktree (java -jar) so their logs land in scripts/sim/results/logs.
 # Compose project name: hokeka-sim. Host ports are offset (5xxxx, bound to 127.0.0.1) so nothing
 # collides with other local stacks (native Postgres :5432, timescale :55432, redis :6379).
+# Every host port can be moved with SIM_*_PORT env vars (keep them in sync with the start scripts,
+# which read the same variables) when another sim stack is already running on the defaults.
 name: hokeka-sim
 
 services:
@@ -12,7 +14,7 @@ services:
       POSTGRES_PASSWORD: hokeka_sim_pw
       POSTGRES_DB: fraud_detector_sim
     ports:
-      - "127.0.0.1:55433:5432"
+      - "127.0.0.1:${SIM_PG_PORT:-55433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hokeka_sim -d fraud_detector_sim"]
       interval: 5s
@@ -24,22 +26,26 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      # Memory caps (sim hosts are often shared): override with SIM_ZK_HEAP.
+      KAFKA_HEAP_OPTS: "-Xms64m -Xmx${SIM_ZK_HEAP:-128m}"
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     depends_on: [zookeeper]
     ports:
-      - "127.0.0.1:59092:59092"
+      - "127.0.0.1:${SIM_KAFKA_PORT:-59092}:${SIM_KAFKA_PORT:-59092}"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:59092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:59092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:${SIM_KAFKA_PORT:-59092}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${SIM_KAFKA_PORT:-59092}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Broker heap cap; override with SIM_KAFKA_HEAP.
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx${SIM_KAFKA_HEAP:-256m}"
       # Production sets this false. The sim reads KAFKA_AUTO_CREATE from the environment so the
       # run can be repeated both ways (missing topic provisioning shows up as a finding).
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "${KAFKA_AUTO_CREATE:-true}"
@@ -47,17 +53,19 @@ services:
   redis:
     image: redis:7.2-alpine
     ports:
-      - "127.0.0.1:56379:6379"
+      - "127.0.0.1:${SIM_REDIS_PORT:-56379}:6379"
 
   neo4j:
     image: neo4j:5.26-community
     environment:
       NEO4J_AUTH: neo4j/hokeka_sim_neo4j
-      NEO4J_server_memory_heap_max__size: 512m
-      NEO4J_server_memory_pagecache_size: 256m
+      # Heap / page-cache caps; override with SIM_NEO4J_HEAP / SIM_NEO4J_PAGECACHE.
+      NEO4J_server_memory_heap_initial__size: 128m
+      NEO4J_server_memory_heap_max__size: ${SIM_NEO4J_HEAP:-256m}
+      NEO4J_server_memory_pagecache_size: ${SIM_NEO4J_PAGECACHE:-128m}
     ports:
-      - "127.0.0.1:57687:7687"
-      - "127.0.0.1:57474:7474"
+      - "127.0.0.1:${SIM_NEO4J_BOLT_PORT:-57687}:7687"
+      - "127.0.0.1:${SIM_NEO4J_HTTP_PORT:-57474}:7474"
 
   aerospike:
     image: aerospike/aerospike-server:6.4
@@ -65,7 +73,7 @@ services:
     volumes:
       - ./aerospike-sim.conf:/opt/aerospike/etc/sim/aerospike.conf:ro
     ports:
-      - "127.0.0.1:53000:3000"
+      - "127.0.0.1:${SIM_AEROSPIKE_PORT:-53000}:3000"
     healthcheck:
       test: ["CMD", "asinfo", "-p", "3000", "-v", "status"]
       interval: 10s
