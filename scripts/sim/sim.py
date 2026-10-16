@@ -1287,10 +1287,9 @@ def e3(ctx, sc):
     mine = [n for n in nodes if n.get("edgeId") == ctx.edge["edge_id"]]
     sc.check(mine and mine[0].get("health") in ("HEALTHY", "OK", "UP") and mine[0].get("lastBundleVersion") is not None,
              "fleet list shows node healthy with bundle version", r)
+    # R10c: the Edge never posts its feature bag to the cloud, so no /edge/decision call may appear.
     dec = [l for l in proxy_log().splitlines() if "/edge/decision" in l]
-    sc.check(not any("-> 404" in l for l in dec), "edge AI decision client hits a valid CP path", {"lines": dec[-3:]})
-    sc.check(not re.search(r"POST /edge/decision ", proxy_log()), "edge AI client uses /api/v1/edge/decision",
-             {"lines": dec[-3:]}, severity="WARN")
+    sc.check(not dec, "edge never calls /edge/decision (no feature data leaves the Edge)", {"lines": dec[-3:]})
 
 
 @scenario("E4", "dual-post", "Edge pre-auth + cloud ingest correlated by edgeAssessmentId")
@@ -1339,12 +1338,11 @@ def e4(ctx, sc):
     sc.check(r.status in (401, 403), "bundle refused without client cert", r)
     r = noc.get("/edge/bundle", headers={"X-SSL-Client-Verify": "SUCCESS", "X-SSL-Client-S-DN": f"CN={ctx.edge['edge_id']}"})
     sc.check(r.status in (401, 403), "forged X-SSL-Client-* headers are stripped by the front end", r)
+    # R10c: the feature-bag endpoint is gone; even an ACTIVE node with a valid certificate is refused.
     r = mt.post("/edge/decision", {"engine": "FRAUD_SCORING", "baselineDecision": "HOLD", "features": {"amount_cents": 1}, "async": False},
                 headers={"X-Hokeka-Edge-Id": ctx.edge["edge_id"]})
-    dj = r.json or {}
-    sc.check(r.status == 200 and dj.get("finalDecision") == "HOLD" and (dj.get("fallback") or not dj.get("aiApplied")),
-             "edge AI decision falls back to baseline with no AI key", r)
-    sc.check(not PROVIDER_LEAK.search(r.text), "edge decision response does not name the AI provider", r)
+    sc.check(r.status in (401, 403, 404), "cloud refuses the removed /edge/decision feature-bag endpoint", r)
+    sc.check(not PROVIDER_LEAK.search(r.text or ""), "refusal does not name the AI provider", r)
 
 
 @scenario("E5", "edge", "Edge fail-closed + suspend/revoke")

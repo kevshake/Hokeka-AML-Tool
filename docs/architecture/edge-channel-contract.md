@@ -91,7 +91,6 @@ Receiver rejects when: `nonce` already seen (bounded LRU, ≥ 10 000 entries), o
 | `GET`  | `/api/v1/edge/config` | mTLS + edge id | — | HSE-1 sealed Edge Config document (`application/octet-stream`), `ETag: "<configVersion>"`, `Cache-Control: no-store` |
 | `POST` | `/api/v1/edge/assessments` | mTLS + edge id | `application/octet-stream`: HSE-1 sealed decision record batch v2 (1..500 records) | `200` acknowledgement |
 | `GET` (WebSocket upgrade) | `/api/v1/edge/tunnel` | mTLS + edge id, node `ACTIVE` before `101` | subprotocol `hokeka-tunnel.v1`, sealed JSON text frames | session |
-| `POST` | `/api/v1/edge/decision` | mTLS + edge id | JSON feature bag (legacy advisory call) | advisory; **removed in R10c** |
 | `POST` | `/api/v1/edge/assessments` | mTLS + edge id | `application/json`: v1 assessment envelope | legacy; **removed in R12** |
 
 `GET /api/v1/edge/bundle` and `GET /api/v1/edge/config` support `If-None-Match` (quoted, bare or

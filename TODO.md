@@ -1,5 +1,5 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-10-16_
+_Last updated: 2026-10-17_
 
 ## Wave 73 — Fix PSP-simulation findings (2026-10-16)
 
@@ -41,7 +41,7 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
   - [ ] R8 refs-by-ID (agent running; migration V264 reserved)
   - [ ] R10a Edge typologies
   - [ ] R10b Edge sanctions matcher
-  - [ ] R10c remove PII feature-bag POST + site-scoped velocity (agent running)
+  - [x] R10c remove PII feature-bag POST + site-scoped velocity (branch wp-r10c-pii-removal; migration V265)
 - [ ] Gaps found by R14a: billing counts only cloud ingest, so Edge decision records bill nothing (owner decision, must land before R12) · Edge does not de-duplicate a retried txn_id (re-evaluates; ref points at newest row)
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill

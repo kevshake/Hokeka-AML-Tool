@@ -23,9 +23,9 @@ Sections 1–5 below describe the code and the target as of 2026-10-04. The owne
 | PSP data settings | none | Retention, support access, cross-PSP opt-in with maker-checker (V261); sealed `GET /api/v1/edge/config`. | Edge-side config consumer (R2). |
 | Cloud → Edge reads | none | Tunnel server: `WS /api/v1/edge/tunnel` (`com.posgateway.aml.edge.tunnel`), Redis registry, sealed relay, `edge_data_access_log` (V263), nginx vhost `BACKEND/nginx/edge-tunnel.conf`. | Edge tunnel client (R5); cloud data proxy for the Console (R6); Console live pulls (R11). |
 | Cloud transaction stores | `transactions`, `transaction_features`, mobile-money / multi-asset / travel-rule stores | Unchanged. `/api/v1/transactions/ingest` still writes them. | Back-fill to each Edge (R15), then delete the ingest path and purge (R12). |
-| AI advisory from the Edge | `HokekaAiDecisionClient.enrichBorderline` → `/api/v1/edge/decision` with the full feature bag | Unchanged. This is a known class-T leak. | Remove the feature-bag POST (R10c). |
+| AI advisory from the Edge | `HokekaAiDecisionClient.enrichBorderline` → `/api/v1/edge/decision` with the full feature bag | Removed (R10c): the Edge client, the endpoint and the PSP inline-AI settings (`psps.ai_inline_mode`, `ai_inline_budget_ms`, dropped in V265) are gone. No feature data leaves the Edge; its answer carries no AI advisory. | A Hokeka AI recommendation fed only by decision records. |
 | Edge sanctions | none | none | Sanctions list distribution and Edge matcher (R10b). |
-| Velocity keys | `<panHash>:yyyyMMddHH` | Unchanged. Velocity is per Aerospike cluster, so per site. | Site-scoped keys for multi-site PSPs (R10c). |
+| Velocity keys | `<panHash>:yyyyMMddHH` | Site-scoped `<panHash>:yyyyMMddHH:<siteId>` (R10c). Reads use the local site only; without XDR velocity is per site. | Summing across sites over XDR, where a PSP runs it. |
 
 **Parts of this document that no longer apply:**
 - Section 4.1 "Ship to the CP" and "adopt mode", and section 4.2 "Edge rails: CP stages 1–10 run in adopt mode". The Edge decides; the cloud does not hydrate or re-run stages for an Edge transaction.
@@ -46,8 +46,6 @@ PSP switch ──► POST /edge/evaluate  (edge-host EdgeController)
                  ├─ EdgeEngine → rule-core (Rust, JNI) / EdgeRuleInterpreter (Java parity)
                  │     ops EQ NE GT GTE LT LTE IN CONTAINS, all/any/not; compute-all, max severity, summed score
                  │     Decision{action ∈ ALLOW/ALERT/HOLD/BLOCK, score, triggered_rule_ids, reasons}
-                 ├─ HokekaAiDecisionClient.enrichBorderline → Control Plane /edge/decision
-                 │     (psps.ai_inline_mode default FALSE; ai_inline_budget_ms default 500)
                  └─ recordTransaction → Aerospike (TTL), response to switch
   RuleBundlePoller ◄── Control Plane EdgeBundleDistributionService (bundle from EdgeRuleCompiler)
   MetricsShipper   ──► Control Plane (metrics only)
@@ -156,10 +154,9 @@ Event plane (txn | txn event | user event | list/screening delta | disposition)
   5. Optionally screen exact or near-exact names against a compact sanctions index (owner decision D-8). Fuzzy and adverse-media screening stay in the CP.
   6. Run sync rule instances (`execution_mode=SYNC`, `placement=EDGE`) from the bundle, with eligibility filter → detection → risk-band parameters (the subject's CRA band is replicated to Aerospike).
   7. Emit Edge Findings and resolve with the **same** precedence code as the CP orchestrator (shared Rust/Java library, parity-tested).
-  8. Optional AI inline only when `ai_inline_mode=true`, inside `ai_inline_budget_ms`. It returns a Finding; it never overrides alone unless the owner enables that.
+  8. No AI inline at the Edge: the feature-bag call to the Control Plane was removed in R10c because it sent transaction data to the cloud. Any future Edge-side AI must run on decision records only.
 - **Latency budget (recommendation, needs owner sign-off D-9):**
   - p99 ≤ 50 ms for steps 1–7 at the Edge;
-  - the AI inline path is bounded by `ai_inline_budget_ms` (default 500 ms) and only on borderline outcomes;
   - fail-closed behaviour stays as today (HOLD → SUSPEND).
 - **Ship to the CP:** an `EdgeAssessmentEnvelope` {edgeAssessmentId, bundleVersion, rule_version_ids hit, findings, decision, featureSnapshot hash} sent asynchronously (outbox on the Edge, at-least-once). Alternatively the PSP's dual-post carries `edgeAssessmentId`. The CP then **adopts** the Edge decision as the transaction's sync decision instead of re-deciding [K16].
 

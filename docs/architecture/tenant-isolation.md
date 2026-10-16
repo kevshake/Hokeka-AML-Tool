@@ -74,5 +74,4 @@ explicitly.
 ### Residency gaps that remain
 
 - The cloud `transactions` table and its dependants (`transaction_features`, `alerts.pan_hash`, mobile-money, multi-asset and travel-rule stores) still exist. `/api/v1/transactions/ingest` still writes them. R15 back-fills each PSP's Edge; R12 deletes the ingest path and purges the tables.
-- `HokekaAiDecisionClient` on the Edge still posts the full feature bag (including `pan_hash` and amount) to `/api/v1/edge/decision` for borderline decisions. That is class-T data reaching the cloud. R10c removes it.
 - Cross-PSP intelligence is opt-in (`psps.cross_psp_opt_in`) and limited by contract to indicators from filed SARs. The indicator set and its distribution are planned (R10b).
