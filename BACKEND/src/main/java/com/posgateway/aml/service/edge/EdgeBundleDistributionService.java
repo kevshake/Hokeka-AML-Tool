@@ -6,14 +6,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.posgateway.aml.config.edge.EdgeControlPlaneKeys;
 import com.posgateway.aml.edge.EdgeBundleService;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
-import com.posgateway.aml.entity.edge.EdgeBundleManifest;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.entity.rules.RuleLifecycleStatus;
 import com.posgateway.aml.repository.edge.EdgeBundleManifestRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -106,7 +104,11 @@ public class EdgeBundleDistributionService {
         }
     }
 
-    @Transactional(readOnly = true)
+    // Read-write: sealing records the bundle manifest (edge_bundles insert in persistManifest) so the
+    // Control Plane can later resolve the manifest hash an edge cites in its assessment envelopes.
+    // It was readOnly, and Postgres rejected the insert ("cannot execute INSERT in a read-only
+    // transaction"), so every first bundle pull answered 500 and edges stayed fail-closed.
+    @Transactional
     public SealedBundle sealFor(EdgeNode node) {
         EdgeRuleCompiler.CompilationResult compiled = compiler.compile(rulesFor(node.getPspId()));
 
@@ -140,6 +142,12 @@ public class EdgeBundleDistributionService {
     }
 
 
+    /**
+     * Records the manifest (rule id / rule version id list) of the bundle being sealed, once per
+     * (PSP, manifest hash), so assessment envelopes citing that hash can be resolved later. Uses an
+     * idempotent native insert so a concurrent seal of the same manifest cannot poison the
+     * surrounding transaction.
+     */
     private void persistManifest(Long pspId, EdgeRuleCompiler.CompilationResult compiled) {
         if (manifests == null || pspId == null || compiled.manifestHash() == null) {
             return;
@@ -147,11 +155,6 @@ public class EdgeBundleDistributionService {
         if (manifests.findByPspIdAndManifestHash(pspId, compiled.manifestHash()).isPresent()) {
             return;
         }
-        EdgeBundleManifest row = new EdgeBundleManifest();
-        row.setPspId(pspId);
-        row.setManifestHash(compiled.manifestHash());
-        row.setRuleCount(compiled.rules().size());
-        row.setCreatedAt(java.time.LocalDateTime.now());
         ArrayNode rules = mapper.createArrayNode();
         for (com.posgateway.aml.edge.EdgeBundleService.CompiledRule rule : compiled.rules()) {
             ObjectNode item = rules.addObject();
@@ -160,12 +163,8 @@ public class EdgeBundleDistributionService {
                 item.put("ruleVersionId", rule.ruleVersionId());
             }
         }
-        row.setManifest(rules.toString());
-        try {
-            manifests.save(row);
-        } catch (DataIntegrityViolationException alreadyPublished) {
-            // Another seal of the same manifest won the unique insert.
-        }
+        manifests.insertIfAbsent(pspId, compiled.manifestHash(), rules.toString(), compiled.rules().size(),
+                java.time.LocalDateTime.now());
     }
 
     /** {@code {"nonce":…,"issuedAt":…,"edgeId":…,"payload":<rule IR>}} — contract §4. */
