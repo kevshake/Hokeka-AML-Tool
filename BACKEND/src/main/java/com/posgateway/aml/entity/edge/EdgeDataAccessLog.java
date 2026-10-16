@@ -93,47 +93,90 @@ public class EdgeDataAccessLog {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    /** Returns {@code id}. */
     public Long getId() { return id; }
+    /** Returns {@code auditId}. */
     public UUID getAuditId() { return auditId; }
+    /** Sets {@code auditId}. */
     public void setAuditId(UUID auditId) { this.auditId = auditId; }
+    /** Returns {@code pspId}. */
     public Long getPspId() { return pspId; }
+    /** Sets {@code pspId}. */
     public void setPspId(Long pspId) { this.pspId = pspId; }
+    /** Returns {@code actorKind}. */
     public String getActorKind() { return actorKind; }
+    /** Sets {@code actorKind}. */
     public void setActorKind(String actorKind) { this.actorKind = actorKind; }
+    /** Returns {@code actorUserId}. */
     public String getActorUserId() { return actorUserId; }
+    /** Sets {@code actorUserId}. */
     public void setActorUserId(String actorUserId) { this.actorUserId = actorUserId; }
+    /** Returns {@code actorRole}. */
     public String getActorRole() { return actorRole; }
+    /** Sets {@code actorRole}. */
     public void setActorRole(String actorRole) { this.actorRole = actorRole; }
+    /** Returns {@code purpose}. */
     public String getPurpose() { return purpose; }
+    /** Sets {@code purpose}. */
     public void setPurpose(String purpose) { this.purpose = purpose; }
+    /** Returns {@code caseId}. */
     public String getCaseId() { return caseId; }
+    /** Sets {@code caseId}. */
     public void setCaseId(String caseId) { this.caseId = caseId; }
+    /** Returns {@code alertId}. */
     public String getAlertId() { return alertId; }
+    /** Sets {@code alertId}. */
     public void setAlertId(String alertId) { this.alertId = alertId; }
+    /** Returns {@code filingRef}. */
     public String getFilingRef() { return filingRef; }
+    /** Sets {@code filingRef}. */
     public void setFilingRef(String filingRef) { this.filingRef = filingRef; }
+    /** Returns {@code supportAccess}. */
     public boolean isSupportAccess() { return supportAccess; }
+    /** Sets {@code supportAccess}. */
     public void setSupportAccess(boolean supportAccess) { this.supportAccess = supportAccess; }
+    /** Returns {@code supportReason}. */
     public String getSupportReason() { return supportReason; }
+    /** Sets {@code supportReason}. */
     public void setSupportReason(String supportReason) { this.supportReason = supportReason; }
+    /** Returns {@code op}. */
     public String getOp() { return op; }
+    /** Sets {@code op}. */
     public void setOp(String op) { this.op = op; }
+    /** Returns {@code paramsSummary}. */
     public String getParamsSummary() { return paramsSummary; }
+    /** Sets {@code paramsSummary}. */
     public void setParamsSummary(String paramsSummary) { this.paramsSummary = paramsSummary; }
+    /** Returns {@code paramsDigest}. */
     public String getParamsDigest() { return paramsDigest; }
+    /** Sets {@code paramsDigest}. */
     public void setParamsDigest(String paramsDigest) { this.paramsDigest = paramsDigest; }
+    /** Returns {@code sitesContacted}. */
     public String getSitesContacted() { return sitesContacted; }
+    /** Sets {@code sitesContacted}. */
     public void setSitesContacted(String sitesContacted) { this.sitesContacted = sitesContacted; }
+    /** Returns {@code sitesAnswered}. */
     public String getSitesAnswered() { return sitesAnswered; }
+    /** Sets {@code sitesAnswered}. */
     public void setSitesAnswered(String sitesAnswered) { this.sitesAnswered = sitesAnswered; }
+    /** Returns {@code itemCount}. */
     public int getItemCount() { return itemCount; }
+    /** Sets {@code itemCount}. */
     public void setItemCount(int itemCount) { this.itemCount = itemCount; }
+    /** Returns {@code bytes}. */
     public long getBytes() { return bytes; }
+    /** Sets {@code bytes}. */
     public void setBytes(long bytes) { this.bytes = bytes; }
+    /** Returns {@code outcome}. */
     public String getOutcome() { return outcome; }
+    /** Sets {@code outcome}. */
     public void setOutcome(String outcome) { this.outcome = outcome; }
+    /** Returns {@code requestedAt}. */
     public Instant getRequestedAt() { return requestedAt; }
+    /** Sets {@code requestedAt}. */
     public void setRequestedAt(Instant requestedAt) { this.requestedAt = requestedAt; }
+    /** Returns {@code completedAt}. */
     public Instant getCompletedAt() { return completedAt; }
+    /** Sets {@code completedAt}. */
     public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
 }

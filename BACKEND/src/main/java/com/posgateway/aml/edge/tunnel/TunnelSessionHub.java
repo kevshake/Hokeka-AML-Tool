@@ -439,8 +439,14 @@ public class TunnelSessionHub {
                 }
             }
             case FINISH -> {
-                if (s != null && s.routes.remove(m.corrId()) != null && live) {
-                    publishEntry(s);
+                if (s != null) {
+                    if (s.routes.remove(m.corrId()) != null) {
+                        if (live) {
+                            publishEntry(s);
+                        }
+                    } else if (live) {
+                        s.finishedEarly.put(m.corrId(), clock.millis());
+                    }
                 }
             }
             case SEAL_FAILURE -> {
@@ -465,6 +471,9 @@ public class TunnelSessionHub {
         if (!live) {
             messaging.toOrigin(m.origin(), RelayMessage.reject(m.sessionId(), m.corrId(), TunnelErrorCode.EDGE_OFFLINE));
             return;
+        }
+        if (s.finishedEarly.remove(m.corrId()) != null) {
+            return; // the origin already gave up on this request (FINISH overtook the REQUEST)
         }
         if (!s.opsEffective.contains(m.op())) {
             messaging.toOrigin(m.origin(), RelayMessage.reject(m.sessionId(), m.corrId(), TunnelErrorCode.OP_NOT_ALLOWED));
@@ -536,6 +545,7 @@ public class TunnelSessionHub {
                 publishEntry(s);
             }
             s.notifyIds.entrySet().removeIf(e -> e.getValue() + 600_000 < nowMs);
+            s.finishedEarly.entrySet().removeIf(e -> e.getValue() + 310_000 < nowMs);
         }
         if (lastReap.plusMillis(Math.max(props.getRegistryStaleMs() / 2, 1_000)).isBefore(now)) {
             lastReap = now;

@@ -47,6 +47,12 @@ final class LocalTunnelSession {
 
     final Map<String, Route> routes = new ConcurrentHashMap<>();
     final Map<String, Long> notifyIds = new ConcurrentHashMap<>();
+    /**
+     * FINISH messages that arrived before their REQUEST (pub/sub delivery is not ordered across
+     * listener threads): corrId → arrival ms. A REQUEST found here is dropped instead of taking a
+     * slot that nothing would ever release before its deadline.
+     */
+    final Map<String, Long> finishedEarly = new ConcurrentHashMap<>();
     private final Deque<Long> sealFailures = new ArrayDeque<>();
 
     private final StringBuilder partial = new StringBuilder();

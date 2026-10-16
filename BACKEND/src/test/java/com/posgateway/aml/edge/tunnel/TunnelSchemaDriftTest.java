@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class TunnelSchemaDriftTest {
 
+    /** Verifies: classpath schemas are byte identical to docs contracts. */
     @Test
     void classpathSchemasAreByteIdenticalToDocsContracts() throws IOException {
         Path root = ContractFixtures.contractsDir();

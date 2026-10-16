@@ -158,7 +158,9 @@ public class EdgeNode {
     public String getEdgeId() { return edgeId; }
     public void setEdgeId(String edgeId) { this.edgeId = edgeId; }
 
+    /** Registered site id; {@code null} = single-node site (see {@link #effectiveSiteId()}). */
     public String getSiteId() { return siteId; }
+    /** Assigns the node to an Edge Site ({@code null} = its own single-node site). */
     public void setSiteId(String siteId) { this.siteId = siteId; }
 
     /** The node's registered site: {@link #siteId}, defaulting to {@link #edgeId} (contract §1). */

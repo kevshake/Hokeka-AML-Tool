@@ -49,6 +49,7 @@ public class EdgeDataStream implements Iterator<ObjectNode>, AutoCloseable {
         boolean currentChunkLast;
         boolean finished;
 
+        /** Buffers the chunks of one site call. */
         SiteBuffer(EdgeTunnelClient.SiteCall call) {
             this.call = call;
         }

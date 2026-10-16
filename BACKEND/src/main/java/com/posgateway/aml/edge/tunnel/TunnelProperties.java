@@ -62,52 +62,82 @@ public class TunnelProperties {
      */
     private String cursorSecret = "";
 
+    /** Returns {@code enabled}. */
     public boolean isEnabled() { return enabled; }
+    /** Sets {@code enabled}. */
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
+    /** Returns {@code instanceId}. */
     public String getInstanceId() { return instanceId; }
+    /** Sets {@code instanceId}. */
     public void setInstanceId(String instanceId) { this.instanceId = instanceId; }
 
+    /** Returns {@code heartbeatIntervalMs}. */
     public long getHeartbeatIntervalMs() { return heartbeatIntervalMs; }
+    /** Sets {@code heartbeatIntervalMs}. */
     public void setHeartbeatIntervalMs(long heartbeatIntervalMs) { this.heartbeatIntervalMs = heartbeatIntervalMs; }
 
+    /** Returns {@code idleTimeoutMs}. */
     public long getIdleTimeoutMs() { return idleTimeoutMs; }
+    /** Sets {@code idleTimeoutMs}. */
     public void setIdleTimeoutMs(long idleTimeoutMs) { this.idleTimeoutMs = idleTimeoutMs; }
 
+    /** Returns {@code helloTimeoutMs}. */
     public long getHelloTimeoutMs() { return helloTimeoutMs; }
+    /** Sets {@code helloTimeoutMs}. */
     public void setHelloTimeoutMs(long helloTimeoutMs) { this.helloTimeoutMs = helloTimeoutMs; }
 
+    /** Returns {@code maxInflight}. */
     public int getMaxInflight() { return maxInflight; }
+    /** Sets {@code maxInflight}. */
     public void setMaxInflight(int maxInflight) { this.maxInflight = maxInflight; }
 
+    /** Returns {@code registryStaleMs}. */
     public long getRegistryStaleMs() { return registryStaleMs; }
+    /** Sets {@code registryStaleMs}. */
     public void setRegistryStaleMs(long registryStaleMs) { this.registryStaleMs = registryStaleMs; }
 
+    /** Returns {@code deadlineGraceMs}. */
     public long getDeadlineGraceMs() { return deadlineGraceMs; }
+    /** Sets {@code deadlineGraceMs}. */
     public void setDeadlineGraceMs(long deadlineGraceMs) { this.deadlineGraceMs = deadlineGraceMs; }
 
+    /** Returns {@code busyRetryAfterMs}. */
     public long getBusyRetryAfterMs() { return busyRetryAfterMs; }
+    /** Sets {@code busyRetryAfterMs}. */
     public void setBusyRetryAfterMs(long busyRetryAfterMs) { this.busyRetryAfterMs = busyRetryAfterMs; }
 
+    /** Returns {@code maxFrameBytes}. */
     public int getMaxFrameBytes() { return maxFrameBytes; }
+    /** Sets {@code maxFrameBytes}. */
     public void setMaxFrameBytes(int maxFrameBytes) { this.maxFrameBytes = maxFrameBytes; }
 
+    /** Returns {@code sealFailureLimit}. */
     public int getSealFailureLimit() { return sealFailureLimit; }
+    /** Sets {@code sealFailureLimit}. */
     public void setSealFailureLimit(int sealFailureLimit) { this.sealFailureLimit = sealFailureLimit; }
 
+    /** Returns {@code sealFailureWindowMs}. */
     public long getSealFailureWindowMs() { return sealFailureWindowMs; }
+    /** Sets {@code sealFailureWindowMs}. */
     public void setSealFailureWindowMs(long sealFailureWindowMs) { this.sealFailureWindowMs = sealFailureWindowMs; }
 
+    /** Returns {@code housekeepingIntervalMs}. */
     public long getHousekeepingIntervalMs() { return housekeepingIntervalMs; }
+    /** Sets {@code housekeepingIntervalMs}. */
     public void setHousekeepingIntervalMs(long housekeepingIntervalMs) {
         this.housekeepingIntervalMs = housekeepingIntervalMs;
     }
 
+    /** Returns {@code nodeRecheckIntervalMs}. */
     public long getNodeRecheckIntervalMs() { return nodeRecheckIntervalMs; }
+    /** Sets {@code nodeRecheckIntervalMs}. */
     public void setNodeRecheckIntervalMs(long nodeRecheckIntervalMs) {
         this.nodeRecheckIntervalMs = nodeRecheckIntervalMs;
     }
 
+    /** Returns {@code cursorSecret}. */
     public String getCursorSecret() { return cursorSecret; }
+    /** Sets {@code cursorSecret}. */
     public void setCursorSecret(String cursorSecret) { this.cursorSecret = cursorSecret; }
 }

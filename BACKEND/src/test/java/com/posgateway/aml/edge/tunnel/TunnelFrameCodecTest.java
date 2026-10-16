@@ -42,6 +42,7 @@ class TunnelFrameCodecTest {
         return new TunnelFrameCodec(hse, new EdgeReplayGuard(), SCHEMAS, MAPPER, 1_048_576);
     }
 
+    /** Generates a key pair of the given algorithm. */
     private static KeyPair gen(String alg) {
         try {
             return KeyPairGenerator.getInstance(alg).generateKeyPair();
@@ -50,6 +51,7 @@ class TunnelFrameCodecTest {
         }
     }
 
+    /** Raw RFC 7748 bytes of an X25519 public key. */
     private byte[] raw(KeyPair x) {
         return HokekaSecureEnvelope.rawFromX25519Public((XECPublicKey) x.getPublic());
     }
@@ -91,6 +93,7 @@ class TunnelFrameCodecTest {
             "notify, notify--config-updated.json",
             "error, error--edge-offline.json"
     })
+    /** cloudToEdgeFramesRoundTripWithTheirContext. */
     void cloudToEdgeFramesRoundTripWithTheirContext(String type, String fixture) throws Exception {
         JsonNode body = ContractFixtures.fixture(fixture);
         String corrId = type.equals("cancel") || type.equals("credit") ? TunnelFrameCodec.newId() : null;
@@ -104,6 +107,7 @@ class TunnelFrameCodecTest {
         assertThat(codec().checkBody(type, f.body())).isEmpty();
     }
 
+    /** Verifies: hello and hello ack round trip. */
     @Test
     void helloAndHelloAckRoundTrip() throws Exception {
         TunnelFrameCodec cloud = codec();
@@ -120,6 +124,7 @@ class TunnelFrameCodecTest {
         assertThat(cloud.checkBody("hello.ack", ackOpened.body())).isEmpty();
     }
 
+    /** Verifies: response and chunk use their own contexts. */
     @Test
     void responseAndChunkUseTheirOwnContexts() throws Exception {
         JsonNode page = ContractFixtures.fixture("response--search-page.json");
@@ -135,6 +140,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.SEAL_INVALID);
     }
 
+    /** Verifies: outer fixtures parse and invalid ones are refused. */
     @Test
     void outerFixturesParseAndInvalidOnesAreRefused() throws Exception {
         TunnelFrameCodec c = codec();
@@ -153,6 +159,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.UNSUPPORTED_FRAME);
     }
 
+    /** Verifies: sealed plaintext fixtures match what the codec binds. */
     @Test
     void sealedPlaintextFixturesMatchWhatTheCodecBinds() {
         assertThat(SCHEMAS.validate("tunnel/sealed-plaintext.schema.json",
@@ -163,6 +170,7 @@ class TunnelFrameCodecTest {
                 ContractFixtures.fixture("sealed-plaintext--request-without-session.invalid.json"))).isNotEmpty();
     }
 
+    /** Verifies: replayed frame is refused. */
     @Test
     void replayedFrameIsRefused() throws Exception {
         TunnelFrameCodec edge = codec();
@@ -172,6 +180,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.REPLAY_DETECTED);
     }
 
+    /** Verifies: outer header tampering is abinding mismatch. */
     @ParameterizedTest(name = "tampered {0}")
     @CsvSource({"id", "corrId", "ts", "nonce"})
     void outerHeaderTamperingIsABindingMismatch(String field) throws Exception {
@@ -187,6 +196,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.BINDING_MISMATCH);
     }
 
+    /** Verifies: wrong session or edge is abinding mismatch. */
     @Test
     void wrongSessionOrEdgeIsABindingMismatch() throws Exception {
         String text = sealToCloud(codec(), "error", TunnelFrameCodec.newId(), SESSION,
@@ -198,6 +208,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.BINDING_MISMATCH);
     }
 
+    /** Verifies: foreign signature or tampered ciphertext is seal invalid. */
     @Test
     void foreignSignatureOrTamperedCiphertextIsSealInvalid() throws Exception {
         String text = sealToCloud(codec(), "response", TunnelFrameCodec.newId(), SESSION,
@@ -215,6 +226,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.SEAL_INVALID);
     }
 
+    /** Verifies: items failing the item schema are discarded by pointer only. */
     @Test
     void itemsFailingTheItemSchemaAreDiscardedByPointerOnly() throws Exception {
         ObjectNode body = (ObjectNode) ContractFixtures.fixture("response--search-item-with-pan-hash.invalid.json");
@@ -231,6 +243,7 @@ class TunnelFrameCodecTest {
         assertThatThrownBy(() -> codec().checkResponse(envelopeBroken)).isInstanceOf(TunnelFrameException.class);
     }
 
+    /** Verifies: oversize frame is refused before sending. */
     @Test
     void oversizeFrameIsRefusedBeforeSending() {
         TunnelFrameCodec small = new TunnelFrameCodec(hse, new EdgeReplayGuard(), SCHEMAS, MAPPER, 600);
@@ -240,6 +253,7 @@ class TunnelFrameCodecTest {
                 .extracting(e -> ((TunnelFrameException) e).code()).isEqualTo(TunnelErrorCode.FRAME_TOO_LARGE);
     }
 
+    /** Verifies: ping and pong are unsealed headers only. */
     @Test
     void pingAndPongAreUnsealedHeadersOnly() throws Exception {
         TunnelFrameCodec c = codec();

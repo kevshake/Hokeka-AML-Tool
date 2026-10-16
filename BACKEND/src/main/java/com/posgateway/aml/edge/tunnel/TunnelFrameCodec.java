@@ -272,13 +272,28 @@ public class TunnelFrameCodec {
                 && java.util.Objects.equals(outerCorr, innerCorr)
                 && outer.get("nonce").asText().equals(env.nonce())
                 && sameMillis(plaintext.path("issuedAt").asText(""), outer.get("ts").asLong())
-                && ("hello".equals(type) ? innerSession == null
-                    : innerSession != null && innerSession.equals(expectedSessionId));
+                && sessionBound(type, innerSession, expectedSessionId);
         if (!bound) {
             throw new TunnelFrameException(TunnelErrorCode.BINDING_MISMATCH, "frame binding mismatch");
         }
         return new OpenedFrame(type, outer.get("id").asText(), outerCorr, innerSession, env.edgeId(),
                 env.nonce(), env.issuedAt(), (ObjectNode) body);
+    }
+
+    /**
+     * Session binding rule of §7.4 step 4: {@code hello} carries no session; {@code hello.ack}
+     * creates it, so a receiver that has no session yet (expected {@code null}) accepts the one it
+     * carries (the Edge then requires it to equal {@code body.sessionId}); every other frame must
+     * carry exactly the live session's id.
+     */
+    private static boolean sessionBound(String type, String inner, String expected) {
+        if ("hello".equals(type)) {
+            return inner == null;
+        }
+        if ("hello.ack".equals(type) && expected == null) {
+            return inner != null;
+        }
+        return inner != null && inner.equals(expected);
     }
 
     /** True when the RFC 3339 {@code issuedAt} denotes exactly epoch-millis {@code ts}. */

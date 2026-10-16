@@ -28,6 +28,7 @@ class TunnelContractFixturesTest {
         return ContractFixtures.fixtureNames().stream();
     }
 
+    /** Verifies: fixture validates as declared. */
     @ParameterizedTest(name = "{0}")
     @MethodSource("fixtures")
     void fixtureValidatesAsDeclared(String name) {
@@ -41,6 +42,7 @@ class TunnelContractFixturesTest {
         }
     }
 
+    /** Verifies: every manifest entry names an invalid fixture. */
     @Test
     void everyManifestEntryNamesAnInvalidFixture() throws IOException {
         JsonNode manifest = ContractFixtures.fixture("expected-failures.json");
@@ -52,6 +54,7 @@ class TunnelContractFixturesTest {
         }
     }
 
+    /** Verifies: pan like fields are rejected for the luhn reason. */
     @Test
     void panLikeFieldsAreRejectedForTheLuhnReason() {
         List<TunnelSchemas.Violation> v = SCHEMAS.validate("tunnel/error.schema.json",
@@ -65,6 +68,7 @@ class TunnelContractFixturesTest {
                 && x.pointer().equals("/features/memo"));
     }
 
+    /** Verifies: unknown param is reported by pointer only. */
     @Test
     void unknownParamIsReportedByPointerOnly() {
         List<TunnelSchemas.Violation> v = SCHEMAS.validate("tunnel/request.schema.json",
@@ -72,6 +76,7 @@ class TunnelContractFixturesTest {
         assertThat(v).anyMatch(x -> x.pointer().equals("/params/panHash"));
     }
 
+    /** Verifies: luhn guard matches the reference rule. */
     @Test
     void luhnGuardMatchesTheReferenceRule() {
         assertThat(LuhnGuard.isPanLike("4111 1111 1111 1111")).isTrue();

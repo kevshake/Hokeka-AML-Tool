@@ -23,6 +23,7 @@ class TunnelCursorTest {
             new CompositeCursorCodec("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8), MAPPER,
                     new TunnelSchemas());
 
+    /** Verifies: query hash of the fixture params is the fixture q. */
     @Test
     void queryHashOfTheFixtureParamsIsTheFixtureQ() {
         JsonNode params = ContractFixtures.fixture("txn.search.params--merchant-window.json");
@@ -33,6 +34,7 @@ class TunnelCursorTest {
         assertThat(CompositeCursorCodec.queryHash(reordered)).isEqualTo(q);
     }
 
+    /** Verifies: minted site cursor is the fixture cursor. */
     @Test
     void mintedSiteCursorIsTheFixtureCursor() throws Exception {
         JsonNode fixture = ContractFixtures.fixture("cursor--site.json");
@@ -46,6 +48,7 @@ class TunnelCursorTest {
         assertThat(minted).matches("^[A-Za-z0-9_-]{1,2048}$");
     }
 
+    /** Verifies: composite cursor round trips and validates against its schema. */
     @Test
     void compositeCursorRoundTripsAndValidatesAgainstItsSchema() throws Exception {
         JsonNode fixture = ContractFixtures.fixture("composite-cursor--two-sites.json");
@@ -60,6 +63,7 @@ class TunnelCursorTest {
         assertThat(body).isEqualTo(fixture);
     }
 
+    /** Verifies: tampered foreign or mismatched cursors are invalid cursor. */
     @Test
     void tamperedForeignOrMismatchedCursorsAreInvalidCursor() {
         String q = ContractFixtures.fixture("cursor--site.json").get("q").asText();
@@ -81,6 +85,7 @@ class TunnelCursorTest {
         }
     }
 
+    /** Verifies: jcs follows rfc8785 for numbers strings and ordering. */
     @Test
     void jcsFollowsRfc8785ForNumbersStringsAndOrdering() throws Exception {
         JsonNode n = MAPPER.readTree("{\"b\":[1.0,1e21,0.000001,1e-7,-0,123.456],\"a\":\"\\u000f\\\"é\",\"€\":true}");
