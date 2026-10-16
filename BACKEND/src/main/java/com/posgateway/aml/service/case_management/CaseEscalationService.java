@@ -169,26 +169,36 @@ public class CaseEscalationService {
      * Determine escalation target based on hierarchy
      */
     private User determineEscalationTarget(ComplianceCase complianceCase) {
-        // Check if case has matching escalation rule
+        // A matching escalation rule wins, but only when its target belongs to the case's tenant:
+        // rules are global, and routing a PSP's case to another PSP's user is a tenancy breach.
         EscalationRule matchingRule = findMatchingEscalationRule(complianceCase);
-
         if (matchingRule != null && matchingRule.getEscalateToUserId() != null) {
-            return userRepository.findById(matchingRule.getEscalateToUserId())
+            User ruleTarget = userRepository.findById(matchingRule.getEscalateToUserId())
                     .orElseThrow(() -> new IllegalStateException("Escalation target user not found"));
+            if (samePspScope(complianceCase, ruleTarget)) {
+                return ruleTarget;
+            }
+            logger.warn("Escalation rule {} targets user {} outside case {}'s PSP; using the PSP hierarchy",
+                    matchingRule.getId(), ruleTarget.getId(), complianceCase.getCaseReference());
         }
 
-        // Default escalation hierarchy
+        // Default hierarchy, restricted to the case's PSP (previously any tenant's officers were
+        // candidates). Walk up until a level has an enabled in-tenant user.
         UserRole targetRole = determineEscalationRole(complianceCase);
-        List<User> availableUsers = userRepository.findByRole_NameAndEnabled(targetRole.name(), true);
-
-        if (availableUsers.isEmpty()) {
-            // Escalate to next level
-            targetRole = getNextEscalationRole(targetRole);
-            availableUsers = userRepository.findByRole_NameAndEnabled(targetRole.name(), true);
+        List<User> availableUsers = eligibleUsers(complianceCase, targetRole);
+        while (availableUsers.isEmpty()) {
+            UserRole next = getNextEscalationRole(targetRole);
+            if (next == targetRole) {
+                break;
+            }
+            targetRole = next;
+            availableUsers = eligibleUsers(complianceCase, targetRole);
         }
 
         if (availableUsers.isEmpty()) {
-            throw new IllegalStateException("No escalation target available");
+            // 409, not 500: the request is valid but the PSP has nobody at a higher level.
+            throw new com.posgateway.aml.exception.ConflictException(
+                    "No " + targetRole.name() + " in this PSP to escalate to; assign one or escalate to a named user");
         }
 
         // Assign to user with lowest workload
@@ -197,8 +207,28 @@ public class CaseEscalationService {
                 .orElseThrow();
     }
 
+    /** Enabled users holding {@code role} in the same PSP scope as the case. */
+    private List<User> eligibleUsers(ComplianceCase complianceCase, UserRole role) {
+        return userRepository.findByRole_NameAndEnabled(role.name(), true).stream()
+                .filter(user -> samePspScope(complianceCase, user))
+                .toList();
+    }
+
     /**
-     * Determine escalation role based on current assignee
+     * True when {@code user} is in the case's tenant: same PSP id, or both platform-level (no PSP /
+     * PSP 0). Mirrors CaseAssignmentService.samePspScope.
+     */
+    private static boolean samePspScope(ComplianceCase complianceCase, User user) {
+        Long casePspId = complianceCase.getPspId();
+        Long userPspId = user.getPsp() == null ? null : user.getPsp().getPspId();
+        if (casePspId == null || casePspId == 0L) {
+            return userPspId == null || userPspId == 0L;
+        }
+        return casePspId.equals(userPspId);
+    }
+
+    /**
+     * Determine escalation role based on the current assignee
      */
     private UserRole determineEscalationRole(ComplianceCase complianceCase) {
         User currentAssignee = complianceCase.getAssignedTo();
@@ -227,7 +257,7 @@ public class CaseEscalationService {
         return switch (currentRole) {
             case ANALYST -> UserRole.COMPLIANCE_OFFICER;
             case COMPLIANCE_OFFICER -> UserRole.MLRO;
-            default -> UserRole.MLRO; // Already at highest level
+            default -> UserRole.MLRO; // MLRO is the top: MLRO -> MLRO ends the walk
         };
     }
 
