@@ -1,114 +1,111 @@
-# Hokeka simulation results — run `r1016174257`
+# Hokeka simulation results — run `r1016212351`
 
-Started: 2026-10-16T17:42:57  ·  Finished: 2026-10-16T17:48:31  ·  Control Plane: `http://127.0.0.1:2637/api/v1`
+Started: 2026-10-16T21:23:51  ·  Finished: 2026-10-16T21:28:53  ·  Control Plane: `http://127.0.0.1:2647/api/v1`
 
-Summary: **FAIL** 6, **PASS** 6
+Summary: **FAIL** 3, **PASS** 30, **WARN** 2
 
 | ID | Area | Scenario | Status | Checks | Failed checks |
 |---|---|---|---|---|---|
-| S0 | seed | Seed PSPs, users, roles, merchants | PASS | 42/42 |  |
-| A1 | monitoring | Actuator health / info / metrics exposure | FAIL | 13/16 | anonymous /actuator/health is UP; health component mail UP; health component sanctionsData UP |
-| A2 | monitoring | Startup configuration warnings (Control Plane log) | FAIL | 4/6 | EnvVarStartupValidator reports 0 MISSING; no ERROR lines during boot |
-| AI1 | ai | AI decision layer degrades gracefully with no LAYA key (shadow) | PASS | 3/3 |  |
-| B1 | auth | Login / me / logout / session | FAIL | 10/11 | Authorization: Bearer <token> authenticates (docs contract) |
-| B2 | auth | Hard-coded / demo credentials are not usable in production profile | FAIL | 0/8 | 'admin' / 'Hokeka2026!' must not log in on the production profile; 'super.admin' / 'Hokeka2026!' must not log in on the production profile; 'platform.admin' / 'Hokeka2026!' must not log in on the production profile; 'velocity.admin' / 'Hokeka2026!' must not log in on the production profile; 'compliance' / 'Hokeka2026!' must not log in on the production profile; 'analyst' / 'Hokeka2026!' must not l |
+| S0 | seed | Seed PSPs, users, roles, merchants | PASS | 48/48 |  |
+| A1 | monitoring | Actuator health / info / metrics exposure | PASS | 15/15 |  |
+| A2 | monitoring | Startup configuration warnings (Control Plane log) | WARN | 5/6 | Flyway migrations are free of duplicate DDL (29 'already exists' notices) |
+| A3 | schema | Fresh Flyway schema needs no out-of-band patches | PASS | 1/1 |  |
+| B1 | auth | Login / me / logout / session | PASS | 10/10 |  |
+| B2 | auth | Hard-coded / demo credentials are not usable in production profile | PASS | 8/8 |  |
 | B3 | auth | Password reset + change password | PASS | 8/8 |  |
 | C1 | rbac | PSP users cannot reach platform endpoints | PASS | 35/35 |  |
 | D1 | onboarding | Invite-only onboarding | PASS | 8/8 |  |
-| D2 | onboarding | PSP API keys lifecycle and use | FAIL | 5/6 | issued API key authenticates PSP ingest (X-Api-Key or Bearer) |
+| D2 | onboarding | PSP API keys lifecycle and use | PASS | 12/12 |  |
 | D3 | onboarding | PSP settings & signal taxonomy mode | PASS | 11/11 |  |
-| D4 | billing | Billing, usage, subscriptions, invoices | FAIL | 9/10 | PSP admin GET /billing/rates |
+| D4 | billing | Billing, usage, subscriptions, invoices | PASS | 11/11 |  |
+| R1 | rules | Rule CRUD with visual-builder JSON + maker/checker + live effect | FAIL | 12/14 | rule id/name cited in decision; below-threshold txn ALLOW |
+| R2 | rules | Rule disable / version history / rollback | PASS | 5/5 |  |
+| T1 | ingest | Normal traffic at volume (all PSPs, concurrent) | FAIL | 1/3 | normal traffic mostly ALLOW (0/600) — false-positive rate; p95 ingest latency < 2000ms (p95=7051) |
+| T2 | ingest | Idempotent ingest (Idempotency-Key / clientReference) | PASS | 7/7 |  |
+| T3 | typology | Structuring below CTR threshold | PASS | 2/2 |  |
+| T4 | typology | Rapid movement of funds (in then out) | PASS | 2/2 |  |
+| T5 | typology | Velocity bursts (1m / 5m windows) | WARN | 2/3 | velocity reason cited |
+| T6 | typology | Z-score amount outlier | PASS | 2/2 |  |
+| T7 | typology | High-risk MCC (gambling 7995, crypto 6051) | PASS | 4/4 |  |
+| T8 | typology | Blacklist hits are tenant-scoped | FAIL | 8/9 | same IP at another PSP not blocked (tenant scope) |
+| T9 | typology | Sanctions exact / fuzzy / PEP screening | PASS | 8/8 |  |
+| T10 | typology | Tipping-off: PSP-facing payloads carry no filing language | PASS | 2/2 |  |
+| C2 | tenant | PSP A cannot see or act on PSP B data | PASS | 12/12 |  |
+| C3 | tenant | PSP B users see only their own alerts / transactions | PASS | 9/9 |  |
+| L1 | alerts | Alerts list, keyset pagination, prioritisation, resolve | PASS | 11/11 |  |
+| L2 | cases | Case management: create, assign, escalate, decide, timeline | PASS | 13/13 |  |
+| L3 | reporting | SAR workflow, XML export, CTR/LCTR CSV+PDF, scheme pack, reports, exports | PASS | 21/21 |  |
+| AI1 | ai | AI decision layer degrades gracefully with no LAYA key (shadow) | PASS | 4/4 |  |
+| E1 | edge | Edge node request / approve / enrollment (real Edge Host) | PASS | 7/7 |  |
+| E2 | edge | Rule bundle pull + signature verification + evaluation | PASS | 9/9 |  |
+| E3 | edge | Edge metrics shipping (HSE-1) + fleet analytics | PASS | 5/5 |  |
+| E4 | dual-post | Edge pre-auth + cloud ingest correlated by edgeAssessmentId | PASS | 14/14 |  |
+| E5 | edge | Edge fail-closed + suspend/revoke | PASS | 3/3 |  |
 
 ## Failure evidence
 
-### A1 — Actuator health / info / metrics exposure (FAIL)
-- **FAIL** anonymous /actuator/health is UP
-  ```json
-  {"request": "GET /actuator/health", "requestBody": null, "status": 503, "ms": 15649.0, "response": "{\"status\":\"DOWN\",\"groups\":[\"liveness\",\"readiness\"]}"}
-  ```
-- **WARN** health component mail UP
-  ```json
-  {"component": "mail", "detail": {"status": "DOWN", "details": {"location": ":587", "error": "jakarta.mail.AuthenticationFailedException: failed to connect, no password specified?"}}}
-  ```
-- **WARN** health component sanctionsData UP
-  ```json
-  {"component": "sanctionsData", "detail": {"status": "DOWN", "details": {"watchlistRecords": -1, "status": "UNAVAILABLE", "reason": "Could not read sanctions count from aml-microservice; screening data status is unknown."}}}
-  ```
-- note: health components: db=UP, diskSpace=UP, livenessState=UP, mail=DOWN, neo4j=UP, onPremLease=UP, ping=UP, readinessState=UP, redis=UP, sanctionsData=DOWN
+### A2 — Startup configuration warnings (Control Plane log) (WARN)
+- **WARN** Flyway migrations are free of duplicate DDL (29 'already exists' notices)
+- note: boot WARN lines (excluding Flyway 'already exists'): 6; ERROR lines: 0
+- note: 2026-10-16 21:22:44.401 WARN  [main] [] org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+- note: 2026-10-16 21:22:51.828 WARN  [main] [] c.p.a.c.s.MpesaCallbackIpAllowlistFilter - MPESA_CALLBACK_ALLOWED_IPS is not configured — the M-Pesa callback endpoint accepts requests from any IP (matches pre-existing behaviour). Set it to Safaricom Daraja's published
+- note: 2026-10-16 21:23:01.009 WARN  [main] [] o.d.c.k.builder.impl.KieBuilderImpl - File 'rules/aml-rules.drl' is in folder 'rules' but declares package 'com.posgateway.aml.rules'. It is advised to have a correspondance between package and folder names.
+- note: 2026-10-16 21:23:20.344 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.AccountTransfer is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please consider
+- note: 2026-10-16 21:23:20.352 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.MerchantRelationship is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please con
+- note: 2026-10-16 21:23:22.396 WARN  [main] [] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to di
 
-### A2 — Startup configuration warnings (Control Plane log) (FAIL)
-- **FAIL** EnvVarStartupValidator reports 0 MISSING
+### R1 — Rule CRUD with visual-builder JSON + maker/checker + live effect (FAIL)
+- **WARN** rule id/name cited in decision
   ```json
-  {"line": null}
+  {"request": "POST /transactions/ingest", "requestBody": "{\"merchantId\": \"2\", \"amountCents\": 300000, \"currency\": \"USD\", \"pan\": \"4070376300421061\", \"terminalId\": \"T-card-01\", \"ipAddress\": \"198.51.100.187\", \"countryCode\": \"KE\", \"channelType\": \"ECOM\", \"direction\": \"INBOUND\", \"clientReference\": \"r1016212351-e9b3005c1593\", \"acquirerResponse\": \"00\"}", "status": 200, "ms": 6099.0, "response": "{\"txnId\":2,\"action\":\"HOLD\",\"reasons\":[\"SCORING_UNAVAILABLE: manual review required\"],\"latencyMs\":0}"}
   ```
-- **WARN** no ERROR lines during boot
+- **FAIL** below-threshold txn ALLOW
   ```json
-  {"errors": ["2026-10-16 17:20:51.539 ERROR [main] [] o.h.m.internal.MetadataContext - HHH015007: Illegal argument on static metamodel field injection : org.hibernate.envers.DefaultRevisionEntity_#class_; expected type :  org.hibernate.metamodel.model.domain.internal.EntityTypeImpl; encountered type : jakarta.per"]}
+  {"request": "POST /transactions/ingest", "requestBody": "{\"merchantId\": \"2\", \"amountCents\": 150000, \"currency\": \"USD\", \"pan\": \"4710600081444825\", \"terminalId\": \"T-card-01\", \"ipAddress\": \"198.51.100.109\", \"countryCode\": \"KE\", \"channelType\": \"ECOM\", \"direction\": \"INBOUND\", \"clientReference\": \"r1016212351-a3184d836e46\", \"acquirerResponse\": \"00\"}", "status": 200, "ms": 3497.4, "response": "{\"txnId\":3,\"action\":\"HOLD\",\"reasons\":[\"SCORING_UNAVAILABLE: manual review required\"],\"latencyMs\":0}"}
   ```
-- note: boot WARN lines (excluding Flyway 'already exists'): 6; ERROR lines: 1
-- note: 2026-10-16 17:20:40.846 WARN  [main] [] org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-- note: 2026-10-16 17:20:56.153 WARN  [main] [] c.p.a.c.s.MpesaCallbackIpAllowlistFilter - MPESA_CALLBACK_ALLOWED_IPS is not configured — the M-Pesa callback endpoint accepts requests from any IP (matches pre-existing behaviour). Set it to Safaricom Daraja's published
-- note: 2026-10-16 17:21:17.797 WARN  [main] [] o.d.c.k.builder.impl.KieBuilderImpl - File 'rules/aml-rules.drl' is in folder 'rules' but declares package 'com.posgateway.aml.rules'. It is advised to have a correspondance between package and folder names.
-- note: 2026-10-16 17:21:43.944 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.AccountTransfer is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please consider
-- note: 2026-10-16 17:21:43.950 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.MerchantRelationship is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please con
-- note: 2026-10-16 17:21:47.143 WARN  [main] [] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to di
-- note: 2026-10-16 17:20:51.539 ERROR [main] [] o.h.m.internal.MetadataContext - HHH015007: Illegal argument on static metamodel field injection : org.hibernate.envers.DefaultRevisionEntity_#class_; expected type :  org.hibernate.metamodel.model.domain.internal.Entity
+- note: PSP compliance officer cannot approve PSP rule (403); using platform checker
 
-### B1 — Login / me / logout / session (FAIL)
-- **FAIL** Authorization: Bearer <token> authenticates (docs contract)
+### T1 — Normal traffic at volume (all PSPs, concurrent) (FAIL)
+- **FAIL** normal traffic mostly ALLOW (0/600) — false-positive rate
   ```json
-  {"request": "GET /auth/me", "requestBody": null, "status": 403, "ms": 113.6, "response": "{\"timestamp\":\"2026-10-16T14:45:41.525+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/auth/me\"}"}
+  {"byAction": {"HOLD": 600}}
   ```
+- **FAIL** p95 ingest latency < 2000ms (p95=7051)
+  ```json
+  {"p95": 7051.063899998553}
+  ```
+- note: 600 txns in 172.3s (3.5 tps) status={200: 600} actions={'HOLD': 600} latency ms p50=1361 p95=7051 p99=9552
 
-### B2 — Hard-coded / demo credentials are not usable in production profile (FAIL)
-- **FAIL** 'admin' / 'Hokeka2026!' must not log in on the production profile
+### T5 — Velocity bursts (1m / 5m windows) (WARN)
+- **WARN** velocity reason cited
   ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"admin\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 443.3, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Platform\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:22:10.161477\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"OVERRIDE_SCREENING_MATCH\",\"VIEW_SCREENING_RESULTS\",\"MANAGE_SKILLS\",\"PSP_SETTINGS_EDIT\",\"APPROVE_SAR\",\"ADD_CASE_NOTES\",\"ESCALATE_CASES\",\"MODIFY_RISK_SCORES\",\"MANAGE_ROLES\",\"CONFIGURE_SYSTEM\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"VIEW_AUDIT_LOGS\",\"MANAGE_PSP_THEME\",\"ASSIGN_CASES\",\"PSP_SETTINGS_VIEW\",\"AMEND_SAR\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"REJECT_S"}
+  {"reasons": "[\"SCORING_UNAVAILABLE: manual review required\"] [\"SCORING_UNAVAILABLE: manual review required\"] [\"SCORING_UNAVAILABLE: manual review required\"]"}
   ```
-- **FAIL** 'super.admin' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"super.admin\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 602.0, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Hokeka\",\"lastName\":\"Super Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"OVERRIDE_SCREENING_MATCH\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"MODIFY_RISK_SCORES\",\"MANAGE_ROLES\",\"REOPEN_CASES\",\"CONFIGURE_SYSTEM\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"VIEW_AUDIT_LOGS\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"REJECT_SAR\",\"VIEW_SA"}
-  ```
-- **FAIL** 'platform.admin' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"platform.admin\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 442.7, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Hokeka\",\"lastName\":\"Platform Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"MERCHANT_VIEW\",\"VIEW_CASES\",\"MANAGE_USERS\",\"VIEW_AUDIT_LOGS\",\"VIEW_SCREENING_RESULTS\",\"PSP_UI_EDIT\",\"PSP_SETTINGS_VIEW\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"MANAGE_ROLES\",\"REPORT_VIEW\",\"CONFIGURE_SYSTEM\",\"MANAGE_PSP\"],\"name\":\"PLATFORM_ADMIN\",\"id\":2},\"pspId\":1,\"id\":2,\"psp\":{\"code\":\"HOKEKA_PLATFORM\",\"name\":\"Hokeka\",\"theme\":{\"brandingTheme\":\"default\"},\"id\":1},\"email\":\"platform.admin@hokeka.com\",\"enabled\":true,\"username\":\"platform.ad"}
-  ```
-- **FAIL** 'velocity.admin' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"velocity.admin\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 400.9, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Velocity\",\"lastName\":\"Admin\",\"createdAt\":\"2026-10-16T17:08:26.369351\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"MERCHANT_VIEW\",\"MANAGE_USERS\",\"MANAGE_RULES\",\"VIEW_SCREENING_RESULTS\",\"APPROVE_SAR\",\"PSP_SETTINGS_EDIT\",\"ESCALATE_CASES\",\"ADD_CASE_NOTES\",\"REOPEN_CASES\",\"VIEW_CASES\",\"MERCHANT_EDIT\",\"PSP_UI_EDIT\",\"ASSIGN_CASES\",\"MANAGE_PSP_THEME\",\"AMEND_SAR\",\"PSP_SETTINGS_VIEW\",\"MANAGE_WATCHLISTS\",\"CREATE_CASES\",\"VIEW_SAR\",\"VIEW_TRANSACTION_DETAILS\",\"CREATE_SAR\",\"WHITELIST_ENTITY\",\"REPORT_VIEW\",\"EXPORT_DATA\",\"VIEW_PII\",\"CLOSE_CASES\",\"F"}
-  ```
-- **FAIL** 'compliance' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"compliance\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 377.8, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Compliance\",\"lastName\":\"Officer\",\"createdAt\":\"2026-10-16T17:22:10.476693\",\"role\":{\"permissions\":[\"ADD_CASE_EVIDENCE\",\"ESCALATE_CASES\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\",\"ASSIGN_CASES\",\"FILE_SAR\",\"MANAGE_WATCHLISTS\"],\"name\":\"COMPLIANCE_OFFICER\",\"id\":29},\"pspId\":0,\"id\":10,\"email\":\"compliance@hokeka.com\",\"enabled\":true,\"username\":\"compliance\"},\"token\":\"823CAB139DD4627AA7E4B3A6BDBB0C94\"}"}
-  ```
-- **FAIL** 'analyst' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"analyst\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 388.5, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"Risk\",\"lastName\":\"Analyst\",\"createdAt\":\"2026-10-16T17:22:11.296903\",\"role\":{\"permissions\":[\"VIEW_TRANSACTION_DETAILS\",\"VIEW_CASES\",\"VIEW_SCREENING_RESULTS\"],\"name\":\"ANALYST\",\"id\":31},\"pspId\":0,\"id\":12,\"email\":\"analyst@hokeka.com\",\"enabled\":true,\"username\":\"analyst\"},\"token\":\"0E94C679E427F7432976C94B05CF3A79\"}"}
-  ```
-- **FAIL** 'viewer' / 'Hokeka2026!' must not log in on the production profile
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"viewer\", \"password\": \"Hokeka2026!\"}", "status": 200, "ms": 591.5, "response": "{\"redirectUrl\":\"/dashboard\",\"success\":true,\"user\":{\"firstName\":\"View\",\"lastName\":\"Only\",\"createdAt\":\"2026-10-16T17:22:11.659177\",\"role\":{\"permissions\":[\"VIEW_SAR\",\"VIEW_CASES\",\"VIEW_TRANSACTION_DETAILS\"],\"name\":\"VIEWER\",\"id\":32},\"pspId\":0,\"id\":13,\"email\":\"viewer@hokeka.com\",\"enabled\":true,\"username\":\"viewer\"},\"token\":\"D58F77504FA4EC81CE0740BA71EE69B3\"}"}
-  ```
-- **FAIL** admin logs in with SEED_ADMIN_PASSWORD (operator-controlled secret)
-  ```json
-  {"request": "POST /auth/login", "requestBody": "{\"username\": \"admin\", \"password\": \"SimAdmin!6bcd6516585c362a\"}", "status": 401, "ms": 292.1, "response": "{\"message\":\"Invalid username or password\"}"}
-  ```
+- note: velocity-1m: [{"txnId": 627, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}]
+- note: velocity actions sequence: ['HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD']; first HOLD/BLOCK at #0
 
-### D2 — PSP API keys lifecycle and use (FAIL)
-- **FAIL** issued API key authenticates PSP ingest (X-Api-Key or Bearer)
+### T8 — Blacklist hits are tenant-scoped (FAIL)
+- **FAIL** same IP at another PSP not blocked (tenant scope)
   ```json
-  {"request": "POST /transactions/ingest", "requestBody": "{\"merchantId\": \"1\", \"amountCents\": 1500, \"currency\": \"USD\", \"pan\": \"4873955523526895\", \"terminalId\": \"T-card-01\", \"ipAddress\": \"198.51.100.157\", \"countryCode\": \"KE\", \"channelType\": \"ECOM\", \"direction\": \"INBOUND\", \"clientReference\": \"r1016174257-1f357b1ca543\", \"acquirerResponse\": \"00\"}", "status": 403, "ms": 197.9, "response": "{\"timestamp\":\"2026-10-16T14:48:17.544+00:00\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/api/v1/transactions/ingest\"}"}
-  ```
-
-### D4 — Billing, usage, subscriptions, invoices (FAIL)
-- **FAIL** PSP admin GET /billing/rates
-  ```json
-  {"request": "GET /billing/rates", "requestBody": null, "status": 400, "ms": 48.4, "response": "{\"status\":\"BAD_REQUEST\",\"message\":\"Required parameter 'pspId' is missing\",\"errorCode\":\"ERR_MISSING_PARAM_001\",\"httpStatus\":400,\"timestamp\":\"2026-10-16T17:48:22.3030742\",\"path\":\"/api/v1/billing/rates\",\"method\":\"GET\",\"details\":{\"parameterType\":\"Long\",\"parameterName\":\"pspId\"},\"traceId\":\"44032ada-0703-4ebc-885e-9005e81d0c3d\"}"}
+  {"request": "POST /transactions/ingest", "requestBody": "{\"merchantId\": \"4\", \"amountCents\": 4000, \"currency\": \"KES\", \"pan\": \"4110625716678204\", \"terminalId\": \"T-momo-01\", \"ipAddress\": \"203.0.113.197\", \"countryCode\": \"KE\", \"channelType\": \"ECOM\", \"direction\": \"INBOUND\", \"clientReference\": \"r1016212351-aa542d0f996e\", \"acquirerResponse\": \"00\"}", "status": 200, "ms": 384.8, "response": "{\"txnId\":653,\"action\":\"HOLD\",\"reasons\":[\"SCORING_UNAVAILABLE: manual review required\"],\"latencyMs\":0}"}
   ```
 
 ## Notes per scenario
 
-- **S0**: admin did not accept SEED_ADMIN_PASSWORD; falling back to the hard-coded default
-- **A1**: health components: db=UP, diskSpace=UP, livenessState=UP, mail=DOWN, neo4j=UP, onPremLease=UP, ping=UP, readinessState=UP, redis=UP, sanctionsData=DOWN
-- **A2**: boot WARN lines (excluding Flyway 'already exists'): 6; ERROR lines: 1 · 2026-10-16 17:20:40.846 WARN  [main] [] org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default) · 2026-10-16 17:20:56.153 WARN  [main] [] c.p.a.c.s.MpesaCallbackIpAllowlistFilter - MPESA_CALLBACK_ALLOWED_IPS is not configured — the M-Pesa callback endpoint accepts requests from any IP (matches pre-existing behaviour). Set it to Safaricom Daraja's published · 2026-10-16 17:21:17.797 WARN  [main] [] o.d.c.k.builder.impl.KieBuilderImpl - File 'rules/aml-rules.drl' is in folder 'rules' but declares package 'com.posgateway.aml.rules'. It is advised to have a correspondance between package and folder names. · 2026-10-16 17:21:43.944 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.AccountTransfer is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please consider · 2026-10-16 17:21:43.950 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.MerchantRelationship is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please con · 2026-10-16 17:21:47.143 WARN  [main] [] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore
+- **A1**: health components: db=UP, diskSpace=UP, livenessState=UP, neo4j=UP, onPremLease=UP, ping=UP, readinessState=UP, redis=UP, sanctionsData=UP
+- **A2**: boot WARN lines (excluding Flyway 'already exists'): 6; ERROR lines: 0 · 2026-10-16 21:22:44.401 WARN  [main] [] org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default) · 2026-10-16 21:22:51.828 WARN  [main] [] c.p.a.c.s.MpesaCallbackIpAllowlistFilter - MPESA_CALLBACK_ALLOWED_IPS is not configured — the M-Pesa callback endpoint accepts requests from any IP (matches pre-existing behaviour). Set it to Safaricom Daraja's published · 2026-10-16 21:23:01.009 WARN  [main] [] o.d.c.k.builder.impl.KieBuilderImpl - File 'rules/aml-rules.drl' is in folder 'rules' but declares package 'com.posgateway.aml.rules'. It is advised to have a correspondance between package and folder names. · 2026-10-16 21:23:20.344 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.AccountTransfer is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please consider · 2026-10-16 21:23:20.352 WARN  [main] [] o.s.d.n.c.m.Neo4jPersistentEntity - The entity com.posgateway.aml.entity.graph.MerchantRelationship is using a Long value for storing internally generated Neo4j ids. The Neo4j internal Long Ids are deprecated, please con · 2026-10-16 21:23:22.396 WARN  [main] [] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore
 - **B3**: reset tokens stored for user: 1
+- **R1**: PSP compliance officer cannot approve PSP rule (403); using platform checker
+- **R2**: versions: [(302, 'PENDING_APPROVAL'), (301, 'ACTIVE')]
+- **T1**: 600 txns in 172.3s (3.5 tps) status={200: 600} actions={'HOLD': 600} latency ms p50=1361 p95=7051 p99=9552
+- **T3**: structuring: [{"txnId": 610, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}]
+- **T4**: rapid-movement: [{"txnId": 613, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}]
+- **T5**: velocity-1m: [{"txnId": 627, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}] · velocity actions sequence: ['HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD', 'HOLD']; first HOLD/BLOCK at #0
+- **T6**: zscore-outlier: [{"txnId": 648, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}]
+- **T7**: high-risk-mcc-7995: [{"txnId": 649, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}] · high-risk-mcc-6051: [{"txnId": 650, "action": "HOLD", "reasons": ["SCORING_UNAVAILABLE: manual review required"], "alerts": []}]
+- **C2**: PSP A /compliance/cases -> 200
+- **L1**: priority order sample: ['WARN', 'WARN', 'WARN']
+- **L2**: auto-created cases visible to card compliance: 0 · case status after decision: CLOSED_SAR_FILED
+- **L3**: CTR rows: 0
+- **E2**: /edge/status: {"evaluator":"native","nativeCore":"loaded","nativeDegraded":false,"nativeDegradedReason":"","standbyBundleReady":true,"ruleBundleVersion":1792185892002,"ruleBundleHash":"sha256:0c51709b10737f8b960d50d4a722bf0c54ee5b0c1b634e3fc61a9fc48f20b833","authorization":"active","authorizationReason":"","featureStore":"connected"} · bundle polls: 2026-10-16T18:17:05.889Z GET /api/v1/edge/bundle -> 304 verify=SUCCESS dn="CN=sim-card-r1016211222,O=Hokeka Edge" 30ms | 2026-10-16T18:17:06.847Z GET /api/v1/edge/bundle -> 403 verify=NONE dn="" 3ms | 2026-10-16T18:17:10.906Z GET /api/v1/edge/bundle -> 403 verify=SUCCESS dn="CN=sim-card-r1016211222,O=Hokeka Edge" 7ms | 2026-10-16T18:28:33.984Z GET /api/v1/edge/bundle -> 200 verify=SUCCESS dn="CN=sim-card-r1016212351,O=Hokeka Edge" 138ms · edge velocity sequence: ['ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW'] · edge derived features after burst: {"action":"ALLOW","score":0,"triggeredRuleIds":[],"reasons":[],"triggeredRuleVersionIds":[],"edgeAssessmentId":"04ef544d-64b7-4131-af88-e2937e6bbb65","ruleBundleVersion":1792185892002,"ruleBundleHash":"sha256:0c51709b10737f8b960d50d4a722bf0c54ee5b0c1b634e3fc61a9fc48f20b833"} · edge sequential evaluate mean latency 32.5 ms
+- **E3**: analytics: {"fromInclusive":"2026-10-15T18:28:37.124901500Z","toExclusive":"2026-10-16T18:28:37.124901500Z","lookbackDays":1,"scope":"PSP","pspId":5,"nodes":1,"totalEvaluated":0,"allowed":0,"alerted":0,"held":0,"blocked":0,"avgP95LatencyMicros":0.0}
