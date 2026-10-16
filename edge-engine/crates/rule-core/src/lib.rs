@@ -288,7 +288,7 @@ mod tests {
                 action: Action::Alert,
                 score: 20,
                 priority: 1,
-            rule_version_id: None,
+                rule_version_id: None,
             },
             Rule {
                 id: 2,
@@ -302,7 +302,7 @@ mod tests {
                 action: Action::Hold,
                 score: 30,
                 priority: 1,
-            rule_version_id: None,
+                rule_version_id: None,
             },
         ]);
         let d = evaluate(
