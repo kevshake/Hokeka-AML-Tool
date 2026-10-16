@@ -7,7 +7,6 @@ const DOC_PAGES = {
   controlPlane: '/docs/03-control-plane',
   packagesCdn: '/docs/04-packages-cdn-and-edge-release',
   localStack: '/docs/05-local-developer-stack',
-  dualPost: '/docs/06-psp-api-dual-post-integration',
 } as const
 
 export type OperatorDocKey = keyof typeof DOC_PAGES
@@ -34,6 +33,5 @@ export const OPERATOR_DOC_LINKS: { key: OperatorDocKey; label: string; descripti
   { key: 'console', label: 'Console deployment', description: 'Dashboard hosting and tenant routing' },
   { key: 'edgeNode', label: 'Edge Node install', description: 'PSP on-prem enrollment' },
   { key: 'packagesCdn', label: 'Packages & CDN', description: 'Edge bundle release pipeline' },
-  { key: 'dualPost', label: 'Dual-post integration', description: 'PSP API contract (06)' },
   { key: 'localStack', label: 'Local developer stack', description: 'Engineering sandbox (05)' },
 ]

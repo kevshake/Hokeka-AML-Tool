@@ -13,7 +13,7 @@ This is a multi-module AML / fraud-detection platform. Canonical topology terms 
 - `aml-microservice/` — Aerospike-backed sanctions lookups (cloud sidecar to Control Plane).
 - `edge-host/` + `edge-engine/` — **Edge Node** (per-PSP on-prem evaluation + Aerospike feature store). Install via [`docs/install/README.md`](docs/install/README.md) (process map) / `edge-host/deploy/install.sh`.
 - `infra/`, `docker-compose.prod.yml`, `docker-compose.test.yml` — Cloud stack (Console + Control Plane + data services). **Does not** deploy Edge Nodes for PSPs.
-- `docs/` — Architecture, dual-post contract, edge install, gap register. **Install process map:** `docs/install/README.md`.
+- `docs/` — Architecture, Edge data residency contract (`docs/EDGE_DATA_RESIDENCY_CONTRACT.md`, schemas in `docs/contracts/`) and plan (`docs/architecture/EDGE_DATA_RESIDENCY_PLAN.md`), edge install, gap register. **Install process map:** `docs/install/README.md`.
 - `website/` — Marketing site.
 
 **Not product runtimes:** full-BACKEND on-prem lease mode (`hokeka.auth.enabled`, `/onprem/auth/*`) — removed; `architecture-v2/` — archival only.
@@ -82,7 +82,7 @@ Production hardening (when running under the `production` profile, not `testenv`
 - Vite manual chunking is configured (`vendor-react`, `vendor-mui`, `vendor-query`, `vendor-charts`) — preserve this when touching `vite.config.ts`.
 
 ### Cross-service contract
-FRONTEND assumes `/api/v1/*` lives on the Control Plane (port 2637 in dev). Edge Nodes pull rule bundles and POST metrics to the same API host; PSP transaction **dual-post** (edge pre-auth + cloud ingest) is documented in `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`. The `aml-microservice` is internal to the cloud stack — not proxied through Vite.
+FRONTEND assumes `/api/v1/*` lives on the Control Plane (port 2637 in dev). The data residency model is normative in `docs/EDGE_DATA_RESIDENCY_CONTRACT.md` (work packages R0–R15 in `docs/architecture/EDGE_DATA_RESIDENCY_PLAN.md`). The Edge Node is the only evaluator: the PSP calls only `POST /edge/evaluate`, and the Edge records each evaluation on its own Postgres Edge Ledger (`com.hokeka.edge.ledger`). The cloud never stores transaction data. It receives sealed decision records v2 (ids, decision, score, rule ids; no PAN, amount or features) at `POST /api/v1/edge/assessments` and raises alerts, cases and SAR/STR/CTR workflow that reference transactions by id. Edge Nodes also pull rule bundles and the sealed Edge Config (`GET /api/v1/edge/config`: PSP retention 5–25 years, support access, cross-PSP opt-in; `com.posgateway.aml.service.residency`, V261–V263) and POST metrics to the same host. The Console will read transaction details live over an Edge-opened outbound mTLS WebSocket (`/api/v1/edge/tunnel`): the cloud server is built (`com.posgateway.aml.edge.tunnel`, `BACKEND/nginx/edge-tunnel.conf`); the Edge tunnel client and purge (R5, R2), the cloud data proxy (R6), Console live pulls (R11) and the back-fill (R15) are planned. The legacy cloud ingest (`/api/v1/transactions/ingest`) and `/api/v1/edge/decision` still run until R12 / R10c delete them; do not build on them. `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md` is a superseded stub. The `aml-microservice` is internal to the cloud stack — not proxied through Vite.
 
 ## Working with this repo
 

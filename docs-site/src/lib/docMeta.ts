@@ -63,14 +63,6 @@ export const DOC_META: Record<string, DocMetaConfig> = {
     installOrder: 99,
     illustration: "local-dev-stack.png",
   },
-  "06-psp-api-dual-post-integration.md": {
-    slug: "06-psp-api-dual-post-integration",
-    shortTitle: "Dual-post API",
-    audiences: ["Dual-post API"],
-    tags: ["integration", "api", "webhooks", "dual-post"],
-    installOrder: 5,
-    illustration: "dual-post.png",
-  },
   "07-first-run-bootstrap.md": {
     slug: "07-first-run-bootstrap",
     shortTitle: "First-run bootstrap",
@@ -88,5 +80,4 @@ export const ALL_AUDIENCES: Audience[] = [
   "Control Plane",
   "CDN & Release",
   "Local Engineer",
-  "Dual-post API",
 ];

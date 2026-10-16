@@ -73,21 +73,46 @@ somewhere else, the unit runs the wrong one — or nothing.
 **Fix.** `java -version` ≥ 21. If you manage your own JRE, edit `ExecStart` in
 `/etc/systemd/system/hokeka-edge.service` to the correct absolute path.
 
-### 2.4 Insufficient RAM, or an undersized Aerospike data file
+### 2.4 Undersized ledger disk
 
-**What happens.** Aerospike fails to start, is OOM-killed under load, or begins **evicting data**
-once its file fills. Eviction is the nastiest: nothing crashes, but velocity history quietly starts
-disappearing, so velocity rules weaken over time.
+**What happens.** The node works for months, then answers **HOLD** with
+`failClosedCode = LEDGER_UNAVAILABLE` for every transaction. Nothing changed except the date.
 
-**Root cause.** The box was sized without accounting for the primary index living in RAM at 64 bytes
-per record, or the data file was left at a default too small for the retention.
+**Root cause.** The Edge Ledger (PostgreSQL 16) keeps every evaluation for the PSP's retention
+period: at least 5 years. The disk was sized for weeks, not years. Until the Edge purge job is built
+(planned, R2) the ledger only grows.
 
-**Fix and prevent.** Install with `--peak-tps N`. The installer then computes the data file size
-from throughput × retention (plus 30% headroom), writes it into the namespace config, and prints the
-index RAM the host will need — warning explicitly when that exceeds 4 GB. `--data-file-size 256G`
-overrides it. Settle retention first (§2.4 of the install guide): it drives both figures linearly.
+**Fix and prevent.** Install with `--peak-tps N`. The installer prints the 5-year estimate:
+`N × 86 400 × 365 × 5` evaluations at about 2 048 bytes each, plus 30% headroom (about 390 GiB per
+peak TPS). It is an upper bound, because it assumes peak TPS all day. See the install guide §2.3.
+Alert on ledger disk usage. Retention is set in the Console, not by the installer:
+`--retention-days` is ignored with a warning.
 
-### 2.5 Missing `gnupg`
+### 2.5 Undersized Aerospike data file
+
+**What happens.** Aerospike begins **evicting data** once its file fills. Nothing crashes, but
+velocity history disappears, so velocity rules weaken.
+
+**Root cause.** Aerospike now holds only 26 h of hourly velocity buckets and the rule bundle. The
+shipped `filesize 4G` covers roughly 90 TPS sustained at an assumed 512 bytes per record. A busier
+node needs more.
+
+**Fix.** Re-run the installer with `--data-file-size 16G` (or larger). See the install guide §2.4.
+
+### 2.6 PostgreSQL 16 not available (native mode)
+
+**What happens.** Native install stops with "install PostgreSQL 16 for … manually (or pass
+--ledger-url to a site database)".
+
+**Root cause.** The installer installs PostgreSQL 16 from the distro or the PostgreSQL project's
+PGDG repository for apt, dnf/yum, apk and zypper hosts. Other package managers, or a host that
+cannot reach PGDG, are not covered.
+
+**Fix.** Install PostgreSQL 16 yourself and re-run, or point the node at an existing PostgreSQL 16
+database with `--ledger-url`, `--ledger-user` and `HOKEKA_LEDGER_PASSWORD`. Container mode avoids
+this.
+
+### 2.7 Missing `gnupg`
 
 **Root cause.** Signature verification is mandatory and needs `gpg`. The installer tries to install
 it, but on a minimal or air-gapped image with no working package source that attempt fails.
@@ -95,7 +120,7 @@ it, but on a minimal or air-gapped image with no working package source that att
 **Fix.** Install `gnupg` manually and re-run. Do not skip the signature check to work around a
 missing package.
 
-### 2.6 File descriptor limits
+### 2.8 File descriptor limits
 
 **Root cause.** Aerospike wants `proto-fd-max 15000`. A restrictive default `ulimit -n` for its user
 causes connection failures under load rather than at startup — so it looks like a runtime problem,
@@ -125,11 +150,25 @@ workaround — the pinning is the point.
 ### 3.2 Blocked or filtered egress
 
 **Root cause.** 443 outbound to `packages.hokeka.com` (artifacts), `registry.hokeka.com` (image), or
-`edge.hokeka.com` (channel) is blocked. Also common: distro mirrors, `get.docker.com` and
-`packages.adoptium.net` blocked, so prerequisite installation fails.
+`edge.hokeka.com` (channel) is blocked. Also common: distro mirrors, `get.docker.com`,
+`packages.adoptium.net` or the PostgreSQL PGDG repository blocked, so prerequisite installation
+fails.
 
 **Fix.** Open the destinations in the install guide §3.2, or mirror the artifacts and use
-`--repo-url https://your-mirror/edge`, or install fully offline with `--offline`.
+`--repo-url https://your-mirror/edge`, or install fully offline with `--offline`. The Edge needs
+egress on TCP 443 only, and no inbound port from the internet.
+
+### 3.2a Decision records not reaching the Control Plane
+
+**What happens.** The node decides normally, but no alerts or cases appear in the Console.
+
+**Root cause.** Decision records wait in the ledger outbox (`edge_outbox`) until the Control Plane
+acknowledges them. The usual causes are the ones in §3.1 and §6.2: blocked or intercepted egress to
+`edge.hokeka.com`, a missing mTLS client certificate, or missing pinned keys. A `401`/`403` marks the
+node unauthorised and stops shipping.
+
+**Fix.** Fix the channel. Nothing is lost: the shipper drains the backlog in order once the channel
+works.
 
 ### 3.3 A proxy that returns HTML instead of the artifact
 
@@ -199,6 +238,22 @@ in `.env` was not updated to match the new keystore.
 **Fix.** Replace it with your CA-issued certificate carrying the right SANs. This is required for
 production anyway.
 
+### 5.4 The Edge Ledger is unreachable
+
+**What happens.** The engine starts, but every evaluation answers **HOLD** with
+`failClosedCode = LEDGER_UNAVAILABLE`.
+
+**Root cause.** The engine cannot write the evaluation and its outbox row. With
+`EDGE_LEDGER_FAIL_CLOSED=true` (the default) it refuses to decide without a record. Common causes:
+the `ledger` container or PostgreSQL service is down; the disk is full (§2.4); `EDGE_LEDGER_PASSWORD`
+in `.env` no longer matches the database (for example after `secrets/edge-ledger.pass` was deleted
+and regenerated); or a shared site database (`EDGE_LEDGER_URL`) is unreachable.
+
+**Fix.** Check `docker compose ps ledger` and `docker compose logs ledger`, or
+`systemctl status postgresql` (`postgresql-16` on RHEL family). Check the disk. Restore the original
+ledger password rather than generating a new one. The engine retries the connection on its own;
+once the ledger is writable, decisions resume.
+
 ---
 
 ## 6. Activation and enrollment failures
@@ -242,8 +297,9 @@ keys.
 
 **Fix.** Re-enroll with a fresh code from the portal.
 
-**Prevent.** Back up `/opt/hokeka/data/`. Do not pass `-v` to `docker compose down` unless you intend
-to destroy the identity and the local history.
+**Prevent.** Back up `/opt/hokeka/data/` and the Edge Ledger. Do not pass `-v` to
+`docker compose down`: it also deletes the `ledger-data` volume, which holds the PSP's transaction
+records for the retention period.
 
 ### 7.2 An upgrade made things worse and there is no automatic rollback
 
@@ -257,9 +313,9 @@ node first, verifying `/edge/status` before proceeding across a fleet.
 
 ### 7.3 Re-running the installer worried someone
 
-Re-running is safe and idempotent. The TLS keystore, `edge.env` and the node identity are preserved;
-only the jar and native core are replaced, then the service restarts. It never overwrites an existing
-keystore.
+Re-running is safe and idempotent. The TLS keystore, `edge.env`, the ledger password, the ledger
+data and the node identity are preserved; only the jar and native core are replaced, then the service
+restarts. It never overwrites an existing keystore or ledger password.
 
 ---
 
@@ -275,8 +331,9 @@ one leaves a node that answers requests and looks fine while doing less than you
 | `standbyBundleReady: false` | The Java standby could not parse the bundle — a native fault would fall through to `HOLD` | Only visible on `/edge/status` |
 | `authorization` changed | The node was deauthorised centrally and is now holding everything | Looks like a traffic problem |
 | Aerospike near `filesize` | Eviction is imminent or under way; history silently shrinks | No error is raised |
+| Ledger disk filling | The node will soon answer HOLD with `LEDGER_UNAVAILABLE` | It grows slowly for months; no purge until R2 |
 
-**Alert on all five.** The install guide §7.2 lists these as the standing monitoring set. A node that
+**Alert on all six.** The install guide §7.2 lists these as the standing monitoring set. A node that
 returns 200s is not evidence that enforcement is intact.
 
 ---
@@ -290,6 +347,8 @@ docker compose logs --since 1h                          # container
 uname -a && ldd --version | head -1                     # arch + libc
 java -version 2>&1
 df -h /opt/aerospike/data                               # data file headroom
+docker compose ps ledger                                # container: ledger state
+docker system df -v | grep ledger-data                  # container: ledger volume size
 ```
 
 Include: the installed version, your edge id, the exact install command (with the enrollment code
@@ -299,6 +358,7 @@ redacted), and whether the node has ever been approved in the portal.
 
 ## 10. Related documents
 
-- `docs/edge-client-install-guide.md` — requirements, sizing, installation
-- `docs/edge-transaction-evaluation.md` — the evaluation contract and rule semantics
-- `docs/INSTALL.md` — internal: control plane deployment and the release pipeline
+- [`edge-client-install-guide.md`](edge-client-install-guide.md) — requirements, sizing, installation
+- [`edge-transaction-evaluation.md`](edge-transaction-evaluation.md) — the evaluation contract and rule semantics
+- [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md) — what data leaves the Edge
+- [`INSTALL.md`](INSTALL.md) — internal: control plane deployment and the release pipeline

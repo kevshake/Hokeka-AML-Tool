@@ -2,60 +2,77 @@
 
 ## Overview
 
-This guide explains how PSPs integrate with the Hokeka AML Platform. All functionality is accessible via REST APIs documented with Swagger/OpenAPI.
+This guide explains how PSPs integrate with the Hokeka AML Platform. There are two parts:
+
+1. **Your Edge Node** (on your premises) evaluates every transaction. Your payment system calls
+   `POST /edge/evaluate` on it. Transaction data stays on your premises.
+2. **The Hokeka cloud** (`https://api.hokeka.com/api/v1`) holds alerts, cases, SAR/STR workflow,
+   screening, reports, billing and settings. It receives a decision record per evaluation from your
+   Edge (IDs, action, score, rule IDs; no PAN, amount or features). It never stores transaction data.
+
+The normative contract is [`EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md).
+The `/edge/evaluate` behaviour is in [`edge-transaction-evaluation.md`](../edge-transaction-evaluation.md).
+Cloud APIs are documented with Swagger/OpenAPI.
 
 ## Quick Start
 
 ```bash
-# 1. Authenticate (get JWT token)
-TOKEN=$(curl -s -X POST https://api.hokeka.com/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"psp_admin@mypsp.com","password":"s3cr3t"}' | jq -r '.token')
-
-# 2. Screen a transaction
-curl -s -X POST https://api.hokeka.com/api/v1/transactions/ingest \
-  -H "Authorization: Bearer $TOKEN" \
+# 1. Evaluate a transaction on your Edge Node (your network, port 8443)
+curl -s -X POST https://edge.internal.mypsp.com:8443/edge/evaluate \
+  --cacert edge-ca.pem \
   -H "Content-Type: application/json" \
   -d '{
-    "amountCents": 1250000,
+    "txn_id": "auth-2026-000123",
+    "pan_hash": "sha256:4a7d...",
+    "amount_cents": 1250000,
     "currency": "KES",
-    "merchantId": "123",
-    "pan": "4111111111111111",
-    "ipAddress": "41.204.187.12",
-    "countryCode": "KE",
-    "direction": "OUTBOUND",
-    "channelType": "ECOMMERCE",
-    "customerAccountReference": "PSP-TOKEN-CUST-78901",
-    "customerEmail": "customer@example.com"
+    "country_code": "KE",
+    "merchant_id": "123",
+    "mcc": "5411",
+    "channel": "ECOMMERCE"
   }'
+# -> { "action": "ALLOW", "score": 0, "triggeredRuleIds": [], "edgeAssessmentId": "3f0c...", ... }
 
-# 3. Check billing usage
-curl -s https://api.hokeka.com/api/v1/billing/usage/7/current \
-  -H "Authorization: Bearer $TOKEN"
+# 2. Log in to the cloud as a Console user (session cookie)
+curl -s -c cookies.txt -X POST https://api.hokeka.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"psp_admin@mypsp.com","password":"s3cr3t"}'
+
+# 3. List the alerts your Edge decisions raised
+curl -s -b cookies.txt "https://api.hokeka.com/api/v1/alerts?page=0&size=25&status=open"
 ```
 
-Amounts are integer minor units. The merchant ID is the platform merchant
-primary key represented as a string. Raw PAN is hashed immediately and is never
-persisted. Customer account references must be PSP-issued opaque tokens; the
-customer email is encrypted at rest.
+Rules for the evaluate body:
+
+- Send `pan_hash`, never the PAN.
+- `txn_id` is your own reference (1..128 printable ASCII, no spaces). A PAN-like value (13 to 19
+  digits that pass the Luhn check) gets `422 {"error":"TXN_REF_LOOKS_LIKE_PAN"}`. Nothing is
+  evaluated or stored.
+- Amounts are integer minor units.
+
+You do not call the cloud per transaction. Your Edge ships decision records to the cloud in the
+background, and the cloud raises alerts and cases from them.
 
 ## Authentication
 
-### JWT Token Flow
+| Caller | Mechanism |
+|---|---|
+| Your API nodes to your Edge Node | TLS on port 8443. Optional mutual TLS (`--tls-client-auth need` at install). |
+| Your Edge Node to the Hokeka cloud | mTLS client certificate issued at activation. Outbound port 443 only. |
+| Your back-office jobs to the cloud | PSP API key: `X-Api-Key: hka_...` or `Authorization: Bearer hka_...` |
+| People to the cloud | Session cookie (`JSESSIONID`) after `POST /api/v1/auth/login` |
 
-```
-POST /api/v1/auth/login → { token, expiresIn, tokenType, userId, pspId, role }
-```
-
-- Token expiry: 24 hours (configurable)
-- Auto-refresh: `POST /api/v1/auth/refresh` with current token
-- Include in all requests: `Authorization: Bearer eyJ...`
+There is no JWT. A `Bearer` header is accepted only when it carries a PSP API key. See
+[`PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) section 2.
 
 ### Role-Based Scoping
 
 - **PSP_ADMIN / PSP_USER**: Queries automatically scoped to own PSP's data
 - **ADMIN / SUPER_ADMIN**: Can access all PSPs, optional `pspId` filter
 - Attempting cross-PSP access returns 403 FORBIDDEN
+- Hokeka staff can read your Edge transaction data only when you turn on **Settings > Hokeka
+  support access**. It is off by default. Each pull needs a reason and is audited. The cloud check
+  is built; the pulls themselves are planned (R6).
 
 ## Base URLs
 
@@ -69,13 +86,17 @@ POST /api/v1/auth/login → { token, expiresIn, tokenType, userId, pspId, role }
 
 ### Transaction Monitoring
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/transactions/ingest` | Ingest and score a transaction |
-| POST | `/transactions/batch-score` | Batch score multiple transactions |
-| GET | `/monitoring/dashboard/stats` | Dashboard statistics |
-| GET | `/monitoring/risk-distribution` | Risk distribution data |
-| GET | `/monitoring/risk-indicators` | Risk indicator metrics |
+| Where | Method | Endpoint | Description |
+|---|---|---|---|
+| Edge Node | POST | `/edge/evaluate` | Evaluate a transaction and record it on the Edge Ledger |
+| Edge Node | GET | `/edge/status` | Node status |
+| Cloud | GET | `/monitoring/dashboard/stats` | Dashboard statistics |
+| Cloud | GET | `/monitoring/risk-distribution` | Risk distribution data |
+| Cloud | GET | `/monitoring/risk-indicators` | Risk indicator metrics |
+| Cloud | POST | `/transactions/ingest`, `/transactions/ingest/batch` | **Deprecated.** Legacy cloud ingest; stores the transaction in the cloud. Kept for existing integrations until R12 deletes it. Do not use it for new integrations. |
+
+Transaction detail in the Console will come live from your Edge over the Edge Tunnel (planned: R5
+Edge client, R6 cloud data proxy, R11 Console).
 
 ### Alerts
 
@@ -153,67 +174,48 @@ POST /api/v1/auth/login → { token, expiresIn, tokenType, userId, pspId, role }
 
 ## SDK Examples
 
+These call your Edge Node. Use your own host name and CA bundle.
+
 ### Python
 
 ```python
 import requests
-class HokekaAMLClient:
-    def __init__(self, base_url, username, password):
-        self.base_url = base_url
-        self.token = None
-        self._login(username, password)
 
-    def _login(self, username, password):
-        resp = requests.post(f"{self.base_url}/auth/login", json={
-            "username": username, "password": password
-        })
+
+class HokekaEdgeClient:
+    """Calls /edge/evaluate on the PSP's own Edge Node."""
+
+    def __init__(self, base_url, ca_bundle, client_cert=None):
+        self.base_url = base_url.rstrip("/")
+        self.session = requests.Session()
+        self.session.verify = ca_bundle
+        if client_cert:                 # (cert.pem, key.pem) when the Edge requires mutual TLS
+            self.session.cert = client_cert
+
+    def evaluate(self, txn_id, pan_hash, amount_cents, currency, merchant_id, **features):
+        body = {"txn_id": txn_id, "pan_hash": pan_hash, "amount_cents": amount_cents,
+                "currency": currency, "merchant_id": merchant_id, **features}
+        resp = self.session.post(f"{self.base_url}/edge/evaluate", json=body, timeout=2)
         resp.raise_for_status()
-        data = resp.json()
-        self.token = data["token"]
-        self.expires_at = time.time() + data["expiresIn"] - 300
-
-    def _ensure_token(self):
-        if time.time() >= self.expires_at:
-            resp = requests.post(f"{self.base_url}/auth/refresh",
-                headers={"Authorization": f"Bearer {self.token}"})
-            resp.raise_for_status()
-            self.token = resp.json()["token"]
-
-    def screen_transaction(self, amount, currency, merchant_id, **kwargs):
-        resp = requests.post(
-            f"{self.base_url}/transactions/ingest",
-            headers={"Authorization": f"Bearer {self.token}"},
-            json={"amount": amount, "currency": currency, "merchantId": merchant_id, **kwargs}
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return resp.json()          # action, score, triggeredRuleIds, reasons, edgeAssessmentId, ...
 ```
 
 ### JavaScript / Node.js
 
 ```javascript
+const https = require('https');
+const fs = require('fs');
 const axios = require('axios');
-class HokekaAMLClient {
-  constructor(baseURL, username, password) {
-    this.client = axios.create({ baseURL });
-    this.username = username;
-    this.password = password;
-    this.token = null;
-  }
-  async ensureToken() {
-    if (!this.token) {
-      const resp = await axios.post(`${this.client.defaults.baseURL}/auth/login`, {
-        username: this.username, password: this.password
-      });
-      this.token = resp.data.token;
-      this.client.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
-    }
-  }
-  async screenTransaction(txn) {
-    await this.ensureToken();
-    const { data } = await this.client.post('/transactions/ingest', txn);
-    return data;
-  }
+
+const edge = axios.create({
+  baseURL: 'https://edge.internal.mypsp.com:8443',
+  httpsAgent: new https.Agent({ ca: fs.readFileSync('edge-ca.pem') }),
+  timeout: 2000,
+});
+
+async function evaluate(txn) {
+  const { data } = await edge.post('/edge/evaluate', txn);
+  return data; // treat HOLD as "do not approve on your own"
 }
 ```
 
@@ -223,7 +225,7 @@ Subscribe to real-time events (one subscription per event type; secret is server
 
 ```http
 POST /api/v1/webhooks/subscribe
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -239,17 +241,22 @@ Repeat for `CASE_UPDATE` and `MERCHANT_STATUS_CHANGE` as needed. Deliveries are 
 
 | Event | When |
 |---|---|
-| `RISK_ALERT` | Fraud/AML alert created from transaction monitoring |
+| `RISK_ALERT` | Alert raised from an Edge decision record (or from the deprecated cloud ingest) |
 | `CASE_UPDATE` | Case created, updated, or decision recorded |
 | `MERCHANT_STATUS_CHANGE` | PSP status transition |
 
-See [`docs/PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) §10 for payloads and
-[`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](../EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md) for edge vs cloud coverage.
+Webhooks raised from Edge decision records carry IDs and the decision only: `alertId`,
+`edgeAssessmentId`, `txnRef`, `decision`, `pspId`, `merchantId`, `caseId`, `timestamp`. They never
+carry the amount, card or customer data. See [`PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) section 10
+for payloads and [`EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md) for the
+residency rules.
 
-## Transaction ingest idempotency
+## Idempotency
 
-Pass `Idempotency-Key: <reference>` or `"clientReference"` in the ingest body. Duplicate keys return
-the existing transaction without duplicating alerts or webhooks.
+- Edge: each evaluation gets its own `edgeAssessmentId`. The Edge Ledger keeps `txn_id` unique per
+  Edge Site. The cloud stores each decision record once (idempotent on `edgeAssessmentId`).
+- Deprecated cloud ingest: pass `Idempotency-Key: <reference>` or `"clientReference"`. Duplicate
+  keys return the existing transaction without duplicating alerts or webhooks.
 
 ## Rate Limits
 
@@ -271,10 +278,10 @@ X-RateLimit-Reset: 1623456789
 | Code | Meaning |
 |---|---|
 | 400 | Invalid payload |
-| 401 | Missing/invalid token |
+| 401 | Missing/expired session, or invalid/revoked/expired API key |
 | 403 | Insufficient permissions |
 | 404 | Resource not found |
 | 409 | Duplicate resource |
-| 422 | Business rule violation |
+| 422 | Business rule violation; on the Edge, `TXN_REF_LOOKS_LIKE_PAN` or `TXN_REF_INVALID` |
 | 429 | Rate limit exceeded |
 | 500 | Server error |

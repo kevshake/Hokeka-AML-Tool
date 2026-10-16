@@ -36,7 +36,20 @@ API is published bound to `127.0.0.1` by default (widen with `--bind`/`--allow-s
 
 **Native path (Linux `--native`):** Aerospike is bound to `127.0.0.1` in `aerospike.conf` and port
 `3000` is firewalled (ufw / firewalld / iptables) so it is unreachable from the network; only local
-processes (the edge) connect.
+processes (the edge) connect. The PostgreSQL 16 ledger is treated the same way on port 5432.
+
+## Network: egress on 443 only, no inbound ports
+
+- **Outbound:** TCP 443 to the Control Plane (`edge.hokeka.com`, mTLS) for bundle pulls, metrics
+  and decision records; TCP 443 to `packages.hokeka.com` / `registry.hokeka.com` at install and
+  upgrade time. Nothing else after install.
+- **Inbound:** none from the internet. The only listener is the 8443 transaction API for the PSP's
+  own API nodes, bound to `127.0.0.1` by default (`--bind`, `--allow-subnet`).
+- **Edge Tunnel (planned, R5):** the Edge will open an outbound WebSocket (WSS on 443, subprotocol
+  `hokeka-tunnel.v1`) to `edge.hokeka.com/api/v1/edge/tunnel` so the Console can read ledger rows
+  live. The Control Plane endpoint and its nginx vhost (`BACKEND/nginx/edge-tunnel.conf`) exist; the
+  Edge client does not. It needs no extra firewall rule beyond 443 egress, but TLS-intercepting
+  proxies must pass WebSocket upgrades to that host.
 
 ## Edge Ledger — PostgreSQL 16, the site's system of record
 
@@ -61,9 +74,23 @@ reason text) is the only per-transaction data that leaves the site; it is shippe
 - **Schema:** Flyway inside edge-host (`edge_ledger` schema): `edge_evaluations` (monthly range
   partitions on `evaluated_at`, created three months ahead), `edge_outbox`, `edge_legal_holds`,
   `edge_held_evaluations`, `edge_config`, `edge_purge_log`, `edge_access_log`.
-- **Retention:** set per PSP in the Console (minimum and default 5 years) and enforced on the ledger;
-  `--retention-days` is no longer used. **Size the ledger disk for 5+ years** (`--peak-tps` prints
-  an estimate) and back the volume up.
+- **Retention:** set per PSP in the Console (minimum and default 5 years, maximum 25, maker-checker,
+  reductions take effect 30 days after approval). `--retention-days` is ignored with a warning. The
+  Control Plane publishes retention in the sealed `GET /api/v1/edge/config` document; the Edge
+  consumer and the daily partition purge are planned (R2). Until then the ledger keeps every row.
+- **Sizing:** size the ledger disk for at least 5 years and back the volume up. `install.sh
+  --peak-tps N` prints `N × 86 400 × 365 × 5` evaluations × 2 048 bytes + 30% headroom:
+
+  | Peak TPS | 5-year ledger disk |
+  |---:|---:|
+  | 1 | ~390 GiB |
+  | 5 | ~1 953 GiB |
+  | 10 | ~3 909 GiB |
+  | 50 | ~19 548 GiB |
+  | 100 | ~39 097 GiB |
+
+  This is an upper bound (peak TPS all day) and the 2 048 B/evaluation figure is an estimate; measure
+  it in a pilot. `install.ps1` has no `-PeakTps`; use the same formula.
 - A `txn_id` that looks like a card number is refused with `422 {"error":"TXN_REF_LOOKS_LIKE_PAN"}`
   and nothing is stored.
 
@@ -137,15 +164,17 @@ Releases are produced by `.github/workflows/release.yml` — see `docs/INSTALL.m
 
 - **✅ Cross-distro Linux + Windows:** yes, via the container path (identical stack everywhere) with
   a native Linux option.
-- **✅ Auto-install all prerequisites incl. the database:** yes — runtime, Aerospike, config, service.
+- **✅ Auto-install all prerequisites incl. the databases:** yes — runtime, Aerospike, PostgreSQL 16
+  ledger, config, service.
 - **✅ Database reachable only by the app:** yes — network isolation (container) or loopback-bind +
   firewall (native).
 - **⚠️ Aerospike on Windows:** there is **no native Windows Aerospike server**, so on Windows the DB
   runs in a container (Docker Desktop/WSL2). The script does this automatically; a bare-metal Windows
   Aerospike is not offered by the vendor.
 - **⚠️ DB-level username/password + TLS:** Aerospike **Community Edition has no authentication** —
-  app-only access is enforced at the network layer as above, which is robust for a single-tenant
-  on-prem box. For **DB-level credentials, roles and TLS** (defence-in-depth), use **Aerospike
+  app-only access is enforced at the network layer as above. That holds on a single-tenant on-prem
+  box as long as nobody publishes port 3000. The Edge Ledger adds a scram-sha-256 password on top of
+  the same network isolation. For **DB-level credentials, roles and TLS** (defence-in-depth), use **Aerospike
   Enterprise** and enable the `security { enable-security true }` stanza in `aerospike.conf`; the
   edge config already supports authenticated connections.
 - **ℹ️ Native Aerospike download URL** varies by distro/version; `install.sh --native` stages the
