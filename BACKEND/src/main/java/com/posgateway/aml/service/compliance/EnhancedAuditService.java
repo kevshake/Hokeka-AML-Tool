@@ -81,7 +81,8 @@ public class EnhancedAuditService extends AuditLogService {
                     .errorMessage(errorMessage)
                     .build();
 
-            auditLogRepository.save(log);
+            // Seal into the audit hash chain so failed-action rows are verifiable too.
+            sealAndSave(log);
         } catch (Exception e) {
             logger.error("Failed to log failed action", e);
         }

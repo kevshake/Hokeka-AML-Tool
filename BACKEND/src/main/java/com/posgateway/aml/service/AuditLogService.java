@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -124,13 +125,7 @@ public class AuditLogService {
                     .success(true)
                     .build();
 
-            String previousChecksum = auditLogRepository.findTopByOrderByIdDesc()
-                    .map(AuditLog::getChecksum)
-                    .orElse(null);
-            log.setPreviousChecksum(previousChecksum);
-            log.setChecksum(computeChecksum(log));
-
-            auditLogRepository.save(log);
+            sealAndSave(log);
 
             // Mirror significant data-modification events to the audit Kafka topic.
             // Fire-and-forget: Kafka failure must not disrupt the audit DB write already completed.
@@ -142,6 +137,27 @@ public class AuditLogService {
                     ? runtime
                     : new IllegalStateException("Failed to create audit log", e);
         }
+    }
+
+    /**
+     * Links an audit row to the current chain head, computes its HMAC checksum and saves it.
+     * Every writer of {@code audit_logs_enhanced} must go through this method so the hash chain
+     * has no unsealed gaps. The timestamp is truncated to microseconds first because PostgreSQL
+     * stores microsecond precision: hashing a nanosecond value would make the row unverifiable
+     * once read back.
+     *
+     * @return the saved row
+     */
+    @Transactional
+    public AuditLog sealAndSave(AuditLog log) {
+        LocalDateTime ts = log.getTimestamp() != null ? log.getTimestamp() : LocalDateTime.now();
+        log.setTimestamp(ts.truncatedTo(ChronoUnit.MICROS));
+        String previousChecksum = auditLogRepository.findTopByOrderByIdDesc()
+                .map(AuditLog::getChecksum)
+                .orElse(null);
+        log.setPreviousChecksum(previousChecksum);
+        log.setChecksum(computeChecksum(log));
+        return auditLogRepository.save(log);
     }
 
     private void publishAuditEvent(AuditLog log) {
@@ -187,24 +203,61 @@ public class AuditLogService {
                 cursor, PageRequest.of(0, batchSize, Sort.by(Sort.Direction.ASC, "id")));
 
         List<Long> tamperedIds = new ArrayList<>();
-        String chainPrevious = auditLogRepository.findTopByIdLessThanOrderByIdDesc(cursor)
-                .map(AuditLog::getChecksum)
-                .orElse(null);
+        AuditLog predecessor = auditLogRepository.findTopByIdLessThanOrderByIdDesc(cursor).orElse(null);
+        String chainPrevious = predecessor != null ? predecessor.getChecksum() : null;
 
         for (AuditLog row : page.getContent()) {
-            if (!Objects.equals(row.getPreviousChecksum(), chainPrevious)) {
+            if (!linkMatches(row, predecessor)) {
                 tamperedIds.add(row.getId());
             }
             String expected = computeChecksum(row);
             if (row.getChecksum() == null || !row.getChecksum().equals(expected)) {
-                tamperedIds.add(row.getId());
+                if (!tamperedIds.contains(row.getId())) {
+                    tamperedIds.add(row.getId());
+                }
             }
+            predecessor = row;
             chainPrevious = row.getChecksum();
         }
 
         return new AuditIntegrityReport(page.getNumberOfElements(), tamperedIds, chainPrevious);
     }
 
+    /**
+     * Whether {@code row.previousChecksum} is a valid link to {@code predecessor}.
+     *
+     * <p>Normally the link must equal the predecessor's checksum (null when there is no
+     * predecessor). When the predecessor is a legacy row re-sealed by the hash-chain backfill,
+     * the successor was written while the predecessor still carried its original checksum, so
+     * the link is also valid if it equals the preserved {@code legacy_checksum} (null-safe:
+     * a predecessor that had no checksum was recorded by its successor as a null link).
+     */
+    static boolean linkMatches(AuditLog row, AuditLog predecessor) {
+        String expected = predecessor != null ? predecessor.getChecksum() : null;
+        if (Objects.equals(row.getPreviousChecksum(), expected)) {
+            return true;
+        }
+        return predecessor != null
+                && predecessor.getChainBackfilledAt() != null
+                && Objects.equals(row.getPreviousChecksum(), predecessor.getLegacyChecksum());
+    }
+
+    /**
+     * Checks a row against the pre-V232 checksum format: HMAC-SHA256 over
+     * {@code userId + actionType + entityType + entityId + timestamp} concatenated without
+     * separators (no chain link, no before/after values). Used by the backfill to confirm a
+     * legacy row's content is authentic before re-sealing it into the chain.
+     */
+    boolean matchesLegacyChecksum(AuditLog log) {
+        if (log.getChecksum() == null || log.getTimestamp() == null) {
+            return false;
+        }
+        String legacyPayload = log.getUserId() + log.getActionType() + log.getEntityType()
+                + log.getEntityId() + log.getTimestamp().toString();
+        return log.getChecksum().equals(new HmacUtils(HmacAlgorithms.HMAC_SHA_256, hmacKey).hmacHex(legacyPayload));
+    }
+
+    /** Current-format HMAC over the row's content fields and its chain link. */
     String computeChecksum(AuditLog log) {
         String payload = String.join("|",
                 nullSafe(log.getUserId()),
