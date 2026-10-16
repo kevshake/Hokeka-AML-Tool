@@ -289,7 +289,8 @@ def a2(ctx, sc):
     for l in warn[:15] + err[:10]:
         sc.note(l[:260])
     sc.check("EPHEMERAL" not in clean, "edge HSE-1 keys are configured (no EPHEMERAL key warning)")
-    m = re.search(r"RESULT: (\d+) ok, (\d+) warn, (\d+) skipped, (\d+) MISSING", clean)
+    # The validator runs on ApplicationReadyEvent, i.e. just after the "Started" line.
+    m = re.search(r"RESULT: (\d+) ok, (\d+) warn, (\d+) skipped, (\d+) MISSING", re.sub(r"\x1b\[[0-9;]*m", "", seg))
     sc.check(m and m.group(4) == "0", "EnvVarStartupValidator reports 0 MISSING", {"line": m.group(0) if m else None})
     flyway_dupe = len([l for l in clean.splitlines() if "already exists, skipping" in l])
     sc.check(flyway_dupe == 0, f"Flyway migrations are free of duplicate DDL ({flyway_dupe} 'already exists' notices)",
