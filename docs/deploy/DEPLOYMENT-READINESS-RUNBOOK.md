@@ -82,8 +82,13 @@ npm run dev &   # or production nginx URL
 node ../scripts/live-console-role-matrix.mjs
 ```
 
-Personas: `docs/CONSOLE_ROLE_MATRIX.md`. Demo passwords: `V127__seed_demo_accounts.sql` header
-(default `Hokeka2026!`). Script provisions `velocity.mlro`, `velocity.investigator`, etc. when missing.
+Personas: `docs/CONSOLE_ROLE_MATRIX.md`. Demo logins exist **only** in the `dev`/`test`/`local`
+profiles (`DemoAccountSeeder`, password from `hokeka.demo-accounts.password` in
+`application-dev.properties`). On every other profile migration V253 disables the V127 demo
+accounts and `DefaultCredentialGuard` disables any demo account that still accepts the shipped
+default password at boot (`admin` is rotated to `SEED_ADMIN_PASSWORD` instead). Run the role-matrix
+script against a dev stack, or create the personas through the Console first. The script provisions
+`velocity.mlro`, `velocity.investigator`, etc. when missing.
 
 ## 7. Kafka and Neo4j
 

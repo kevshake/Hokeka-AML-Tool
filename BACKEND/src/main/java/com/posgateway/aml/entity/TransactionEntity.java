@@ -48,6 +48,8 @@ public class TransactionEntity {
     @Column(name = "amount_cents")
     private Long amountCents;
 
+    // Column is CHAR(n) (bpchar) in the Flyway schema; map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(name = "currency", length = 3)
     private String currency;
 

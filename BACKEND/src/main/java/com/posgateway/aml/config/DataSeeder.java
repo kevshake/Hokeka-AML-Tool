@@ -40,7 +40,13 @@ public class DataSeeder {
         this.environment = environment;
     }
 
+    /**
+     * Ensures the ADMIN role and the operator-controlled {@code admin} account exist. Runs after
+     * {@link PermissionInitializer} (order 10). The account is only ever created when absent; an
+     * existing admin password is never overwritten here.
+     */
     @Bean
+    @org.springframework.core.annotation.Order(20)
     public CommandLineRunner seedUsers(UserRepository userRepository, RoleRepository roleRepository,
             PasswordEncoder passwordEncoder) {
         return args -> {

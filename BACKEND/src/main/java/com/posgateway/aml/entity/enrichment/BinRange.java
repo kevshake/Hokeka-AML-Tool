@@ -23,6 +23,8 @@ public class BinRange {
     @Column(name = "issuer", length = 255)
     private String issuer;
 
+    // Column is CHAR(n) (bpchar) in the Flyway schema; map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(name = "issuer_country", length = 2)
     private String issuerCountry;
 

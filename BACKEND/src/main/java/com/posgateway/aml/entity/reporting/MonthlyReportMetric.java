@@ -31,6 +31,8 @@ public class MonthlyReportMetric {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Column is CHAR(n) (bpchar) in the Flyway schema; map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(name = "year_month", nullable = false, length = 7)
     private String yearMonth;
 

@@ -30,6 +30,8 @@ public class SarTemplate {
     private String regulator;
 
     /** ISO 3166-1 alpha-3 country code (e.g. USA, GBR, KEN). */
+    // Column is CHAR(n) (bpchar) in the Flyway schema; map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(nullable = false, length = 3)
     private String jurisdiction;
 

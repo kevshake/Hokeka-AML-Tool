@@ -19,6 +19,8 @@ import java.time.OffsetDateTime;
 public class CountryRiskScore {
 
     @Id
+    // Column is CHAR(n) (bpchar) in the Flyway schema; map it as CHAR so ddl-auto=validate matches.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
     @Column(name = "country_code", nullable = false, length = 2)
     private String countryCode;
 

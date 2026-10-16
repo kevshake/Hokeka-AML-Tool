@@ -1,6 +1,29 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-10-16_
 
+## Wave 73 — Fix PSP-simulation findings (2026-10-16)
+
+- [ ] C1 demo passwords: dev/test-only demo users, prod admin from SEED_ADMIN_PASSWORD only, V253 disables seeded demo accounts
+- [ ] C2 Envers revinfo_seq / revision entity matches schema
+- [ ] C3 missing _aud columns migration + real ddl validate in production (Postgres validate run)
+- [ ] H4 compose/install docs: AUTH_PASSWORD_RESET_PEPPER, SEED_ADMIN_PASSWORD
+- [ ] H5 SanctionsCountClient root cause + own timeout + deterministic startup
+- [ ] H6 PSP API-key authentication filter
+- [ ] H7 /transactions/ingest merchant tenant ownership
+- [ ] M8 mail health off without SMTP host
+- [ ] M9 Kafka NewTopic beans
+- [ ] M10 ingest 400/404 JSON for unknown merchant / bad edgeAssessmentId
+- [ ] M11 duplicate /cases/{id}/escalate mapping
+- [ ] M12 decision client path /api/v1/edge/decision
+- [ ] M13 edge-host mints edgeAssessmentId; contract doc + ingest correlation
+- [ ] M14 payment blacklist CRUD API
+- [ ] M15 PSP_API_GUIDE auth section (session + API key)
+- [ ] L16 /compliance/sar restricted to compliance roles
+- [ ] L17 platform super admin access to all PSPs
+- [ ] L18 Neo4j GDS plugin detection
+- [ ] L19 Envers HHH015007 boot error
+- [ ] Verify: compile, targeted tests, full mvn test, aml-ms + edge-host tests
+
 ## Wave 72 — Full PSP simulation: Edge + Control Plane, live readiness (2026-10-16)
 
 - [x] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch — `34e98037c`, pushed
