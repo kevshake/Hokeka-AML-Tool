@@ -67,6 +67,12 @@ public class SanctionsService {
     private static final String SET_NAME = "sanctions";
     private static final String IDX_SEARCH_KEYS = "idx_sanctions_search_keys_v2";
     private static final String BIN_SEARCH_KEYS = "searchKeys";
+    /**
+     * Bins the index query projects for {@link #evaluateRecord}. It must list every bin that method
+     * reads: "pepLevel" was missing, so every indexed PEP/RCA hit came back with pepLevel=null and the
+     * Control Plane reported PEPs as sanctions matches.
+     */
+    static final String[] SCREEN_BINS = {"name", "aliases", "type", "listName", "entityId", "pepLevel"};
     private static final DoubleMetaphone DOUBLE_METAPHONE = new DoubleMetaphone();
 
     private static final int TOP_N = 5;
@@ -205,7 +211,7 @@ public class SanctionsService {
                 Statement stmt = new Statement();
                 stmt.setNamespace(namespace);
                 stmt.setSetName(SET_NAME);
-                stmt.setBinNames("name", "aliases", "type", "listName", "entityId");
+                stmt.setBinNames(SCREEN_BINS);
                 stmt.setFilter(Filter.contains(BIN_SEARCH_KEYS, IndexCollectionType.LIST, searchKey));
                 aerospikeClient.query(null, stmt, (key, record) -> {
                     if (record == null) return;
