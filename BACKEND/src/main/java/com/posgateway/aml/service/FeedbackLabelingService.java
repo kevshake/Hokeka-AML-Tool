@@ -17,9 +17,10 @@ import java.util.List;
  * <p>Lets investigators label transactions (fraud / not fraud) on their persisted
  * feature rows. These labels are the ground-truth store for supervised training.
  *
- * <p>NOTE: there is no automated in-app retraining loop. Model training is performed
- * offline (Python/LightGBM per the ML strategy) against this labelled feature store;
- * this service only records the labels — it does not schedule or trigger a retrain.
+ * <p>NOTE: there is no model trainer in this platform and nothing retrains a model on a schedule.
+ * Labels are persisted on {@code transaction_features.label} (the investigator is only
+ * logged, not stored) and are available for export to an externally operated training pipeline;
+ * nothing in this codebase consumes them to update a model automatically.
  */
 @Service
 public class FeedbackLabelingService {
