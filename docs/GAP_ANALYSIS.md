@@ -7,6 +7,32 @@
 - **Status rule:** If something exists but is backend-only, off by default, merchant-only where the target needs any party, or not wired end-to-end, it is marked **Partial**, and the missing piece is spelled out.
 - **Doc vs code discrepancies:** `AGENTS.md` says Java 17 while the runtime brief says Java 21. `docs/UI_COVERAGE_MATRIX.md` marks every route "implemented + aligned", yet the Lists, risk-config, simulation and webhook-delivery surfaces do not exist in `FRONTEND/src/App.tsx`.
 
+## 0. Data residency update (2026-10-17)
+
+The rows below were assessed on 2026-10-04. The owner decisions of 2026-10-16 ([`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md), contract [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md)) change two things for every row:
+
+- **Where a gap is fixed.** Only the Edge evaluates transactions. A gap in transaction evaluation, features or findings is fixed on the Edge (`edge-host`, `edge-engine`), not in the cloud pipeline. The cloud pipeline behind `/api/v1/transactions/ingest` is deleted in R12.
+- **What the cloud may store.** The cloud stores decision records, workflow records and filed SAR/STR/CTR documents. It never stores transaction data (PAN, amount, features, names). Rows whose "What is missing" adds a column to the cloud `transactions` table (B1–B9, B4 especially) now mean a column in the Edge ledger.
+
+**Rows changed by the residency work:**
+
+| Row | Was | Now | Status | Evidence / open WP |
+|---|---|---|---|---|
+| K16 | Missing: Edge and cloud decide independently; dual-post | Edge is the only decider. Decision record v2 reaches the cloud and raises alerts and cases. | Partial | Done: `OutboxShipper`, `EdgeResidencyController` `POST /api/v1/edge/assessments`, `service.edge.records.DecisionRecordWorkflowService`, V262. Open: the cloud still re-decides on `/ingest` until R12. |
+| E12 | Edge hits not logged in CP | Each decision record carries `triggeredRuleIds`, `ruleVersionIds`, `bundleVersion`, `bundleHash`. | Partial | Done: V262 columns on `assessments`. Open: rule-execution evidence stays on the Edge ledger; the cloud `rule_execution_logs` path dies with R12. |
+| M5 (Edge bundles) | Bundle version = `max(updated_at)*1000 + count` | Bundle manifest hash `EdgeRuleCompiler.manifestHash` over `ruleId:ruleVersionId` lines, sent as `bundleHash`. | Partial | Lists, risk config and screening config are still unversioned. |
+| B10 | Idempotent ingestion implemented | Still implemented, but on a path being removed. Decision record ingest is idempotent on `edgeAssessmentId` (`record_digest`, V262). `/edge/evaluate` is not idempotent: a retry with the same `txn_id` is evaluated again, and `edge_txn_refs` points the reference at the newest evaluation. | Partial | R12 deletes `/ingest`. Evaluate-side idempotency is not assigned to a WP. |
+| B1–B9 | Missing/partial on cloud `TransactionEntity` | Target store is the Edge ledger (`edge_evaluations`). | Unchanged status | Re-scoped WP-07, WP-11 (see `IMPLEMENTATION_PLAN.md`). |
+| G6 | Payment-time screening in the cloud (`RealTimeTransactionScreeningService`) | Cloud screening runs only on the ingest path. The Edge does no sanctions screening. | Partial | R10b: sanctions list snapshot to the Edge and an Edge matcher; merchant screening stays in the cloud. |
+| new: R-1 | — | Edge retention. The 90-day Aerospike `txn` TTL is gone. Evaluations live in the Postgres ledger, sized for 5 years. | Partial | Done: R1 (`com.hokeka.edge.ledger`), PSP setting V261 (5..25 years, maker-checker, 30-day delay on reductions), sealed `/edge/config`. Open: the Edge does not yet read `/edge/config` or purge (R2). |
+| new: R-2 | — | PII leak: `HokekaAiDecisionClient` posts the full feature bag (pan_hash, amount, merchant) to `/api/v1/edge/decision` for borderline decisions. | Open | R10c removes it. The Hokeka AI recommendation returns later fed only by decision records. |
+| new: R-3 | — | Velocity across sites. Velocity keys are `<panHash>:yyyyMMddHH` in one Aerospike cluster, so velocity is per site. | Open | R10c: site-scoped keys, summed over XDR where present. |
+| new: R-4 | — | Cloud still stores transactions (`transactions`, `transaction_features`, mobile-money, multi-asset, travel-rule stores). | Open | R15 back-fills each PSP's Edge, then R12 purges. |
+| new: R-5 | — | Console reads transactions from the cloud database. | Open | Tunnel server built (R4). Edge tunnel client (R5), cloud data proxy (R6) and Console live pulls (R11) are planned. |
+| new: R-6 | — | Cloud-only detections (SpEL typology rules, DL4J, behavioural profiling, CTR, limits) have no Edge equivalent; the ~60 seeded SpEL typologies are skipped by `EdgeRuleCompiler`. | Open | R10a; parity sign-off gates R12. |
+
+The status counts in 1.1 and the top-10 list in 1.2 are from 2026-10-04 and are not recomputed here. Gap #3 in 1.2 is the K16 row above.
+
 ## 1. Executive summary
 
 ### 1.1 Status counts (164 capability rows)
@@ -46,7 +72,7 @@ There is no AssessmentContext, no common Finding, and no single compute-all orch
 |---|---|---|---|
 | 1 | **No AssessmentContext and no common Finding model.** Engine outputs are strings and JSON names spread over 5+ tables, with no provenance or versions. | K1, K2, K3, Q11 | Decisions cannot be explained or replayed per transaction. This blocks simulation, shadow, feedback and regulator-grade traceability. |
 | 2 | **The decision engine short-circuits and has no FLAG/SUSPEND.** `DecisionEngine` returns on the first hit (limits → blacklist → sanctions → cross-PSP → rules → ML). Its vocabulary is ALLOW/ALERT/HOLD/BLOCK, and SUSPEND is mapped to BLOCK. | F1, F2, K4, K5 | Later engines' results are never recorded, so suspend/flag semantics drift and the target precedence BLOCK > SUSPEND > FLAG cannot be implemented. |
-| 3 | **The Edge and the Control Plane decide independently.** The integrator must dual-post. The Edge decision, its rule hits and its bundle version never reach the cloud record. | K16, E12, E14 | The decision the PSP acted on can differ from what Hokeka stores, alerts on and reports. |
+| 3 | **The Edge and the Control Plane decide independently.** _(2026-10-17: superseded; the Edge is the sole decider, see section 0.)_ The integrator must dual-post. The Edge decision, its rule hits and its bundle version never reach the cloud record. | K16, E12, E14 | The decision the PSP acted on can differ from what Hokeka stores, alerts on and reports. |
 | 4 | **No party model.** No consumer users, no origin/destination users, no directors/shareholders for business users, and no user events or versioned snapshots. Merchant is the only subject. | C1, C3, C6, B3, Q1, Q2, Q5 | Bank and wallet customers cannot be monitored or risk-scored (KRS/CRA), and KYC changes cannot trigger re-assessment. |
 | 5 | **The transaction is not canonical.** No type or state enum, no transaction events, no payment-details union (card only, while mobile money and crypto are separate silos), and no payment/device/IP identity normalization. IP country is computed but discarded. | B1, B2, B5, B8, B9, A3, P2 | Non-card rails go through side modules, aggregates by payment id or device are impossible or mislabeled, and refunds or reversals never re-trigger assessment. |
 | 6 | **Alerts are not linked to findings, transactions or rule versions, and there are three alert truths** (`alerts`, `case_alerts` with no FK, `monitoring_alerts`). Each alert has one `txn_id`. `CaseAlert.ruleVersion` is faked as "v<year>.<month>". There is no alerts-by-transaction lookup. | H1, H2, H3, H6, H7, M4, A9 | You cannot answer "which rule version generated this alert" or "show every transaction behind this alert", and investigators see copies that drift. |
@@ -57,7 +83,7 @@ There is no AssessmentContext, no common Finding, and no single compute-all orch
 
 ### 1.3 Recommended first three work packages
 
-These are taken from `IMPLEMENTATION_PLAN.md`.
+These are taken from `IMPLEMENTATION_PLAN.md`. _2026-10-17: WP-01 and WP-02 are re-scoped to the Edge ledger; see the "Data residency re-scope" section of [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)._
 1. **WP-01: Assessment and Finding ledger, recorded in shadow.**
    - Add the `assessments` and `findings` tables (+ `rule_version_id` on `rule_execution_logs`).
    - Add a `FindingRecorder` that captures outputs from limits, blacklist, sanctions, cross-PSP, rules, ML and AI with source versions on every `/ingest`.
@@ -254,7 +280,7 @@ Legend: **Status** = Implemented / Partial / Missing / N/A. **Module** = Console
 | K13 | Stage 8: ML | Partial | CP | `ScoringService` (off by default). | ML Findings. | Important |
 | K14 | Stage 9: Findings consolidation | Missing | CP | — | Dedupe/merge findings per nature/subject before decision. | Core |
 | K15 | Stage 10: Decision | Partial | CP, Edge | `DecisionEngine`, Edge `EdgeEngine`. | K4. | Core |
-| K16 | Edge decision carried into the Control Plane assessment (one decision per transaction) | Missing | Edge, CP | `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`: the Edge creates no cloud transaction/alert/webhook, the integrator must dual-post to `/ingest`, and the cloud re-decides. `TransactionRequestDTO` has no edge-decision field. | The Edge ships its Decision + Findings (bundle + rule versions) to CP (via `MetricsShipper`-like channel or ingest field). The CP assessment adopts the Edge sync decision as authoritative for the transaction and adds async findings. | Core |
+| K16 | Edge decision carried into the Control Plane assessment (one decision per transaction). _2026-10-17: now Partial, see section 0._ | Missing | Edge, CP | `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`: the Edge creates no cloud transaction/alert/webhook, the integrator must dual-post to `/ingest`, and the cloud re-decides. `TransactionRequestDTO` has no edge-decision field. | The Edge ships its Decision + Findings (bundle + rule versions) to CP (via `MetricsShipper`-like channel or ingest field). The CP assessment adopts the Edge sync decision as authoritative for the transaction and adds async findings. | Core |
 | K17 | Stage 11: Alert/Case creation from findings | Partial | CP | `DecisionEngine` alerts, `CaseCreationService`, `AlertToCaseService`. | Created from findings, with links (H2, H6). | Core |
 | K18 | Stage 12: State propagation (user state, tags, lists, CRA) | Partial | CP | CRA update at ingest, hard-coded PAN blacklist on BLOCK. | Configurable actions (F5/F6) recorded as DecisionActions. | Core |
 | K19 | Stage 13: Webhooks | Partial | CP | Outbox webhooks (O1–O3). | Full event catalogue (O3). | Core |

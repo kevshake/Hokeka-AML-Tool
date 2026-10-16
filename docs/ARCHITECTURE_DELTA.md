@@ -2,7 +2,38 @@
 
 Companion to `GAP_ANALYSIS.md` (row IDs in brackets). Based on a read-only review of `kevshake/Hokeka-AML-Tool@main` on 2026-10-04 (EAT).
 
-## 1. Current flow, end to end
+## 0. Data residency update (2026-10-17)
+
+Sections 1–5 below describe the code and the target as of 2026-10-04. The owner decisions of 2026-10-16 replace part of that target. The plan of record is [`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md); the contract is [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md).
+
+**New target, in short:**
+- The Edge Node is the only component that evaluates transactions. The Control Plane never re-decides.
+- The Edge records every evaluation in a PostgreSQL ledger on PSP premises. The PSP sets retention (5 to 25 years, default 5).
+- The Edge sends decision records (IDs, action, score, rule IDs, bundle version; no PAN, amount or features) to the cloud. The cloud raises alerts and cases from them.
+- The cloud never stores transaction data. The Console reads it live from the Edge over a tunnel the Edge opens (outbound mTLS WebSocket, port 443).
+- Filed SAR/STR/CTR documents are the only cloud copy of transaction data.
+
+**What changed in code since 2026-10-04:**
+
+| Area | Was (sections 1.1, 4.1) | Now | Still to do |
+|---|---|---|---|
+| Edge transaction record | `recordTransaction` → Aerospike `txn` set, TTL `EDGE_RETENTION_DAYS` (default 90 days) | `EvaluationRecorder` → Edge Ledger (`com.hokeka.edge.ledger`, Postgres 16, `edge_evaluations` partitioned by month). The Aerospike `txn` set is gone; Aerospike keeps velocity buckets (26 h TTL) and the bundle. | Retention purge and legal holds (R2). No purge runs yet, so the ledger only grows. |
+| Edge → cloud decision | none (dual-post), later a v1 JSON envelope from an in-memory `EdgeAssessmentShipper` | Decision record v2, written to `edge_outbox` in the same transaction as the evaluation, shipped sealed (HSE-1, `hokeka.decision.records`) by `OutboxShipper` to `POST /api/v1/edge/assessments`. A ledger write failure answers `HOLD / LEDGER_UNAVAILABLE` when `ledger.fail-closed=true`. | v1 acceptance removed in R12. |
+| Cloud workflow from Edge decisions | none | `DecisionRecordWorkflowService` raises alerts (source type `EDGE_DECISION`), cases and CTR deadlines by `edgeAssessmentId`; `decision_stats_hourly` rollup (V262). | Detach Alert/Case/SAR from `TransactionEntity` (R8). |
+| PSP data settings | none | Retention, support access, cross-PSP opt-in with maker-checker (V261); sealed `GET /api/v1/edge/config`. | Edge-side config consumer (R2). |
+| Cloud → Edge reads | none | Tunnel server: `WS /api/v1/edge/tunnel` (`com.posgateway.aml.edge.tunnel`), Redis registry, sealed relay, `edge_data_access_log` (V263), nginx vhost `BACKEND/nginx/edge-tunnel.conf`. | Edge tunnel client (R5); cloud data proxy for the Console (R6); Console live pulls (R11). |
+| Cloud transaction stores | `transactions`, `transaction_features`, mobile-money / multi-asset / travel-rule stores | Unchanged. `/api/v1/transactions/ingest` still writes them. | Back-fill to each Edge (R15), then delete the ingest path and purge (R12). |
+| AI advisory from the Edge | `HokekaAiDecisionClient.enrichBorderline` → `/api/v1/edge/decision` with the full feature bag | Unchanged. This is a known class-T leak. | Remove the feature-bag POST (R10c). |
+| Edge sanctions | none | none | Sanctions list distribution and Edge matcher (R10b). |
+| Velocity keys | `<panHash>:yyyyMMddHH` | Unchanged. Velocity is per Aerospike cluster, so per site. | Site-scoped keys for multi-site PSPs (R10c). |
+
+**Parts of this document that no longer apply:**
+- Section 4.1 "Ship to the CP" and "adopt mode", and section 4.2 "Edge rails: CP stages 1–10 run in adopt mode". The Edge decides; the cloud does not hydrate or re-run stages for an Edge transaction.
+- Section 4.2 "Canonical stores": Transaction, TransactionEvent and the payment/device/network identities move to the Edge ledger. Assessment in the cloud means the decision record. Findings that carry evidence values stay on the Edge.
+- Section 4.4 rows "Control Plane sync" for transactions: there is no cloud sync path once R12 lands. Sanctions screening of counterparties moves to the Edge (R10b); merchant screening stays in the cloud.
+- Silo S1 (two decisions per transaction) is resolved by design. It is fully closed when R12 deletes the cloud ingest path.
+
+## 1. Current flow, end to end (as of 2026-10-04)
 
 ### 1.1 Edge Node (edge-host Java + edge-engine Rust + Aerospike)
 
@@ -25,7 +56,7 @@ PSP switch ──► POST /edge/evaluate  (edge-host EdgeController)
 - **What the Edge does not do:**
   - No sanctions, lists or screening.
   - No device, IP or payment-identity aggregates.
-  - It does not create a cloud transaction, alert, case or webhook (`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`).
+  - It does not create a cloud transaction, alert, case or webhook (`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`). _2026-10-17: no longer true for alerts, cases and webhooks. Decision records v2 raise them (R7, section 0). It still creates no cloud transaction, by design._
 - **Bundle provenance:** the bundle version is `max(updated_at)*1000 + count`, with no `rule_version_id` per rule [M4, M5].
 - **Rule compatibility:** rules whose `rule_json` uses unknown fields, operators or shapes are **skipped with a WARN**. This includes everything saved by the Console Visual Rule Builder (`{groups:[…]}`) [E2, E9].
 
@@ -93,7 +124,7 @@ Event plane (txn | txn event | user event | list/screening delta | disposition)
 
 | # | Silo / duplicate truth | Evidence | Consequence | Rows |
 |---|---|---|---|---|
-| S1 | **Two independent decisions per transaction (Edge vs cloud).** | Dual-post contract; no edge-decision field in `TransactionRequestDTO`. | Stored decision ≠ acted-on decision. Edge hits are not logged. | K16 |
+| S1 | **Two independent decisions per transaction (Edge vs cloud).** | Dual-post contract; no edge-decision field in `TransactionRequestDTO`. | Stored decision ≠ acted-on decision. Edge hits are not logged. _2026-10-17: resolved by design (Edge is sole decider; decision record v2 carries rule ids and versions). The cloud still decides on `/ingest` until R12._ | K16 |
 | S2 | **Three CP orchestrators.** | `FraudDetectionOrchestrator`, `AsyncFraudDetectionOrchestrator`, `HighConcurrencyFraudOrchestrator`. | Behaviour depends on a flag, and fixes must be made three times. | A1 |
 | S3 | **Pre-decision vs final decision.** | `TransactionIngestionService` sets the decision from TRS, then `DecisionEngine` overwrites it. | Transient wrong state. Webhooks or reads in between can see it. | K4 |
 | S4 | **Four rule/risk engines.** | Drools, SpEL, Easy Rules `RiskRulesEngine`, Edge `rule-core`. | Different operators and features. Parity is unverifiable. | E9, E14 |

@@ -2,7 +2,7 @@
 
 **Start here.** This index separates **who installs what** so operators never mix a PSP Edge Node install with the Console (dashboard) or Control Plane stack.
 
-> **Browsable docs site:** Run the install documentation web app from [`docs-site/`](../docs-site/) (`npm install && npm run dev`). It renders this folder's markdown with search, catalog sort/filter, and illustrations — see [`docs-site/README.md`](../docs-site/README.md).
+> **Browsable docs site:** Run the install documentation web app from [`docs-site/`](../../docs-site/) (`npm install && npm run dev`). It renders this folder's markdown with search, catalog sort/filter, and illustrations — see [`docs-site/README.md`](../../docs-site/README.md).
 
 Canonical product names: [`docs/SYSTEM-GLOSSARY.md`](../SYSTEM-GLOSSARY.md).
 
@@ -14,8 +14,8 @@ Deep technical reference (secrets, compose internals, release pipeline details):
 
 | Role | Installs | Where | Process doc |
 |------|----------|-------|-------------|
-| **PSP / client infrastructure engineer** | **Edge Node** — local transaction evaluation + Aerospike feature store | PSP on-premises servers | [01 — Client Edge Node](01-client-edge-node.md) |
-| **PSP / client integration engineer** | **Dual-post API wiring** — `/edge/evaluate` + cloud ingest (not a server) | PSP API / payment nodes | [06 — PSP API dual-post](06-psp-api-dual-post-integration.md) |
+| **PSP / client infrastructure engineer** | **Edge Node** — local transaction evaluation, Edge Ledger (PostgreSQL 16), Aerospike velocity store | PSP on-premises servers | [01 — Client Edge Node](01-client-edge-node.md) |
+| **PSP / client integration engineer** | **API wiring** — PSP API nodes call `/edge/evaluate` (not a server) | PSP API / payment nodes | [`edge-transaction-evaluation.md`](../edge-transaction-evaluation.md) |
 | **Hokeka platform ops** | **Control Plane** — API, Postgres, Kafka, aml-microservice, etc. | Hokeka Hostinger VPS | [03 — Control Plane](03-control-plane.md) |
 | **Hokeka platform ops** | **Console** — operator SPA (alerts, cases, edge fleet, rules) | Same VPS as Control Plane (via `frontend-prod`) | [02 — Console](02-console-dashboard.md) |
 | **Hokeka release ops** | **Edge artifact CDN** — packages.hokeka.com, signing, release workflow | Separate Hostinger VPS (or shared docroot) | [04 — Packages CDN & edge release](04-packages-cdn-and-edge-release.md) |
@@ -34,8 +34,8 @@ Follow these in order for a **new PSP go-live**:
 | 1 | [03 — Control Plane](03-control-plane.md) | Hokeka brings up cloud API + data services on Hostinger |
 | 2 | [02 — Console](02-console-dashboard.md) | Hokeka serves the operator dashboard (built into prod compose) |
 | 3 | [04 — Packages CDN](04-packages-cdn-and-edge-release.md) | Hokeka publishes signed Edge artifacts clients download |
-| 4 | [01 — Client Edge Node](01-client-edge-node.md) | PSP installs on-prem evaluation node; enroll from Console |
-| 5 | [06 — PSP API dual-post](06-psp-api-dual-post-integration.md) | PSP wires API nodes: pre-auth edge + post-auth cloud ingest |
+| 4 | [01 — Client Edge Node](01-client-edge-node.md) | PSP installs the on-prem evaluation node and its ledger; enroll from Console |
+| 5 | [`edge-transaction-evaluation.md`](../edge-transaction-evaluation.md) | PSP wires API nodes to `/edge/evaluate`. The Edge ships decision records; the cloud raises alerts and cases from them |
 
 **Fresh OS?** Run [07 — First-run bootstrap](07-first-run-bootstrap.md) (`scripts/install/hokeka-install.sh` / `hokeka-install.ps1`) before the role-specific steps above.
 
@@ -47,12 +47,11 @@ For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-d
 
 | Doc | Audience | Scope |
 |-----|----------|-------|
-| [01-client-edge-node.md](01-client-edge-node.md) | PSP infra | Complete Edge Node runbook: sizing, install, activation, verify, upgrade |
+| [01-client-edge-node.md](01-client-edge-node.md) | PSP infra | Edge Node runbook: 5-year ledger sizing, install, activation, verify, upgrade |
 | [02-console-dashboard.md](02-console-dashboard.md) | Hokeka ops / frontend dev | Console only — prod nginx path, Vite dev, **not** on client edge |
 | [03-control-plane.md](03-control-plane.md) | Hokeka ops | VPS secrets, `docker-compose.prod.yml`, Flyway, health checks |
 | [04-packages-cdn-and-edge-release.md](04-packages-cdn-and-edge-release.md) | Hokeka release ops | packages.hokeka.com layout, GPG signing, GitHub release workflow |
 | [05-local-developer-stack.md](05-local-developer-stack.md) | Hokeka engineers | Java 21, Postgres, BACKEND dev profile, FRONTEND Vite |
-| [06-psp-api-dual-post-integration.md](06-psp-api-dual-post-integration.md) | PSP integration | Wire evaluate + ingest; webhooks; enrollment from Console |
 | [07-first-run-bootstrap.md](07-first-run-bootstrap.md) | All installers | Idempotent OS bootstrap: Docker, Java/Node/Rust, `.env`, systemd; delegates to Edge/Compose |
 
 ---
@@ -64,8 +63,8 @@ For **Hokeka-only internal work**, use [05 — Local developer stack](05-local-d
 | [`docs/edge-client-install-guide.md`](../edge-client-install-guide.md) | Extended Edge sizing, network, security detail |
 | [`docs/edge-install-troubleshooting.md`](../edge-install-troubleshooting.md) | Edge install failures by root cause |
 | [`docs/edge-transaction-evaluation.md`](../edge-transaction-evaluation.md) | `/edge/evaluate` request/response contract |
-| [`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](../EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md) | Normative dual-post contract |
-| [`docs/PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) | Cloud API reference (ingest, webhooks, auth) |
+| [`docs/EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md) | Normative contract: what leaves the Edge, decision records, Edge config, Edge Tunnel, retention |
+| [`docs/PSP_API_GUIDE.md`](../PSP_API_GUIDE.md) | Cloud API reference (webhooks, auth, workflow) |
 | [`docs/architecture/edge-channel-contract.md`](../architecture/edge-channel-contract.md) | Control Plane ↔ Edge wire protocol |
 | [`edge-host/deploy/README.md`](../../edge-host/deploy/README.md) | Installer security model quick reference |
 
@@ -93,9 +92,12 @@ PSP API nodes                         aml.hokeka.com → Console (frontend-prod 
    │ TLS                                   api.hokeka.com → Control Plane (:2637)
    ▼
 Edge Node :8443                       packages.hokeka.com → Edge release artifacts
-   ├─ edge-host + edge-engine
-   └─ local Aerospike (feature store)
-      txn data STAYS HERE
+   ├─ edge-host + edge-engine         edge.hokeka.com → Control Plane edge vhost (mTLS)
+   ├─ Edge Ledger (PostgreSQL 16)
+   │    transaction data STAYS HERE
+   ├─ Aerospike (velocity buckets, bundle)
+   │
+   └── outbound TCP 443 only ──────►  decision records, metrics, bundle + config pulls
 ```
 
-Dual-post: Edge alone does **not** create cloud alerts or cases — see [06-psp-api-dual-post-integration.md](06-psp-api-dual-post-integration.md).
+The Edge is the only evaluator. The cloud stores decision records (IDs, action, score, rule IDs), never transaction data, and raises alerts and cases from them. The Console will read transaction details live from the Edge over an Edge-opened tunnel (Edge tunnel client planned, R5; Console live pulls planned, R11). Contract: [`docs/EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md).

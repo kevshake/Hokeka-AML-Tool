@@ -22,7 +22,7 @@ Operators use Console to:
 - Configure rules, limits, and reporting
 - **Hokeka AI** — Platform operator configuration (engine toggles, PSP inline mode) and tenant-facing **Hokeka Intelligence** verdict panels on alert/case/screening/KYC detail views (advisory recommendations with audit trail; no vendor or model details shown to PSP users)
 
-Console does **not** evaluate transactions and does **not** replace Edge Node or dual-post API wiring. AI vendor credentials live only on the Control Plane.
+Console does **not** evaluate transactions and does **not** replace the Edge Node. AI vendor credentials live only on the Control Plane.
 
 ---
 
@@ -212,7 +212,7 @@ Vite assets are **immutable-hashed** in `dist/`; nginx sets long cache headers o
 | Install Console on PSP edge server | **Wrong** — Edge runs headless API only |
 | Console evaluates transactions | **Wrong** — Edge Node `/edge/evaluate` |
 | Lowercase `frontend/` folder | **Orphan** — use **`FRONTEND/`** only |
-| Console replaces dual-post | **Wrong** — see [06 — dual-post](06-psp-api-dual-post-integration.md) |
+| Console stores transactions | **Wrong** — the cloud keeps decision records only; transaction data stays on the Edge Ledger ([residency contract](../EDGE_DATA_RESIDENCY_CONTRACT.md)) |
 
 ---
 

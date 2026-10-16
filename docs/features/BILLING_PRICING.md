@@ -77,7 +77,7 @@ directly from the filter's current mapping table:
 | SANCTIONS_SCREENING_PERSON | `/sanctions/screen/person*`, and the generic `/sanctions/screen*` fallback | 0.50 |
 | SANCTIONS_SCREENING_ORGANIZATION | `/sanctions/screen/organization*` | 0.75 |
 | AML_SCREENING | `/aml/check*`, `/aml/detection*`, `/screening/*` | 0.10 |
-| TRANSACTION_MONITORING | `/transactions/ingest*` | 0.02 |
+| TRANSACTION_MONITORING | `/transactions/ingest*` (deprecated cloud ingest only; see below) | 0.02 |
 | RISK_ASSESSMENT | `/risk-assessment/assess*` | (V147 seed, still active) |
 | REPORT_GENERATION | `/reports/generate*` (preview/chart reads are not billed) | (V147 seed, still active) |
 | KYC_VERIFICATION | `/merchants/onboard*` | 2.00 |
@@ -94,6 +94,34 @@ currently unused dead seed data, not a working catch-all.
 Source of truth going forward: `UsageTrackingFilter.URL_SERVICE_MAP`/`resolveServiceType` (code)
 and the `billing_rates` table (seeded across V147, V149, V216) — re-check both before trusting this
 table again if either changes.
+
+## Transaction volume under the Edge residency model
+
+Your Edge Node evaluates every transaction, and the cloud never stores transaction data (see
+[`EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md)). Transaction billing must
+therefore count what the cloud does receive: decision records, the hourly `decision_stats_hourly`
+rollup built from them, and hourly Edge metrics. It must not count cloud transaction rows.
+
+**Current state (what the code does today):**
+
+- `UsageTrackingFilter` bills `TRANSACTION_MONITORING` per `POST /api/v1/transactions/ingest*`
+  request. That is the deprecated cloud ingest path.
+- Evaluations on your Edge Node are **not metered**. `POST /api/v1/edge/assessments` (decision
+  records) and `POST /api/v1/edge/metrics` match no pattern in `URL_SERVICE_MAP`, so they create no
+  `api_usage_log` rows.
+- `decision_stats_hourly` exists (V262) and counts decision records per PSP, Edge Site, merchant
+  and hour. No billing code reads it yet.
+
+**Planned:**
+
+- Meter transaction volume from `decision_stats_hourly` (record counts per PSP and month). No work
+  package in [`EDGE_DATA_RESIDENCY_PLAN.md`](../architecture/EDGE_DATA_RESIDENCY_PLAN.md) owns this
+  yet; the plan lists "billing usage" under the Console aggregates of R11.
+- R12 deletes the cloud ingest path. After R12 the `/transactions/ingest*` row above meters nothing,
+  so the new metering must ship before R12.
+
+The other service types (screening, KYC, cases, SAR filing, CBK reporting, reports) are cloud
+actions and stay metered as described above.
 
 ## Page Features
 

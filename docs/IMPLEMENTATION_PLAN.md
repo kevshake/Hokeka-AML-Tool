@@ -8,10 +8,54 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - Core first.
 
 **Conventions:**
-- Flyway numbering continues from **V236**; the latest on `main` is V235.
+- Flyway numbers are assigned when a package is built. The migration numbers written in the packages below are from 2026-10-04 and are stale: V261–V263 are now taken by the data residency work (`V261__psp_data_retention`, `V262__edge_decision_records`, `V263__edge_data_access_log`). Use the next free number.
 - `BE` = `BACKEND/src/main/java/com/posgateway/aml`, `FE` = `FRONTEND/src`.
 - Sizes: **S** ≤ 3 dev-days, **M** ≤ 2 weeks, **L** ≤ 4 weeks. Split L packages into 2–3 PRs where noted.
 - Every package needs unit and integration tests (Testcontainers Postgres where DB is touched), an updated API doc / OpenAPI, and a `docs/UI_COVERAGE_MATRIX.md` update when the Console changes.
+
+---
+
+## Data residency re-scope (2026-10-17)
+
+The owner decisions of 2026-10-16 change the ground this plan was written on. The plan of record for them is [`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md). The normative contract is [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md).
+
+**What changed:**
+- Only the Edge Node evaluates transactions. The Control Plane never re-evaluates, re-scores or overrides an Edge decision.
+- The cloud never stores transaction data. It stores decision records only: IDs, action, score, rule IDs and bundle version. It stores no PAN, amount or features.
+- The Edge keeps every evaluation in a PostgreSQL ledger on PSP premises. The PSP sets retention in the Console: minimum and default 5 years, maximum 25.
+- The Console reads transaction details live from the PSP's Edge over an outbound mTLS WebSocket tunnel that the Edge opens.
+- Alerts, cases and SAR/STR workflow stay in the cloud. They reference transactions by `edgeAssessmentId` and `txnRef` only.
+
+**How this plan reads now:**
+- Any package below that adds columns to the cloud `transactions` table, or reads transactions from it, is superseded. Its intent moves to the Edge ledger or to the decision record. The notes under WP-01, WP-02, WP-04, WP-06, WP-07, WP-08 and WP-11 say where.
+- Plan conflict 12 applies: WP-01, WP-02, WP-06 and WP-07 are re-scoped to the Edge ledger.
+- New cloud work must not read or write `TransactionEntity`. R8 detaches the workflow entities from it, and R12 deletes it.
+
+**Residency work packages:**
+
+| WP | Scope | Status |
+|---|---|---|
+| R0 | Contract, JSON schemas and fixtures under `docs/contracts/` | Built (commit `8b460fefa`) |
+| R1 | Edge Ledger (Postgres 16, monthly partitions) and durable outbox; Aerospike `txn` set removed | Built (`com.hokeka.edge.ledger`, `OutboxShipper`) |
+| R3 | PSP retention, support access and cross-PSP opt-in with maker-checker; sealed `GET /api/v1/edge/config`; Console settings panels; cloud decision-record purge job | Built (`service.residency`, V261) |
+| R4 | Cloud tunnel server: WebSocket endpoint, handshake, Redis registry and relay, timeouts, access audit, nginx vhost | Built (`com.posgateway.aml.edge.tunnel`, V263, `BACKEND/nginx/edge-tunnel.conf`) |
+| R7 | Decision record v2 at `POST /api/v1/edge/assessments`; alerts and cases from decision records; `decision_stats_hourly`; ID-only webhooks | Built (`service.edge.records`, V262) |
+| R14a | Docs drafts | This docs pass |
+| R2 | Edge retention purge, legal holds, Edge config consumer | Planned |
+| R5 | Edge tunnel client and read-only op handlers over the ledger | Planned |
+| R6 | Cloud data proxy: `/transactions` GETs re-backed by the tunnel, batchGet, related, export, support-access gate on the Console API | Planned |
+| R8 | Workflow references by ID; detach Alert/Case/SAR/Screening/Finding from `TransactionEntity` | Planned |
+| R9 | SAR/CTR filing from Edge pulls; filed-document store; hold notifications | Planned |
+| R10a | Edge CTR, FX, limits, structuring; SpEL typology library compiled to Edge IR | Planned |
+| R10b | Sanctions list distribution and Edge matcher; merchant blocklist | Planned |
+| R10c | Remove the feature-bag POST to `/edge/decision`; site-scoped velocity | Planned |
+| R11 | Console live pulls (`useEdgeData`), offline banner, dashboards on rollups, access-log viewer | Planned |
+| R15 | Back-fill legacy cloud transaction data to each Edge, then verify | Planned |
+| R12 | Delete the cloud ingest and evaluation path; purge migration | Planned, gated on parity sign-off |
+| R13 | Simulator rewrite and N1 residency canary | Planned |
+| R14b | Docs finalised | Planned, after R12 |
+
+"Built" means the code is merged on the integration branch. It does not mean the end-to-end flow runs: until R5 ships, no Edge answers tunnel requests, so the cloud tunnel server has no peer.
 
 ---
 
@@ -68,7 +112,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 ## Phase 1: Core spine (AssessmentContext, Findings, orchestrator, provenance)
 
 ### WP-01 Assessment and Finding ledger, recorded in shadow [K1, K2, K3, Q11, E12]
-- **Scope:**
+- **Re-scoped (residency):** findings are produced where the evaluation runs, which is the Edge. Per-transaction findings, evidence and feature values belong in the Edge ledger (`edge_evaluations`), not in cloud tables. The cloud `assessments` table now holds decision records v2 (V262: ids, decision, score, rule ids, rule version ids, bundle version, flags). A cloud `findings` table may hold only class-D data (rule ids, codes, flags), never evidence values. The adapters around `DecisionEngine` below apply only to the cloud ingest path, which R12 deletes; do not build them.
+- **Scope (original, 2026-10-04):**
   - Introduce `Assessment` and `Finding`, plus `FindingRecorder` with adapters called from the existing code:
     - the limits check inside `DecisionEngine` (`limits/LimitsManagementController` config);
     - `PaymentBlacklistService` (LIST);
@@ -98,7 +143,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - **Size:** L. Split: 01a schema + recorder + rules/limits/blacklist; 01b screening/ML/risk adapters + API/Console.
 
 ### WP-02 Compute-all DecisionOrchestrator with ALLOW/FLAG/SUSPEND/BLOCK [F1, F2, K4, K5, A1]
-- **Scope:**
+- **Re-scoped (residency):** the decision is made on the Edge, so compute-all resolution belongs in `rule-core` and its Java parity `EdgeRuleInterpreter`. The cloud keeps only the workflow half: turning a decision record into alerts, cases and webhooks (`DecisionRecordWorkflowService`, R7). Do not add `transactions.decision_v2`; the cloud transaction table is deleted in R12. A vocabulary change (FLAG/SUSPEND) is a decision record version change under contract §12.
+- **Scope (original, 2026-10-04):**
   - Refactor `DecisionEngine` into `DecisionOrchestrator`. All engines run and emit findings, then resolution is BLOCK > SUSPEND > FLAG > ALLOW, with deterministic tie-break by severity then source priority.
   - Map HOLD → SUSPEND and ALERT → FLAG (owner decision D-7). Keep the `transactions.decision` legacy value via a mapping column during transition.
   - Emit `DecisionAction`s (alert creation, blacklist add, case trigger, webhook) instead of inline side effects.
@@ -138,7 +184,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - **Size:** M.
 
 ### WP-04 Edge decision adoption and bundle manifest [K16, E12, M5, S1]
-- **Scope:**
+- **Superseded (residency):** the Edge is the only decider, so there is nothing to adopt. Decision record v2 (R7) replaces the `EdgeAssessmentEnvelope`: the Edge writes it to `edge_outbox` with the evaluation, and `OutboxShipper` posts it sealed to `POST /api/v1/edge/assessments`. The envelope carries no feature snapshot (contract §4). The v1 adopt path and `TransactionRequestDTO.edgeAssessmentId` stay only until R12. The bundle manifest hash (`EdgeRuleCompiler.manifestHash`) is in use and travels as `bundleHash` on each record.
+- **Scope (original, 2026-10-04):**
   - The Edge emits an `EdgeAssessmentEnvelope` (edgeAssessmentId, bundle manifest hash, rule_version_ids hit, findings, decision, feature snapshot) through an Edge-side outbox to a new CP endpoint.
   - The dual-post `/ingest` accepts `edgeAssessmentId`. The CP links them and runs **adopt mode** (records Edge findings, does not re-decide sync).
   - `EdgeBundleDistributionService` publishes a manifest of rule_version_ids (and later list/risk versions). The bundle version becomes a content hash.
@@ -169,7 +216,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - **Size:** M.
 
 ### WP-06 One assessment pipeline (collapse the orchestrators) [A1, S2]
-- **Scope:**
+- **Re-scoped (residency):** the three cloud orchestrators run only behind the cloud ingest path, which R12 deletes after parity sign-off. Do not merge them. Port their detections to the Edge instead (R10a, R10b, plan conflict 5), then delete them in R12.
+- **Scope (original, 2026-10-04):**
   - Make `FraudDetectionOrchestrator` the `AssessmentPipeline`.
   - `AsyncFraudDetectionOrchestrator` and `HighConcurrencyFraudOrchestrator` become execution strategies (thread pool / reactive) of the same staged pipeline: identity → hydrate → features → risk → screening → rules → ML → consolidate → decide → actions.
   - Delete the duplicate logic.
@@ -183,7 +231,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 ## Phase 2: Core data model (parties, canonical transaction, events, identities)
 
 ### WP-07 Canonical transaction v2 [B1–B8, Q4]
-- **Scope:**
+- **Re-scoped (residency):** the canonical transaction lives in the Edge ledger. New fields (type, state, parties, payment details, device, IP geo, tags) go into `edge_evaluations` typed columns or its hygienic `features` bag (contract §2.4), and into the `/edge/evaluate` request. They are class T: the cloud sees them only inside an audited tunnel response (R5, R6) and never stores them. Do not add `V243__transaction_canonical_v2` to the cloud. Mobile money and multi-asset transactions move to the Edge or are removed in R12.
+- **Scope (original, 2026-10-04):**
   - Add `type` enum, `state` enum, `origin_party_id` / `destination_party_id`, and origin/destination amount + currency + country.
   - Add `payment_details` JSONB per side with `method` (CARD, IBAN, ACH, UPI, WALLET, SWIFT, MPESA/MOBILE_MONEY, CHECK, CASH, CRYPTO).
   - Add `device` JSONB, persisted IP country/ASN/proxy, `tags` JSONB, `metadata` JSONB, `related_transaction_ids`, `product_type`, `promotion_code`, `reference`, `jurisdiction`, `origin_funds_info`.
@@ -199,7 +248,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - **Size:** L (PRs: schema + DTO; module mappings; Edge fields).
 
 ### WP-08 Transaction events and re-assessment [A3, B2, P2]
-- **Scope:**
+- **Re-scoped (residency):** transaction events and re-assessment run on the Edge, against the ledger. The cloud receives a new decision record per re-assessment. No cloud `transaction_events` table.
+- **Scope (original, 2026-10-04):**
   - `POST /transactions/{id}/events` (state change + updated fields, idempotent by eventId) creates a `transaction_events` row and a new assessment (trigger=TXN_EVENT, parent=prior).
   - Async rules re-run. A state change is a webhook.
 - **Modules:** CP.
@@ -240,7 +290,8 @@ Inputs: `GAP_ANALYSIS.md` (row IDs in brackets) and `ARCHITECTURE_DELTA.md`.
 - **Size:** M.
 
 ### WP-11 Payment, device and network identity normalization [B9, Q3, K7, E5]
-- **Scope:**
+- **Re-scoped (residency):** payment, device and IP identities are class E/T and stay on the Edge. Linkage is served by the tunnel op `txn.related`, which never returns the key value (R5). No cloud identity tables keyed on PAN, device or IP.
+- **Scope (original, 2026-10-04):**
   - `payment_identities` (method, normalized hashed key, e.g. PAN hash, IBAN, MSISDN, wallet), `device_identities`, `network_identities` (IP, /24, ASN).
   - Resolve them at ingest (stage 2) and link transactions to identities.
   - Correct the mislabeled features (`distinct_payment_ids`, `distinct_banks`, `unique_counterparties`, wallet blacklist).
@@ -410,6 +461,8 @@ Phase 4: WP-21 → WP-22; WP-23, WP-24, WP-25, WP-26, WP-27
 Phase 5: WP-28, WP-29, WP-30, WP-31
 ```
 
+The residency packages (R0–R15, above) take precedence where they overlap. Phase 1 and 2 exit criteria that mention `/ingest` or cloud transactions are read against the Edge ledger and decision records.
+
 **Exit criteria per phase:**
 - **Phase 1:** every `/ingest` and every Edge decision has one assessment with findings and versions. One decision per transaction. Alerts link to findings, transactions and rule versions.
 - **Phase 2:** card, mobile money and multi-asset transactions use the canonical model. Consumer and business parties with ownership exist, and events re-trigger assessment.
@@ -426,12 +479,12 @@ Phase 5: WP-28, WP-29, WP-30, WP-31
 | D-5 | **Sanctions download** (`sanctions.download.enabled=false`): enable in production, which lists (UN, OFAC, EU, UK, local Kenya), and what freshness SLA? | Screening quality. | WP-20 |
 | D-6 | **List tenancy:** should a BLOCK at one PSP blacklist the PAN for all PSPs (today's global behaviour), or only that PSP, with cross-PSP sharing via the existing `CrossPspFraudFlag` consortium mechanism? | Data isolation and consortium terms. | WP-00, WP-15 |
 | D-7 | **Decision semantics:** confirm HOLD → SUSPEND and ALERT → FLAG mapping, the meaning of SUSPEND for PSPs (hold funds pending review?), and the legacy API deprecation window. | API contract. | WP-02 |
-| D-8 | **Edge sync scope:** which checks must run inline at the Edge (lists yes; exact sanctions index? risk band? AI inline?) and data residency of replicated lists/party bands on Edge nodes. | Edge design. | WP-04, WP-14, WP-15 |
-| D-9 | **Edge latency budget and authority:** confirm a p99 target (proposed ≤ 50 ms excluding AI inline), and that the Edge decision is authoritative for edge rails (CP adopt mode, no re-decision). | Single decision per transaction. | WP-04 |
+| D-8 | **Edge sync scope:** which checks must run inline at the Edge (lists yes; exact sanctions index? risk band? AI inline?) and data residency of replicated lists/party bands on Edge nodes. **Partly decided 2026-10-16:** every check runs at the Edge (sole decider); sanctions screening moves to the Edge (R10b). Party bands and AI inline remain open. | Edge design. | WP-04, WP-14, WP-15 |
+| D-9 | **Edge latency budget and authority:** confirm a p99 target (proposed ≤ 50 ms excluding AI inline), and that the Edge decision is authoritative for edge rails (CP adopt mode, no re-decision). **Authority decided 2026-10-16:** the Edge is the only decider for every rail. The p99 target is still open; the Edge ledger write is held to +2 ms p99 (`EvaluateLatencyRegressionTest`). | Single decision per transaction. | WP-04 |
 | D-10 | **Risk-band scheme:** 5 bands VERY_LOW..VERY_HIGH and their default boundaries; the KRS/TRS weighting in CRA; who may lock CRA and for how long. | Risk model. | WP-12, WP-13 |
 | D-11 | **SAR transport per jurisdiction:** which regulators are live per tenant (Kenya FRC goAML, CBK, FinCEN, FCA, etc.), manual vs API filing, and receipt handling. | Filing. | WP-30 |
 | D-12 | **AI beyond shadow:** may any AI engine move from `advisory_only=true` to influencing decisions (and which), and may Edge inline AI (`ai_inline_mode`) be enabled per PSP? | Governance and model risk. | WP-28 |
 | D-13 | **Webhook event catalogue and payload versioning:** which events PSPs get by default; the signature scheme stays HMAC-SHA256 "ts.body". | API contract. | WP-19 |
 | D-14 | **CRM integration target(s)** (none found in code): which CRM systems, and is linkage by reference or sync? | Scope. | WP-26 |
-| D-15 | **Retention:** findings/assessment retention period and partitioning (volume grows by about N findings per transaction), aligned with record-keeping law (e.g. 7 years in Kenya POCAMLA; confirm). | Storage. | WP-01 |
+| D-15 | **Retention:** findings/assessment retention period and partitioning (volume grows by about N findings per transaction), aligned with record-keeping law (e.g. 7 years in Kenya POCAMLA; confirm). **Decided 2026-10-16:** each PSP sets retention in the Console, minimum and default 5 years (FATF R.11), maximum 25, maker-checker, reductions take effect 30 days after approval (V261). A PSP under a 7-year law sets 7. | Storage. | WP-01 |
 | D-16 | **Side modules:** confirm that multi-asset, mobile money and crypto modules fold into the canonical transaction/party model (no separate risk engines). | No-silo principle. | WP-07, WP-09 |

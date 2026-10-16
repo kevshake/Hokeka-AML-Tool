@@ -4,8 +4,7 @@ export type Audience =
   | "Console"
   | "Control Plane"
   | "CDN & Release"
-  | "Local Engineer"
-  | "Dual-post API";
+  | "Local Engineer";
 
 export interface InstallDoc {
   id: string;

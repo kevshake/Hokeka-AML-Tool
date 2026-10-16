@@ -22,7 +22,7 @@ Sources: `docs/install/01–06`, `docs/install/README.md`, `docs/AML-FRAUD-COVER
 | Packages / CDN / edge release | `/edge-nodes` (bundle version column) | `/docs/04-packages-cdn-and-edge-release` | implemented+aligned |
 | Edge Node install & enrollment | `/edge-nodes`, Setup wizard | `/docs/01-client-edge-node` | implemented+aligned |
 | Local developer stack | Dev-only (no prod route) | `/docs/05-local-developer-stack` | implemented+aligned |
-| PSP dual-post API integration | `/settings` → Webhooks; `/transaction-monitoring` | `/docs/06-psp-api-dual-post-integration` | implemented+aligned |
+| PSP API integration (`/edge/evaluate`; decision records raise alerts and cases) | `/settings` → Webhooks; `/transaction-monitoring` | Repo docs only: [`edge-transaction-evaluation.md`](edge-transaction-evaluation.md), [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md) (the docs-site install page 06 was removed) | implemented; Console live transaction pulls planned (R11) |
 
 ## Console domains (functional)
 

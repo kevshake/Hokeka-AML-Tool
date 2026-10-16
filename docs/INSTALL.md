@@ -14,10 +14,15 @@ different security models:
 | # | Target | Who runs it | What it is |
 |---|---|---|---|
 | 1 | **Control plane** | Hokeka, on our own VPS | The portal, API, ML, case management, reporting — the whole `BACKEND/` app plus its datastores |
-| 2 | **Edge node** | The client (PSP), on their own servers | `edge-host` + Rust core + a local Aerospike feature store, evaluating transactions on premises |
+| 2 | **Edge node** | The client (PSP), on their own servers | `edge-host` + Rust core + the Edge Ledger (PostgreSQL 16) + Aerospike velocity store; the only component that evaluates transactions |
 
-They are joined by one narrow channel. **Transaction data never leaves the client's estate** — only
-aggregate counts are pushed up. That property is the product; do not weaken it.
+They are joined by one narrow channel that the Edge opens, outbound on TCP 443. **The cloud never
+stores transaction data.** The Edge ships decision records (IDs, action, score, rule IDs; no PAN,
+amount or features) and aggregate metrics, and pulls signed rule bundles. Transaction data stays on
+the Edge Ledger. The Console will read it live over an Edge-opened tunnel (Edge client planned, R5).
+One exception exists today: the Hokeka AI recommendation request for ALERT/HOLD decisions still
+carries feature values (removal planned, R10c). Normative contract:
+[`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md). Do not weaken it.
 
 ```
 CLIENT (PSP) PREMISES                          HOKEKA CONTROL PLANE
@@ -27,9 +32,11 @@ PSP API node                                   host nginx :443  (TLS termination
    ▼                                         ┌──────┴───────────────────────┐
 edge-host :8443                              │ backend-prod    127.0.0.1:2637│
    ├─ Rust core (JNI)  ◄── sealed rule bundles ──── frontend-prod 127.0.0.1:8088│
-   ├─ Aerospike (NO published port)                │ aml-ms-prod :8091 ──► Aerospike│
-   └─ txn + velocity history  ── aggregate counts ─►│ Postgres · Neo4j · Kafka · Redis│
-      STAYS HERE                                    │ ClamAV · website              │
+   ├─ Aerospike: velocity only (NO published port) │ aml-ms-prod :8091 ──► Aerospike│
+   ├─ Edge Ledger, Postgres 16 (NO published port) │ Postgres · Neo4j · Kafka · Redis│
+   │    transactions STAY HERE                      │ ClamAV · website              │
+   └─ outbound 443 only ── decision records,       │                               │
+                           aggregate metrics ──────►│                               │
                                                     └───────────────────────────────┘
 ```
 
@@ -164,7 +171,8 @@ it is **not** zero-downtime; schedule it.
 
 ## 2. Edge node — install on a client's servers
 
-One command provisions everything, including the datastore.
+One command provisions everything, including both datastores. Client-facing detail (sizing tables,
+network, troubleshooting): [`edge-client-install-guide.md`](edge-client-install-guide.md).
 
 ### 2.1 Install
 
@@ -173,7 +181,7 @@ One command provisions everything, including the datastore.
 sudo ./install.sh --pspid 42 --edgeid acme-eu-1 \
      --controlplane https://edge.hokeka.com --enrollment-code ABCD-1234
 
-# Linux, estates that do not permit containers: Temurin JRE 25 + Aerospike CE + systemd
+# Linux, estates that do not permit containers: Temurin JRE 25 + Aerospike CE + PostgreSQL 16 + systemd
 sudo ./install.sh --native --pspid 42 --edgeid acme-eu-1 \
      --controlplane https://edge.hokeka.com --enrollment-code ABCD-1234
 ```
@@ -189,21 +197,41 @@ sudo ./install.sh --native --pspid 42 --edgeid acme-eu-1 \
 
 Useful flags: `--version 1.2.3` (pin an exact build — recommended for production change control),
 `--channel beta`, `--repo-url URL` (mirror for restricted-egress estates), `--offline`,
-`--bind 10.0.0.5`, `--allow-subnet CIDR`, `--tls-client-auth need`.
+`--bind 10.0.0.5`, `--allow-subnet CIDR`, `--tls-client-auth need`, `--peak-tps N`,
+`--data-file-size 16G`, `--ledger-url JDBC`, `--ledger-user USER`, `--site-id ID`. Windows:
+`-LedgerUrl`, `-LedgerUser`, `-SiteId`. A shared site ledger takes its password from
+`HOKEKA_LEDGER_PASSWORD`, never the command line. `--retention-days` is ignored with a warning.
+
+**Retention and disk.** Retention is set per PSP in the Console: minimum and default 5 years,
+maximum 25, maker-checker, reductions effective 30 days after approval. The Control Plane publishes
+it in the sealed `GET /api/v1/edge/config` document; the Edge consumer and partition purge are
+planned (R2), so today the ledger only grows. `--peak-tps N` prints the 5-year ledger estimate:
+`N × 86 400 × 365 × 5` evaluations × 2 048 bytes + 30% headroom, about 390 GiB per peak TPS
+(10 TPS ≈ 3 909 GiB, 100 TPS ≈ 39 097 GiB). It is an upper bound (peak TPS all day); the per-row
+figure is an estimate to validate in a pilot.
+
+**Network.** Egress TCP 443 only: `edge.hokeka.com` (mTLS, ongoing) and the package/registry hosts
+(install and upgrade). No inbound port from the internet; 8443 is for the PSP's own API nodes and
+binds `127.0.0.1` by default.
 
 ### 2.2 What the installer does
 
 1. Detects distro + package manager (apt/dnf/zypper/pacman/apk) and arch (x86_64, aarch64).
 2. Downloads and **checksum-verifies** `edge-host.jar` and the arch-correct native core. A file
    missing from `SHA256SUMS`, or whose digest mismatches, is deleted and the install aborts.
-3. Installs prerequisites — container runtime, **or** Temurin JRE 25 + Aerospike CE.
-4. **Hardens the datastore**: container mode gives Aerospike *no published port* at all; native mode
-   binds `127.0.0.1` and firewalls port 3000.
-5. Generates a self-signed EC P-384 PKCS#12 (mode 600). The edge **refuses to start without TLS**.
-6. Writes `/opt/hokeka/config/edge.env` (mode 600).
-7. Stages the native core into `/opt/hokeka/lib`.
-8. Installs + starts `hokeka-edge.service`, or runs `docker compose up`.
-9. Health-checks `https://127.0.0.1:8443/actuator/health`.
+3. Installs prerequisites — container runtime, **or** Temurin JRE 25 + Aerospike CE + PostgreSQL 16
+   (distro package or PGDG).
+4. **Hardens the datastores**: container mode gives Aerospike and the `ledger` service
+   (`postgres:16-alpine`, compose profile `local-ledger`) *no published port* at all; native mode
+   binds both to `127.0.0.1` and firewalls ports 3000 and 5432.
+5. Generates the ledger password into `secrets/edge-ledger.pass` (mode 600, reused on re-runs);
+   native mode creates the `hokeka_edge` role and `hokeka_ledger` database (scram-sha-256).
+6. Generates a self-signed EC P-384 PKCS#12 (mode 600). The edge **refuses to start without TLS**.
+7. Writes `.env` / `/opt/hokeka/config/edge.env` (mode 600), including `EDGE_LEDGER_URL`,
+   `EDGE_LEDGER_USER`, `EDGE_LEDGER_PASSWORD`, `EDGE_LEDGER_FAIL_CLOSED=true`, `EDGE_SITE_ID`.
+8. Stages the native core into `/opt/hokeka/lib`.
+9. Installs + starts `hokeka-edge.service`, or runs `docker compose up`.
+10. Health-checks `https://127.0.0.1:8443/actuator/health`.
 
 ### 2.3 Before production — replace the certificate
 
@@ -230,7 +258,8 @@ platform admin approves it in the portal:
 
 Then set the pinned `CONTROLPLANE_ED25519_PUBLIC_KEY` and `CONTROLPLANE_X25519_PUBLIC_KEY` in `.env`
 (the installer leaves them blank) and drop the issued mTLS client certificate at
-`secrets/edge-client.p12`. Without the pinned keys the node accepts no bundles and ships no metrics.
+`secrets/edge-client.p12`. Without the pinned keys the node accepts no bundles and ships no metrics
+or decision records.
 
 `POST /edge/bundle` (plaintext upload) exists **only** under the `dev` profile; in a real deployment
 it is a 404. Rules arrive exclusively via the signed, encrypted, replay-guarded pull.
@@ -250,6 +279,9 @@ curl -sk https://127.0.0.1:8443/edge/status | jq
 - `featureStore` — `unavailable` when Aerospike is unreachable. The node **fails soft**, still
   deciding on caller-supplied features, but velocity rules cannot fire without local history, so a
   history-blind node must not be treated as healthy.
+- `ledger.state` — `OK`, `DOWN` or `NOT_CONFIGURED`, plus `ledger.outboxBacklog` and
+  `ledger.writeFailures`. While the ledger cannot be written, every evaluation answers HOLD
+  (`LEDGER_UNAVAILABLE`), because `EDGE_LEDGER_FAIL_CLOSED=true` by default.
 
 ### 2.6 Runtime flow
 
@@ -257,17 +289,26 @@ curl -sk https://127.0.0.1:8443/edge/status | jq
 POST /edge/evaluate
   ├─► Aerospike: read velocity history for the card
   ├─► Rust core (JNI): evaluate rules against enriched features
-  ├─► Aerospike: record the transaction + advance the hourly counter
+  ├─► Aerospike: advance the hourly counter
+  ├─► Edge Ledger: evaluation row + decision-record outbox row in one local transaction
   └─► ALLOW / ALERT / HOLD / BLOCK
+
+OutboxShipper ──sealed decision records v2, mTLS, 443──► POST /api/v1/edge/assessments
 ```
 
-On-premises data model (Aerospike namespace `hokeka`):
+On-premises data model:
+
+- **Edge Ledger** (PostgreSQL 16, schema `edge_ledger`): `edge_evaluations` (monthly partitions),
+  `edge_txn_refs`, `edge_outbox`, `edge_legal_holds`, `edge_held_evaluations`, `edge_config`,
+  `edge_purge_log`, `edge_access_log`. The system of record for transaction data.
+- **Aerospike** (namespace `hokeka`):
 
 | Set | Key | Contents | TTL |
 |---|---|---|---|
-| `txn` | txn id | transaction + its decision (`decision`, `score`, `triggered_rule_ids`, `reasons`) | retention days (default 90) |
 | `velocity` | `<panHash>:yyyyMMddHH` | hourly `{count, amount_cents}` counters | 26 h |
 | `rules` | `active` | last verified rule IR + version | never |
+
+The former Aerospike `txn` set is removed.
 
 Hourly buckets mean each transaction does one atomic server-side `Operation.add`, a window is at most
 24 key lookups, and buckets expire themselves — no cleanup job. The verified bundle is persisted, so a
@@ -279,8 +320,9 @@ restart resumes enforcing immediately rather than HOLDing all traffic until the 
 curl -fsSL https://packages.hokeka.com/edge/install.sh | sudo bash -s -- --native --version 1.3.0
 ```
 
-Re-running is safe and idempotent: the TLS keystore, `edge.env` and the pinned node identity
-(`/opt/hokeka/data/edge-identity.json`) are preserved, so the node keeps its enrollment. Only the jar
+Re-running is safe and idempotent: the TLS keystore, `edge.env`, the ledger password and data, and
+the pinned node identity (`/opt/hokeka/data/edge-identity.json`) are preserved, so the node keeps its
+enrollment and its records. Only the jar
 and native core are replaced, then the service restarts.
 
 ---
@@ -439,7 +481,7 @@ These are real and unresolved. Read them before promising an install date to a c
 | 5 | ~~aarch64 JNI never executed~~ **Closed.** The aarch64 leg now runs on a native `ubuntu-24.04-arm` runner, and the musl leg runs its crossing inside an Alpine container. Every published core has had its JNI boundary executed on its own platform. | — |
 | 6 | No automatic rollback, health-check-and-revert, or canary. `--version <previous>` works manually. | A bad release needs a manual pinned re-install across the fleet. |
 | 7 | The systemd unit hardcodes `/usr/bin/java`. | Fine for the Temurin package the installer lays down; breaks if a customer brings their own JRE. |
-| 8 | Aerospike CE has **no authentication**; app-only access is enforced at the network layer. | Robust for a single-tenant on-prem box. For DB-level credentials, roles and TLS, the customer needs Aerospike Enterprise with `security { enable-security true }` — the edge config already supports authenticated connections. |
+| 8 | Aerospike CE has **no authentication**; app-only access is enforced at the network layer. | Adequate for a single-tenant on-prem box as long as nobody publishes port 3000. For DB-level credentials, roles and TLS, the customer needs Aerospike Enterprise with `security { enable-security true }` — the edge config already supports authenticated connections. |
 | 9 | There is **no native Windows Aerospike server**. Windows always uses the container path. | Vendor limitation, documented, not a defect. |
 
 ---
@@ -461,7 +503,10 @@ These are real and unresolved. Read them before promising an install date to a c
 
 - [ ] Artifact digests verified against `SHA256SUMS`
 - [ ] Self-signed certificate replaced with the PSP's CA-issued one
-- [ ] Aerospike has no published port (container) or is loopback-bound + firewalled (native)
+- [ ] Aerospike and the ledger have no published port (container) or are loopback-bound + firewalled (native)
+- [ ] Ledger disk sized for 5 years (`--peak-tps`) and the ledger is backed up
+- [ ] `/edge/status` shows `ledger.state: OK`
+- [ ] Egress is TCP 443 only; no inbound port open from the internet
 - [ ] Node approved in the portal; `/edge/status` shows `authorization` cleared
 - [ ] `evaluator: native` — not silently on the Java fallback
 - [ ] `featureStore` healthy — velocity rules cannot fire without it

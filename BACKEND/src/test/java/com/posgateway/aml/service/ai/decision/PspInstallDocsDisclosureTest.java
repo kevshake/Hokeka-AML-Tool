@@ -8,15 +8,21 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * PSP-facing install docs must not disclose AI vendor, model, or internal JEV naming.
+ * PSP-facing docs must not disclose the AI vendor, model, or internal JEV naming. Any AI output is
+ * described to PSPs only as a "Hokeka AI recommendation".
  */
 class PspInstallDocsDisclosureTest {
 
+    /** PSP-facing documents, relative to the repository's {@code docs/} directory. */
     private static final List<String> PSP_DOC_FILES = List.of(
-            "01-client-edge-node.md",
-            "06-psp-api-dual-post-integration.md");
+            "install/01-client-edge-node.md",
+            "edge-client-install-guide.md",
+            "PSP_API_GUIDE.md",
+            "features/API_INTEGRATION.md",
+            "features/TRANSACTION_MONITORING.md");
 
     /** AI-vendor patterns only — avoids JWT / tokenization examples in API samples. */
     private static final List<Pattern> FORBIDDEN = List.of(
@@ -27,15 +33,17 @@ class PspInstallDocsDisclosureTest {
             Pattern.compile("anthropic|openai|claude|gpt-", Pattern.CASE_INSENSITIVE),
             Pattern.compile("promptVersion|maxTokens|inputTokens|estimatedCost", Pattern.CASE_INSENSITIVE));
 
+    /** Fails when any PSP-facing doc is missing or matches a forbidden AI-vendor pattern. */
     @Test
-    void pspInstallDocsDoNotDiscloseAiVendorDetails() throws Exception {
-        Path installDir = Path.of("..", "docs", "install").normalize();
-        for (String filename : PSP_DOC_FILES) {
-            Path doc = installDir.resolve(filename);
+    void pspDocsDoNotDiscloseAiVendorDetails() throws Exception {
+        Path docsDir = Path.of("..", "docs").normalize();
+        for (String relative : PSP_DOC_FILES) {
+            Path doc = docsDir.resolve(relative);
+            assertTrue(Files.isRegularFile(doc), relative + " must exist (PSP-facing doc list is stale)");
             String content = Files.readString(doc);
             for (Pattern pattern : FORBIDDEN) {
                 assertFalse(pattern.matcher(content).find(),
-                        filename + " must not disclose AI vendor/model details (matched " + pattern + ")");
+                        relative + " must not disclose AI vendor/model details (matched " + pattern + ")");
             }
         }
     }

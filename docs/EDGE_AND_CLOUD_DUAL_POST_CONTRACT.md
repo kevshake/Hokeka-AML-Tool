@@ -1,106 +1,30 @@
 # Edge + Cloud Dual-Post Integrator Contract
 
 > **SUPERSEDED (2026-10-16)** by [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md).
-> The Edge is now the only evaluator and the cloud never stores transaction data: it receives
-> decision records and reads transactions live from the Edge over the Edge Tunnel. The dual-post
-> ingest path below keeps working only until work package R12 of
-> [`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md) removes it.
-> Do not build new integrations on it. Kept for reference until R14b.
+> Do not build new integrations on anything this page used to describe.
 
-**Audience:** PSP engineers integrating pre-auth edge evaluation with cloud compliance artifacts (alerts, cases, SAR, webhooks).
+This page is a stub. The dual-post model is retired. Under it, a PSP called `POST /edge/evaluate`
+before authorisation and then sent the same transaction to the cloud with
+`POST /api/v1/transactions/ingest`. The cloud stored the transaction and re-ran its own pipeline.
 
-This is the authoritative contract for how the **on-premises edge** and the **cloud control plane** work together. It supersedes any implied assumption that a single edge call creates cloud-side compliance records.
+The owner decision of 2026-10-16 replaced that model:
 
----
+| Then (dual-post) | Now (Edge data residency) | Status |
+|---|---|---|
+| PSP posts each transaction to the cloud (`/api/v1/transactions/ingest`) | PSP calls only `POST /edge/evaluate`. The Edge Node is the only evaluator | Edge evaluation: built |
+| Cloud stores the transaction and raises alerts and cases from it | The Edge records the evaluation on its Postgres Edge Ledger and ships a **decision record v2** (ids, decision, score, rule ids; no PAN, amount or features) to `POST /api/v1/edge/assessments`. The cloud raises alerts and cases from the record, by transaction id | Built (R1, R7) |
+| Console reads transactions from the cloud database | Console reads transaction details live from the PSP's Edge over the outbound Edge Tunnel | Cloud tunnel server built (R4); Edge tunnel client (R5), data proxy (R6) and Console live views (R11) planned |
+| PSP passed `edgeAssessmentId` on ingest so the cloud adopted the Edge decision | `edgeAssessmentId` is the shared key of the ledger row and the decision record | Built |
+| Edge posted the feature bag to `/api/v1/edge/decision` for AI advisory | No feature data leaves the Edge | Removal planned (R10c); the call still runs today |
 
-## Summary
+**Still running until removal.** `POST /api/v1/transactions/ingest`, `POST /api/v1/transactions/ingest/batch`,
+`/api/v1/edge/decision` and the v1 JSON `/api/v1/edge/assessments` envelope still work. They are
+legacy. Work package R12 deletes them after parity sign-off (planned). Existing cloud transaction
+data is back-filled to each PSP's Edge and then purged (R15, then R12; planned).
 
-| Path | Endpoint | Creates cloud txn? | Creates alerts/cases/SAR? | Sends webhooks? |
-|------|----------|-------------------|---------------------------|-----------------|
-| **Edge (pre-auth)** | `POST /edge/evaluate` | No | No | No |
-| **Cloud (post-auth typical)** | `POST /api/v1/transactions/ingest` | Yes | Yes (via fraud pipeline, or adopted edge decision — §2.1) | Yes (via durable outbox) |
+**Where to look now:**
 
-**Integrators that need cloud compliance artifacts must dual-post:** call `/edge/evaluate` for the pre-auth decision, then call `/api/v1/transactions/ingest` with the same transaction context (typically after authorisation) so the control plane can persist the transaction, run the full fraud/AML pipeline, raise alerts/cases, and deliver webhooks.
-
----
-
-## 1. Edge `/edge/evaluate` — local-only pre-auth
-
-- Served on the PSP's edge node over TLS; transaction payloads **do not leave the premises**.
-- Evaluates caller-supplied features plus locally-derived velocity history (Aerospike).
-- Returns `{ action, score, triggeredRuleIds, reasons, triggeredRuleVersionIds, edgeAssessmentId, ruleBundleVersion, ruleBundleHash }` synchronously. `edgeAssessmentId` is a UUID minted by the edge for **every** evaluation, including the fail-closed `HOLD`.
-- **Does not** write to cloud Postgres in the request path, **does not** create alerts, cases, SAR filings, or webhook deliveries.
-- What is shipped upward (mTLS): aggregate metrics windows (`docs/architecture/edge-channel-contract.md`) and, asynchronously, one **decision envelope** per evaluation to `POST /api/v1/edge/assessments`: `edgeAssessmentId`, decision, score, triggered rule ids / rule version ids, bundle manifest hash, latency. The envelope's feature snapshot is **empty** — no PAN hash, amount, merchant or other request field leaves the premises. Delivery is at-least-once from a bounded in-memory buffer (`EDGE_ASSESSMENT_BUFFER_SIZE`, default 10 000; shipped every `EDGE_ASSESSMENT_SHIP_INTERVAL`, default 2 s); the cloud endpoint is idempotent on the id. Envelopes still buffered when the node restarts during a Control Plane outage are lost (the cloud then keeps that assessment pending).
-
-When `featurestore.fail-closed=true` (default), an unavailable local feature store returns `HOLD` instead of evaluating without velocity history. See `docs/edge-transaction-evaluation.md` §5.
-
----
-
-## 2. Cloud `/api/v1/transactions/ingest` — compliance artifacts
-
-- Authenticated cloud API: a PSP machine API key (`X-Api-Key: hka_…` or `Authorization: Bearer hka_…`), or a Console session for operators. The merchant must belong to the caller's PSP (otherwise `404`).
-- Persists the transaction, enqueues Kafka outbox events, runs fraud detection (rules, ML, sanctions, limits).
-- **Alerts** are created by `DecisionEngine` on HOLD/BLOCK/ALERT paths.
-- **Cases** may be auto-created from rule outcomes when configured.
-- **Webhooks** (`RISK_ALERT`, `CASE_UPDATE`, `MERCHANT_STATUS_CHANGE`) are enqueued in the **transactional outbox** (`event_outbox` channel `WEBHOOK`) atomically with the triggering write.
-- Supports **idempotent ingest** via `Idempotency-Key` header or `clientReference` body field (unique per PSP).
-
-### 2.1 Correlation with the edge decision (`edgeAssessmentId`)
-
-Send the `edgeAssessmentId` from the edge response in the ingest body. The Control Plane then:
-
-1. validates it is a UUID (`400` otherwise — nothing is persisted);
-2. links the transaction to the assessment with that id (created by whichever arrives first: the
-   edge envelope or the ingest); an id already linked to another transaction, or owned by another
-   PSP, is refused with `409`;
-3. **adopts** the edge decision as the transaction's synchronous result instead of re-deciding
-   (`riskDetails.decidedAtEdge=true`). If the envelope has not arrived yet the response says
-   `edgeAssessmentPending=true` and the decision is copied onto the transaction when it lands.
-
-Without `edgeAssessmentId` the ingest runs the full cloud fraud/AML pipeline as before.
-
----
-
-## 3. Recommended integration sequence
-
-```
-1. Pre-auth (edge)
-   POST https://edge-node.internal/edge/evaluate
-   { pan_hash, txn_id, amount_cents, merchant_id, ... }
-   → { action: ALLOW | HOLD | BLOCK, edgeAssessmentId: "<uuid>", ... }
-
-2. Apply acquirer decision based on edge action (do not auto-approve HOLD/BLOCK)
-
-3. Post-auth (cloud) — required for compliance coverage
-   POST https://api.hokeka.com/api/v1/transactions/ingest
-   Idempotency-Key: <stable client reference for this txn>
-   X-Api-Key: hka_...            (PSP machine API key)
-   { merchantId, amountCents, currency, pan, clientReference, acquirerResponse,
-     edgeAssessmentId: "<uuid from step 1>", ... }
-   → fraud detection result; alerts/cases/webhooks as applicable
-```
-
-Use the **same stable client reference** (`txn_id` from edge, or your authorisation reference) as `Idempotency-Key` / `clientReference` on ingest so retries do not duplicate cloud transactions.
-
----
-
-## 4. What each path owns
-
-| Concern | Edge | Cloud |
-|---------|------|-------|
-| Pre-auth latency | ✓ primary | optional |
-| Velocity / local history | ✓ Aerospike | Postgres statistics |
-| Rule bundle enforcement | ✓ pulled bundle | full rule engine + DB features |
-| Sanctions / cross-PSP | — | ✓ |
-| Alert / case / SAR | — | ✓ |
-| PSP webhooks | — | ✓ durable outbox |
-| Operator UI / reporting | aggregates only | ✓ |
-
----
-
-## 5. Related documentation
-
-- [`docs/edge-transaction-evaluation.md`](edge-transaction-evaluation.md) — edge request/response contract
-- [`docs/PSP_API_GUIDE.md`](PSP_API_GUIDE.md) — cloud ingest, webhooks, auth
-- [`docs/features/API_INTEGRATION.md`](features/API_INTEGRATION.md) — SDK-style integration notes
-- [`docs/SYSTEM-COMMUNICATION-AND-TX-PATH-ANALYSIS.md`](SYSTEM-COMMUNICATION-AND-TX-PATH-ANALYSIS.md) — architecture analysis (Pass A–D)
+- Integration: [`PSP_API_GUIDE.md`](PSP_API_GUIDE.md) and [`edge-transaction-evaluation.md`](edge-transaction-evaluation.md)
+- Normative contract: [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md)
+- Plan and work packages: [`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md)
+- The full former text is in git history before this change.

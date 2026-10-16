@@ -64,10 +64,11 @@ export function ManagementHomePage() {
 
       <h2>Not in this API</h2>
       <p>
-        Transaction ingest, screening hits, cases, and alerts are part of the PSP
+        Transaction evaluation, screening hits, cases, and alerts are part of the PSP
         integration / monitoring API. See{" "}
         <code>docs/PSP_API_GUIDE.md</code>{" "}
-        and dual-post contract docs in <code>docs/</code>.
+        and the data residency contract in{" "}
+        <code>docs/EDGE_DATA_RESIDENCY_CONTRACT.md</code>.
       </p>
     </article>
   );
