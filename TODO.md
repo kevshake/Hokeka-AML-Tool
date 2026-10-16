@@ -3,7 +3,7 @@ _Last updated: 2026-10-16_
 
 ## Wave 72 — Full PSP simulation: Edge + Control Plane, live readiness (2026-10-16)
 
-- [ ] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch
+- [x] Merge in-flight Wave 71 fixes (gap register + Wave 46 worktree) into the branch — `34e98037c`, pushed
 - [ ] Build a simulation environment (Docker data services + Control Plane + aml-microservice + Edge Node) and a reusable multi-PSP simulator under `scripts/sim/`
 - [ ] Run every functional scenario (onboarding, auth/RBAC, API keys, edge enrollment, bundle pull, edge pre-auth + cloud dual-post ingest, rules, velocity, sanctions/PEP, alerts, cases, SAR/STR/CTR, exports, AI shadow, billing, metrics) and record each failure with its root cause
 - [ ] Fix every failure at the root (no stubs), with regression tests
