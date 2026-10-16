@@ -47,6 +47,22 @@ order by 1""")
         found.append({"defect": f"{t} lacks column {col} present on {t[:-4]}",
                       "fix": f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ};"})
     found += unmapped_not_null()
+    # Entities join users to platform_users(id); a key into the legacy (empty) psp_users table
+    # makes every insert that records the acting user fail (V243 / V260).
+    for row in psql("select conrelid::regclass||'.'||conname from pg_constraint "
+                    "where contype='f' and confrelid=to_regclass('public.psp_users')"):
+        found.append({"defect": f"{row} references legacy psp_users (entities use platform_users)",
+                      "fix": "-- needs a Flyway migration; no sim patch"})
+    # Envers writes the entity id column; an *_aud primary key on another column rejects inserts.
+    for row in psql(r"""
+with pk as (select c.conrelid::regclass::text t, array_agg(a.attname::text order by a.attname) cols
+            from pg_constraint c join pg_attribute a on a.attrelid=c.conrelid and a.attnum=any(c.conkey)
+            where c.contype='p' group by 1)
+select a.t||'|'||array_to_string(a.cols,',')||'|'||array_to_string(b.cols,',')
+from pk a join pk b on b.t=regexp_replace(a.t,'_aud$','') where a.t like '%\_aud' and not (b.cols <@ a.cols)"""):
+        t, aud_cols, base_cols = row.split("|")
+        found.append({"defect": f"{t} primary key ({aud_cols}) does not include the entity id ({base_cols})",
+                      "fix": "-- needs a Flyway migration; no sim patch"})
     return found
 
 

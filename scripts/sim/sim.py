@@ -1224,7 +1224,9 @@ def e2(ctx, sc):
     def loaded():
         r = ec.get("/edge/status")
         j = r.json or {}
-        return j if (j.get("bundleVersion") or j.get("version") or j.get("rulesLoaded") or j.get("loaded")) else None
+        # /edge/status reports ruleBundleVersion (-1 until a verified bundle is armed).
+        v = j.get("ruleBundleVersion", j.get("bundleVersion"))
+        return j if (isinstance(v, int) and v > 0) else None
     st = wait_until(loaded, timeout=60, interval=3)
     r = ec.get("/edge/status")
     sc.note(f"/edge/status: {r.text[:400]}")
