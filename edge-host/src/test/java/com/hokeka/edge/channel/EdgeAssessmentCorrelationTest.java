@@ -1,6 +1,5 @@
 package com.hokeka.edge.channel;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hokeka.edge.EdgeController;
 import com.hokeka.edge.EdgeEngine;
@@ -8,6 +7,11 @@ import com.hokeka.edge.EdgeEvaluation;
 import com.hokeka.edge.EdgeRuleInterpreter;
 import com.hokeka.edge.activation.ActivationService;
 import com.hokeka.edge.activation.EdgeIdentity;
+import com.hokeka.edge.contract.ContractSchemas;
+import com.hokeka.edge.ledger.EdgeLedger;
+import com.hokeka.edge.ledger.EvaluationRecorder;
+import com.hokeka.edge.ledger.LedgerEvaluation;
+import com.hokeka.edge.ledger.LedgerProperties;
 import com.hokeka.edge.store.NoOpFeatureStore;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -17,14 +21,13 @@ import org.springframework.web.client.RestClient;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,16 +35,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Every /edge/evaluate response carries a UUID edgeAssessmentId, and the same id is shipped to the
- * Control Plane's /api/v1/edge/assessments in a transaction-free envelope (at-least-once). Also
- * covers the AI advisory call reaching /api/v1/edge/decision.
+ * Every /edge/evaluate response carries a fresh UUID edgeAssessmentId, and the ledger row handed
+ * to the recorder carries the same id, the node/site ids and the contract decision. (Delivery of the
+ * resulting decision records is covered against a real ledger by OutboxShipperIntegrationTest.)
+ * Also covers the AI advisory call reaching /api/v1/edge/decision.
  */
 class EdgeAssessmentCorrelationTest {
 
     private HttpServer server;
     private final List<String> paths = new CopyOnWriteArrayList<>();
-    private final List<String> bodies = new CopyOnWriteArrayList<>();
-    private final AtomicInteger status = new AtomicInteger(200);
 
     @AfterEach
     void stop() {
@@ -52,10 +54,10 @@ class EdgeAssessmentCorrelationTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", ex -> {
             paths.add(ex.getRequestURI().getPath());
-            bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            ex.getRequestBody().readAllBytes();
             byte[] out = "{\"reasons\":[\"cp\"],\"aiApplied\":true,\"fallback\":false}".getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", "application/json");
-            ex.sendResponseHeaders(status.get(), out.length);
+            ex.sendResponseHeaders(200, out.length);
             ex.getResponseBody().write(out);
             ex.close();
         });
@@ -74,85 +76,47 @@ class EdgeAssessmentCorrelationTest {
         return activation;
     }
 
-    private EdgeController controller(EdgeAssessmentShipper shipper, EdgeRuleInterpreter.Decision decision) {
-        EdgeEngine engine = mock(EdgeEngine.class);
-        when(engine.evaluate(any())).thenReturn(decision);
-        when(engine.activeVersion()).thenReturn(12L);
-        when(engine.activeBundleHash()).thenReturn("sha256:abc");
-        EdgeController controller = new EdgeController(engine, new EdgeMetricsAggregator("psp", "edge", 64, 1_000L),
-                new NoOpFeatureStore(), null, shipper);
-        ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", false);
-        return controller;
-    }
-
     @Test
-    void evaluateMintsUuidAndShipsTransactionFreeEnvelopeWithSameId() throws Exception {
-        ControlPlaneProperties props = new ControlPlaneProperties();
-        props.setEnabled(true);
-        EdgeAssessmentShipper shipper = new EdgeAssessmentShipper(props, channelToLocalServer(), authorizedActivation());
-        EdgeController controller = controller(shipper, new EdgeRuleInterpreter.Decision(
-                EdgeRuleInterpreter.Action.HOLD, 70, List.of(5L), List.of("velocity"), List.of(51L)));
+    void evaluateMintsAFreshUuidAndRecordsTheRowUnderTheSameId() {
+        List<LedgerEvaluation> recorded = new CopyOnWriteArrayList<>();
+        ObjectMapper mapper = new ObjectMapper();
+        // Deliberate test double (intentional-stub): captures rows instead of writing them to Postgres.
+        EvaluationRecorder capturing = new EvaluationRecorder(new EdgeLedger(new LedgerProperties(), mapper, "edge-7"),
+                ContractSchemas.fromDirectory(Path.of(System.getProperty("contracts.dir", "../docs/contracts"))),
+                mapper) {
+            @Override
+            public LedgerEvaluation record(LedgerEvaluation ev) {
+                recorded.add(ev);
+                return ev;
+            }
+        };
+        EdgeEngine engine = mock(EdgeEngine.class);
+        when(engine.evaluateWithProvenance(any())).thenReturn(new EdgeEngine.Outcome(new EdgeRuleInterpreter.Decision(
+                EdgeRuleInterpreter.Action.HOLD, 70, List.of(5L), List.of("velocity"), List.of(51L)), "java", null));
+        when(engine.activeVersion()).thenReturn(12L);
+        when(engine.activeBundleHash()).thenReturn("sha256:" + "0".repeat(64));
+        EdgeController controller = new EdgeController(engine, new EdgeMetricsAggregator("psp", "edge", 64, 1_000L),
+                new NoOpFeatureStore(), null, capturing, "edge-7", "site-7");
+        ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", false);
 
-        EdgeEvaluation first = controller.evaluate(Map.of("pan_hash", "h", "amount_cents", 125000,
+        EdgeEvaluation first = (EdgeEvaluation) controller.evaluate(Map.of("pan_hash", "h", "amount_cents", 125000,
                 "merchant_id", "m-1")).getBody();
-        EdgeEvaluation second = controller.evaluate(Map.of("pan_hash", "h")).getBody();
+        EdgeEvaluation second = (EdgeEvaluation) controller.evaluate(Map.of("pan_hash", "h")).getBody();
 
         UUID.fromString(first.edgeAssessmentId());
         assertNotEquals(first.edgeAssessmentId(), second.edgeAssessmentId());
         assertEquals(12L, first.ruleBundleVersion());
-        assertEquals(2, shipper.backlog());
-
-        shipper.ship();
-
-        assertEquals(0, shipper.backlog());
-        assertEquals(List.of(EdgeAssessmentShipper.ASSESSMENTS_PATH, EdgeAssessmentShipper.ASSESSMENTS_PATH), paths);
-        JsonNode env = new ObjectMapper().readTree(bodies.get(0));
-        assertEquals(first.edgeAssessmentId(), env.path("edgeAssessmentId").asText());
-        assertEquals("HOLD", env.path("decision").asText());
-        assertEquals(5L, env.path("findings").get(0).path("ruleId").asLong());
-        assertEquals(51L, env.path("findings").get(0).path("ruleVersionId").asLong());
-        assertEquals("sha256:abc", env.path("bundleManifestHash").asText());
-        assertTrue(env.path("featureSnapshot").isEmpty(), "no transaction data may leave the edge");
-        assertFalse(bodies.get(0).contains("125000") || bodies.get(0).contains("m-1") || bodies.get(0).contains("pan"));
-    }
-
-    @Test
-    void controlPlaneOutageKeepsEnvelopesAndRejectedEnvelopesAreDropped() throws Exception {
-        ControlPlaneProperties props = new ControlPlaneProperties();
-        props.setEnabled(true);
-        EdgeAssessmentShipper shipper = new EdgeAssessmentShipper(props, channelToLocalServer(), authorizedActivation());
-        EdgeController controller = controller(shipper, new EdgeRuleInterpreter.Decision(
-                EdgeRuleInterpreter.Action.ALLOW, 0, List.of(), List.of()));
-        controller.evaluate(Map.of());
-
-        status.set(503);
-        shipper.ship();
-        assertEquals(1, shipper.backlog(), "5xx keeps the envelope for the next run");
-
-        status.set(400);
-        shipper.ship();
-        assertEquals(0, shipper.backlog());
-        assertEquals(1, shipper.dropped());
-    }
-
-    @Test
-    void bufferIsBoundedAndDisabledControlPlaneShipsNothing() {
-        ControlPlaneProperties props = new ControlPlaneProperties();
-        props.setEnabled(true);
-        props.setAssessmentBufferSize(2);
-        EdgeAssessmentShipper shipper = new EdgeAssessmentShipper(props, mock(SecureChannel.class), authorizedActivation());
-        EdgeEvaluation e = new EdgeEvaluation(EdgeRuleInterpreter.Action.ALLOW, 0, List.of(), List.of(), List.of(),
-                UUID.randomUUID().toString(), 1L, "");
-        shipper.enqueue(e, 1);
-        shipper.enqueue(e, 1);
-        shipper.enqueue(e, 1);
-        assertEquals(2, shipper.backlog());
-        assertEquals(1, shipper.dropped());
-
-        props.setEnabled(false);
-        EdgeAssessmentShipper off = new EdgeAssessmentShipper(props, mock(SecureChannel.class), authorizedActivation());
-        off.enqueue(e, 1);
-        assertEquals(0, off.backlog());
+        assertEquals(2, recorded.size());
+        LedgerEvaluation row = recorded.get(0);
+        assertEquals(first.edgeAssessmentId(), row.edgeAssessmentId().toString());
+        assertEquals("edge-7", row.nodeId());
+        assertEquals("site-7", row.siteId());
+        assertEquals("HOLD", row.decision());
+        assertEquals(List.of(5L), row.triggeredRuleIds());
+        assertEquals(List.of(51L), row.ruleVersionIds());
+        assertEquals("java", row.evaluator());
+        assertEquals("h", row.panHash());
+        assertTrue(!row.features().containsKey("pan_hash"));
     }
 
     @Test

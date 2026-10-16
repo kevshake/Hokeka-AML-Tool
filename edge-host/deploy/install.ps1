@@ -23,7 +23,13 @@ param(
     [string]$AllowSubnet    = "",
     [string]$EnrollmentCode = "",
     [ValidateSet("none","want","need")]
-    [string]$TlsClientAuth  = "none"
+    [string]$TlsClientAuth  = "none",
+    # Edge Ledger: empty = the local 'ledger' container (PostgreSQL 16). A shared site database is
+    # given as a JDBC URL; its password is read from $env:HOKEKA_LEDGER_PASSWORD, never the command line.
+    [string]$LedgerUrl      = "",
+    [string]$LedgerUser     = "hokeka_edge",
+    # Edge Site id; empty = single-node site (site id = EdgeId).
+    [string]$SiteId         = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -117,7 +123,39 @@ function Ensure-TlsCert {
     Ok "TLS keystore created (self-signed, P-384, 825 days) with restricted ACLs"
 }
 
+# --- Edge Ledger credentials -----------------------------------------------------------------------
+# Random password for the local ledger in secrets\edge-ledger.pass (SYSTEM+Administrators only),
+# reused on re-runs so a reinstall never locks the edge out of its existing database. A shared site
+# database (-LedgerUrl) takes its password from $env:HOKEKA_LEDGER_PASSWORD.
+function Ensure-LedgerPassword {
+    $passFile = Join-Path (Join-Path $Here "secrets") "edge-ledger.pass"
+    if (-not [string]::IsNullOrWhiteSpace($LedgerUrl)) {
+        $script:LedgerPassword = $env:HOKEKA_LEDGER_PASSWORD
+        if ([string]::IsNullOrWhiteSpace($script:LedgerPassword)) {
+            Die "-LedgerUrl needs the database password in `$env:HOKEKA_LEDGER_PASSWORD"
+        }
+        Ok "Using the shared site ledger at $($LedgerUrl.Split('?')[0])"
+        return
+    }
+    if (Test-Path $passFile) {
+        $script:LedgerPassword = (Get-Content $passFile -Raw).Trim()
+        Ok "Ledger password already present - reusing it"
+        return
+    }
+    $script:LedgerPassword = New-RandomPassword
+    Set-Content -Path $passFile -Value $script:LedgerPassword -Encoding ascii -NoNewline
+    icacls $passFile /inheritance:r /grant:r "SYSTEM:F" "Administrators:F" | Out-Null
+    Ok "Generated the Edge Ledger password (secrets\edge-ledger.pass, restricted ACL)"
+}
+
 function Write-Env {
+    if ([string]::IsNullOrWhiteSpace($LedgerUrl)) {
+        $ledgerJdbc = "jdbc:postgresql://ledger:5432/hokeka_ledger"
+        $profiles = "local-ledger"
+    } else {
+        $ledgerJdbc = $LedgerUrl
+        $profiles = ""
+    }
     $env = @"
 EDGE_IMAGE=$EdgeImage
 EDGE_BIND=$Bind
@@ -125,6 +163,16 @@ EDGE_PSPID=$PspId
 EDGE_EDGEID=$EdgeId
 CONTROLPLANE_URL=$ControlPlane
 AEROSPIKE_TAG=6.4
+POSTGRES_TAG=16-alpine
+# Edge Ledger (PostgreSQL 16): every evaluation + the decision-record outbox. Fail-closed: if the
+# ledger cannot be written, evaluations answer HOLD. Retention is set per PSP in the Console.
+EDGE_LEDGER_URL=$ledgerJdbc
+EDGE_LEDGER_USER=$LedgerUser
+EDGE_LEDGER_PASSWORD=$script:LedgerPassword
+EDGE_LEDGER_FAIL_CLOSED=true
+EDGE_SITE_ID=$SiteId
+# Starts the local 'ledger' service; empty when the node uses a shared site database.
+COMPOSE_PROFILES=$profiles
 # TLS on the transaction API - the edge refuses to start without these.
 EDGE_TLS_KEYSTORE_PASSWORD=$script:TlsPassword
 EDGE_TLS_KEY_ALIAS=edge
@@ -159,7 +207,7 @@ function Firewall-Api {
 }
 
 function Compose-Up {
-    Log "Starting the isolated stack (Aerospike has NO published port - reachable only by the edge)..."
+    Log "Starting the isolated stack (Aerospike and the ledger have NO published port - reachable only by the edge)..."
     Push-Location $Here
     try { docker compose up -d } finally { Pop-Location }
 }
@@ -180,7 +228,7 @@ function Summary {
     Write-Host ""
     Log "---------------- Installation summary (Windows/container) ----------------"
     Ok  "Edge transaction API : https://${Bind}:8443  (PSP API nodes only)"
-    Ok  "Database access      : Aerospike is reachable ONLY by the edge app"
+    Ok  "Database access      : Aerospike and the Edge Ledger are reachable ONLY by the edge app"
     Write-Host "                         (private container network, no published port)"
     Ok  "Control plane        : $ControlPlane  (outbound only, mTLS + HSE-1)"
     Ok  "Transport security   : TLS 1.3 only, self-signed keystore at secrets\edge-tls.p12"
@@ -221,10 +269,12 @@ function Stage-NativeCore {
 
 # --- run ------------------------------------------------------------------------------------------
 $script:TlsPassword = ""
+$script:LedgerPassword = ""
 Ensure-Docker
 Setup-Dirs
 Stage-NativeCore
 Ensure-TlsCert
+Ensure-LedgerPassword
 Write-Env
 Compose-Up
 Firewall-Api

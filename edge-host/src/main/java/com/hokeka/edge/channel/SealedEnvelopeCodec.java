@@ -27,6 +27,8 @@ public final class SealedEnvelopeCodec {
     public static final String CTX_RULE_BUNDLE = "hokeka.rules.bundle";
     public static final String CTX_METRICS_REPORT = "hokeka.metrics.report";
     public static final String CTX_ACTIVATION = "hokeka.edge.activation";
+    /** Decision record v2 batches, Edge → Control Plane (EDGE_DATA_RESIDENCY_CONTRACT.md §3.2). */
+    public static final String CTX_DECISION_RECORDS = "hokeka.decision.records";
 
     private final ObjectMapper mapper;
     private final HokekaSecureEnvelope hse = new HokekaSecureEnvelope();

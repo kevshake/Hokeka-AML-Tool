@@ -6,11 +6,11 @@ import java.util.List;
  * Response of {@code POST /edge/evaluate}: the decision plus the identifiers the PSP needs for the
  * cloud dual-post.
  *
- * <p>{@code edgeAssessmentId} is a UUID minted for every evaluation. The PSP passes it as
- * {@code edgeAssessmentId} on {@code POST /api/v1/transactions/ingest}; the edge ships a decision
- * envelope under the same id to {@code POST /api/v1/edge/assessments}, and the Control Plane links
- * both (see docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md). The first four fields keep the original
- * response shape, so existing integrations keep parsing it.
+ * <p>{@code edgeAssessmentId} is a UUID minted for every evaluation. It is the primary key of the
+ * evaluation on the site's Edge Ledger and of the decision record v2 the edge ships under the same
+ * id to {@code POST /api/v1/edge/assessments} (docs/EDGE_DATA_RESIDENCY_CONTRACT.md §4). Until the
+ * dual-post is retired (R12) the PSP may still pass it on {@code POST /api/v1/transactions/ingest}.
+ * The first four fields keep the original response shape, so existing integrations keep parsing it.
  *
  * @param action                  decision
  * @param score                   accumulated rule score

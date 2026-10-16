@@ -1,7 +1,7 @@
 # Hokeka Edge Engine — isolated on-prem stack.
 #
-# Security model (database is reachable ONLY by the edge app):
-#   * Aerospike sits on a PRIVATE bridge network and publishes NO host port, so nothing on the host
+# Security model (databases are reachable ONLY by the edge app):
+#   * Aerospike and the Postgres Edge Ledger sit on a PRIVATE bridge network and publish NO host port, so nothing on the host
 #     or the wider network can reach it — only the `edge` service, over the internal network, can.
 #   * Only the edge's transaction API is published, bound by default to 127.0.0.1 (override with
 #     EDGE_BIND to your PSP-internal interface). It speaks TLS 1.3 ONLY — the keystore in
@@ -32,12 +32,44 @@ services:
       timeout: 5s
       retries: 12
 
+  # Edge Ledger (EDGE_DATA_RESIDENCY_CONTRACT.md §1): the site's PostgreSQL 16 system of record for
+  # evaluations and the decision-record outbox. Same isolation as Aerospike: private network, NO
+  # published port, password-authenticated (scram-sha-256) on top. Started by the `local-ledger`
+  # profile (COMPOSE_PROFILES=local-ledger, written by the installers). For a multi-node Edge Site,
+  # leave the profile off and point every node's EDGE_LEDGER_URL at one shared site database.
+  ledger:
+    image: postgres:${POSTGRES_TAG:-16-alpine}
+    container_name: hokeka-ledger
+    profiles: ["local-ledger"]
+    # NO `ports:` — reachable only by `edge` over the private network.
+    environment:
+      POSTGRES_DB: ${EDGE_LEDGER_DB:-hokeka_ledger}
+      POSTGRES_USER: ${EDGE_LEDGER_USER:-hokeka_edge}
+      POSTGRES_PASSWORD: ${EDGE_LEDGER_PASSWORD:?run install.sh/install.ps1 first — it generates the ledger password and writes this to .env}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    volumes:
+      - ledger-data:/var/lib/postgresql/data
+    networks:
+      - edge-internal
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   edge:
     image: ${EDGE_IMAGE:-registry.hokeka.com/hokeka/edge-engine:0.1.0}
     container_name: hokeka-edge
     depends_on:
       aerospike:
         condition: service_healthy
+      ledger:
+        condition: service_healthy
+        # Absent when the node uses a shared site ledger (profile off). Needs Compose >= 2.20.
+        required: false
     # Publish ONLY the transaction API, bound to localhost by default (set EDGE_BIND=0.0.0.0 or an
     # internal IP to accept from your PSP API nodes).
     ports:
@@ -47,10 +79,15 @@ services:
       FEATURESTORE_HOST: aerospike
       FEATURESTORE_PORT: "3000"
       FEATURESTORE_NAMESPACE: hokeka
-      # Retention for raw transactions. MUST match `default-ttl` in aerospike/aerospike.conf —
-      # install.sh writes both from --retention-days. Records are written with an explicit TTL, so
-      # THIS value is what actually takes effect; the namespace default only governs sizing.
-      EDGE_RETENTION_DAYS: ${EDGE_RETENTION_DAYS:-90}
+      # ── Edge Ledger (evaluations + outbox). Missing values are reported by NAME at startup and,
+      # fail-closed, every evaluation answers HOLD until they are set. Retention (min 5 years) is
+      # set per PSP in the Console and delivered in the Edge config document — not here.
+      EDGE_LEDGER_URL: ${EDGE_LEDGER_URL:-jdbc:postgresql://ledger:5432/hokeka_ledger}
+      EDGE_LEDGER_USER: ${EDGE_LEDGER_USER:-hokeka_edge}
+      EDGE_LEDGER_PASSWORD: ${EDGE_LEDGER_PASSWORD:?run install.sh/install.ps1 first — it generates the ledger password and writes this to .env}
+      EDGE_LEDGER_FAIL_CLOSED: ${EDGE_LEDGER_FAIL_CLOSED:-true}
+      # Edge Site id; empty = single-node site (site id = EDGE_EDGEID).
+      EDGE_SITE_ID: ${EDGE_SITE_ID:-}
       EDGE_PSPID: ${EDGE_PSPID:-acme}
       EDGE_EDGEID: ${EDGE_EDGEID:-acme-1}
       # ── TLS on the transaction API (fail-closed: the app refuses to start without it) ──────────
@@ -94,3 +131,5 @@ networks:
 
 volumes:
   aerospike-data:
+  # The Edge Ledger: the PSP's multi-year system of record. Back it up; never prune it.
+  ledger-data:

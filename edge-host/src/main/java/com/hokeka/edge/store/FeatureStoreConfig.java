@@ -35,19 +35,6 @@ public class FeatureStoreConfig {
     @Value("${featurestore.namespace:${FEATURESTORE_NAMESPACE:hokeka}}")
     private String namespace;
 
-    /**
-     * How long raw transactions are retained on the client's premises, in days.
-     *
-     * <p><b>Single source of truth.</b> This value and the {@code default-ttl} in
-     * {@code deploy/aerospike/aerospike.conf} must agree, and both are driven by
-     * {@code EDGE_RETENTION_DAYS} — the installer writes it into {@code .env} and templates the
-     * namespace config from the same number. They previously disagreed (90 here, 30 in the
-     * namespace), which made capacity planning wrong by 3x even though the effective retention was
-     * 90: every record is written with an explicit TTL, which overrides the namespace default.
-     */
-    @Value("${featurestore.retention-days:${EDGE_RETENTION_DAYS:90}}")
-    private int retentionDays;
-
     @Bean(destroyMethod = "close")
     public AerospikeClient aerospikeClient() {
         if (host == null || host.isBlank()) {
@@ -82,12 +69,9 @@ public class FeatureStoreConfig {
                     + "evaluating only on caller-supplied features.");
             return new NoOpFeatureStore();
         }
-        // Log the EFFECTIVE retention. Sizing depends on it and it is set in two places that must
-        // agree (see the field doc), so an operator needs to be able to confirm it from the logs
-        // rather than inferring it from whichever config file they happen to open.
-        log.info("On-prem retention: {} days for raw transactions (velocity buckets fixed at 26h). "
-                + "Aerospike 'filesize' must be sized for this — see docs/edge-client-install-guide.md §2.",
-                retentionDays);
-        return new AerospikeFeatureStore(client, namespace, retentionDays);
+        // Aerospike now holds only velocity buckets (26 h TTL) and the rule bundle; transaction
+        // retention lives on the Edge Ledger and is set per PSP (minimum 5 years).
+        log.info("On-prem feature store: velocity buckets (26 h TTL) + rule bundle in namespace '{}'", namespace);
+        return new AerospikeFeatureStore(client, namespace);
     }
 }

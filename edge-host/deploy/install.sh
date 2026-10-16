@@ -21,10 +21,19 @@
 #   Air-gapped: mirror the repo and pass --repo-url, or drop the artifacts beside this script and
 #   pass --offline. Pin a build with --version 1.2.3; track pre-releases with --channel beta.
 #
-#   Retention + sizing: --retention-days N (default 90) drives BOTH the edge's retention and the
-#   Aerospike namespace default-ttl, so they cannot drift. --peak-tps N sizes the data file from
-#   throughput × retention (with 30% headroom) and reports the RAM the primary index will need;
-#   --data-file-size 256G overrides it explicitly. Undersizing means silent eviction of history.
+#   Edge Ledger: every evaluation is recorded on a PostgreSQL 16 ledger (the site's system of
+#   record) together with the decision record shipped to Hokeka. Container mode runs it as the
+#   `ledger` service (private network, no published port); --native installs PostgreSQL 16 bound to
+#   127.0.0.1. A random ledger password is generated into secrets/edge-ledger.pass and .env.
+#   Multi-node site: --ledger-url jdbc:postgresql://site-db:5432/hokeka_ledger --ledger-user U
+#   (password via HOKEKA_LEDGER_PASSWORD) points the node at a shared site database instead, and
+#   --site-id names the Edge Site (default: the edge id).
+#
+#   Retention + sizing: retention is set per PSP in the Console (minimum and default 5 years) and
+#   enforced on the ledger — it is no longer an installer setting (--retention-days is accepted and
+#   ignored with a warning). --peak-tps N estimates the ledger disk for 5 years of evaluations (with
+#   30% headroom). Aerospike keeps only 26 h velocity buckets + the rule bundle; --data-file-size
+#   overrides its data file size.
 #
 #   Artifact trust: SHA256SUMS is GPG-signed by the Hokeka release key, whose public half is pinned
 #   in this script. The signature is verified BEFORE any digest is trusted, so a tampered origin or
@@ -51,12 +60,16 @@ ENROLL_CODE=""             # operator-supplied, single-use, 24h TTL — needed f
 TLS_CLIENT_AUTH="none"     # none | want | need (mutual TLS from your PSP API nodes)
 TLS_PASS=""                # filled by ensure_tls_cert
 SKIP_SIGNATURE=0           # 1 = do not verify SHA256SUMS.asc (see --insecure-skip-signature)
-# ── retention + sizing ───────────────────────────────────────────────────────────────────────────
-# RETENTION_DAYS is the single source of truth: it drives BOTH the namespace `default-ttl` and the
-# edge's EDGE_RETENTION_DAYS. They must never be set independently — see aerospike/aerospike.conf.
-RETENTION_DAYS=90
-PEAK_TPS=""                # optional: compute the data file size from throughput × retention
-DATA_FILE_SIZE=""          # explicit override, e.g. 256G
+# ── Edge Ledger ──────────────────────────────────────────────────────────────────────────────────
+LEDGER_URL=""              # empty = local ledger (container service / native PostgreSQL 16)
+LEDGER_USER="hokeka_edge"
+LEDGER_DB="hokeka_ledger"
+LEDGER_PASS=""             # filled by ensure_ledger_password (or HOKEKA_LEDGER_PASSWORD for a shared DB)
+SITE_ID=""                 # empty = single-node site (site id = edge id)
+# ── sizing ───────────────────────────────────────────────────────────────────────────────────────
+LEDGER_SIZING_YEARS=5      # the contract's retention floor and default
+PEAK_TPS=""                # optional: estimate the ledger disk from throughput × 5 years
+DATA_FILE_SIZE=""          # explicit Aerospike data file override, e.g. 16G
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── pinned release signing key ───────────────────────────────────────────────────────────────────
@@ -95,7 +108,10 @@ while [ $# -gt 0 ]; do
     --enrollment-code) ENROLL_CODE="$2"; shift ;;
     --tls-client-auth) TLS_CLIENT_AUTH="$2"; shift ;;
     --insecure-skip-signature) SKIP_SIGNATURE=1 ;;
-    --retention-days) RETENTION_DAYS="$2"; shift ;;
+    --retention-days) printf '\033[0;33m  ! \033[0m%s\n' "--retention-days is ignored: retention is set per PSP in the Console (min 5 years) and enforced on the Edge Ledger"; shift ;;
+    --ledger-url) LEDGER_URL="$2"; shift ;;
+    --ledger-user) LEDGER_USER="$2"; shift ;;
+    --site-id) SITE_ID="$2"; shift ;;
     --peak-tps) PEAK_TPS="$2"; shift ;;
     --data-file-size) DATA_FILE_SIZE="$2"; shift ;;
     -h|--help) usage ;;
@@ -106,79 +122,83 @@ done
 
 [ "$(id -u)" -eq 0 ] || die "please run as root (sudo)."
 
-# ── retention + capacity sizing ──────────────────────────────────────────────────────────────────
-# Two numbers decide whether this node keeps the history its rules depend on:
+# ── capacity sizing ──────────────────────────────────────────────────────────────────────────────
+# Transactions now live on the Edge Ledger (PostgreSQL), kept for the PSP's retention: at least 5
+# years (FATF R.11), set in the Console. Undersizing the ledger disk means the node eventually stops
+# recording — and, fail-closed, answers HOLD — so --peak-tps prints the estimate up front.
 #
-#   default-ttl  how long a transaction is kept
-#   filesize     how much room there is to keep them in
-#
-# If filesize is too small for the retention, Aerospike EVICTS once the file fills. Nothing errors;
-# velocity history just quietly shrinks and velocity rules weaken. That silence is why this is
-# computed and checked here rather than left to a comment in a config file.
-#
-# Bytes per stored transaction record, used for the estimate. Derived from the bins the edge writes
-# (pan_hash, amount, ts, merchant, currency, country, mcc, decision, score, rule ids) plus
-# Aerospike's per-record overhead, rounded up to a whole write block. This is an ESTIMATE — validate
-# against real volumes during a pilot before committing to a tier.
-BYTES_PER_TXN=512
-# Aerospike keeps the primary index in RAM at a fixed 64 bytes per record.
-INDEX_BYTES_PER_RECORD=64
+# Bytes per evaluation on disk: the row (ids, typed columns, decision, a ~0.5 KiB feature bag), its
+# share of the three indexes, the outbox row (decision record JSON + index) and Postgres tuple/page
+# overhead. An ESTIMATE — validate against real volumes during a pilot before committing to a tier.
+BYTES_PER_EVALUATION=2048
 
 validate_sizing() {
-  case "$RETENTION_DAYS" in
-    ''|*[!0-9]*) die "--retention-days must be a whole number of days (got '$RETENTION_DAYS')" ;;
-  esac
-  [ "$RETENTION_DAYS" -ge 1 ] && [ "$RETENTION_DAYS" -le 3650 ] \
-    || die "--retention-days must be between 1 and 3650 (got $RETENTION_DAYS)"
-
   if [ -n "$PEAK_TPS" ]; then
     case "$PEAK_TPS" in
       ''|*[!0-9]*) die "--peak-tps must be a whole number (got '$PEAK_TPS')" ;;
     esac
     [ "$PEAK_TPS" -ge 1 ] || die "--peak-tps must be at least 1"
   fi
-
-  # Explicit size wins; otherwise derive from throughput; otherwise keep the shipped default.
   if [ -n "$DATA_FILE_SIZE" ]; then
     printf '%s' "$DATA_FILE_SIZE" | grep -Eq '^[0-9]+[GT]$' \
-      || die "--data-file-size must look like 128G or 2T (got '$DATA_FILE_SIZE')"
-    return
+      || die "--data-file-size must look like 16G or 1T (got '$DATA_FILE_SIZE')"
   fi
+  [ -n "$PEAK_TPS" ] || return 0   # nothing to compute from
 
-  [ -n "$PEAK_TPS" ] || return   # nothing to compute from; the shipped default stands
-
-  # records = tps × seconds/day × days; bytes = records × per-record; +30% headroom, min 16G.
-  local records bytes gib
-  records=$(( PEAK_TPS * 86400 * RETENTION_DAYS ))
-  bytes=$(( records * BYTES_PER_TXN ))
-  gib=$(( bytes / 1073741824 ))
-  gib=$(( gib * 13 / 10 ))
-  [ "$gib" -lt 16 ] && gib=16
-  DATA_FILE_SIZE="${gib}G"
-
-  local index_gib
-  index_gib=$(( records * INDEX_BYTES_PER_RECORD / 1073741824 ))
-  log "Sizing for ${PEAK_TPS} TPS × ${RETENTION_DAYS}d: ~$(( records / 1000000 ))M records"
-  log "  data file : ${DATA_FILE_SIZE} (incl. 30% headroom)"
-  log "  index RAM : ~${index_gib} GB — Aerospike holds the primary index in MEMORY."
-  if [ "$index_gib" -ge 4 ]; then
-    warn "This node needs roughly ${index_gib} GB of RAM for the Aerospike index ALONE, before the"
-    echo  "  JVM, Aerospike overhead and the OS. Confirm the host has it, or reduce --retention-days."
-  fi
+  # Peak TPS sustained all day is a deliberate upper bound; +30% headroom.
+  local records gib
+  records=$(( PEAK_TPS * 86400 * 365 * LEDGER_SIZING_YEARS ))
+  gib=$(( records * BYTES_PER_EVALUATION / 1073741824 * 13 / 10 ))
+  log "Edge Ledger sizing for ${PEAK_TPS} TPS × ${LEDGER_SIZING_YEARS} years: ~$(( records / 1000000 ))M evaluations"
+  log "  ledger disk : ~${gib} GiB (incl. 30% headroom) for the Postgres data volume"
+  log "  Aerospike   : velocity buckets only (26 h TTL) — the shipped data file size is ample"
 }
 
 validate_sizing
 
-# Write RETENTION_DAYS and (when known) the data file size into the namespace config, so the
-# database and the edge cannot drift apart. Idempotent: re-running replaces the same two directives.
+# Apply an explicit --data-file-size to the Aerospike namespace config. Idempotent. Retention is no
+# longer an Aerospike concern: velocity buckets and the rule bundle carry their own TTLs.
 apply_aerospike_sizing() {
   local conf="$1"
   [ -f "$conf" ] || { warn "aerospike config not found at $conf — skipping sizing"; return 0; }
-  sed -i -E "s/^([[:space:]]*)default-ttl[[:space:]]+[0-9]+d.*/\\1default-ttl ${RETENTION_DAYS}d        # managed by install.sh --retention-days/" "$conf"
   if [ -n "$DATA_FILE_SIZE" ]; then
-    sed -i -E "s/^([[:space:]]*)filesize[[:space:]]+[0-9]+[GT].*/\\1filesize ${DATA_FILE_SIZE}      # managed by install.sh --data-file-size \\/ --peak-tps/" "$conf"
+    sed -i -E "s/^([[:space:]]*)filesize[[:space:]]+[0-9]+[GT].*/\\1filesize ${DATA_FILE_SIZE}      # managed by install.sh --data-file-size/" "$conf"
   fi
-  ok "Aerospike namespace: default-ttl ${RETENTION_DAYS}d, filesize $(grep -Eo 'filesize[[:space:]]+[0-9]+[GT]' "$conf" | awk '{print $2}')"
+  ok "Aerospike namespace: filesize $(grep -Eo 'filesize[[:space:]]+[0-9]+[GT]' "$conf" | awk '{print $2}')"
+}
+
+# ── Edge Ledger credentials ──────────────────────────────────────────────────────────────────────
+# A random password for the local ledger, kept in secrets/edge-ledger.pass (mode 600) and reused on
+# re-runs, so re-installing never locks the edge out of its own existing database. For a shared
+# site database (--ledger-url) the operator supplies it via HOKEKA_LEDGER_PASSWORD instead.
+ensure_ledger_password() {
+  local passfile="$HERE/secrets/edge-ledger.pass"
+  if [ -n "$LEDGER_URL" ]; then
+    LEDGER_PASS="${HOKEKA_LEDGER_PASSWORD:-}"
+    [ -n "$LEDGER_PASS" ] || die "--ledger-url needs the database password in HOKEKA_LEDGER_PASSWORD (it is never taken on the command line)"
+    ok "Using the shared site ledger at ${LEDGER_URL%%\?*}"
+    return
+  fi
+  if [ -s "$passfile" ]; then
+    LEDGER_PASS="$(cat "$passfile")"
+    ok "Ledger password already present — reusing it"
+    return
+  fi
+  LEDGER_PASS="$(random_password)"
+  printf '%s' "$LEDGER_PASS" > "$passfile"
+  chmod 600 "$passfile"
+  ok "Generated the Edge Ledger password (secrets/edge-ledger.pass, mode 600)"
+}
+
+# The JDBC URL the edge uses: the shared one, the container service, or native loopback.
+ledger_url_for() { # ledger_url_for container|native
+  if [ -n "$LEDGER_URL" ]; then
+    printf '%s' "$LEDGER_URL"
+  elif [ "$1" = "container" ]; then
+    printf 'jdbc:postgresql://ledger:5432/%s' "$LEDGER_DB"
+  else
+    printf 'jdbc:postgresql://127.0.0.1:5432/%s' "$LEDGER_DB"
+  fi
 }
 
 # ── detect distro + package manager ──────────────────────────────────────────────────────────────
@@ -327,7 +347,7 @@ install_container() {
   install -d -m 700 "$HERE/config" "$HERE/secrets" "$HERE/data"
   ok "created config/secrets/data (mode 700)"
   ensure_tls_cert
-  # Keep the namespace config and the edge's retention in lockstep before the stack comes up.
+  ensure_ledger_password
   apply_aerospike_sizing "$HERE/aerospike/aerospike.conf"
 
   cat > "$HERE/.env" <<EOF
@@ -337,9 +357,16 @@ EDGE_PSPID=${PSPID}
 EDGE_EDGEID=${EDGEID}
 CONTROLPLANE_URL=${CONTROLPLANE}
 AEROSPIKE_TAG=6.4
-# Retention for raw transactions. MUST match default-ttl in aerospike/aerospike.conf — both are
-# written from --retention-days. Changing one alone breaks capacity planning silently.
-EDGE_RETENTION_DAYS=${RETENTION_DAYS}
+POSTGRES_TAG=16-alpine
+# Edge Ledger (PostgreSQL 16): every evaluation + the decision-record outbox. Fail-closed: if the
+# ledger cannot be written, evaluations answer HOLD. Retention is set per PSP in the Console.
+EDGE_LEDGER_URL=$(ledger_url_for container)
+EDGE_LEDGER_USER=${LEDGER_USER}
+EDGE_LEDGER_PASSWORD=${LEDGER_PASS}
+EDGE_LEDGER_FAIL_CLOSED=true
+EDGE_SITE_ID=${SITE_ID}
+# Starts the local 'ledger' service; empty when the node uses a shared site database (--ledger-url).
+COMPOSE_PROFILES=$([ -n "$LEDGER_URL" ] || printf 'local-ledger')
 # TLS on the transaction API — the edge refuses to start without these.
 EDGE_TLS_KEYSTORE_PASSWORD=${TLS_PASS}
 EDGE_TLS_KEY_ALIAS=edge
@@ -358,7 +385,7 @@ EOF
   chmod 600 "$HERE/.env"
   ok "wrote .env (mode 600)"
 
-  log "Starting the isolated stack (Aerospike has NO published port — reachable only by the edge)…"
+  log "Starting the isolated stack (Aerospike and the ledger have NO published port — reachable only by the edge)…"
   ( cd "$HERE" && $COMPOSE up -d )
   firewall_api
 
@@ -528,8 +555,100 @@ install_native() {
   command -v java >/dev/null 2>&1 || install_temurin25
   install_aerospike_native
   harden_aerospike_native
+  install -d -m 700 "$HERE/secrets"
+  ensure_ledger_password
+  if [ -z "$LEDGER_URL" ]; then
+    install_postgres16_native
+    provision_ledger_native
+  fi
   install_edge_native
   print_summary "native"
+}
+
+# ── native Edge Ledger (PostgreSQL 16) ───────────────────────────────────────────────────────────
+# Installs PostgreSQL 16 from the PostgreSQL project's own repositories (PGDG) where the distro does
+# not ship 16, initialises the cluster and enables the service. Sets PG_SERVICE / PSQL_AS_POSTGRES
+# for provision_ledger_native.
+install_postgres16_native() {
+  log "Installing PostgreSQL 16 (Edge Ledger)…"
+  PG_SERVICE="postgresql"
+  case "$PKG" in
+    apt-get)
+      pkg_install curl ca-certificates gnupg
+      install -d /usr/share/postgresql-common/pgdg
+      curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        || die "could not fetch the PGDG signing key"
+      . /etc/os-release
+      echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list
+      pkg_install postgresql-16
+      PG_SERVICE="postgresql" ;;
+    dnf|yum)
+      local el; el="$(rpm -E '%{rhel}' 2>/dev/null || echo 9)"
+      $PKG install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-${el}-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm" \
+        || die "could not install the PGDG repository"
+      $PKG -qy module disable postgresql 2>/dev/null || true
+      pkg_install postgresql16-server
+      [ -s /var/lib/pgsql/16/data/PG_VERSION ] || /usr/pgsql-16/bin/postgresql-16-setup initdb \
+        || die "postgresql-16-setup initdb failed"
+      PG_SERVICE="postgresql-16" ;;
+    apk)
+      pkg_install postgresql16 postgresql16-client
+      if [ ! -s /var/lib/postgresql/16/data/PG_VERSION ]; then
+        rc-service postgresql setup 2>/dev/null || die "could not initialise the PostgreSQL 16 cluster"
+      fi
+      PG_SERVICE="postgresql" ;;
+    zypper)
+      pkg_install postgresql16-server postgresql16
+      PG_SERVICE="postgresql" ;;
+    *) die "install PostgreSQL 16 for ${PKG:-this system} manually (or pass --ledger-url to a site database), then re-run" ;;
+  esac
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now "$PG_SERVICE" || die "could not start ${PG_SERVICE}"
+  else
+    rc-update add postgresql default 2>/dev/null || true
+    rc-service postgresql start || die "could not start postgresql"
+  fi
+  ok "PostgreSQL 16 running (${PG_SERVICE})"
+}
+
+# Creates the ledger role (scram-sha-256 password) and database, owned by that role, and keeps the
+# server on loopback. Idempotent: an existing role gets its password re-set to the one in
+# secrets/edge-ledger.pass, an existing database is left as is. The password reaches psql through a
+# psql variable on stdin, never through argv (visible in `ps`) or a log line.
+provision_ledger_native() {
+  log "Provisioning the Edge Ledger database '${LEDGER_DB}' for role '${LEDGER_USER}'…"
+  local i
+  for i in $(seq 1 20); do
+    su - postgres -c "pg_isready -q" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  su - postgres -c "psql -v ON_ERROR_STOP=1 -q -d postgres" <<SQL || die "could not provision the ledger role/database"
+\set ledger_pass '${LEDGER_PASS}'
+SET password_encryption = 'scram-sha-256';
+SELECT format('CREATE ROLE %I LOGIN', '${LEDGER_USER}')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${LEDGER_USER}') \gexec
+ALTER ROLE "${LEDGER_USER}" WITH LOGIN PASSWORD :'ledger_pass';
+SELECT format('CREATE DATABASE %I OWNER %I', '${LEDGER_DB}', '${LEDGER_USER}')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${LEDGER_DB}') \gexec
+ALTER SYSTEM SET listen_addresses = 'localhost';
+SQL
+  # listen_addresses only takes effect on restart.
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart "${PG_SERVICE:-postgresql}" || die "could not restart ${PG_SERVICE:-postgresql}"
+  else
+    rc-service postgresql restart || die "could not restart postgresql"
+  fi
+  # Loopback only, whatever the distro default: the edge is the only client.
+  if command -v ufw >/dev/null 2>&1; then
+    ufw deny 5432/tcp >/dev/null 2>&1 && ok "ufw: port 5432 denied from the network"
+  elif command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP 2>/dev/null \
+      || iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
+    ok "iptables: 5432 dropped except localhost"
+  fi
+  ok "Edge Ledger ready on 127.0.0.1:5432 (database ${LEDGER_DB}, scram-sha-256)"
 }
 
 install_temurin25() {
@@ -577,7 +696,7 @@ install_aerospike_native() {
   install -d -m 750 -o root "$DATA_DIR/aerospike/data" 2>/dev/null || true
   install -m 640 "$HERE/aerospike/aerospike.conf" /etc/aerospike/aerospike.conf 2>/dev/null || \
     { install -d /etc/aerospike; install -m 640 "$HERE/aerospike/aerospike.conf" /etc/aerospike/aerospike.conf; }
-  # Apply retention/sizing to the INSTALLED copy, so the namespace matches EDGE_RETENTION_DAYS.
+  # Apply an explicit --data-file-size to the INSTALLED copy.
   apply_aerospike_sizing /etc/aerospike/aerospike.conf
   ok "Aerospike config staged"
 }
@@ -642,8 +761,12 @@ CONTROLPLANE_X25519_PUBLIC_KEY=
 EDGE_MTLS_KEYSTORE=${DATA_DIR}/secrets/edge-client.p12
 EDGE_MTLS_KEYSTORE_PASSWORD=
 EDGE_IDENTITY_FILE=${DATA_DIR}/data/edge-identity.json
-# MUST match default-ttl in /etc/aerospike/aerospike.conf — both written from --retention-days.
-EDGE_RETENTION_DAYS=${RETENTION_DAYS}
+# Edge Ledger (PostgreSQL 16). Fail-closed: if it cannot be written, evaluations answer HOLD.
+EDGE_LEDGER_URL=$(ledger_url_for native)
+EDGE_LEDGER_USER=${LEDGER_USER}
+EDGE_LEDGER_PASSWORD=${LEDGER_PASS}
+EDGE_LEDGER_FAIL_CLOSED=true
+EDGE_SITE_ID=${SITE_ID}
 EOF
   chmod 600 "$DATA_DIR/config/edge.env"
   ok "TLS keystore + ${DATA_DIR}/config/edge.env staged (mode 600)"
@@ -683,7 +806,7 @@ write_systemd_unit() {
   cat > /etc/systemd/system/hokeka-edge.service <<EOF
 [Unit]
 Description=Hokeka Edge Engine (on-premises AML rule evaluation)
-After=network-online.target aerospike.service
+After=network-online.target aerospike.service postgresql.service postgresql-16.service
 Wants=network-online.target
 
 [Service]
@@ -720,12 +843,18 @@ print_summary() {
   echo
   log "──────────── Installation summary (${1}) ────────────"
   ok  "Edge transaction API : https://${BIND}:8443  (PSP API nodes only)"
-  ok  "Database access      : Aerospike is reachable ONLY by the edge app"
+  ok  "Database access      : Aerospike and the Edge Ledger are reachable ONLY by the edge app"
   if [ "$1" = "container" ]; then
     echo "                         (private Docker network, no published port)"
   else
-    echo "                         (bound to 127.0.0.1 + firewalled on port 3000)"
+    echo "                         (bound to 127.0.0.1 + firewalled on ports 3000 / 5432)"
   fi
+  if [ -n "$LEDGER_URL" ]; then
+    ok  "Edge Ledger          : shared site database ${LEDGER_URL%%\?*}"
+  else
+    ok  "Edge Ledger          : local PostgreSQL 16, password in secrets/edge-ledger.pass (mode 600)"
+  fi
+  echo  "                         Back up the ledger: it is the PSP's multi-year system of record."
   ok  "Control plane        : ${CONTROLPLANE}  (outbound only, mTLS + HSE-1)"
   ok  "Transport security   : TLS 1.3 only, self-signed keystore at secrets/edge-tls.p12"
   echo

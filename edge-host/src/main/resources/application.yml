@@ -24,6 +24,12 @@ spring:
   threads:
     virtual:
       enabled: true    # serve each transaction on a virtual thread (Java 21+); near-unbounded concurrency
+  autoconfigure:
+    # The Edge Ledger owns its DataSource and Flyway run (com.hokeka.edge.ledger.EdgeLedger), so a
+    # database outage can never block boot; Boot's own DataSource/Flyway wiring must stay off.
+    exclude:
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 
 hokeka:
   controlplane:
@@ -34,9 +40,9 @@ hokeka:
     enrollment-code: ${EDGE_ENROLLMENT_CODE:}
     bundle-poll-interval: ${EDGE_BUNDLE_POLL_INTERVAL:15s}
     metrics-interval: ${EDGE_METRICS_INTERVAL:60s}
-    # Decision envelopes (no transaction data) correlated with the cloud ingest by edgeAssessmentId.
+    # How often the Edge Ledger outbox (decision records v2, ids + outcome only) is drained to the
+    # Control Plane. The records are durable in edge_outbox; this is only the polling cadence.
     assessment-ship-interval: ${EDGE_ASSESSMENT_SHIP_INTERVAL:2s}
-    assessment-buffer-size: ${EDGE_ASSESSMENT_BUFFER_SIZE:10000}
     request-timeout: ${EDGE_CONTROLPLANE_TIMEOUT:20s}
     # mTLS identity presented to the control plane (contract §5).
     keystore: ${EDGE_MTLS_KEYSTORE:/opt/hokeka/secrets/edge-client.p12}
@@ -49,6 +55,24 @@ hokeka:
     identity-file: ${EDGE_IDENTITY_FILE:/opt/hokeka/secrets/edge-identity.json}
     # Last verified rule IR. Empty = rule-bundle.ir beside the identity file.
     bundle-file: ${EDGE_RULE_BUNDLE_FILE:}
+  # Edge Ledger (EDGE_DATA_RESIDENCY_CONTRACT.md §1): the site's PostgreSQL 16 system of record for
+  # evaluations + the decision-record outbox. URL/user/password have no defaults: when one is
+  # missing the node logs WHICH variable is missing (never a value) and, fail-closed, answers HOLD.
+  ledger:
+    url: ${EDGE_LEDGER_URL:}
+    username: ${EDGE_LEDGER_USER:}
+    password: ${EDGE_LEDGER_PASSWORD:}
+    schema: ${EDGE_LEDGER_SCHEMA:edge_ledger}
+    # Edge Site id; empty = single-node site, site id = EDGE_EDGEID.
+    site-id: ${EDGE_SITE_ID:}
+    # true (default): a failed evaluation+outbox write answers HOLD / LEDGER_UNAVAILABLE.
+    fail-closed: ${EDGE_LEDGER_FAIL_CLOSED:true}
+    pool-size: ${EDGE_LEDGER_POOL_SIZE:16}
+    connection-timeout: ${EDGE_LEDGER_CONNECTION_TIMEOUT:1000ms}
+    write-timeout: ${EDGE_LEDGER_WRITE_TIMEOUT:2s}
+    partition-months-ahead: ${EDGE_LEDGER_PARTITION_MONTHS_AHEAD:3}
+    retry-buffer-size: ${EDGE_LEDGER_RETRY_BUFFER_SIZE:10000}
+    outbox-batch-size: ${EDGE_LEDGER_OUTBOX_BATCH_SIZE:500}
 
 management:
   endpoints:

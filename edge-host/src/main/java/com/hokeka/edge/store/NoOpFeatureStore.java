@@ -29,9 +29,9 @@ public class NoOpFeatureStore implements EdgeFeatureStore {
         return new FeatureDerivation(Map.of(), needsHistory);
     }
 
+    /** No store attached: there are no counters to advance (intentional-stub: the no-store fallback). */
     @Override
-    public void recordTransaction(String panHash, Map<String, Object> features,
-                                  com.hokeka.edge.EdgeRuleInterpreter.Decision decision) {
+    public void recordVelocity(String panHash, long amountCents) {
         // nothing to record without a store
     }
 
