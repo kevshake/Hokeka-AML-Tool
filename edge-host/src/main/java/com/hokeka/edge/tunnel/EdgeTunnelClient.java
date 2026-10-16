@@ -585,10 +585,24 @@ public class EdgeTunnelClient {
         }
         WebSocket ws = conn.ws;
         if (ws != null) {
+            // WebSocket sends must not overlap: wait briefly for an in-progress frame, else just drop.
+            boolean locked = false;
             try {
-                ws.sendClose(code, reason).orTimeout(2, TimeUnit.SECONDS).whenComplete((w, e) -> ws.abort());
+                locked = conn.sendLock.tryLock(500, TimeUnit.MILLISECONDS);
+                if (locked) {
+                    ws.sendClose(code, reason).orTimeout(2, TimeUnit.SECONDS).whenComplete((w, e) -> ws.abort());
+                } else {
+                    ws.abort();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                ws.abort();
             } catch (RuntimeException e) {
                 ws.abort();
+            } finally {
+                if (locked) {
+                    conn.sendLock.unlock();
+                }
             }
         }
         recordClose(code, reason, "closed by the Edge");
@@ -888,8 +902,10 @@ public class EdgeTunnelClient {
         Inflight inf = new Inflight(prepared, row, "export.stream".equals(prepared.op())
                 ? new Credit(TunnelOps.initialCredit(prepared), clock) : null);
         boolean busy;
+        // The session cap from hello.ack, narrowed by the config in force now (it may have changed).
+        int cap = Math.min(conn.maxInflight, localMaxInflight());
         synchronized (conn) {
-            busy = conn.closed || conn.inflight.size() >= conn.maxInflight;
+            busy = conn.closed || conn.inflight.size() >= cap;
             if (!busy) {
                 conn.inflight.put(f.id(), inf);
             }
@@ -1145,7 +1161,7 @@ public class EdgeTunnelClient {
     }
 
     /** Builds a hold placement from a (schema-checked) hold.place body. */
-    private static LegalHoldService.Placement placement(JsonNode b) {
+    static LegalHoldService.Placement placement(JsonNode b) {
         JsonNode scope = b.get("scope");
         List<UUID> ids = null;
         String merchant = null;

@@ -88,6 +88,12 @@ services:
       EDGE_LEDGER_FAIL_CLOSED: ${EDGE_LEDGER_FAIL_CLOSED:-true}
       # Edge Site id; empty = single-node site (site id = EDGE_EDGEID).
       EDGE_SITE_ID: ${EDGE_SITE_ID:-}
+      # ── Data residency: local settings can only narrow the tunnel or raise retention ─────────────
+      EDGE_TUNNEL_ENABLED: ${EDGE_TUNNEL_ENABLED:-true}
+      EDGE_TUNNEL_OPS: ${EDGE_TUNNEL_OPS:-}
+      EDGE_RETENTION_MIN_YEARS: ${EDGE_RETENTION_MIN_YEARS:-5}
+      EDGE_PURGE_TIME: ${EDGE_PURGE_TIME:-02:00}
+      EDGE_SITE_TIMEZONE: ${EDGE_SITE_TIMEZONE:-}
       EDGE_PSPID: ${EDGE_PSPID:-acme}
       EDGE_EDGEID: ${EDGE_EDGEID:-acme-1}
       # ── TLS on the transaction API (fail-closed: the app refuses to start without it) ──────────

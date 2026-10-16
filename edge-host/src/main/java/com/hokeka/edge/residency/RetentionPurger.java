@@ -295,7 +295,7 @@ public class RetentionPurger {
                               JOIN edge_legal_holds h
                                 ON h.released_at IS NULL AND h.scope_kind = 'MERCHANT_RANGE'
                                AND e.merchant_id = h.merchant_id
-                               AND e.evaluated_at >= h.range_from AND e.evaluated_at < h.range_to
+                               AND e.evaluated_at >= h.range_from AND e.evaluated_at <= h.range_to
                         )
                         INSERT INTO edge_held_evaluations (%2$s, legal_hold, hold_ids)
                         SELECT %3$s, true, edge_hold_ids(e.edge_assessment_id, e.merchant_id, e.evaluated_at)

@@ -4,7 +4,8 @@
 
 -- ── legal hold predicate ─────────────────────────────────────────────────────────────────────────
 -- True when an ACTIVE hold covers the evaluation (§7.10 scopes): an IDS hold listing the id, or a
--- MERCHANT_RANGE hold on the row's merchant with from <= evaluated_at < to. This one function is the
+-- MERCHANT_RANGE hold on the row's merchant with from <= evaluated_at <= to (inclusive: the conservative
+-- reading of a hold's end, §12.2). This one function is the
 -- authority for "is this row held": the purge's hold copy, the insert trigger and every tunnel read
 -- use it, so they can never disagree. search_path is pinned to the ledger schema at creation.
 CREATE FUNCTION edge_is_held(p_id uuid, p_merchant_id text, p_evaluated_at timestamptz)
@@ -22,7 +23,7 @@ AS $$
                  AND p_merchant_id IS NOT NULL
                  AND h.merchant_id = p_merchant_id
                  AND p_evaluated_at >= h.range_from
-                 AND p_evaluated_at < h.range_to)))
+                 AND p_evaluated_at <= h.range_to)))
 $$;
 
 -- The active hold ids covering one row, sorted (NULL when none): what edge_held_evaluations.hold_ids
@@ -41,7 +42,7 @@ AS $$
              AND p_merchant_id IS NOT NULL
              AND h.merchant_id = p_merchant_id
              AND p_evaluated_at >= h.range_from
-             AND p_evaluated_at < h.range_to))
+             AND p_evaluated_at <= h.range_to))
 $$;
 
 -- "A merchant-range hold also covers rows inserted later inside the range" (§7.10): new rows that an

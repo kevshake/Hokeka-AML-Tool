@@ -35,8 +35,9 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Scope semantics: {@code edgeAssessmentIds} lists rows by id; {@code merchantId + from + to}
- * covers that merchant's rows with {@code from <= evaluatedAt < to} (the same half-open range as
- * {@code txn.search}). A hold is authoritative through {@code edge_is_held()}; the
+ * covers that merchant's rows with {@code from <= evaluatedAt <= to} — inclusive of {@code to}, the
+ * conservative reading of a hold's end (§12.2; the fixture ends a range at {@code 23:59:59Z}). A
+ * hold is authoritative through {@code edge_is_held()}; the
  * {@code legal_hold} column is the marker the contract asks for.
  */
 public class LegalHoldService {
@@ -59,7 +60,7 @@ public class LegalHoldService {
      * @param ids        IDS scope, or null
      * @param merchantId MERCHANT_RANGE scope merchant, or null
      * @param from       MERCHANT_RANGE start (inclusive), or null
-     * @param to         MERCHANT_RANGE end (exclusive), or null
+     * @param to         MERCHANT_RANGE end (inclusive), or null
      */
     public record Placement(UUID holdId, Instant placedAt, String placedBy, String reasonCode, String reference,
                             List<UUID> ids, String merchantId, Instant from, Instant to) {
@@ -267,7 +268,7 @@ public class LegalHoldService {
     private static String scope(StoredHold h) {
         return h.ids() != null
                 ? "e.edge_assessment_id = ANY (?)"
-                : "e.merchant_id = ? AND e.evaluated_at >= ? AND e.evaluated_at < ?";
+                : "e.merchant_id = ? AND e.evaluated_at >= ? AND e.evaluated_at <= ?";
     }
 
     /** Binds the parameters of {@link #scope} starting at {@code index}; returns the next index. */

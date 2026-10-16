@@ -42,8 +42,8 @@ final class FakeTunnelServer implements AutoCloseable {
     final AtomicInteger upgrades = new AtomicInteger();
     /** HTTP status to answer the next upgrades with instead of 101 (0 = upgrade normally). */
     volatile int refuseWith;
-    /** Whether to echo the subprotocol on upgrade. */
-    volatile boolean selectSubprotocol = true;
+    /** The 1-based upgrade number that is answered without selecting the subprotocol (0 = none). */
+    volatile int skipSubprotocolOnUpgrade;
 
     /** Binds to an ephemeral loopback port. */
     FakeTunnelServer(SSLContext ctx) throws IOException {
@@ -81,7 +81,7 @@ final class FakeTunnelServer implements AutoCloseable {
             InputStream in = socket.getInputStream();
             OutputStream out = socket.getOutputStream();
             Map<String, String> headers = readRequest(in);
-            upgrades.incrementAndGet();
+            int upgradeNo = upgrades.incrementAndGet();
             String peer = ((X509Certificate) socket.getSession().getPeerCertificates()[0]).getSubjectX500Principal()
                     .getName();
             if (refuseWith != 0) {
@@ -97,7 +97,7 @@ final class FakeTunnelServer implements AutoCloseable {
             StringBuilder resp = new StringBuilder("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
                     + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n");
             String offered = headers.getOrDefault("sec-websocket-protocol", "");
-            if (selectSubprotocol && offered.contains(TunnelFrameCodec.SUBPROTOCOL)) {
+            if (upgradeNo != skipSubprotocolOnUpgrade && offered.contains(TunnelFrameCodec.SUBPROTOCOL)) {
                 resp.append("Sec-WebSocket-Protocol: ").append(TunnelFrameCodec.SUBPROTOCOL).append("\r\n");
             }
             resp.append("\r\n");
