@@ -41,8 +41,6 @@ public class AiDecisionProperties {
     /** Minimum confidence to auto-apply when promoted (non-shadow); below → escalate human. */
     private double minConfidenceToAutoAct = 0.72;
 
-    private Duration inlineTimeout = Duration.ofMillis(500);
-
     /** Per-tenant daily call budget (0 = unlimited). */
     private int dailyCallBudgetPerPsp = 0;
 
@@ -152,14 +150,6 @@ public class AiDecisionProperties {
 
     public void setMinConfidenceToAutoAct(double minConfidenceToAutoAct) {
         this.minConfidenceToAutoAct = minConfidenceToAutoAct;
-    }
-
-    public Duration getInlineTimeout() {
-        return inlineTimeout;
-    }
-
-    public void setInlineTimeout(Duration inlineTimeout) {
-        this.inlineTimeout = inlineTimeout;
     }
 
     public int getDailyCallBudgetPerPsp() {

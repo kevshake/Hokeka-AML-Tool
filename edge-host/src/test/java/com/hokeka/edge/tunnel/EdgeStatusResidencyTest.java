@@ -41,7 +41,7 @@ class EdgeStatusResidencyTest {
     @Test
     void statusReportsConfigRetentionAndTunnel() {
         EdgeController controller = new EdgeController(new EdgeEngine(AuthorizationGate.alwaysAuthorized()),
-                new EdgeMetricsAggregator("12", TunnelRig.EDGE_ID, 64, 1_000L), new NoOpFeatureStore(), null,
+                new EdgeMetricsAggregator("12", TunnelRig.EDGE_ID, 64, 1_000L), new NoOpFeatureStore(),
                 new EvaluationRecorder(rig.ledger, rig.schemas, rig.mapper), TunnelRig.EDGE_ID, TunnelRig.SITE_ID);
         controller.setLocalResidencyStatus(rig.config, rig.purger, rig.ledgerProperties);
 

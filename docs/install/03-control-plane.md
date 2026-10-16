@@ -119,12 +119,11 @@ LAYA_MIN_CONFIDENCE_TO_APPLY=0.55    # below → rules + human review
 LAYA_MIN_CONFIDENCE_TO_AUTO_ACT=0.72 # below → no auto-apply when promoted
 HOKEKA_AI_SHADOW_MODE=true           # default log-only
 HOKEKA_AI_PROMOTED=false             # both promoted + shadow off required to apply
-HOKEKA_AI_INLINE_TIMEOUT=500ms
 HOKEKA_AI_DAILY_CALL_BUDGET_PER_PSP=0
 LAYA_DAILY_INPUT_TOKEN_CAP_PER_PSP=0 # 0 = unlimited input tokens / day / PSP
 ```
 
-Health/status (no key exposure): `GET /api/v1/ai/status` (authenticated). Platform Admins configure per-engine toggles and PSP `aiInlineMode` in Console → Settings → Hokeka AI.
+Health/status (no key exposure): `GET /api/v1/ai/status` (authenticated). Platform Admins configure per-engine toggles in Console → Settings → Hokeka AI.
 
 Optional rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) uses Laya `/v1/ask` on the Control Plane when enabled.
 

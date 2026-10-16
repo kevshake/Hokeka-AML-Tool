@@ -2,7 +2,6 @@ package com.hokeka.edge;
 
 import com.hokeka.edge.channel.ControlPlaneProperties;
 import com.hokeka.edge.channel.EdgeMetricsAggregator;
-import com.hokeka.edge.channel.HokekaAiDecisionClient;
 import com.hokeka.edge.ledger.EvaluationRecorder;
 import com.hokeka.edge.ledger.LedgerEvaluation;
 import com.hokeka.edge.ledger.LedgerEvaluations;
@@ -51,7 +50,6 @@ public class EdgeController {
     private final EdgeEngine engine;
     private final EdgeMetricsAggregator metrics;
     private final EdgeFeatureStore featureStore;
-    private final HokekaAiDecisionClient aiDecisionClient;
     private final EvaluationRecorder recorder;
     private final String nodeId;
     private final String siteId;
@@ -97,10 +95,9 @@ public class EdgeController {
      */
     @Autowired
     public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics, EdgeFeatureStore featureStore,
-                          @Autowired(required = false) HokekaAiDecisionClient aiDecisionClient,
                           EvaluationRecorder recorder, ControlPlaneProperties controlPlane,
                           LedgerProperties ledger) {
-        this(engine, metrics, featureStore, aiDecisionClient, recorder, controlPlane.getEdgeId(),
+        this(engine, metrics, featureStore, recorder, controlPlane.getEdgeId(),
                 ledger.effectiveSiteId(controlPlane.getEdgeId()));
     }
 
@@ -111,12 +108,10 @@ public class EdgeController {
      * @param siteId this node's Edge Site id
      */
     public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics, EdgeFeatureStore featureStore,
-                          HokekaAiDecisionClient aiDecisionClient, EvaluationRecorder recorder,
-                          String nodeId, String siteId) {
+                          EvaluationRecorder recorder, String nodeId, String siteId) {
         this.engine = engine;
         this.metrics = metrics;
         this.featureStore = featureStore;
-        this.aiDecisionClient = aiDecisionClient;
         this.recorder = recorder;
         this.nodeId = nodeId == null ? "" : nodeId.trim();
         this.siteId = siteId == null ? "" : siteId.trim();
@@ -278,11 +273,6 @@ public class EdgeController {
         enriched.putAll(features);
 
         EdgeEngine.Outcome outcome = engine.evaluateWithProvenance(enriched);
-
-        if (aiDecisionClient != null && outcome.failClosedCode() == null) {
-            outcome = new EdgeEngine.Outcome(aiDecisionClient.enrichBorderline(outcome.decision(), enriched),
-                    outcome.evaluator(), null);
-        }
 
         // Record AFTER evaluating, so a transaction never inflates its own velocity counters.
         featureStore.recordVelocity(panHash, velocityAmount(enriched.get("amount_cents")));

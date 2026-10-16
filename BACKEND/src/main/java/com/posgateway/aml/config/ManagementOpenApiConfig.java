@@ -351,7 +351,6 @@ public class ManagementOpenApiConfig {
 
         private static final String[] FORBIDDEN_PATH_PREFIXES = {
                 "/ai/engines",
-                "/ai/psps",
                 "/ai/status"
         };
 

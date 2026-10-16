@@ -98,9 +98,6 @@ public class AiDecisionAudit {
     @Column(name = "screening_hit_id", length = 128)
     private String screeningHitId;
 
-    @Column(name = "edge_id", length = 128)
-    private String edgeId;
-
     @Column(name = "decision_point", length = 64)
     private String decisionPoint;
 
@@ -345,14 +342,6 @@ public class AiDecisionAudit {
 
     public void setScreeningHitId(String screeningHitId) {
         this.screeningHitId = screeningHitId;
-    }
-
-    public String getEdgeId() {
-        return edgeId;
-    }
-
-    public void setEdgeId(String edgeId) {
-        this.edgeId = edgeId;
     }
 
     public String getDecisionPoint() {

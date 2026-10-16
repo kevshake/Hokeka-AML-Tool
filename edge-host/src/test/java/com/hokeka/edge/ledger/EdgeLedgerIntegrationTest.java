@@ -77,7 +77,7 @@ class EdgeLedgerIntegrationTest {
         EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
         engine.loadPlainBundle(BUNDLE.getBytes(StandardCharsets.UTF_8));
         EdgeController controller = new EdgeController(engine, new EdgeMetricsAggregator("42", "acme-eu-1", 64, 1_000L),
-                new NoOpFeatureStore(), null, recorder, "acme-eu-1", "acme-eu");
+                new NoOpFeatureStore(), recorder, "acme-eu-1", "acme-eu");
         ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", false);
         return controller;
     }

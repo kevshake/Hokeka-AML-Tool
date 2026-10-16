@@ -66,8 +66,8 @@ chmod +x scripts/edge-runtime-smoke.sh
 ./scripts/edge-runtime-smoke.sh
 ```
 
-On PSP premises: install via `edge-host/deploy/install.sh`, confirm rule bundle pull, `/edge/decision`,
-metrics upload, and Console **Edge Nodes** page (`MANAGE_PSP` / `PSP_SETTINGS_VIEW`). Dual-post contract:
+On PSP premises: install via `edge-host/deploy/install.sh`, confirm rule bundle pull,
+metrics upload, decision-record shipping (`/edge/assessments`), and Console **Edge Nodes** page (`MANAGE_PSP` / `PSP_SETTINGS_VIEW`). Dual-post contract:
 [`docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](../EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md).
 
 Rust toolchain is pinned in `edge-engine/rust-toolchain.toml` (minimum 1.85 for edition2024 deps).

@@ -22,7 +22,7 @@ tests named there exist but were not re-run for this update._
 | 9 | Control plane → Edge `GET /api/v1/edge/config` | outbound (Edge polls) | **mTLS, TLS 1.3** | **HSE-1 sealed** to the node's X25519 key, context `hokeka.edge.config` | `EdgeConfigServiceTest`, `EdgeResidencyControllerTest`. The Edge does not fetch it yet (planned, R2). |
 | 10 | Edge ↔ control plane Edge Tunnel `wss://…/api/v1/edge/tunnel` | outbound (Edge opens) | **mTLS, TLS 1.3**, nginx `ssl_verify_client on` (`BACKEND/nginx/edge-tunnel.conf`) | every frame except `ping`/`pong` **HSE-1 sealed**, context `hokeka.tunnel.<type>`, header bound inside the seal | `TunnelFrameCodecTest`, `EdgeTunnelIntegrationTest` (fake Edge). Server only: the Edge tunnel client is planned (R5). |
 | 11 | Control plane instance ↔ instance via Redis pub/sub (tunnel relay) | control-plane internal | Redis transport as deployed | frames relayed **still sealed** (`RelayMessage`); Redis never sees plaintext | `EdgeTunnelIntegrationTest` (two instances) |
-| 12 | Edge → control plane `POST /api/v1/edge/decision` (Hokeka AI recommendation) | outbound | **mTLS, TLS 1.3** | **plain JSON, not sealed**, carries the full feature bag ⚠️ | see §4 |
+| 12 | ~~Edge → control plane `POST /api/v1/edge/decision`~~ | — | — | **removed in R10c**: the hop no longer exists | `NoFeaturesLeaveTheEdgeIntegrationTest` |
 | 13 | Edge → local Edge Ledger (PostgreSQL 16) | on-prem, private network / loopback | **plaintext** ⚠️, SCRAM-SHA-256 auth | — | see §4 |
 | 14 | Edge → shared site ledger (`--ledger-url`) | on-prem, PSP network | whatever the JDBC URL sets | — | operator-controlled, see §4 |
 
@@ -81,12 +81,12 @@ control plane is ever split across hosts, this hop must become TLS.
 **Plaintext to the TLS port returns HTTP 400, not a connection reset.** Tomcat answers rather than
 drops. The request never reaches application code (asserted), but the port does respond.
 
-**Hop 12 — the Hokeka AI recommendation call sends transaction data in plain JSON.**
-`HokekaAiDecisionClient.enrichBorderline` posts the full enriched feature bag (including
-`pan_hash`, amount and merchant) to `/api/v1/edge/decision` for borderline decisions. TLS protects
-it on the wire, but it is not HSE-1 sealed, and it puts class-T data in the cloud, which the
-residency contract forbids. Work package R10c removes this call. Until then it is the one known
-residency leak on the Edge side.
+**Hop 12 — removed.** `HokekaAiDecisionClient.enrichBorderline` used to post the full enriched
+feature bag (including `pan_hash`, amount and merchant) to `/api/v1/edge/decision` for borderline
+decisions, in plain JSON inside mTLS: class-T data in the cloud, which the residency contract
+forbids. Work package R10c removed the Edge client and the Control Plane endpoint.
+`NoFeaturesLeaveTheEdgeIntegrationTest` asserts that the only requests an Edge makes are the bundle
+and config polls, the sealed metrics report and the sealed decision-record batch.
 
 **Hops 13–14 — Edge → ledger is not TLS.** The local ledger container sits on the same private
 bridge network as Aerospike with **no published port**; the native install binds PostgreSQL to
@@ -153,4 +153,4 @@ planned with the Edge tunnel client (R5).
 
 **Cloud data that still breaks the residency model:** the cloud `transactions` table and its
 dependants, written by `/api/v1/transactions/ingest`, until R15 back-fills each Edge and R12
-purges them; and hop 12 above until R10c.
+purges them.

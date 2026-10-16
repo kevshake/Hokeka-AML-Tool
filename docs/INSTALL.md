@@ -20,8 +20,8 @@ They are joined by one narrow channel that the Edge opens, outbound on TCP 443. 
 stores transaction data.** The Edge ships decision records (IDs, action, score, rule IDs; no PAN,
 amount or features) and aggregate metrics, and pulls signed rule bundles. Transaction data stays on
 the Edge Ledger. The Console will read it live over an Edge-opened tunnel (Edge client planned, R5).
-One exception exists today: the Hokeka AI recommendation request for ALERT/HOLD decisions still
-carries feature values (removal planned, R10c). Normative contract:
+The former Hokeka AI recommendation request, which carried feature values, was removed in R10c.
+Normative contract:
 [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md). Do not weaken it.
 
 ```

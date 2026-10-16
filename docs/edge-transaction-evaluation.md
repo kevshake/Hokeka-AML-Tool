@@ -31,12 +31,11 @@ EdgeEngine
     │  6. EVALUATE via the Rust core, or the Java interpreter as warm standby
     ▼
 EdgeController
-    │  7. ADVISORY: ALERT/HOLD only — Hokeka AI recommendation via the Control Plane (see §7.3)
-    │  8. advance this card's velocity counters (after the decision)
-    │  9. MINT edgeAssessmentId (UUID)
-    │ 10. RECORD on the Edge Ledger: evaluation row + txn_ref index + decision-record outbox row,
+    │  7. advance this card's velocity counters (after the decision; site-scoped keys)
+    │  8. MINT edgeAssessmentId (UUID)
+    │  9. RECORD on the Edge Ledger: evaluation row + txn_ref index + decision-record outbox row,
     │     one SQL statement, one local transaction. Failure → HOLD / LEDGER_UNAVAILABLE (§5.3)
-    │ 11. count the standing decision into the aggregate metrics
+    │ 10. count the standing decision into the aggregate metrics
     ▼
     └─► 200 OK  { action, score, triggeredRuleIds, reasons, triggeredRuleVersionIds,
                   edgeAssessmentId, ruleBundleVersion, ruleBundleHash }
@@ -110,9 +109,11 @@ The node reads these from Aerospike, keyed on `pan_hash`, and merges them in **b
 > 24 buckets, so it spans 23 to 24 hours. A rule that needs a strict rolling window must say so
 > differently.
 
-Velocity is per Aerospike cluster. All nodes of one Edge Site share one cluster, so they share
-counters. Across several sites of one PSP, counters are per site today. Site-scoped keys are
-planned (R10c).
+Velocity is site-scoped. Buckets are keyed `<pan_hash>:<yyyyMMddHH>:<site_id>` (site id =
+`EDGE_SITE_ID`, or `EDGE_EDGEID` for a single-node site). All nodes of one Edge Site share one
+Aerospike cluster, so they share counters, and a node reads only its own site's keys. Across
+several sites of one PSP, counters are per site unless the PSP links the sites' Aerospike clusters
+with XDR; without XDR, velocity is per site (`edge-host/deploy/README.md`).
 
 ### 2.3 Caller values override derived values
 
@@ -444,7 +445,10 @@ Aerospike now holds only velocity and the bundle. The former `txn` set is gone.
 |---|---|---|
 | Decision records v2 | `POST /api/v1/edge/assessments`, mTLS, HSE-1 sealed (context `hokeka.decision.records`) | §3.2. Batches of up to 500, drained from `edge_outbox` in order, at least once, every 2 s by default (`EDGE_ASSESSMENT_SHIP_INTERVAL`). A restart or a cloud outage loses nothing |
 | Aggregate metrics | `POST /api/v1/edge/metrics`, mTLS, HSE-1 sealed | Counts only, every 60 s. No transaction, no `pan_hash`, no amount. Metrics report v2 (hourly per-merchant and per-currency aggregates) is specified in the contract; the node still sends v1 |
-| Hokeka AI recommendation request | `POST /api/v1/edge/decision`, mTLS | **Known leak, to be removed.** For every `ALERT` or `HOLD` from the rules, the node posts the full enriched feature bag (including `pan_hash`, amount, merchant and your other features) to the Control Plane and appends any "Hokeka AI recommendation" to `reasons`. The advisory never changes the action, score or rules. This breaks the residency rule that transaction data stays on the Edge. Work package R10c removes it (planned). Until then, an operator who must not send this data can set `hokeka.controlplane.enabled=false`, which also stops bundle polling, so it is not a workable production setting |
+
+Nothing else is sent. The former Hokeka AI recommendation request (`POST /api/v1/edge/decision`,
+which posted the full feature bag for every `ALERT` or `HOLD`) was removed in R10c, so the
+response's `reasons` contain rule reasons only and never an AI recommendation.
 
 If the pinned Control Plane keys are not configured, nothing sealed is shipped. The node keeps
 evaluating; decision records stay in the outbox.

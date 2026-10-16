@@ -48,7 +48,7 @@ The owner decisions of 2026-10-16 change the ground this plan was written on. Th
 | R9 | SAR/CTR filing from Edge pulls; filed-document store; hold notifications | Planned |
 | R10a | Edge CTR, FX, limits, structuring; SpEL typology library compiled to Edge IR | Planned |
 | R10b | Sanctions list distribution and Edge matcher; merchant blocklist | Planned |
-| R10c | Remove the feature-bag POST to `/edge/decision`; site-scoped velocity | Planned |
+| R10c | Remove the feature-bag POST to `/edge/decision`; site-scoped velocity | Done |
 | R11 | Console live pulls (`useEdgeData`), offline banner, dashboards on rollups, access-log viewer | Planned |
 | R15 | Back-fill legacy cloud transaction data to each Edge, then verify | Planned |
 | R12 | Delete the cloud ingest and evaluation path; purge migration | Planned, gated on parity sign-off |
@@ -483,7 +483,7 @@ The residency packages (R0–R15, above) take precedence where they overlap. Pha
 | D-9 | **Edge latency budget and authority:** confirm a p99 target (proposed ≤ 50 ms excluding AI inline), and that the Edge decision is authoritative for edge rails (CP adopt mode, no re-decision). **Authority decided 2026-10-16:** the Edge is the only decider for every rail. The p99 target is still open; the Edge ledger write is held to +2 ms p99 (`EvaluateLatencyRegressionTest`). | Single decision per transaction. | WP-04 |
 | D-10 | **Risk-band scheme:** 5 bands VERY_LOW..VERY_HIGH and their default boundaries; the KRS/TRS weighting in CRA; who may lock CRA and for how long. | Risk model. | WP-12, WP-13 |
 | D-11 | **SAR transport per jurisdiction:** which regulators are live per tenant (Kenya FRC goAML, CBK, FinCEN, FCA, etc.), manual vs API filing, and receipt handling. | Filing. | WP-30 |
-| D-12 | **AI beyond shadow:** may any AI engine move from `advisory_only=true` to influencing decisions (and which), and may Edge inline AI (`ai_inline_mode`) be enabled per PSP? | Governance and model risk. | WP-28 |
+| D-12 | **AI beyond shadow:** may any AI engine move from `advisory_only=true` to influencing decisions (and which), and may an Edge-side AI recommendation fed only by decision records be enabled per PSP (the feature-bag inline path was removed in R10c)? | Governance and model risk. | WP-28 |
 | D-13 | **Webhook event catalogue and payload versioning:** which events PSPs get by default; the signature scheme stays HMAC-SHA256 "ts.body". | API contract. | WP-19 |
 | D-14 | **CRM integration target(s)** (none found in code): which CRM systems, and is linkage by reference or sync? | Scope. | WP-26 |
 | D-15 | **Retention:** findings/assessment retention period and partitioning (volume grows by about N findings per transaction), aligned with record-keeping law (e.g. 7 years in Kenya POCAMLA; confirm). **Decided 2026-10-16:** each PSP sets retention in the Console, minimum and default 5 years (FATF R.11), maximum 25, maker-checker, reductions take effect 30 days after approval (V261). A PSP under a 7-year law sets 7. | Storage. | WP-01 |

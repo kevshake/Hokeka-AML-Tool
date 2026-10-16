@@ -255,7 +255,7 @@ The older cloud ingest endpoint (`POST /api/v1/transactions/ingest`) still works
 
 The installer does **not** install a local AI service. Every Hokeka AI recommendation is produced on the Control Plane. Edge Nodes never hold AI credentials.
 
-Today, for borderline decisions (`ALERT` or `HOLD`), the Edge asks the Control Plane for a Hokeka AI recommendation over the mTLS channel (`POST /api/v1/edge/decision`). That request carries the evaluation's feature values. It is the one path where transaction features leave the Edge today. Its removal is planned (R10c); after that the recommendation will use decision records only. The recommendation is advisory: it never changes the action or score the Edge returned.
+The Edge does not request a Hokeka AI recommendation. The former request for borderline decisions (`POST /api/v1/edge/decision`) carried the evaluation's feature values and was removed in R10c, so no transaction features leave the Edge. A future recommendation will use decision records only, and will stay advisory: it will never change the action or score the Edge returned.
 
 ---
 

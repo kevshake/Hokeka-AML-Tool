@@ -17,7 +17,6 @@ public final class AiDecisionContext {
     private final Long caseId;
     private final Long merchantId;
     private final String screeningHitId;
-    private final String edgeId;
     private final boolean advisoryOnly;
 
     private AiDecisionContext(Builder builder) {
@@ -30,7 +29,6 @@ public final class AiDecisionContext {
         this.caseId = builder.caseId;
         this.merchantId = builder.merchantId;
         this.screeningHitId = builder.screeningHitId;
-        this.edgeId = builder.edgeId;
         this.advisoryOnly = builder.advisoryOnly;
     }
 
@@ -70,10 +68,6 @@ public final class AiDecisionContext {
         return screeningHitId;
     }
 
-    public String getEdgeId() {
-        return edgeId;
-    }
-
     public boolean isAdvisoryOnly() {
         return advisoryOnly;
     }
@@ -92,7 +86,6 @@ public final class AiDecisionContext {
         private Long caseId;
         private Long merchantId;
         private String screeningHitId;
-        private String edgeId;
         private boolean advisoryOnly = true;
 
         private Builder(AiEngineType engine) {
@@ -145,11 +138,6 @@ public final class AiDecisionContext {
 
         public Builder screeningHitId(String screeningHitId) {
             this.screeningHitId = screeningHitId;
-            return this;
-        }
-
-        public Builder edgeId(String edgeId) {
-            this.edgeId = edgeId;
             return this;
         }
 

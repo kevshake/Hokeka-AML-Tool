@@ -78,6 +78,16 @@ reason text) is the only per-transaction data that leaves the site; it is shippe
   reductions take effect 30 days after approval). `--retention-days` is ignored with a warning. The
   Control Plane publishes retention in the sealed `GET /api/v1/edge/config` document; the Edge
   consumer and the daily partition purge are planned (R2). Until then the ledger keeps every row.
+- **Velocity is site-scoped.** Aerospike velocity buckets are keyed `<pan_hash>:<yyyyMMddHH>:<site_id>`
+  (site id = `EDGE_SITE_ID`, or `EDGE_EDGEID` for a single-node site). Every node of one Edge Site
+  shares one Aerospike cluster, so all of them advance and read the same counters. A node reads only
+  its **own site's** keys. If a PSP runs several Edge Sites, a card's activity at one site is **not**
+  visible to velocity rules at another unless the PSP links the sites' Aerospike clusters with
+  **XDR** (Aerospike Enterprise cross-datacenter replication) and the counters are summed on read.
+  **Without XDR, velocity is per site**: a card used at two sites in the same hour counts once at
+  each. With neither `EDGE_SITE_ID` nor `EDGE_EDGEID` set, the node does not use Aerospike at all
+  (logged by variable name) and velocity rules cannot fire. Upgrading from a release with unscoped
+  keys (`<pan_hash>:<yyyyMMddHH>`) starts the counters from zero; the old buckets expire within 26 h.
 - **Sizing:** size the ledger disk for at least 5 years and back the volume up. `install.sh
   --peak-tps N` prints `N × 86 400 × 365 × 5` evaluations × 2 048 bytes + 30% headroom:
 

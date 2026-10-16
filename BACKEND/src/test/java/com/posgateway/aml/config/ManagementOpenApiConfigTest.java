@@ -34,7 +34,7 @@ class ManagementOpenApiConfigTest {
         assertTrue(exclusions.contains("/ai/**"));
         assertFalse(ManagementOpenApiConfig.ManagementPathRules.isDocumentedManagementPath("/ai/status"));
         assertFalse(ManagementOpenApiConfig.ManagementPathRules.isDocumentedManagementPath("/ai/engines"));
-        assertFalse(ManagementOpenApiConfig.ManagementPathRules.isDocumentedManagementPath("/ai/psps/1/ai-settings"));
+        assertFalse(ManagementOpenApiConfig.ManagementPathRules.isDocumentedManagementPath("/ai/audit/case/1"));
     }
 
     @Test
@@ -42,7 +42,7 @@ class ManagementOpenApiConfigTest {
         assertTrue(ManagementOpenApiConfig.ManagementPublicSpecSanitizer
                 .isForbiddenPublicManagementPath("/ai/engines"));
         assertTrue(ManagementOpenApiConfig.ManagementPublicSpecSanitizer
-                .isForbiddenPublicManagementPath("/ai/psps/7/ai-settings"));
+                .isForbiddenPublicManagementPath("/ai/status"));
         assertFalse(ManagementOpenApiConfig.ManagementPublicSpecSanitizer
                 .isForbiddenPublicManagementPath("/admin/psp-billing"));
     }

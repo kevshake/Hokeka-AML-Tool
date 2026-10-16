@@ -865,10 +865,10 @@ MUST NOT echo them in acknowledgements.
 
 ### 12.3 Transition from dual-post
 
-- Until R12: `/api/v1/transactions/ingest`, `/edge/decision` and v1 assessment envelopes keep
-  working; new Edges send v2 records.
-- R10c removes the `HokekaAiDecisionClient` feature-bag POST to `/edge/decision` **before** R12,
-  because it is a class-T leak today.
+- Until R12: `/api/v1/transactions/ingest` and v1 assessment envelopes keep working; new Edges send
+  v2 records.
+- R10c removed the `HokekaAiDecisionClient` feature-bag POST to `/edge/decision` **before** R12,
+  because it was a class-T leak. Neither the Edge client nor the Control Plane endpoint exists.
 - R12 deletes the ingest path and v1 acceptance, gated on simulator parity sign-off (owner
   decision 7).
 
