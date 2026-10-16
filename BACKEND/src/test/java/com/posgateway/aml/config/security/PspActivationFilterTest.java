@@ -15,6 +15,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -105,6 +106,25 @@ class PspActivationFilterTest {
             assertEquals(200, response.getStatus(), path + " must stay public");
             assertNotNull(chain.getRequest(), path + " must reach the chain");
         }
+    }
+
+    /**
+     * The merged R3 + R4 exemption list: every machine-to-machine Edge path (including
+     * {@code /edge/config} and the {@code /edge/tunnel} upgrade) is exempt under the servlet
+     * context path, while the fleet admin API under {@code /edge/nodes} still enforces activation.
+     */
+    @Test
+    void edgeMachinePathsAreExemptButTheFleetAdminApiIsNot() throws Exception {
+        for (String path : new String[]{"/edge/enroll", "/edge/bundle", "/edge/metrics", "/edge/decision",
+                "/edge/assessments", "/edge/config", "/edge/tunnel"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1" + path);
+            request.setContextPath("/api/v1");
+            assertTrue(filter.shouldNotFilter(request), path + " must be exempt");
+        }
+        MockHttpServletRequest admin = new MockHttpServletRequest("GET", "/api/v1/edge/nodes");
+        admin.setContextPath("/api/v1");
+        assertFalse(filter.shouldNotFilter(admin), "/edge/nodes is a user API");
+        assertEquals(403, run("/edge/nodes", user("PENDING")).getStatus());
     }
 
     @Test

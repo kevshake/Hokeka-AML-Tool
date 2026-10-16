@@ -39,6 +39,8 @@ final class LocalTunnelSession {
     private final AtomicReference<State> state = new AtomicReference<>(State.AWAITING_HELLO);
     volatile String sessionId;
     volatile Set<String> opsEffective = Set.of();
+    /** {@code hello.opsEnabled}: what the Edge offered, to re-derive {@link #opsEffective} on a config change. */
+    volatile Set<String> opsOffered = Set.of();
     volatile int maxInflight;
     volatile Instant connectedAt;
     volatile Instant lastFrameAt;

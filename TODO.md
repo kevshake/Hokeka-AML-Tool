@@ -1,5 +1,5 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
-_Last updated: 2026-10-16_
+_Last updated: 2026-10-17_
 
 ## Wave 73 — Fix PSP-simulation findings (2026-10-16)
 
@@ -34,7 +34,7 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
   - [x] R1 Edge ledger + durable outbox (merged 22fde3d95; edge-host 198 tests, 0 failures; p99 +2 ms latency gate still to be measured on a quiet Linux host)
   - [x] R4 cloud tunnel server (merged 021ef992e; 146 tunnel tests pass)
   - [x] R3 + R7 retention/config doc + decision record v2 (merged 3fadba33b; BACKEND 807 tests 0 failures; FRONTEND typecheck/lint/vitest pass)
-  - [ ] Lane 1 integration: real per-PSP tunnel settings, config.updated notify, site_id single source, support-access revocation cuts tunnel sessions; full suite on merged branch
+  - [x] Lane 1 integration: real per-PSP tunnel settings, config.updated notify, site_id single source, support-access revocation cuts tunnel sessions; full suite on merged branch (branch `wp-lane1-integration`; also fixed merge defects: duplicate test-scoped json-schema-validator in pom, V263 params_digest CHAR vs entity VARCHAR failing Hibernate validate)
   - [ ] R14a docs drafts
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge

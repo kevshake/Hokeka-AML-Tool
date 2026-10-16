@@ -173,7 +173,7 @@ public class EdgeDataGateway {
     /**
      * §9 / §7.9: support access was switched off for a PSP. Every Control Plane instance cancels
      * its in-flight {@code PLATFORM_USER} pulls of that PSP ({@code cancel SUPPORT_ACCESS_REVOKED}).
-     * Called by the R3 settings flow after it stores the flag.
+     * Called by {@link TunnelResidencyEventListener} after R3's withdrawal of the flag commits.
      */
     public void revokeSupportAccess(long pspId) {
         messaging.broadcast(RelayMessage.supportRevoked(pspId));

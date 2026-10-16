@@ -18,6 +18,8 @@ import com.posgateway.aml.repository.edge.EdgeDataAccessLogRepository;
 import com.posgateway.aml.repository.edge.EdgeNodeRepository;
 import com.posgateway.aml.service.edge.EdgeIdentityResolver;
 import com.posgateway.aml.service.edge.EdgeReplayGuard;
+import com.posgateway.aml.service.residency.EdgeConfigUpdatedEvent;
+import com.posgateway.aml.service.residency.PspDataSettingsChangedEvent;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
@@ -52,6 +54,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URI;
 import java.net.http.WebSocketHandshakeException;
@@ -62,6 +66,7 @@ import java.security.interfaces.XECPublicKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -69,6 +74,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -78,6 +84,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -142,7 +149,7 @@ class EdgeTunnelIntegrationTest {
     static class TunnelItApp {
     }
 
-    /** Policy beans: real JDBC support-access policy and contract-default settings. */
+    /** Policy beans: real JDBC support-access policy and per-PSP settings the tests control. */
     static class TestPolicies {
 
         /** HSE-1 primitive (EdgeBundleConfig in the full application). */
@@ -165,10 +172,10 @@ class EdgeTunnelIntegrationTest {
             return new JdbcSupportAccessPolicy(jdbcTemplate);
         }
 
-        /** §6.1 defaults. */
+        /** Per-PSP tunnel settings shared by both instances (R3's config document in production). */
         @Bean
         TunnelPspSettingsProvider tunnelPspSettingsProvider() {
-            return new ContractDefaultTunnelSettings();
+            return SETTINGS;
         }
 
         /** Fixed bundle version. */
@@ -203,6 +210,39 @@ class EdgeTunnelIntegrationTest {
     }
 
     static final RecordingListener RECORDER = new RecordingListener();
+
+    /**
+     * Test double for R3's per-PSP config document (production: {@link ResidencyTunnelPspSettings}):
+     * the §6.1 defaults unless a test stores settings for its PSP. Shared by both instances, as
+     * the database is in production.
+     */
+    static final class MutableTunnelSettings implements TunnelPspSettingsProvider {
+        /** §6.1 "all read ops": every op except ledger.backfill. */
+        static final Set<String> READ_OPS = Arrays.stream(TunnelOp.values())
+                .filter(op -> op != TunnelOp.LEDGER_BACKFILL).map(TunnelOp::wire).collect(Collectors.toUnmodifiableSet());
+        static final TunnelPspSettings DEFAULTS = new TunnelPspSettings(true, READ_OPS, false, 16, 1L);
+        private final Map<Long, TunnelPspSettings> byPsp = new ConcurrentHashMap<>();
+
+        /** Stores the config a PSP's next lookups return. */
+        void set(long pspId, TunnelPspSettings settings) {
+            byPsp.put(pspId, settings);
+        }
+
+        /** The stored settings of the PSP, or the §6.1 defaults. */
+        @Override
+        public TunnelPspSettings settings(long pspId) {
+            return byPsp.getOrDefault(pspId, DEFAULTS);
+        }
+    }
+
+    static final MutableTunnelSettings SETTINGS = new MutableTunnelSettings();
+
+    /** Read ops without the given ones. */
+    private static Set<String> readOpsWithout(String... ops) {
+        Set<String> out = new java.util.HashSet<>(MutableTunnelSettings.READ_OPS);
+        Arrays.asList(ops).forEach(out::remove);
+        return Set.copyOf(out);
+    }
 
     // ── lifecycle ────────────────────────────────────────────────────────────────────────────────
 
@@ -1034,6 +1074,150 @@ class EdgeTunnelIntegrationTest {
                 .getValue()).isEqualTo(ContractFixtures.fixture("hold.ack.item--applied.json"));
         assertThatThrownBy(() -> cpA.getBean(TunnelNotifier.class).notifyPsp(psp, MAPPER.createObjectNode().put("type", "x")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── per-PSP config (R3) and residency events ─────────────────────────────────────────────────
+
+    /** Verifies: a config with tunnel.enabled = false refuses the hello with 4403 and registers nothing. */
+    @Test
+    void tunnelDisabledInConfigClosesHello4403() throws Exception {
+        long psp = newPsp(false);
+        SETTINGS.set(psp, new TunnelPspSettingsProvider.TunnelPspSettings(false, MutableTunnelSettings.READ_OPS,
+                false, 16, 4L));
+        FakeEdge e = node("cfg-off-node", "cfg-off-node", psp);
+        e.connect(uri(cpA), true, e.identityHeaders()).get(10, TimeUnit.SECONDS);
+        e.sendHello(List.of(1));
+        assertThat(e.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(4403);
+        assertThat(e.ackFuture).isNotCompleted();
+        assertThat(redis.opsForHash().size("tunnel:psp:" + psp)).isZero();
+        assertThatThrownBy(() -> gatewayA.request(psp, TunnelOp.TXN_GET, params("{\"txnRef\":\"AUTH-1\"}"),
+                analyst(psp), TunnelActor.Purpose.ALERT_REVIEW))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(TunnelErrorCode.EDGE_OFFLINE));
+    }
+
+    /** Verifies: an op outside tunnel.opsAllowed is not effective and is refused without reaching the Edge. */
+    @Test
+    void opOutsideOpsAllowedIsRefusedOpNotAllowed() throws Exception {
+        long psp = newPsp(false);
+        SETTINGS.set(psp, new TunnelPspSettingsProvider.TunnelPspSettings(true, Set.of("txn.search", "ledger.health"),
+                false, 16, 3L));
+        FakeEdge e = connected("cfg-ops-node", "cfg-ops", psp, cpB);
+        List<String> eff = new ArrayList<>();
+        e.helloAck.get("opsEffective").forEach(op -> eff.add(op.asText()));
+        assertThat(eff).containsExactly("txn.search", "ledger.health");
+        assertThat(e.helloAck.get("currentConfigVersion").asLong()).isEqualTo(3L);
+
+        assertThatThrownBy(() -> gatewayA.request(psp, TunnelOp.TXN_GET, params("{\"txnRef\":\"AUTH-2\"}"),
+                analyst(psp), TunnelActor.Purpose.ALERT_REVIEW))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(TunnelErrorCode.OP_NOT_ALLOWED));
+        assertThat(e.requests("txn.get")).isEmpty();
+    }
+
+    /**
+     * Verifies: an issued config version sends notify config.updated (contract body) to every
+     * session of the PSP on both instances; a narrowed opsAllowed applies to live sessions at once;
+     * a disabled tunnel closes them 4403; widening closes 1000 so the Edge re-handshakes.
+     */
+    @Test
+    void configUpdatedNotifiesEverySessionAndAppliesTheTunnelSection() throws Exception {
+        long psp = newPsp(false);
+        FakeEdge a = connected("cfg-upd-1", "cfg-upd-a", psp, cpA);
+        FakeEdge b = connected("cfg-upd-2", "cfg-upd-b", psp, cpB);
+        FakeEdge other = connected("cfg-upd-other", "cfg-upd-other", newPsp(false), cpA);
+
+        SETTINGS.set(psp, new TunnelPspSettingsProvider.TunnelPspSettings(true, readOpsWithout("txn.get"), false, 8, 2L));
+        cpB.publishEvent(new EdgeConfigUpdatedEvent(psp, 2L));
+        await(() -> !a.frames("notify").isEmpty() && !b.frames("notify").isEmpty(), 5_000, "config.updated at both nodes");
+        ObjectNode expected = MAPPER.createObjectNode().put("type", "config.updated").put("configVersion", 2);
+        assertThat(a.frames("notify").get(0).body()).isEqualTo(expected);
+        assertThat(b.frames("notify").get(0).body()).isEqualTo(expected);
+        assertThat(a.frames("notify").get(0).corrId()).isNull();
+        assertThat(a.openFailures).isEmpty();
+        assertThat(other.frames("notify")).isEmpty();
+
+        await(() -> !cpA.getBean(TunnelSessionHub.class).opsEffective(a.sessionId).orElseThrow().contains("txn.get")
+                && !cpB.getBean(TunnelSessionHub.class).opsEffective(b.sessionId).orElseThrow().contains("txn.get"),
+                5_000, "txn.get withdrawn on both instances");
+        assertThatThrownBy(() -> gatewayA.request(EdgeDataRequest.of(psp, TunnelOp.TXN_GET,
+                params("{\"txnRef\":\"AUTH-3\"}"), analyst(psp)).onSites(Set.of("cfg-upd-b"))))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(TunnelErrorCode.OP_NOT_ALLOWED));
+        assertThat(b.requests("txn.get")).isEmpty();
+        assertThat(cpB.getBean(TunnelSessionHub.class).opsEffective(b.sessionId).orElseThrow()).contains("txn.search");
+
+        // Widening: txn.get allowed again → the session cannot grow mid-way, so it is closed 1000.
+        SETTINGS.set(psp, new TunnelPspSettingsProvider.TunnelPspSettings(true, MutableTunnelSettings.READ_OPS, false, 8, 3L));
+        cpA.publishEvent(new EdgeConfigUpdatedEvent(psp, 3L));
+        assertThat(a.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(1000);
+        assertThat(b.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(1000);
+
+        // Disabled: reconnected sessions are closed 4403.
+        FakeEdge a2 = a.twin().start(uri(cpA), 1_000);
+        edges.add(a2);
+        SETTINGS.set(psp, new TunnelPspSettingsProvider.TunnelPspSettings(false, MutableTunnelSettings.READ_OPS, false, 8, 4L));
+        cpA.publishEvent(new EdgeConfigUpdatedEvent(psp, 4L));
+        assertThat(a2.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(4403);
+        assertThat(other.closeCode).isNotDone();
+    }
+
+    /** Verifies: inside a transaction notify config.updated waits for the commit, and a rollback sends none. */
+    @Test
+    void configUpdatedIsSentOnlyAfterCommit() throws Exception {
+        long psp = newPsp(false);
+        FakeEdge e = connected("cfg-tx-node", "cfg-tx", psp, cpA);
+        TransactionTemplate tx = new TransactionTemplate(cpA.getBean(PlatformTransactionManager.class));
+
+        tx.executeWithoutResult(status -> {
+            cpA.publishEvent(new EdgeConfigUpdatedEvent(psp, 5L));
+            status.setRollbackOnly();
+        });
+        tx.executeWithoutResult(status -> {
+            cpA.publishEvent(new EdgeConfigUpdatedEvent(psp, 6L));
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            assertThat(e.frames("notify")).as("nothing before commit").isEmpty();
+        });
+        await(() -> !e.frames("notify").isEmpty(), 5_000, "config.updated after commit");
+        Thread.sleep(300);
+        assertThat(e.frames("notify")).singleElement()
+                .satisfies(f -> assertThat(f.body().get("configVersion").asLong()).isEqualTo(6L));
+    }
+
+    /**
+     * Verifies: R3's immediate support-access withdrawal (flag stored + SUPPORT_ACCESS event in one
+     * transaction) cancels in-flight platform pulls on commit, on another instance than the holder.
+     */
+    @Test
+    void supportAccessWithdrawalCancelsInFlightPlatformPullsAfterCommit() throws Exception {
+        long psp = newPsp(true);
+        FakeEdge e = connected("withdraw-node", "withdraw", psp, cpB);
+        TunnelActor platform = TunnelActor.platformUser("u-1", "SUPER_ADMIN", psp, "Ticket HK-3100: missing alerts");
+        CompletableFuture<EdgeDataResult> pull = CompletableFuture.supplyAsync(() -> gatewayA.request(
+                EdgeDataRequest.of(psp, TunnelOp.TXN_GET, params("{\"txnRef\":\"AUTH-11\"}"), platform)
+                        .withDeadline(8_000)));
+        await(() -> !e.requests("txn.get").isEmpty(), 5_000, "platform request at the Edge");
+
+        TransactionTemplate tx = new TransactionTemplate(cpA.getBean(PlatformTransactionManager.class));
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE psps SET support_access_enabled = FALSE WHERE psp_id = ?", psp);
+            cpA.publishEvent(new PspDataSettingsChangedEvent(psp, "SUPPORT_ACCESS"));
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            assertThat(e.frames("cancel")).as("no cancel before commit").isEmpty();
+            assertThat(pull).isNotDone();
+        });
+        assertThatThrownBy(() -> pull.get(5, TimeUnit.SECONDS))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(TunnelErrorCode.SUPPORT_ACCESS_DISABLED));
+        await(() -> !e.frames("cancel").isEmpty(), 5_000, "cancel at the Edge");
+        assertThat(e.frames("cancel").get(0).body().get("reason").asText()).isEqualTo("SUPPORT_ACCESS_REVOKED");
+        assertThatThrownBy(() -> gatewayA.request(EdgeDataRequest.of(psp, TunnelOp.TXN_GET,
+                params("{\"txnRef\":\"AUTH-12\"}"), platform)))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(TunnelErrorCode.SUPPORT_ACCESS_DISABLED));
     }
 
     // ── §7.16: no payload persistence ────────────────────────────────────────────────────────────

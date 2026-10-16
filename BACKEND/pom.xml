@@ -66,7 +66,9 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
-        <!-- JSON Schema (draft 2020-12) validation of Edge Tunnel frames against docs/contracts -->
+        <!-- JSON Schema (draft 2020-12) validation of Edge Tunnel frames against docs/contracts
+             (main), also used by the data residency contract tests. Declared once: a second,
+             test-scoped declaration would override this one and break the main compile. -->
         <dependency>
             <groupId>com.networknt</groupId>
             <artifactId>json-schema-validator</artifactId>
@@ -320,14 +322,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- Validates data residency payloads against the shared docs/contracts JSON Schemas (draft 2020-12). -->
-        <dependency>
-            <groupId>com.networknt</groupId>
-            <artifactId>json-schema-validator</artifactId>
-            <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
 

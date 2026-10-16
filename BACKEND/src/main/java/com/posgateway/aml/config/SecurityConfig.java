@@ -172,7 +172,8 @@ public class SecurityConfig {
                                                 // the caller is authenticated by its mTLS client certificate
                                                 // (EdgeIdentityResolver) plus its ACTIVE authorisation state,
                                                 // or — for /enroll — by a single-use enrollment code. Only
-                                                // these three exact paths are permitted; everything else under
+                                                // these exact paths are permitted (mirrored in
+                                                // PspActivationFilter.EXEMPT_PATTERNS); everything else under
                                                 // /edge (the fleet admin API at /edge/nodes) goes through the
                                                 // normal user chain and its @PreAuthorize rules.
                                                 .requestMatchers(

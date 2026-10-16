@@ -88,6 +88,7 @@ class EdgeResidencyControllerTest {
         node.setId(7L);
         node.setPspId(12L);
         node.setEdgeId(EDGE_ID);
+        node.setSiteId("acme-eu");
         node.setStatus(EdgeNodeStatus.ACTIVE);
         node.setEdgeX25519PublicKey(Base64.getEncoder().encodeToString(
                 HokekaSecureEnvelope.rawFromX25519Public((XECPublicKey) edgeX.getPublic())));
@@ -121,7 +122,7 @@ class EdgeResidencyControllerTest {
         EdgeResidencyController controller = new EdgeResidencyController(
                 new EdgeNodeAuthorizer(new EdgeIdentityResolver(properties), enrollment),
                 configService,
-                new DecisionRecordIngestService(store, siteResolver("acme-eu")),
+                new DecisionRecordIngestService(store),
                 new EdgeReplayGuard(),
                 controlPlaneKeys,
                 properties,
@@ -264,14 +265,6 @@ class EdgeResidencyControllerTest {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────────────────────────
-
-    /** A site resolver that places every node in {@code site}. */
-    private static com.posgateway.aml.service.edge.records.EdgeSiteResolver siteResolver(String site) {
-        com.posgateway.aml.service.edge.records.EdgeSiteResolver resolver =
-                mock(com.posgateway.aml.service.edge.records.EdgeSiteResolver.class);
-        when(resolver.siteOf(any())).thenReturn(site);
-        return resolver;
-    }
 
     /** nginx's forwarded client-certificate headers after a successful mTLS handshake. */
     private static MockHttpServletRequestBuilder edgeRequest(MockHttpServletRequestBuilder builder) {
