@@ -1,0 +1,14 @@
+{
+  "backfillId": "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+  "phase": "BATCH",
+  "state": "OPEN",
+  "batchSeq": 0,
+  "accepted": 499,
+  "duplicates": 0,
+  "rejected": [
+    {
+      "legacyTransactionId": "txn-10022",
+      "code": "PAST_RETENTION"
+    }
+  ]
+}

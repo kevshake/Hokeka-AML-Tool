@@ -1,0 +1,17 @@
+{
+  "v": 2,
+  "edgeAssessmentId": "8b6e2c1d-4f3a-4e9b-8c7d-2a1b0f9e8d7c",
+  "edgeNodeId": "acme-eu-2",
+  "siteId": "acme-eu",
+  "evaluatedAt": "2026-10-16T09:15:00Z",
+  "decision": "HOLD",
+  "score": 0,
+  "triggeredRuleIds": [],
+  "ruleVersionIds": [],
+  "bundleVersion": -1,
+  "evaluator": "none",
+  "failClosedCode": "NO_BUNDLE",
+  "latencyMs": 0,
+  "ctrRequired": false,
+  "sanctionsHit": false
+}

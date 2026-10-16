@@ -1,0 +1,24 @@
+{
+  "link": "CARD",
+  "hop": 1,
+  "viaEdgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+  "transaction": {
+    "edgeAssessmentId": "5a7b9c1d-3e5f-4a6b-9c8d-7e6f5a4b3c2d",
+    "txnRef": "AUTH-2026-10-15-008812",
+    "siteId": "acme-eu",
+    "nodeId": "acme-eu-1",
+    "evaluatedAt": "2026-10-15T21:40:12.003Z",
+    "decision": "ALLOW",
+    "score": 0,
+    "merchantId": "mrc_00421",
+    "mcc": "5411",
+    "amountMinor": 250000,
+    "currency": "KES",
+    "countryCode": "KE",
+    "channel": "POS",
+    "triggeredRuleIds": [],
+    "ctrRequired": false,
+    "sanctionsHit": false,
+    "origin": "LIVE"
+  }
+}

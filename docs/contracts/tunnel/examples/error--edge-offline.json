@@ -1,0 +1,8 @@
+{
+  "code": "EDGE_OFFLINE",
+  "httpStatus": 503,
+  "message": "no tunnel session for site acme-eu",
+  "retryable": true,
+  "lastSeenAt": "2026-10-16T09:58:41Z",
+  "siteId": "acme-eu"
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/notify.schema.json",
+  "title": "notify body (cloud -> Edge)",
+  "description": "Context 'hokeka.tunnel.notify'. Dispatches on body.type. config.updated and bundle.updated are hints (the Edge fetches over HTTPS as usual); hold.place and hold.release MUST be acknowledged with a response frame (op 'hold.ack', corrId = the notify frame id).",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": { "enum": ["config.updated", "bundle.updated", "hold.place", "hold.release"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "config.updated" } } }, "then": { "$ref": "notify/config.updated.schema.json" } },
+    { "if": { "properties": { "type": { "const": "bundle.updated" } } }, "then": { "$ref": "notify/bundle.updated.schema.json" } },
+    { "if": { "properties": { "type": { "const": "hold.place" } } }, "then": { "$ref": "notify/hold.place.schema.json" } },
+    { "if": { "properties": { "type": { "const": "hold.release" } } }, "then": { "$ref": "notify/hold.release.schema.json" } }
+  ]
+}

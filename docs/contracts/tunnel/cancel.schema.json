@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/cancel.schema.json",
+  "title": "cancel body (cloud -> Edge)",
+  "description": "Stops the request named by the frame's corrId. Context 'hokeka.tunnel.cancel'. Idempotent; cancelling an unknown or finished request is a no-op.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reason"],
+  "properties": {
+    "reason": { "enum": ["CLIENT_GONE", "DEADLINE", "SUPERSEDED", "SUPPORT_ACCESS_REVOKED", "SHUTDOWN"] }
+  }
+}

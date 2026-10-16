@@ -1,5 +1,12 @@
 # Edge + Cloud Dual-Post Integrator Contract
 
+> **SUPERSEDED (2026-10-16)** by [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md).
+> The Edge is now the only evaluator and the cloud never stores transaction data: it receives
+> decision records and reads transactions live from the Edge over the Edge Tunnel. The dual-post
+> ingest path below keeps working only until work package R12 of
+> [`architecture/EDGE_DATA_RESIDENCY_PLAN.md`](architecture/EDGE_DATA_RESIDENCY_PLAN.md) removes it.
+> Do not build new integrations on it. Kept for reference until R14b.
+
 **Audience:** PSP engineers integrating pre-auth edge evaluation with cloud compliance artifacts (alerts, cases, SAR, webhooks).
 
 This is the authoritative contract for how the **on-premises edge** and the **cloud control plane** work together. It supersedes any implied assumption that a single edge call creates cloud-side compliance records.

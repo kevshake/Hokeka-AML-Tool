@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/decision-record-batch-v2.schema.json",
+  "title": "Decision record batch v2",
+  "description": "Payload of the replay envelope sealed (HSE-1 context 'hokeka.decision.records') and POSTed to /api/v1/edge/assessments by the Edge outbox shipper. edgeId MUST equal the mTLS identity and every record's edgeNodeId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "edgeId", "siteId", "records"],
+  "properties": {
+    "v": { "const": 2 },
+    "edgeId": { "$ref": "common.schema.json#/$defs/edgeId" },
+    "siteId": { "$ref": "common.schema.json#/$defs/siteId" },
+    "outboxSeqFrom": { "type": "integer", "minimum": 0 },
+    "outboxSeqTo": { "type": "integer", "minimum": 0 },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": { "$ref": "decision-record-v2.schema.json" }
+    }
+  }
+}

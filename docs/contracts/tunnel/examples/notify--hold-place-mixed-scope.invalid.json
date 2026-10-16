@@ -1,0 +1,16 @@
+{
+  "type": "hold.place",
+  "holdId": "4e8a2c6d-0b1f-4a3c-9d5e-7f1a3b5c7d9e",
+  "placedAt": "2026-10-16T10:30:00Z",
+  "placedBy": "u-4512",
+  "reasonCode": "SAR",
+  "reference": "SAR-2026-0077",
+  "scope": {
+    "edgeAssessmentIds": [
+      "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44"
+    ],
+    "merchantId": "mrc_00421",
+    "from": "2026-01-01T00:00:00Z",
+    "to": "2026-06-30T23:59:59Z"
+  }
+}

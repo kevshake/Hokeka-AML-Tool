@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/metrics-report-v2.schema.json",
+  "title": "Edge metrics report v2",
+  "description": "One closed UTC clock hour of aggregates for one Edge Node, sealed with HSE-1 context 'hokeka.metrics.report' and POSTed to /api/v1/edge/metrics. Breakdowns are per merchant and per currency only - never per card, customer, account, device or IP. Idempotent on (edgeId, windowStart): a re-sent report replaces the earlier one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v", "pspId", "edgeId", "siteId", "windowStart", "windowEnd", "bundleVersion",
+    "totals", "ruleHitCounts", "latencyUs", "engineHealth", "byMerchant", "byCurrency"
+  ],
+  "properties": {
+    "v": { "const": 2 },
+    "pspId": { "$ref": "common.schema.json#/$defs/pspId" },
+    "edgeId": { "$ref": "common.schema.json#/$defs/edgeId" },
+    "siteId": { "$ref": "common.schema.json#/$defs/siteId" },
+    "windowStart": { "$ref": "common.schema.json#/$defs/instantHour" },
+    "windowEnd": { "$ref": "common.schema.json#/$defs/instantHour" },
+    "bundleVersion": { "$ref": "common.schema.json#/$defs/bundleVersion" },
+    "bundleHash": { "$ref": "common.schema.json#/$defs/bundleHash" },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluated", "allow", "alert", "hold", "block", "failClosed", "ctrFlagged", "sanctionsHits"],
+      "properties": {
+        "evaluated": { "$ref": "common.schema.json#/$defs/count" },
+        "allow": { "$ref": "common.schema.json#/$defs/count" },
+        "alert": { "$ref": "common.schema.json#/$defs/count" },
+        "hold": { "$ref": "common.schema.json#/$defs/count" },
+        "block": { "$ref": "common.schema.json#/$defs/count" },
+        "failClosed": { "$ref": "common.schema.json#/$defs/count" },
+        "ctrFlagged": { "$ref": "common.schema.json#/$defs/count" },
+        "sanctionsHits": { "$ref": "common.schema.json#/$defs/count" }
+      }
+    },
+    "failClosedByCode": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/failClosedCode" },
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/count" }
+    },
+    "ruleHitCounts": {
+      "description": "ruleId (decimal string) -> times triggered in the window.",
+      "type": "object",
+      "maxProperties": 4096,
+      "propertyNames": { "pattern": "^[1-9][0-9]{0,18}$" },
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/count" }
+    },
+    "latencyUs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p50", "p95", "p99"],
+      "properties": {
+        "p50": { "type": "number", "minimum": 0 },
+        "p95": { "type": "number", "minimum": 0 },
+        "p99": { "type": "number", "minimum": 0 }
+      }
+    },
+    "engineHealth": { "enum": ["OK", "DEGRADED", "FAIL_CLOSED"] },
+    "byMerchant": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["merchantId", "currency", "count", "amountMinorSum", "decisions"],
+        "properties": {
+          "merchantId": {
+            "description": "null aggregates evaluations that carried no merchant_id.",
+            "anyOf": [{ "$ref": "common.schema.json#/$defs/merchantId" }, { "type": "null" }]
+          },
+          "currency": { "$ref": "common.schema.json#/$defs/currency" },
+          "count": { "$ref": "common.schema.json#/$defs/count" },
+          "amountMinorSum": { "$ref": "common.schema.json#/$defs/amountMinor" },
+          "decisions": { "$ref": "#/$defs/decisionCounts" }
+        }
+      }
+    },
+    "byCurrency": {
+      "type": "array",
+      "maxItems": 400,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["currency", "count", "amountMinorSum"],
+        "properties": {
+          "currency": { "$ref": "common.schema.json#/$defs/currency" },
+          "count": { "$ref": "common.schema.json#/$defs/count" },
+          "amountMinorSum": { "$ref": "common.schema.json#/$defs/amountMinor" }
+        }
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outboxBacklog", "writeFailures"],
+      "properties": {
+        "outboxBacklog": { "$ref": "common.schema.json#/$defs/count" },
+        "outboxOldestPendingAt": { "$ref": "common.schema.json#/$defs/instantSeconds" },
+        "writeFailures": { "$ref": "common.schema.json#/$defs/count" }
+      }
+    }
+  },
+  "$defs": {
+    "decisionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allow", "alert", "hold", "block"],
+      "properties": {
+        "allow": { "$ref": "common.schema.json#/$defs/count" },
+        "alert": { "$ref": "common.schema.json#/$defs/count" },
+        "hold": { "$ref": "common.schema.json#/$defs/count" },
+        "block": { "$ref": "common.schema.json#/$defs/count" }
+      }
+    }
+  }
+}

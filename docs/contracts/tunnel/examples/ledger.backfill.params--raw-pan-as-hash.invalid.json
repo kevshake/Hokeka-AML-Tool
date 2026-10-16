@@ -1,0 +1,35 @@
+{
+  "phase": "BATCH",
+  "backfillId": "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+  "batchSeq": 1,
+  "rows": [
+    {
+      "legacyTransactionId": "txn-55120",
+      "edgeAssessmentId": "4d298ed2-d12f-5908-8ed9-6bbc73cc7213",
+      "txnRef": "AUTH-2025-03-02-000017",
+      "evaluatedAt": "2025-03-02T14:21:09.331Z",
+      "panHash": "4111111111111111",
+      "amountMinor": 1250000,
+      "currency": "KES",
+      "merchantId": "mrc_00421",
+      "mcc": "5411",
+      "countryCode": "KE",
+      "channel": "POS",
+      "features": {
+        "is_cross_border": false,
+        "device_id": "dv-77a1"
+      },
+      "decision": "ALERT",
+      "score": 30,
+      "triggeredRuleIds": [
+        1204
+      ],
+      "ruleVersionIds": [],
+      "reasons": [
+        "Card velocity above 10 transactions per hour"
+      ],
+      "ctrRequired": false,
+      "sanctionsHits": []
+    }
+  ]
+}

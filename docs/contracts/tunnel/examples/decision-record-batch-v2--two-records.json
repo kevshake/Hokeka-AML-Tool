@@ -1,0 +1,68 @@
+{
+  "v": 2,
+  "edgeId": "acme-eu-1",
+  "siteId": "acme-eu",
+  "outboxSeqFrom": 1041,
+  "outboxSeqTo": 1042,
+  "records": [
+    {
+      "v": 2,
+      "edgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+      "txnRef": "AUTH-2026-10-16-000981",
+      "edgeNodeId": "acme-eu-1",
+      "siteId": "acme-eu",
+      "evaluatedAt": "2026-10-16T09:14:07Z",
+      "decision": "ALERT",
+      "score": 45,
+      "triggeredRuleIds": [
+        1204,
+        1311
+      ],
+      "ruleVersionIds": [
+        88012,
+        88140
+      ],
+      "bundleVersion": 37,
+      "bundleHash": "sha256:75ac5ea64b7e41ec878c80aac05517a168e9a2f9671b623da95acc5d1b660676",
+      "evaluator": "native",
+      "latencyMs": 3,
+      "merchantId": "mrc_00421",
+      "ctrRequired": false,
+      "sanctionsHit": false,
+      "typologyCodes": [
+        "CARD_VELOCITY"
+      ]
+    },
+    {
+      "v": 2,
+      "edgeAssessmentId": "c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f",
+      "txnRef": "AUTH-2026-10-16-001207",
+      "edgeNodeId": "acme-eu-1",
+      "siteId": "acme-eu",
+      "evaluatedAt": "2026-10-16T10:02:51Z",
+      "decision": "BLOCK",
+      "score": 100,
+      "triggeredRuleIds": [
+        9001
+      ],
+      "ruleVersionIds": [
+        91002
+      ],
+      "bundleVersion": 37,
+      "bundleHash": "sha256:75ac5ea64b7e41ec878c80aac05517a168e9a2f9671b623da95acc5d1b660676",
+      "evaluator": "java",
+      "latencyMs": 11,
+      "merchantId": "mrc_00421",
+      "ctrRequired": true,
+      "sanctionsHit": true,
+      "watchlistEntryIds": [
+        "ofac-sdn:36216",
+        "un:QDi.001"
+      ],
+      "typologyCodes": [
+        "SANCTIONS_COUNTERPARTY",
+        "CASH_THRESHOLD"
+      ]
+    }
+  ]
+}

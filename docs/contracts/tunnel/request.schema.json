@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/request.schema.json",
+  "title": "request body (cloud -> Edge)",
+  "description": "Sealed with context 'hokeka.tunnel.request': signed by the Control Plane Ed25519 key (the request signature) and encrypted to the target node's pinned X25519 key. params are validated against the op's params schema; unknown params are rejected (INVALID_PARAMS). deadlineMs is a relative budget from the frame's issuedAt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["op", "params", "deadlineMs", "actor", "auditId"],
+  "properties": {
+    "op": { "$ref": "../common.schema.json#/$defs/op" },
+    "params": { "type": "object" },
+    "deadlineMs": { "type": "integer", "minimum": 100, "maximum": 300000 },
+    "page": { "$ref": "../common.schema.json#/$defs/page" },
+    "actor": { "$ref": "../common.schema.json#/$defs/actor" },
+    "auditId": {
+      "description": "Minted by the Control Plane; shared by the cloud edge_data_access_log row and the Edge edge_access_log row.",
+      "$ref": "../common.schema.json#/$defs/uuid"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "op": { "const": "txn.search" } } },
+      "then": { "required": ["page"], "properties": { "params": { "$ref": "ops/txn.search.params.schema.json" }, "deadlineMs": { "maximum": 8000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "txn.get" } } },
+      "then": { "not": { "required": ["page"] }, "properties": { "params": { "$ref": "ops/txn.get.params.schema.json" }, "deadlineMs": { "maximum": 8000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "txn.batchGet" } } },
+      "then": { "not": { "required": ["page"] }, "properties": { "params": { "$ref": "ops/txn.batchGet.params.schema.json" }, "deadlineMs": { "maximum": 8000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "txn.related" } } },
+      "then": { "required": ["page"], "properties": { "params": { "$ref": "ops/txn.related.params.schema.json" }, "deadlineMs": { "maximum": 8000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "filing.extract" } } },
+      "then": { "not": { "required": ["page"] }, "properties": { "params": { "$ref": "ops/filing.extract.params.schema.json" }, "deadlineMs": { "maximum": 30000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "export.stream" } } },
+      "then": { "not": { "required": ["page"] }, "properties": { "params": { "$ref": "ops/export.stream.params.schema.json" }, "deadlineMs": { "maximum": 300000 } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "ledger.backfill" } } },
+      "then": {
+        "not": { "required": ["page"] },
+        "properties": {
+          "params": { "$ref": "ops/ledger.backfill.params.schema.json" },
+          "deadlineMs": { "maximum": 60000 },
+          "actor": { "properties": { "kind": { "const": "SYSTEM" }, "purpose": { "const": "LEDGER_BACKFILL" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "op": { "const": "ledger.health" } } },
+      "then": { "not": { "required": ["page"] }, "properties": { "params": { "$ref": "ops/ledger.health.params.schema.json" }, "deadlineMs": { "maximum": 8000 } } }
+    }
+  ]
+}

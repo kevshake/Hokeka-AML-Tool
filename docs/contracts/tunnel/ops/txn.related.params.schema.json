@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/txn.related.params.schema.json",
+  "title": "txn.related params",
+  "description": "Evaluations linked to an anchor evaluation. The Edge resolves each link key internally (CARD = pan_hash, MERCHANT = merchant_id, DEVICE = features.device_id, ACCOUNT = features.account_id or features.customer_id, IP = features.ip_address) and never returns the key value. Window is +/- windowDays around the anchor's evaluatedAt. Paged with request.page.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["edgeAssessmentId", "linkBy"],
+  "properties": {
+    "edgeAssessmentId": { "$ref": "../../common.schema.json#/$defs/uuid" },
+    "linkBy": {
+      "type": "array",
+      "items": { "enum": ["CARD", "MERCHANT", "DEVICE", "ACCOUNT", "IP"] },
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "windowDays": { "type": "integer", "minimum": 1, "maximum": 180, "default": 30 },
+    "depth": { "type": "integer", "minimum": 1, "maximum": 2, "default": 1 }
+  }
+}

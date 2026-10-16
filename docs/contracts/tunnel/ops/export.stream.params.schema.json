@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/export.stream.params.schema.json",
+  "title": "export.stream params",
+  "description": "Streams the rows matching filter (span <= 366 days) as chunk frames of at most 500 items under credit. columns projects transactionSummary fields; edgeAssessmentId, evaluatedAt, siteId and decision are always included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["filter"],
+  "properties": {
+    "filter": { "$ref": "../../common.schema.json#/$defs/searchFilter" },
+    "columns": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "txnRef", "nodeId", "score", "merchantId", "mcc", "amountMinor", "currency",
+          "countryCode", "channel", "triggeredRuleIds", "ctrRequired", "sanctionsHit", "origin"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "maxRows": { "type": "integer", "minimum": 1, "maximum": 1000000, "default": 100000 },
+    "initialCredit": { "type": "integer", "minimum": 1, "maximum": 16, "default": 4 }
+  }
+}

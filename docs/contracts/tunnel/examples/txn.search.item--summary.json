@@ -1,0 +1,22 @@
+{
+  "edgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+  "txnRef": "AUTH-2026-10-16-000981",
+  "siteId": "acme-eu",
+  "nodeId": "acme-eu-1",
+  "evaluatedAt": "2026-10-16T09:14:07.412Z",
+  "decision": "ALERT",
+  "score": 45,
+  "merchantId": "mrc_00421",
+  "mcc": "5411",
+  "amountMinor": 250000,
+  "currency": "KES",
+  "countryCode": "KE",
+  "channel": "POS",
+  "triggeredRuleIds": [
+    1204,
+    1311
+  ],
+  "ctrRequired": false,
+  "sanctionsHit": false,
+  "origin": "LIVE"
+}

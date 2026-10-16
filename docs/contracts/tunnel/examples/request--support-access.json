@@ -1,0 +1,16 @@
+{
+  "op": "txn.get",
+  "params": {
+    "edgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44"
+  },
+  "deadlineMs": 8000,
+  "actor": {
+    "kind": "PLATFORM_USER",
+    "userId": "u-1",
+    "role": "PLATFORM_ADMIN",
+    "pspId": 12,
+    "purpose": "SUPPORT_ACCESS",
+    "supportReason": "Ticket HK-2291: PSP reports a missing ALERT on this evaluation"
+  },
+  "auditId": "7c3e1a9b-2d4f-4b6a-8e0c-5f7a9b1d3e2c"
+}

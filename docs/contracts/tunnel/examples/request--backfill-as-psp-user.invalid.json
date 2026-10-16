@@ -1,0 +1,18 @@
+{
+  "op": "ledger.backfill",
+  "params": {
+    "phase": "ABORT",
+    "backfillId": "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+    "reason": "OPERATOR"
+  },
+  "deadlineMs": 60000,
+  "actor": {
+    "kind": "PSP_USER",
+    "userId": "u-4512",
+    "role": "COMPLIANCE_OFFICER",
+    "pspId": 12,
+    "purpose": "CASE_INVESTIGATION",
+    "caseId": "CASE-2026-0412"
+  },
+  "auditId": "7c3e1a9b-2d4f-4b6a-8e0c-5f7a9b1d3e2c"
+}

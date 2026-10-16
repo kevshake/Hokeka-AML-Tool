@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/txn.batchGet.params.schema.json",
+  "title": "txn.batchGet params",
+  "description": "Up to 200 distinct ids. Ids not in this site's ledger are listed in response.missing; items keep the order of the request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["edgeAssessmentIds"],
+  "properties": {
+    "edgeAssessmentIds": {
+      "type": "array",
+      "items": { "$ref": "../../common.schema.json#/$defs/uuid" },
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true
+    }
+  }
+}

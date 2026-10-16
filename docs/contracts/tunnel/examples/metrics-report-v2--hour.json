@@ -1,0 +1,77 @@
+{
+  "v": 2,
+  "pspId": 12,
+  "edgeId": "acme-eu-1",
+  "siteId": "acme-eu",
+  "windowStart": "2026-10-16T09:00:00Z",
+  "windowEnd": "2026-10-16T10:00:00Z",
+  "bundleVersion": 37,
+  "bundleHash": "sha256:75ac5ea64b7e41ec878c80aac05517a168e9a2f9671b623da95acc5d1b660676",
+  "totals": {
+    "evaluated": 18412,
+    "allow": 18101,
+    "alert": 266,
+    "hold": 39,
+    "block": 6,
+    "failClosed": 2,
+    "ctrFlagged": 4,
+    "sanctionsHits": 1
+  },
+  "failClosedByCode": {
+    "FEATURE_STORE_UNAVAILABLE": 2
+  },
+  "ruleHitCounts": {
+    "1204": 211,
+    "1311": 70,
+    "9001": 1
+  },
+  "latencyUs": {
+    "p50": 410.0,
+    "p95": 1220.5,
+    "p99": 2875.0
+  },
+  "engineHealth": "OK",
+  "byMerchant": [
+    {
+      "merchantId": "mrc_00421",
+      "currency": "KES",
+      "count": 9120,
+      "amountMinorSum": 1823400000,
+      "decisions": {
+        "allow": 8950,
+        "alert": 150,
+        "hold": 17,
+        "block": 3
+      }
+    },
+    {
+      "merchantId": null,
+      "currency": "KES",
+      "count": 12,
+      "amountMinorSum": 340000,
+      "decisions": {
+        "allow": 10,
+        "alert": 0,
+        "hold": 2,
+        "block": 0
+      }
+    }
+  ],
+  "byCurrency": [
+    {
+      "currency": "KES",
+      "count": 18000,
+      "amountMinorSum": 3611000000
+    },
+    {
+      "currency": "USD",
+      "count": 412,
+      "amountMinorSum": 9120000
+    }
+  ],
+  "ledger": {
+    "outboxBacklog": 3,
+    "outboxOldestPendingAt": "2026-10-16T09:59:58Z",
+    "writeFailures": 0
+  }
+}

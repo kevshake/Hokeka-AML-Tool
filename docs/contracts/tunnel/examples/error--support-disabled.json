@@ -1,0 +1,6 @@
+{
+  "code": "SUPPORT_ACCESS_DISABLED",
+  "httpStatus": 403,
+  "message": "PSP has not enabled Hokeka support access",
+  "retryable": false
+}

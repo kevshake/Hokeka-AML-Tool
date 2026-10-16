@@ -1,0 +1,13 @@
+{
+  "type": "hold.place",
+  "holdId": "4e8a2c6d-0b1f-4a3c-9d5e-7f1a3b5c7d9e",
+  "placedAt": "2026-10-16T10:30:00Z",
+  "placedBy": "u-4512",
+  "reasonCode": "REGULATOR_REQUEST",
+  "reference": "REQ-2026-0003",
+  "scope": {
+    "merchantId": "mrc_00421",
+    "from": "2026-01-01T00:00:00Z",
+    "to": "2026-06-30T23:59:59Z"
+  }
+}

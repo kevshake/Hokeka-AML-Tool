@@ -1,0 +1,11 @@
+{
+  "accepted": 1,
+  "duplicates": 0,
+  "rejected": [
+    {
+      "edgeAssessmentId": "c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f",
+      "code": "CONFLICT",
+      "message": "edgeAssessmentId already recorded with a different decision"
+    }
+  ]
+}

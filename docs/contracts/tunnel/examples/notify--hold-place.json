@@ -1,0 +1,15 @@
+{
+  "type": "hold.place",
+  "holdId": "4e8a2c6d-0b1f-4a3c-9d5e-7f1a3b5c7d9e",
+  "placedAt": "2026-10-16T10:30:00Z",
+  "placedBy": "u-4512",
+  "reasonCode": "SAR",
+  "reference": "SAR-2026-0077",
+  "scope": {
+    "edgeAssessmentIds": [
+      "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+      "c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f",
+      "5a7b9c1d-3e5f-4a6b-9c8d-7e6f5a4b3c2d"
+    ]
+  }
+}

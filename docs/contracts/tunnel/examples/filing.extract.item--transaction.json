@@ -1,0 +1,55 @@
+{
+  "kind": "TRANSACTION",
+  "transaction": {
+    "edgeAssessmentId": "c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f",
+    "txnRef": "AUTH-2026-10-16-001207",
+    "siteId": "acme-eu",
+    "nodeId": "acme-eu-1",
+    "evaluatedAt": "2026-10-16T10:02:51.880Z",
+    "decision": "BLOCK",
+    "score": 100,
+    "merchantId": "mrc_00421",
+    "mcc": "5411",
+    "amountMinor": 210000000,
+    "currency": "KES",
+    "countryCode": "KE",
+    "channel": "AGENT",
+    "triggeredRuleIds": [
+      9001
+    ],
+    "ctrRequired": true,
+    "sanctionsHit": true,
+    "origin": "LIVE",
+    "ruleVersionIds": [
+      91002
+    ],
+    "reasons": [
+      "Counterparty on sanctions list"
+    ],
+    "bundleVersion": 37,
+    "bundleHash": "sha256:75ac5ea64b7e41ec878c80aac05517a168e9a2f9671b623da95acc5d1b660676",
+    "evaluator": "java",
+    "latencyUs": 2875,
+    "sanctionsHits": [
+      {
+        "entryId": "ofac-sdn:36216",
+        "score": 0.97,
+        "matchedOn": "COUNTERPARTY_NAME",
+        "matchedValue": "Example Trading LLC",
+        "listVersion": "2026-10-16.1"
+      }
+    ],
+    "typologyCodes": [
+      "SANCTIONS_COUNTERPARTY",
+      "CASH_THRESHOLD"
+    ],
+    "features": {
+      "is_cross_border": false,
+      "device_id": "dv-77a1",
+      "pan_txn_count_1h": 11,
+      "pan_amount_sum_24h": 18250.5,
+      "customer_id": "cust-778812"
+    },
+    "legalHold": true
+  }
+}

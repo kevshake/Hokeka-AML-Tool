@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/ledger.health.item.schema.json",
+  "title": "ledger.health item",
+  "description": "Status of the answering node and its site's Edge Ledger. Counts and timestamps only; no row content.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["siteId", "nodeId", "status", "schemaVersion", "rows", "outbox", "retention", "holds", "storage", "writeFailures24h"],
+  "properties": {
+    "siteId": { "$ref": "../../common.schema.json#/$defs/siteId" },
+    "nodeId": { "$ref": "../../common.schema.json#/$defs/edgeId" },
+    "status": { "enum": ["OK", "DEGRADED", "DOWN"] },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approxCount"],
+      "properties": {
+        "approxCount": { "$ref": "../../common.schema.json#/$defs/count" },
+        "oldestEvaluatedAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" },
+        "newestEvaluatedAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" }
+      }
+    },
+    "partitions": {
+      "type": "array",
+      "maxItems": 400,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["month", "approxRows", "bytes"],
+        "properties": {
+          "month": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+          "approxRows": { "$ref": "../../common.schema.json#/$defs/count" },
+          "bytes": { "$ref": "../../common.schema.json#/$defs/count" }
+        }
+      }
+    },
+    "outbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backlog", "failedAttempts24h"],
+      "properties": {
+        "backlog": { "$ref": "../../common.schema.json#/$defs/count" },
+        "oldestPendingAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" },
+        "lastShippedAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" },
+        "failedAttempts24h": { "$ref": "../../common.schema.json#/$defs/count" }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["years", "lastPurgeDroppedPartitions"],
+      "properties": {
+        "years": { "type": "integer", "minimum": 5, "maximum": 25 },
+        "configVersion": { "type": "integer", "minimum": 1 },
+        "lastPurgeAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" },
+        "lastPurgeDroppedPartitions": { "$ref": "../../common.schema.json#/$defs/count" },
+        "nextPurgeAt": { "$ref": "../../common.schema.json#/$defs/instantSeconds" }
+      }
+    },
+    "holds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "heldRows", "activeHoldDigest"],
+      "properties": {
+        "active": { "$ref": "../../common.schema.json#/$defs/count" },
+        "heldRows": { "$ref": "../../common.schema.json#/$defs/count" },
+        "activeHoldDigest": { "$ref": "../../common.schema.json#/$defs/sha256Hex" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dbSizeBytes", "diskFreeBytes"],
+      "properties": {
+        "dbSizeBytes": { "$ref": "../../common.schema.json#/$defs/count" },
+        "diskFreeBytes": { "$ref": "../../common.schema.json#/$defs/count" }
+      }
+    },
+    "writeFailures24h": { "$ref": "../../common.schema.json#/$defs/count" }
+  }
+}

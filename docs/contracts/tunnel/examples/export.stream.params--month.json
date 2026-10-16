@@ -1,0 +1,18 @@
+{
+  "filter": {
+    "from": "2026-09-01T00:00:00Z",
+    "to": "2026-09-30T23:59:59Z",
+    "decisions": [
+      "BLOCK"
+    ]
+  },
+  "columns": [
+    "txnRef",
+    "merchantId",
+    "amountMinor",
+    "currency",
+    "score"
+  ],
+  "maxRows": 50000,
+  "initialCredit": 4
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/response.schema.json",
+  "title": "response / chunk body (Edge -> cloud)",
+  "description": "Sealed to the Control Plane X25519 key with context 'hokeka.tunnel.response' (frame type response) or 'hokeka.tunnel.chunk' (frame type chunk), signed by the node's Ed25519 key. One request is answered by response frames seq 0..n (n > 0 only when a page does not fit one frame) or, for export.stream, by chunk frames under credit. 'last' closes the exchange. Items are validated against the op's item schema; op 'hold.ack' answers a hold.place / hold.release notify.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["op", "status", "seq", "last", "items"],
+  "properties": {
+    "op": {
+      "anyOf": [
+        { "$ref": "../common.schema.json#/$defs/op" },
+        { "const": "hold.ack" }
+      ]
+    },
+    "status": { "const": "OK" },
+    "seq": { "type": "integer", "minimum": 0 },
+    "last": { "type": "boolean" },
+    "items": { "type": "array", "maxItems": 500 },
+    "nextCursor": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,2048}$" },
+    "incomplete": { "type": "boolean" },
+    "incompleteReason": { "enum": ["SCAN_LIMIT", "DEPTH_LIMIT", "DEADLINE"] },
+    "missing": {
+      "description": "txn.batchGet / filing.extract ids that are not in this site's ledger.",
+      "type": "array",
+      "items": { "$ref": "../common.schema.json#/$defs/uuid" },
+      "maxItems": 200,
+      "uniqueItems": true
+    },
+    "totalRows": {
+      "description": "export.stream: rows sent in the whole stream; only on the last chunk.",
+      "$ref": "../common.schema.json#/$defs/count"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "incomplete": { "const": true } }, "required": ["incomplete"] },
+      "then": { "required": ["incompleteReason"] },
+      "else": { "not": { "required": ["incompleteReason"] } }
+    },
+    {
+      "if": { "properties": { "last": { "const": false } } },
+      "then": { "not": { "anyOf": [{ "required": ["nextCursor"] }, { "required": ["totalRows"] }] } }
+    },
+    { "if": { "properties": { "op": { "const": "txn.search" } } }, "then": { "properties": { "items": { "maxItems": 200, "items": { "$ref": "ops/txn.search.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "txn.get" } } }, "then": { "properties": { "items": { "maxItems": 1, "items": { "$ref": "ops/txn.get.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "txn.batchGet" } } }, "then": { "properties": { "items": { "maxItems": 200, "items": { "$ref": "ops/txn.batchGet.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "txn.related" } } }, "then": { "properties": { "items": { "maxItems": 200, "items": { "$ref": "ops/txn.related.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "filing.extract" } } }, "then": { "properties": { "items": { "maxItems": 400, "items": { "$ref": "ops/filing.extract.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "export.stream" } } }, "then": { "properties": { "items": { "maxItems": 500, "items": { "$ref": "ops/export.stream.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "ledger.backfill" } } }, "then": { "properties": { "items": { "minItems": 1, "maxItems": 1, "items": { "$ref": "ops/ledger.backfill.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "ledger.health" } } }, "then": { "properties": { "items": { "minItems": 1, "maxItems": 1, "items": { "$ref": "ops/ledger.health.item.schema.json" } } } } },
+    { "if": { "properties": { "op": { "const": "hold.ack" } } }, "then": { "properties": { "items": { "minItems": 1, "maxItems": 1, "items": { "$ref": "notify/hold.ack.item.schema.json" } } } } }
+  ]
+}

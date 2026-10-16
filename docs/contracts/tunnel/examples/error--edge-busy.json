@@ -1,0 +1,8 @@
+{
+  "code": "EDGE_BUSY",
+  "httpStatus": 429,
+  "message": "16 requests already in flight on every node of site acme-eu",
+  "retryable": true,
+  "retryAfterMs": 500,
+  "siteId": "acme-eu"
+}

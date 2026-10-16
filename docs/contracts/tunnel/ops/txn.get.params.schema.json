@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/tunnel/ops/txn.get.params.schema.json",
+  "title": "txn.get params",
+  "description": "Exactly one of edgeAssessmentId or txnRef. txn_ref is unique within a site; across sites the cloud fans out and may receive one item per site.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edgeAssessmentId"],
+      "properties": { "edgeAssessmentId": { "$ref": "../../common.schema.json#/$defs/uuid" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["txnRef"],
+      "properties": { "txnRef": { "$ref": "../../common.schema.json#/$defs/txnRef" } }
+    }
+  ]
+}

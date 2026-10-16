@@ -1,0 +1,7 @@
+{
+  "code": "INVALID_PARAMS",
+  "httpStatus": 400,
+  "message": "search window exceeds 93 days",
+  "retryable": false,
+  "param": "/params/to"
+}

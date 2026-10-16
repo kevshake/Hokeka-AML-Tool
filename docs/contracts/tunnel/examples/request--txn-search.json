@@ -1,0 +1,26 @@
+{
+  "op": "txn.search",
+  "params": {
+    "from": "2026-10-01T00:00:00Z",
+    "to": "2026-10-16T23:59:59Z",
+    "merchantId": "mrc_00421",
+    "decisions": [
+      "ALERT",
+      "HOLD",
+      "BLOCK"
+    ]
+  },
+  "deadlineMs": 8000,
+  "page": {
+    "limit": 50
+  },
+  "actor": {
+    "kind": "PSP_USER",
+    "userId": "u-4512",
+    "role": "COMPLIANCE_OFFICER",
+    "pspId": 12,
+    "purpose": "CASE_INVESTIGATION",
+    "caseId": "CASE-2026-0412"
+  },
+  "auditId": "7c3e1a9b-2d4f-4b6a-8e0c-5f7a9b1d3e2c"
+}

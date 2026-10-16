@@ -1,0 +1,41 @@
+{
+  "siteId": "acme-eu",
+  "nodeId": "acme-eu-1",
+  "status": "OK",
+  "schemaVersion": 3,
+  "rows": {
+    "approxCount": 182330114,
+    "oldestEvaluatedAt": "2021-10-16T00:00:04Z",
+    "newestEvaluatedAt": "2026-10-16T10:05:00Z"
+  },
+  "partitions": [
+    {
+      "month": "2026-10",
+      "approxRows": 5310221,
+      "bytes": 4123004928
+    }
+  ],
+  "outbox": {
+    "backlog": 3,
+    "oldestPendingAt": "2026-10-16T10:04:58Z",
+    "lastShippedAt": "2026-10-16T10:04:59Z",
+    "failedAttempts24h": 0
+  },
+  "retention": {
+    "years": 5,
+    "configVersion": 14,
+    "lastPurgeAt": "2026-10-16T02:00:00Z",
+    "lastPurgeDroppedPartitions": 1,
+    "nextPurgeAt": "2026-10-17T02:00:00Z"
+  },
+  "holds": {
+    "active": 1,
+    "heldRows": 3,
+    "activeHoldDigest": "84d4d74e36d9b6901452b02ac2a73ca72ce4122b0f453c5aaae4b66b28ab72ae"
+  },
+  "storage": {
+    "dbSizeBytes": 151230004224,
+    "diskFreeBytes": 902114000896
+  },
+  "writeFailures24h": 0
+}

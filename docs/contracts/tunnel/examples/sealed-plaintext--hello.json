@@ -1,0 +1,36 @@
+{
+  "nonce": "Zx81mQp0Lk7Vb3Nc5Dr9Tg",
+  "issuedAt": "2026-10-16T06:00:03.500Z",
+  "edgeId": "acme-eu-1",
+  "payload": {
+    "frame": {
+      "type": "hello",
+      "id": "6c7b8a9f-0e1d-4c2b-9a4f-5e6d7c8b9a0f"
+    },
+    "body": {
+      "edgeId": "acme-eu-1",
+      "siteId": "acme-eu",
+      "pspId": 12,
+      "bootId": "ab12cd34-ef56-4a78-9b01-c23d45e67f89",
+      "agentVersion": "2.4.0",
+      "protocolVersions": [
+        1
+      ],
+      "ledgerSchemaVersion": 3,
+      "opsEnabled": [
+        "txn.search",
+        "txn.get",
+        "txn.batchGet",
+        "txn.related",
+        "filing.extract",
+        "export.stream",
+        "ledger.health"
+      ],
+      "maxInflight": 16,
+      "maxFrameBytes": 1048576,
+      "configVersion": 14,
+      "bundleVersion": 37,
+      "startedAt": "2026-10-16T06:00:03.120Z"
+    }
+  }
+}

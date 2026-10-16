@@ -1,0 +1,25 @@
+{
+  "edgeId": "acme-eu-1",
+  "siteId": "acme-eu",
+  "pspId": 12,
+  "bootId": "ab12cd34-ef56-4a78-9b01-c23d45e67f89",
+  "agentVersion": "2.4.0",
+  "protocolVersions": [
+    1
+  ],
+  "ledgerSchemaVersion": 3,
+  "opsEnabled": [
+    "txn.search",
+    "txn.get",
+    "txn.batchGet",
+    "txn.related",
+    "filing.extract",
+    "export.stream",
+    "ledger.health"
+  ],
+  "maxInflight": 16,
+  "maxFrameBytes": 1048576,
+  "configVersion": 14,
+  "bundleVersion": 37,
+  "startedAt": "2026-10-16T06:00:03.120Z"
+}

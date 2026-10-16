@@ -1,0 +1,28 @@
+{
+  "v": 2,
+  "edgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+  "txnRef": "AUTH-2026-10-16-000981",
+  "edgeNodeId": "acme-eu-1",
+  "siteId": "acme-eu",
+  "evaluatedAt": "2026-10-16T09:14:07Z",
+  "decision": "ALERT",
+  "score": 45,
+  "triggeredRuleIds": [
+    1204,
+    1311
+  ],
+  "ruleVersionIds": [
+    88012,
+    88140
+  ],
+  "bundleVersion": 37,
+  "bundleHash": "sha256:75ac5ea64b7e41ec878c80aac05517a168e9a2f9671b623da95acc5d1b660676",
+  "evaluator": "native",
+  "latencyMs": 3,
+  "merchantId": "mrc_00421",
+  "ctrRequired": false,
+  "sanctionsHit": false,
+  "typologyCodes": [
+    "CARD_VELOCITY"
+  ]
+}

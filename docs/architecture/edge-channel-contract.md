@@ -4,6 +4,10 @@ Normative contract shared by the control plane (`BACKEND`, `com.posgateway.aml.e
 on-prem host (`edge-host`, `com.hokeka.edge`). Both sides implement exactly this; the proof tests in
 `EdgeChannelEncryptionTest` assert it.
 
+> HSE-1, the replay envelope (§4) and the lifecycle (§7) defined here are reused unchanged by
+> [`../EDGE_DATA_RESIDENCY_CONTRACT.md`](../EDGE_DATA_RESIDENCY_CONTRACT.md), which adds the decision
+> record, Edge config and Edge Tunnel contexts (its §3.2) and metrics report v2.
+
 ## 1. Layering — two independent layers, both mandatory
 
 ```

@@ -1,0 +1,93 @@
+{
+  "v": 1,
+  "configVersion": 14,
+  "pspId": 12,
+  "issuedAt": "2026-10-16T08:00:00Z",
+  "retention": {
+    "years": 26,
+    "effectiveSince": "2026-10-16T00:00:00Z"
+  },
+  "supportAccess": {
+    "enabled": false,
+    "changedAt": "2026-10-16T00:00:00Z"
+  },
+  "crossPspIntelligence": {
+    "optIn": false,
+    "changedAt": "2026-10-16T00:00:00Z"
+  },
+  "ctr": {
+    "enabled": true,
+    "aggregation": "CARD_BUSINESS_DAY",
+    "businessDayTimezone": "Africa/Nairobi",
+    "reportingCurrency": "USD",
+    "thresholds": [
+      {
+        "currency": "USD",
+        "amountMinor": 1500000
+      }
+    ],
+    "cashChannels": [
+      "ATM",
+      "CASH_IN",
+      "AGENT"
+    ],
+    "fx": {
+      "asOf": "2026-10-16T06:00:00Z",
+      "base": "USD",
+      "rates": {
+        "KES": "0.0077",
+        "EUR": "1.0852",
+        "USD": "1"
+      }
+    }
+  },
+  "limits": [
+    {
+      "limitId": 1,
+      "scope": "CARD",
+      "metric": "COUNT",
+      "window": "PT1H",
+      "max": 20,
+      "action": "HOLD"
+    },
+    {
+      "limitId": 2,
+      "scope": "MERCHANT",
+      "metric": "AMOUNT",
+      "window": "P1D",
+      "currency": "KES",
+      "max": 5000000000,
+      "action": "ALERT",
+      "merchantId": "mrc_00421"
+    }
+  ],
+  "merchantBlocklist": {
+    "version": 3,
+    "entries": [
+      {
+        "merchantId": "mrc_09917",
+        "reasonCode": "SANCTIONED",
+        "since": "2026-09-30T12:00:00Z"
+      }
+    ]
+  },
+  "sanctions": {
+    "listVersion": "2026-10-16.1",
+    "listHash": "a330395cc0a53ad1207736546afff4735940937564bbf75ce1edad40780d9139",
+    "publishedAt": "2026-10-16T05:00:00Z"
+  },
+  "tunnel": {
+    "enabled": true,
+    "opsAllowed": [
+      "txn.search",
+      "txn.get",
+      "txn.batchGet",
+      "txn.related",
+      "filing.extract",
+      "export.stream",
+      "ledger.health"
+    ],
+    "backfillAllowed": false,
+    "maxInflightPerSession": 16
+  }
+}

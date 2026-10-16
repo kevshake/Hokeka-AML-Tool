@@ -1,0 +1,10 @@
+{
+  "from": "2026-10-01T00:00:00Z",
+  "to": "2026-10-16T23:59:59Z",
+  "merchantId": "mrc_00421",
+  "decisions": [
+    "ALERT",
+    "HOLD",
+    "BLOCK"
+  ]
+}

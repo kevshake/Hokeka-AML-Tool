@@ -1,0 +1,7 @@
+{
+  "code": "EDGE_BUSY",
+  "httpStatus": 503,
+  "message": "busy",
+  "retryable": true,
+  "retryAfterMs": 500
+}

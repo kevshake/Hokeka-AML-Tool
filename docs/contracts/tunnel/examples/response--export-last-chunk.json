@@ -1,0 +1,15 @@
+{
+  "op": "export.stream",
+  "status": "OK",
+  "seq": 96,
+  "last": true,
+  "items": [
+    {
+      "edgeAssessmentId": "c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f",
+      "evaluatedAt": "2026-09-14T10:02:51.880Z",
+      "siteId": "acme-eu",
+      "decision": "BLOCK"
+    }
+  ],
+  "totalRows": 48001
+}
