@@ -136,30 +136,9 @@ public class CaseManagementController {
         ));
     }
 
-    /**
-     * Escalate case
-     */
-    @PostMapping("/{caseId}/escalate")
-    public ResponseEntity<Map<String, Object>> escalateCase(@PathVariable Long caseId,
-                                                            @RequestBody EscalationRequest request) {
-        ComplianceCase complianceCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Case not found"));
-        pspIsolationService.validatePspAccess(complianceCase.getPspId());
-        com.posgateway.aml.entity.User currentUser = pspIsolationService.getCurrentUser();
-        if (currentUser == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
-        }
-        caseEscalationService.escalateCase(
-                caseId,
-                request.getReason(),
-                currentUser.getId()
-        );
-        
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Case escalated successfully"
-        ));
-    }
+    // POST /cases/{id}/escalate lives in CaseWorkflowController only (RBAC via CasePermissionService,
+    // PSP isolation, audit trail). A second mapping here made every call fail with an ambiguous
+    // handler-method error.
 
     /**
      * Get SLA status
@@ -337,18 +316,6 @@ public class CaseManagementController {
     }
 
     // DTOs
-    public static class EscalationRequest {
-        private String reason;
-
-        public String getReason() {
-            return reason;
-        }
-
-        public void setReason(String reason) {
-            this.reason = reason;
-        }
-    }
-
     public static class CreateQueueRequest {
         private String queueName;
         private String targetRole;

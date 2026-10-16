@@ -17,10 +17,13 @@ import java.util.Set;
 public class CasePermissionService {
 
     private final ComplianceCaseRepository caseRepository;
+    private final com.posgateway.aml.service.security.PspIsolationService pspIsolationService;
 
     @Autowired
-    public CasePermissionService(ComplianceCaseRepository caseRepository) {
+    public CasePermissionService(ComplianceCaseRepository caseRepository,
+                                 com.posgateway.aml.service.security.PspIsolationService pspIsolationService) {
         this.caseRepository = caseRepository;
+        this.pspIsolationService = pspIsolationService;
     }
 
     /**
@@ -31,33 +34,30 @@ public class CasePermissionService {
      * simplified to all for now as queues are shared).
      */
     public boolean canView(Long caseId, User user) {
-        if (isAdminOrOfficer(user)) {
-            return true;
-        }
-
-        // Fetch case to check assignment if needed
+        // Always load the case: tenancy must be checked even for officer roles, because a
+        // COMPLIANCE_OFFICER / PSP_USER can be bound to a single PSP.
         return caseRepository.findById(caseId)
                 .map(kase -> canViewCase(kase, user))
                 .orElse(false);
     }
 
+    /**
+     * Tenancy first: platform administrators see every case; any user bound to a PSP sees only
+     * that PSP's cases (previously only PSP_ADMIN / PSP_ANALYST were scoped, so PSP-bound
+     * PSP_USER and COMPLIANCE_OFFICER accounts could read and act on other PSPs' cases).
+     */
     private boolean canViewCase(ComplianceCase kase, User user) {
-        UserRole role = UserRole.valueOf(user.getRole().getName());
-
-        // 1. PSP Data Isolation
-        if (role == UserRole.PSP_ADMIN || role == UserRole.PSP_ANALYST) {
-            // Can only view cases belonging to their PSP
-            if (user.getPsp() == null) {
-                return false; // Misconfiguration: PSP user without PSP ID
-            }
-            return user.getPsp().getPspId().equals(kase.getPspId());
+        if (user == null || user.getRole() == null) {
+            return false;
         }
-
-        // 2. Bank/Platform wide roles
-        // Admins, Officers, Bank Auditors, MLRO can view all.
-        // Standard Analysts can view all (to pick from queue), unless restricted by
-        // queues later.
-        return true;
+        if (pspIsolationService.isPlatformAdministrator(user)) {
+            return true;
+        }
+        if (user.getPsp() == null || user.getPsp().getPspId() == null) {
+            // Not a platform admin and not bound to a PSP: only global (non-tenant) roles remain.
+            return isAdminOrOfficer(user);
+        }
+        return user.getPsp().getPspId().equals(kase.getPspId());
     }
 
     /**

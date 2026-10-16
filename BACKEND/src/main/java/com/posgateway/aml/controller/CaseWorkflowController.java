@@ -39,6 +39,8 @@ public class CaseWorkflowController {
     private final UserRepository userRepository;
     private final CasePermissionService permissionService;
     private final CaseAuditService auditService;
+    private final com.posgateway.aml.repository.ComplianceCaseRepository caseRepository;
+    private final com.posgateway.aml.service.security.PspIsolationService pspIsolationService;
 
     @Autowired
     public CaseWorkflowController(CaseTimelineService timelineService,
@@ -48,7 +50,11 @@ public class CaseWorkflowController {
             CaseAssignmentService assignmentService,
             UserRepository userRepository,
             CasePermissionService permissionService,
-            CaseAuditService auditService) {
+            CaseAuditService auditService,
+            com.posgateway.aml.repository.ComplianceCaseRepository caseRepository,
+            com.posgateway.aml.service.security.PspIsolationService pspIsolationService) {
+        this.caseRepository = caseRepository;
+        this.pspIsolationService = pspIsolationService;
         this.timelineService = timelineService;
         this.networkService = networkService;
         this.decisionService = decisionService;
@@ -112,27 +118,35 @@ public class CaseWorkflowController {
     }
 
     /**
-     * Escalate Case
-     * POST /api/cases/{id}/escalate
+     * Escalate a case — the single handler for {@code POST /cases/{id}/escalate}.
+     *
+     * <p>404 when the case does not exist, 403 when it belongs to another PSP or the caller's role may
+     * not escalate it ({@link CasePermissionService#canAct}), 400 without a reason. On success the
+     * escalation is applied by {@link CaseEscalationService} and recorded in the case audit trail.
      */
     @PostMapping("/{id}/escalate")
-    public ResponseEntity<Void> escalateCase(@PathVariable Long id,
+    public ResponseEntity<Map<String, Object>> escalateCase(@PathVariable Long id,
             @RequestBody Map<String, String> request) {
-        String reason = request.get("reason");
+        String reason = request == null ? null : request.get("reason");
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason is required to escalate a case");
+        }
+        com.posgateway.aml.entity.compliance.ComplianceCase kase = caseRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + id));
+        pspIsolationService.validatePspAccess(kase.getPspId());
 
         User currentUser = getCurrentUser();
-
-        // RBAC Check
         if (!permissionService.canAct(id, currentUser, "ESCALATE")) {
             return ResponseEntity.status(403).build();
         }
 
-        escalationService.escalateCase(id, reason, currentUser.getId());
+        escalationService.escalateCase(id, reason.trim(), currentUser.getId());
+        auditService.logAction(id, currentUser, "ESCALATE", reason.trim());
 
-        // Audit Log
-        auditService.logAction(id, currentUser, "ESCALATE", reason);
-
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "caseId", id,
+                "message", "Case escalated successfully"));
     }
 
     /**
