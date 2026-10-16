@@ -28,9 +28,21 @@ public interface EdgeMetricsRecordRepository extends JpaRepository<EdgeMetricsRe
             + "COALESCE(AVG(m.p95LatencyMicros), 0) "
             + "FROM EdgeMetricsRecord m WHERE m.pspId = :pspId "
             + "AND m.windowStart >= :from AND m.windowStart < :to")
-    Object[] summarizeForPsp(@Param("pspId") Long pspId,
-                             @Param("from") Instant from,
-                             @Param("to") Instant to);
+    List<Object[]> summarizeRowsForPsp(@Param("pspId") Long pspId,
+                                       @Param("from") Instant from,
+                                       @Param("to") Instant to);
+
+    /**
+     * The single aggregate row of {@link #summarizeRowsForPsp}, or {@code null} if none.
+     *
+     * <p>The query used to be declared as returning {@code Object[]} directly. Spring Data then wraps
+     * the one result row in another array ({@code Object[]{Object[7]}}), so the caller's {@code s[1]}
+     * threw "Index 1 out of bounds for length 1" and {@code GET /edge/nodes/analytics} answered 500.
+     */
+    default Object[] summarizeForPsp(Long pspId, Instant from, Instant to) {
+        List<Object[]> rows = summarizeRowsForPsp(pspId, from, to);
+        return rows == null || rows.isEmpty() ? null : rows.get(0);
+    }
 
     /**
      * Same rollup across every PSP — the platform-wide fleet view. Grouped by PSP so the operator can
