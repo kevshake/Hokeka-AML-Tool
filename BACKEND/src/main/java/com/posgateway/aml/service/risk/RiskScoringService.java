@@ -208,13 +208,16 @@ public class RiskScoringService {
                 (String) features.getOrDefault("destination_country", null),
                 new BigDecimal(features.getOrDefault("amount", 0.0).toString()));
 
+        // ScoringService writes the model score as "ml_score"; readMlScore resolves that canonical key
+        // (and the legacy "mlScore" alias) so the ML component is no longer silently zero.
+        Double resolvedMlScore = RiskDetailKeys.readMlScore(riskDetails);
+        double mlScore = resolvedMlScore != null ? resolvedMlScore : 0.0;
+
         RuleEvaluationResult ruleResult = rulesExecutionService.evaluateRules(
-                Long.valueOf(txnId), features,
-                ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue());
+                Long.valueOf(txnId), features, mlScore);
 
         double trsScore = calculateTrs(features, ruleResult);
         double craScore = calculateCra(features);
-        double mlScore  = ((Number) riskDetails.getOrDefault("mlScore", 0.0)).doubleValue();
 
         double totalWeight = overallKrsWeight + overallTrsWeight + overallCraWeight + overallMlWeight;
         if (totalWeight <= 0) {

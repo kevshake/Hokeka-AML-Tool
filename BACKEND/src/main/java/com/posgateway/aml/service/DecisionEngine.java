@@ -539,6 +539,23 @@ public class DecisionEngine {
                 
                 return new DecisionResult("BLOCK", 1.0, reasons);
             }
+
+            // Non-exact / low-confidence candidates: hold for sanctions disambiguation and
+            // compliance review instead of blocking outright (confirmed hits are handled above).
+            // A potential match is never allowed straight through.
+            if (result.requiresReview()) {
+                List<String> reasons = new ArrayList<>();
+                reasons.add("SANCTIONS_POTENTIAL_MATCH: possible sanctions match requires compliance review");
+                for (var match : result.getMatches()) {
+                    reasons.add(String.format("Potential match: %s (%s) - %s",
+                        match.getScreenedName(),
+                        match.getEntityType(),
+                        match.getScreeningResult() != null ? match.getScreeningResult().getStatus() : null));
+                }
+                logger.warn("Transaction {} held for sanctions disambiguation: {}",
+                    transaction.getTxnId(), reasons);
+                return new DecisionResult("HOLD", 1.0, reasons);
+            }
         } catch (Exception e) {
             logger.error("Error during real-time sanctions screening for transaction {}: {}",
                 transaction.getTxnId(), e.getMessage(), e);

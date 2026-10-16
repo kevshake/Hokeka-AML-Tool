@@ -107,7 +107,7 @@ public class ScoringService {
                             txnId, resp.riskScore(), resp.indicators());
                     Map<String, Object> riskDetails = new HashMap<>();
                     double cachedScore = resp.riskScore();
-                    riskDetails.put("ml_score", cachedScore);
+                    riskDetails.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE, cachedScore);
                     riskDetails.put("cache_layer", resp.cacheLayer());
                     riskDetails.put("source", resp.source());
                     riskDetails.put("model_explanation_status", "UNAVAILABLE_CACHE_RESULT");
@@ -206,7 +206,7 @@ public class ScoringService {
                 }
 
                 // Add ML score to riskDetails as requested
-                riskDetails.put("ml_score", score);
+                riskDetails.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE, score);
                 copyModelEvidence(response, riskDetails);
 
                 // --- Unified rules engine (SpEL from DB + Drools DRL) ---
@@ -220,7 +220,7 @@ public class ScoringService {
                 if (dl4jAnomalyService != null && dl4jAnomalyService.isEnabled()) {
                     try {
                         com.posgateway.aml.service.deeplearning.DL4JAnomalyService.AnomalyResult anomalyResult = dl4jAnomalyService
-                                .detectAnomaly(txnId, features);
+                                .detectAnomaly(txnId, withMlScore(features, riskDetails));
 
                         riskDetails.put("anomaly_score", anomalyResult.getAnomalyScore());
                         riskDetails.put("is_anomaly", anomalyResult.isAnomaly());
@@ -272,6 +272,21 @@ public class ScoringService {
         }
     }
 
+    /**
+     * Returns a copy of the extracted feature map with the raw model score added under the canonical
+     * {@code ml_score} key. The anomaly autoencoder reads {@code ml_score} from its input map, but the
+     * score lives in riskDetails (the feature extractor never sets it), so without this the anomaly
+     * model always saw 0.0 for that input. A copy is used so the caller's feature map is not mutated.
+     */
+    static Map<String, Object> withMlScore(Map<String, Object> features, Map<String, Object> riskDetails) {
+        Map<String, Object> enriched = features != null ? new HashMap<>(features) : new HashMap<>();
+        Double mlScore = com.posgateway.aml.service.risk.RiskDetailKeys.readMlScore(riskDetails);
+        if (mlScore != null) {
+            enriched.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE, mlScore);
+        }
+        return enriched;
+    }
+
     private ScoringResult evaluateRulesOnly(Long txnId, Map<String, Object> features,
             com.posgateway.aml.service.risk.SchemeSimulatorService.MerchantRiskAssessment assessment) {
         return evaluateRulesOnly(txnId, features, assessment, 0L);
@@ -289,7 +304,7 @@ public class ScoringService {
                 rulesExecutionService.evaluateRules(txnId, features, score);
         applyRuleResultToScore(ruleResult, riskDetails);
         score = resolveScoreAfterRules(score, ruleResult);
-        riskDetails.put("ml_score", score);
+        riskDetails.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE, score);
         riskDetails.put("model_explanation_status", "NOT_APPLICABLE_RULES_ONLY");
         return attachMlFinding(new ScoringResult(txnId, score, latencyMs, riskDetails));
     }
@@ -393,7 +408,8 @@ public class ScoringService {
         if (riskDetails != null) {
             aiFeatures.put("rule_decision", riskDetails.get("rule_decision"));
             aiFeatures.put("rules_triggered", riskDetails.get("rules_triggered"));
-            aiFeatures.put("ml_score", riskDetails.get("ml_score"));
+            aiFeatures.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE,
+                    riskDetails.get(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE));
             aiFeatures.put("source", riskDetails.get("source"));
             aiFeatures.put("cache_layer", riskDetails.get("cache_layer"));
         }

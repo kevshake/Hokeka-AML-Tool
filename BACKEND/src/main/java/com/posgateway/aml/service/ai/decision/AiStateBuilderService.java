@@ -59,7 +59,8 @@ public class AiStateBuilderService {
         putSafe(alert, "engine_action", firstNonNull(features, "engine_action", features.get("action"), context.getBaselineDecision()));
         putSafe(alert, "severity", features.get("severity"));
         putSafe(alert, "rules_triggered", sanitizeRulesTriggered(features.get("rules_triggered"), features.get("reasons")));
-        putSafe(alert, "ml_score", firstNonNull(features, "ml_score", features.get("score")));
+        // Canonical "ml_score" first, then the camelCase response alias, then the pipeline score.
+        putSafe(alert, "ml_score", firstNonNull(features, "ml_score", features.get("mlScore"), features.get("score")));
         putSafe(alert, "ml_hold_threshold", features.get("ml_hold_threshold"));
         putSafe(alert, "anomaly_score", features.get("anomaly_score"));
         putSafe(alert, "sanctions_screening", firstNonNull(features, "sanctions_screening", "UNKNOWN"));

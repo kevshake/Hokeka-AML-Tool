@@ -48,13 +48,32 @@ public class AlertPrioritizationService {
         }
 
         // Severity factor
-        if ("CRITICAL".equals(alert.getSeverity())) {
-            score += 0.3;
-        } else if ("WARN".equals(alert.getSeverity())) {
-            score += 0.15;
-        }
+        score += severityWeight(alert.getSeverity());
 
         return Math.min(score, 1.0);
+    }
+
+    /**
+     * Maps an alert severity to its priority contribution (max 0.3).
+     *
+     * <p>Covers the full vocabulary actually written to {@code alerts.severity}: the
+     * {@link com.posgateway.aml.service.DecisionEngine} emits CRITICAL / HIGH / MEDIUM, while
+     * the screening, KYC, monitoring and surveillance publishers emit CRITICAL / WARN / INFO.
+     * Previously only CRITICAL and WARN were recognised, so every HIGH and MEDIUM alert raised
+     * by the transaction decision engine received no severity weight at all. Matching is
+     * case-insensitive; unknown or null severities contribute nothing.
+     */
+    static double severityWeight(String severity) {
+        if (severity == null) {
+            return 0.0;
+        }
+        return switch (severity.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "CRITICAL" -> 0.3;
+            case "HIGH" -> 0.225;
+            case "WARN", "WARNING", "MEDIUM" -> 0.15;
+            case "LOW" -> 0.05;
+            default -> 0.0;
+        };
     }
 
     /**

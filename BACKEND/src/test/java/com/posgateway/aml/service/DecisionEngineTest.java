@@ -196,4 +196,63 @@ class DecisionEngineTest {
         verify(transactionRepository).save(transaction);
         verify(alertRepository).save(any(Alert.class));
     }
+
+    /**
+     * Runs the legacy decision path with the given sanctions screening result and a low ML score,
+     * so the sanctions outcome alone determines the action.
+     */
+    private static DecisionEngine.DecisionResult evaluateWithScreening(
+            RealTimeTransactionScreeningService.TransactionScreeningResult screening) {
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        TransactionLimitEnforcementService limitService = mock(TransactionLimitEnforcementService.class);
+        RealTimeTransactionScreeningService screeningService = mock(RealTimeTransactionScreeningService.class);
+        when(limitService.checkLimits(any())).thenReturn(Optional.empty());
+        when(screeningService.screenTransaction(any())).thenReturn(screening);
+        when(alertRepository.save(any(Alert.class))).thenAnswer(invocation -> {
+            Alert alert = invocation.getArgument(0);
+            alert.setAlertId(73L);
+            return alert;
+        });
+        DecisionEngine engine = new DecisionEngine(
+                mock(ConfigService.class), alertRepository, mock(TransactionFeaturesRepository.class),
+                mock(TransactionRepository.class), new ObjectMapper(), mock(KafkaOutboxService.class),
+                limitService, mock(PaymentBlacklistService.class));
+        ReflectionTestUtils.setField(engine, "realTimeScreeningService", screeningService);
+        useLegacyOrchestratorMode(engine);
+
+        TransactionEntity transaction = new TransactionEntity();
+        transaction.setTxnId(52L);
+        transaction.setMerchantId("4");
+        transaction.setPspId(2L);
+        transaction.setAmountCents(1000L);
+        return engine.evaluate(transaction, 0.1, Map.of(), 5L, Map.of());
+    }
+
+    /** Builds a single-match screening result with the given provider status and blocking flag. */
+    private static RealTimeTransactionScreeningService.TransactionScreeningResult screeningWith(
+            com.posgateway.aml.model.ScreeningResult.ScreeningStatus status, boolean blocking) {
+        var sr = com.posgateway.aml.model.ScreeningResult.builder().status(status).build();
+        var match = new RealTimeTransactionScreeningService.ScreeningMatch(
+                "Jon Doh", "COUNTERPARTY", "Jon Doh", sr, blocking);
+        return new RealTimeTransactionScreeningService.TransactionScreeningResult(
+                52L, List.of(match), blocking, false);
+    }
+
+    @Test
+    void potentialSanctionsMatchIsHeldForReviewNotBlockedOrAllowed() {
+        DecisionEngine.DecisionResult result = evaluateWithScreening(
+                screeningWith(com.posgateway.aml.model.ScreeningResult.ScreeningStatus.POTENTIAL_MATCH, false));
+
+        assertEquals("HOLD", result.getAction());
+        assertTrue(result.getReasons().get(0).startsWith("SANCTIONS_POTENTIAL_MATCH"));
+    }
+
+    @Test
+    void confirmedSanctionsMatchStillBlocks() {
+        DecisionEngine.DecisionResult result = evaluateWithScreening(
+                screeningWith(com.posgateway.aml.model.ScreeningResult.ScreeningStatus.MATCH, true));
+
+        assertEquals("BLOCK", result.getAction());
+        assertTrue(result.getReasons().get(0).startsWith("SANCTIONS_MATCH"));
+    }
 }

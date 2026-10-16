@@ -43,6 +43,13 @@ public class RealTimeTransactionScreeningService {
     @Value("${screening.realtime.screen-counterparty:true}")
     private boolean screenCounterparty;
 
+    /**
+     * Similarity at or above which a match is treated as a confirmed hit even when the provider
+     * labelled it POTENTIAL_MATCH. Mirrors the sanctions microservice FLAGGED threshold (0.95).
+     */
+    @Value("${screening.realtime.confirmed-match-threshold:0.95}")
+    private double confirmedMatchThreshold = 0.95;
+
     @Autowired(required = false)
     private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
 
@@ -158,6 +165,39 @@ public class RealTimeTransactionScreeningService {
         return result;
     }
 
+    /**
+     * Decides whether a screening result with matches is a confirmed (blocking) hit or a
+     * non-exact candidate that must go to disambiguation / manual review.
+     *
+     * <p>Confirmed, and therefore blocking: provider status {@code MATCH} (the microservice's
+     * FLAGGED, similarity &gt;= 0.95), any match whose similarity reaches
+     * {@link #confirmedMatchThreshold}, a DOB-confirmed match, or a result whose status is missing
+     * or unrecognised (fail closed). Only an explicit {@code POTENTIAL_MATCH} below the threshold
+     * is non-blocking; those transactions are still held for review by the decision engine, never
+     * allowed through. Previously every match was hard-coded as blocking, so the disambiguation
+     * baseline was always BLOCK and fuzzy candidates could never be routed to review.
+     */
+    boolean isConfirmedHit(ScreeningResult result) {
+        if (result == null || !result.hasMatches()) {
+            return false;
+        }
+        if (result.getStatus() != ScreeningResult.ScreeningStatus.POTENTIAL_MATCH) {
+            return true;
+        }
+        if (result.getHighestMatchScore() != null && result.getHighestMatchScore() >= confirmedMatchThreshold) {
+            return true;
+        }
+        for (ScreeningResult.Match match : result.getMatches()) {
+            if (match.getMatchType() == ScreeningResult.MatchType.DOB_CONFIRMED) {
+                return true;
+            }
+            if (match.getSimilarityScore() != null && match.getSimilarityScore() >= confirmedMatchThreshold) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static java.util.Map<String, Object> buildSanctionsAiFeatures(ScreeningMatch primary, int matchCount) {
         java.util.Map<String, Object> features = new java.util.HashMap<>();
         features.put("match_count", matchCount);
@@ -236,8 +276,7 @@ public class RealTimeTransactionScreeningService {
                     "MERCHANT",
                     merchant.getLegalName(),
                     legalNameResult,
-                    true // Blocking match
-            );
+                    isConfirmedHit(legalNameResult));
         }
 
         // Screen trading name if different
@@ -257,7 +296,7 @@ public class RealTimeTransactionScreeningService {
                         "MERCHANT",
                         merchant.getTradingName(),
                         tradingNameResult,
-                        true);
+                        isConfirmedHit(tradingNameResult));
             }
         }
 
@@ -303,7 +342,7 @@ public class RealTimeTransactionScreeningService {
                     "COUNTERPARTY",
                     name,
                     result,
-                    true);
+                    isConfirmedHit(result));
         }
 
         return null;
@@ -416,6 +455,14 @@ public class RealTimeTransactionScreeningService {
 
         public boolean isScreeningUnavailable() {
             return screeningUnavailable;
+        }
+
+        /**
+         * True when there are matches but none of them is a confirmed hit (or blocking was
+         * disabled), i.e. the transaction must be held for sanctions disambiguation / review.
+         */
+        public boolean requiresReview() {
+            return hasMatches() && !shouldBlock;
         }
     }
 

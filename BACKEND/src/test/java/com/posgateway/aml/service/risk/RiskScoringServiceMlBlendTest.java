@@ -39,5 +39,13 @@ class RiskScoringServiceMlBlendTest {
                 Map.of("amount", 0), Map.of("mlScore", 87.5));
 
         assertEquals(87.5, (double) result.get("finalScore"), .0001);
+
+        // The canonical key written by ScoringService ("ml_score") must be honoured too; before the
+        // fix only "mlScore" was read, so real scoring output contributed 0 to the blend.
+        Map<String, Object> canonical = service.calculateOverallRisk("1",
+                Map.of("amount", 0), Map.of("ml_score", 42.0));
+        assertEquals(42.0, (double) canonical.get("finalScore"), .0001);
+        assertEquals(42.0, (double) canonical.get("mlScore"), .0001);
+        verify(rules).evaluateRules(eq(1L), anyMap(), eq(42.0));
     }
 }

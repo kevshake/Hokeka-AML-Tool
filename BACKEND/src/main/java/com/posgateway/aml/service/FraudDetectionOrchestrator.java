@@ -76,7 +76,12 @@ public class FraudDetectionOrchestrator {
         if (transaction.getKrs() != null) finalRiskDetails.put("krsScore", transaction.getKrs());
         if (transaction.getTrs() != null) finalRiskDetails.put("trsScore", transaction.getTrs());
         if (transaction.getCra() != null) finalRiskDetails.put("craScore", transaction.getCra());
-        finalRiskDetails.put("mlScore", score); // Ensure ML score is also there
+        // Expose the ML score to the Console under the camelCase response alias, using the same raw
+        // model value ScoringService stored under the canonical "ml_score" key so the two never
+        // disagree; fall back to the pipeline score only when no model score was recorded.
+        Double modelScore = com.posgateway.aml.service.risk.RiskDetailKeys.readMlScore(finalRiskDetails);
+        finalRiskDetails.put(com.posgateway.aml.service.risk.RiskDetailKeys.ML_SCORE_RESPONSE_ALIAS,
+                modelScore != null ? modelScore : score);
 
         long latencyMs = System.currentTimeMillis() - startTime;
 

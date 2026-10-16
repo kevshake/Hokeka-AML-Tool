@@ -84,8 +84,10 @@ public class AssessmentEngineRecorder {
                 .nature("SCREENING")
                 .severity(triggered ? "CRITICAL" : "INFO")
                 .triggered(triggered)
+                // Confirmed hit -> BLOCK; unavailable or non-exact candidate awaiting
+                // disambiguation -> HOLD; only a clean screen proposes ALLOW.
                 .proposedAction(result.shouldBlock() ? "BLOCK"
-                        : result.isScreeningUnavailable() ? "HOLD" : "ALLOW")
+                        : (result.isScreeningUnavailable() || result.requiresReview()) ? "HOLD" : "ALLOW")
                 .score(triggered ? 1.0 : 0.0)
                 .evidence(evidence)
                 .explanation(triggered ? "Sanctions screening match" : "No sanctions match"));
