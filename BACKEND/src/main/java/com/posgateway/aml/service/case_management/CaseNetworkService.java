@@ -1,15 +1,16 @@
 package com.posgateway.aml.service.case_management;
 
-import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.User;
+import com.posgateway.aml.entity.assessment.Assessment;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
-import com.posgateway.aml.repository.TransactionRepository;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.UserRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,8 +30,7 @@ public class CaseNetworkService {
 
     private final ComplianceCaseRepository caseRepository;
     private final CaseTransactionRepository caseTransactionRepository;
-    @SuppressWarnings("unused")
-    private final TransactionRepository transactionRepository;
+    private final TransactionReferenceResolver transactionReferences;
     private final SuspiciousActivityReportRepository sarRepository;
     @SuppressWarnings("unused")
     private final UserRepository userRepository;
@@ -39,13 +39,13 @@ public class CaseNetworkService {
     @Autowired
     public CaseNetworkService(ComplianceCaseRepository caseRepository,
                               CaseTransactionRepository caseTransactionRepository,
-                              TransactionRepository transactionRepository,
+                              TransactionReferenceResolver transactionReferences,
                               SuspiciousActivityReportRepository sarRepository,
                               UserRepository userRepository,
                               @Autowired(required = false) com.posgateway.aml.service.graph.Neo4jGdsService neo4jGdsService) {
         this.caseRepository = caseRepository;
         this.caseTransactionRepository = caseTransactionRepository;
-        this.transactionRepository = transactionRepository;
+        this.transactionReferences = transactionReferences;
         this.sarRepository = sarRepository;
         this.userRepository = userRepository;
         this.neo4jGdsService = neo4jGdsService;
@@ -70,12 +70,14 @@ public class CaseNetworkService {
             graph.addEdge(createCaseEdge(rootCase, relatedCase, "RELATED_CASE"));
         });
 
-        // Find related transactions
+        // Find related transactions (by ID reference; details are pulled from the Edge, R6)
         List<CaseTransaction> caseTransactions = caseTransactionRepository.findByComplianceCase(rootCase);
+        Map<UUID, Assessment> records = decisionRecords(rootCase, caseTransactions);
         caseTransactions.forEach(ct -> {
-            if (ct.getTransaction() != null) {
-                graph.addNode(createTransactionNode(ct.getTransaction()));
-                graph.addEdge(createCaseTransactionEdge(rootCase, ct.getTransaction()));
+            TransactionReference reference = ct.getTransactionReference();
+            if (!reference.isEmpty()) {
+                graph.addNode(createTransactionNode(reference, recordOf(reference, records)));
+                graph.addEdge(createCaseTransactionEdge(rootCase, reference));
             }
         });
 
@@ -183,15 +185,16 @@ public class CaseNetworkService {
     private Set<EntityNode> findRelatedEntities(ComplianceCase complianceCase) {
         Set<EntityNode> entities = new HashSet<>();
 
-        // Find entities from related transactions
+        // Merchants named by the decision records of the case's transactions (class-D merchant ids)
         List<CaseTransaction> transactions = caseTransactionRepository.findByComplianceCase(complianceCase);
+        Map<UUID, Assessment> records = decisionRecords(complianceCase, transactions);
         transactions.forEach(ct -> {
-            TransactionEntity tx = ct.getTransaction();
-            if (tx.getMerchantId() != null) {
+            Assessment record = recordOf(ct.getTransactionReference(), records);
+            if (record != null && record.getMerchantId() != null) {
                 entities.add(EntityNode.builder()
-                        .id(tx.getMerchantId())
+                        .id(record.getMerchantId())
                         .type("MERCHANT")
-                        .label("Merchant: " + tx.getMerchantId())
+                        .label("Merchant: " + record.getMerchantId())
                         .build());
             }
         });
@@ -211,15 +214,43 @@ public class CaseNetworkService {
                 .build();
     }
 
+    /** The case PSP's decision records named by the case's transaction links (PSP-scoped lookup). */
+    private Map<UUID, Assessment> decisionRecords(ComplianceCase complianceCase, List<CaseTransaction> links) {
+        return transactionReferences.decisionRecords(complianceCase.getPspId(),
+                links.stream().map(CaseTransaction::getTransactionReference).toList());
+    }
+
+    /** The decision record of one reference, or null. */
+    private static Assessment recordOf(TransactionReference reference, Map<UUID, Assessment> records) {
+        return reference.edgeAssessmentId() == null ? null : records.get(reference.edgeAssessmentId());
+    }
+
+    /** Stable graph node id of a transaction reference: Edge id, else legacy id, else txnRef. */
+    private static String transactionNodeId(TransactionReference reference) {
+        if (reference.edgeAssessmentId() != null) {
+            return "TXN_" + reference.edgeAssessmentId();
+        }
+        if (reference.legacyTransactionId() != null) {
+            return "TXN_" + reference.legacyTransactionId();
+        }
+        return "TXN_REF_" + reference.txnRef();
+    }
+
     /**
-     * Create transaction node
+     * Create transaction node: the ID reference plus the decision record's decision. Transaction
+     * details are not read from the cloud; {@code transactionDetails} stays null until the R6 live pull.
      */
-    private NetworkNode createTransactionNode(TransactionEntity transaction) {
+    private NetworkNode createTransactionNode(TransactionReference reference, Assessment record) {
+        Map<String, Object> data = new LinkedHashMap<>(reference.toMap());
+        if (record != null && record.getDecision() != null) {
+            data.put("decision", record.getDecision());
+        }
+        data.put("transactionDetails", null);
         return NetworkNode.builder()
-                .id("TXN_" + transaction.getTxnId())
+                .id(transactionNodeId(reference))
                 .type("TRANSACTION")
-                .label("TXN: " + transaction.getTxnId())
-                .data(transaction)
+                .label("TXN: " + reference.label())
+                .data(data)
                 .build();
     }
 
@@ -238,10 +269,10 @@ public class CaseNetworkService {
     /**
      * Create case-transaction edge
      */
-    private NetworkEdge createCaseTransactionEdge(ComplianceCase complianceCase, TransactionEntity transaction) {
+    private NetworkEdge createCaseTransactionEdge(ComplianceCase complianceCase, TransactionReference reference) {
         return NetworkEdge.builder()
                 .from("CASE_" + complianceCase.getId())
-                .to("TXN_" + transaction.getTxnId())
+                .to(transactionNodeId(reference))
                 .type("HAS_TRANSACTION")
                 .label("Contains Transaction")
                 .build();

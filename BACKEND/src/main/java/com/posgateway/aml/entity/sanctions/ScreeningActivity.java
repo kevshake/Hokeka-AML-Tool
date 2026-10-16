@@ -25,8 +25,21 @@ public class ScreeningActivity {
     @Column(name = "merchant_id")
     private Long merchantId;
 
+    /** Legacy cloud transactions.txn_id (no foreign key since V264). */
     @Column(name = "txn_id")
     private Long txnId;
+
+    /** Decision record of the screened transaction (V264, ID-only reference). */
+    @Column(name = "edge_assessment_id")
+    private UUID edgeAssessmentId;
+
+    /** The PSP's transaction id; never card-shaped. */
+    @Column(name = "txn_ref", length = 128)
+    private String txnRef;
+
+    /** Edge Site of the screened transaction. */
+    @Column(name = "site_id", length = 64)
+    private String siteId;
 
     @Column(name = "subject_type", nullable = false, length = 32)
     private String subjectType;
@@ -102,6 +115,47 @@ public class ScreeningActivity {
 
     public void setTxnId(Long txnId) {
         this.txnId = txnId;
+    }
+
+    /** Decision record id of the screened transaction. */
+    public UUID getEdgeAssessmentId() {
+        return edgeAssessmentId;
+    }
+
+    /** Sets the decision record id. */
+    public void setEdgeAssessmentId(UUID edgeAssessmentId) {
+        this.edgeAssessmentId = edgeAssessmentId;
+    }
+
+    /** The PSP's transaction id. */
+    public String getTxnRef() {
+        return txnRef;
+    }
+
+    /** Sets the PSP's transaction id; a card-shaped value is dropped. */
+    public void setTxnRef(String txnRef) {
+        this.txnRef = com.posgateway.aml.model.TransactionReference.safeTxnRef(txnRef);
+    }
+
+    /** Edge Site of the screened transaction. */
+    public String getSiteId() {
+        return siteId;
+    }
+
+    /** Sets the Edge Site. */
+    public void setSiteId(String siteId) {
+        this.siteId = siteId;
+    }
+
+    /** Copies an ID-only transaction reference onto the activity. */
+    public void applyTransactionReference(com.posgateway.aml.model.TransactionReference reference) {
+        if (reference == null) {
+            return;
+        }
+        this.txnId = reference.legacyTransactionId();
+        this.edgeAssessmentId = reference.edgeAssessmentId();
+        setTxnRef(reference.txnRef());
+        this.siteId = reference.siteId();
     }
 
     public String getSubjectType() {

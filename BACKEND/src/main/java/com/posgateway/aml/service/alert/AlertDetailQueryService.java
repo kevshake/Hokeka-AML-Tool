@@ -5,6 +5,7 @@ import com.posgateway.aml.dto.assessment.FindingResponseDTO;
 import com.posgateway.aml.entity.Alert;
 import com.posgateway.aml.entity.alert.AlertFindingLink;
 import com.posgateway.aml.entity.assessment.Finding;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.alert.AlertFindingLinkRepository;
 import com.posgateway.aml.repository.compliance.AlertTransactionLinkRepository;
@@ -54,18 +55,23 @@ public class AlertDetailQueryService {
         dto.setCreatedAt(alert.getCreatedAt());
         dto.setClosedAt(alert.getClosedAt());
 
-        List<Long> txnIds = new ArrayList<>();
-        if (alert.getTxnId() != null) {
-            txnIds.add(alert.getTxnId());
+        // Linked transactions by ID reference only (R8); details come from the Edge (R6)
+        List<TransactionReference> refs = new ArrayList<>();
+        TransactionReference own = alert.getTransactionReference();
+        if (!own.isEmpty()) {
+            refs.add(own);
         }
         alertTransactionLinkRepository.findByAlertIdOrderByPrimaryLinkDescIdDesc(alertId).stream()
-                .map(link -> link.getTxnId())
-                .forEach(id -> {
-                    if (!txnIds.contains(id)) {
-                        txnIds.add(id);
-                    }
-                });
-        dto.setTransactionIds(txnIds);
+                .map(link -> link.getTransactionReference())
+                .filter(ref -> !ref.isEmpty() && refs.stream().noneMatch(ref::sameTransactionAs))
+                .forEach(refs::add);
+        dto.setTransactionRefs(refs);
+        dto.setTransactionIds(refs.stream()
+                .map(TransactionReference::legacyTransactionId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList());
+        dto.setTransactionDetails(null);
 
         List<FindingResponseDTO> findings = new ArrayList<>();
         alertFindingLinkRepository.findByAlertIdOrderByLinkedAtAsc(alertId).forEach(link ->

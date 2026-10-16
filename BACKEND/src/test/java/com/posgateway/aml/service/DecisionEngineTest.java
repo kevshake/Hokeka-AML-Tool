@@ -151,6 +151,13 @@ class DecisionEngineTest {
                 payloadCaptor.capture(),
                 org.mockito.ArgumentMatchers.eq("webhook.risk_alert:72"));
         assertEquals(72L, payloadCaptor.getValue().get("alertId"));
+        // Plan conflict 10: IDs and the decision only; no score, rule text, amount or card data.
+        assertEquals("HOLD", payloadCaptor.getValue().get("decision"));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                com.posgateway.aml.service.psp.WebhookOutboxService.RISK_ALERT_KEYS.containsAll(
+                        payloadCaptor.getValue().keySet()), payloadCaptor.getValue().keySet().toString());
+        org.junit.jupiter.api.Assertions.assertFalse(payloadCaptor.getValue().containsKey("score"));
+        org.junit.jupiter.api.Assertions.assertFalse(payloadCaptor.getValue().containsKey("triggeredRules"));
     }
 
     @Test

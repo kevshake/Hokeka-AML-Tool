@@ -46,6 +46,13 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     Optional<TransactionEntity> findByPspIdAndClientReference(Long pspId, String clientReference);
 
     /**
+     * The PSP's own reference of one legacy transaction, PSP-scoped. Reads an identifier only (no
+     * transaction detail): R8 turns it into the workflow {@code txnRef}.
+     */
+    @Query("SELECT t.clientReference FROM TransactionEntity t WHERE t.pspId = :pspId AND t.txnId = :txnId")
+    Optional<String> findClientReferenceByPspIdAndTxnId(@Param("pspId") Long pspId, @Param("txnId") Long txnId);
+
+    /**
      * Find transactions by merchant ID
      */
     List<TransactionEntity> findByMerchantId(String merchantId);

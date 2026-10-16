@@ -30,7 +30,8 @@ class CaseWebhookProducerTest {
                 null,
                 webhookOutboxService,
                 mock(CaseEnrichmentService.class),
-                mock(RuleDefinitionRepository.class));
+                mock(RuleDefinitionRepository.class),
+                mock(com.posgateway.aml.service.residency.TransactionReferenceResolver.class));
 
         ComplianceCase cCase = new ComplianceCase();
         cCase.setId(99L);

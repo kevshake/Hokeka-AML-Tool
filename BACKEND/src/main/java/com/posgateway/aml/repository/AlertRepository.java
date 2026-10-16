@@ -39,8 +39,14 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     /** Alerts already escalated to a compliance case (indexed FK on alerts.compliance_case_id). */
     List<Alert> findByComplianceCaseId(Long complianceCaseId);
 
-    /** Card-scoped alert history using denormalized pan_hash on alerts. */
-    List<Alert> findByPanHashAndMerchantIdOrderByCreatedAtDesc(String panHash, Long merchantId);
+    /**
+     * A PSP's alerts on one transaction, by decision record id (V264 reference). Replaces the retired
+     * card-scoped pan_hash lookup: card identity no longer leaves the Edge.
+     */
+    List<Alert> findByPspIdAndEdgeAssessmentIdOrderByCreatedAtDesc(Long pspId, java.util.UUID edgeAssessmentId);
+
+    /** A PSP's alerts on one transaction, by the PSP's transaction id (V264 reference). */
+    List<Alert> findByPspIdAndTxnRefOrderByCreatedAtDesc(Long pspId, String txnRef);
 
     /** Customer-scoped alert list for multi-asset customer compliance graphs. */
     List<Alert> findByMultiAssetCustomerIdOrderByCreatedAtDesc(Long multiAssetCustomerId);
@@ -152,12 +158,12 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
     long countReviewedAlerts();
 
     /**
-     * Count CRITICAL alerts created in a date window, optionally scoped to a PSP via txn join.
+     * Count CRITICAL alerts created in a date window, optionally scoped to a PSP by the alert's own
+     * psp_id (V264 back-filled it for legacy rows; alerts no longer join transactions).
      * Used by the /transactions/stats endpoint for fraudAlertCount.
      */
     @Query(value = "SELECT COUNT(DISTINCT a.alert_id) FROM alerts a " +
-            "LEFT JOIN transactions t ON a.txn_id = t.txn_id " +
-            "WHERE (:pspId IS NULL OR a.psp_id = :pspId OR t.psp_id = :pspId) " +
+            "WHERE (:pspId IS NULL OR a.psp_id = :pspId) " +
                    "AND a.severity = 'CRITICAL' " +
                    "AND a.created_at >= :start AND a.created_at < :end",
            nativeQuery = true)

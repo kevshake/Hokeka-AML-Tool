@@ -97,6 +97,13 @@ public class SarWorkflowService {
         sar.setDeadlineCalculatedAt(now);
         sar.setDeadlineWarningAt(deadline.deadline().minusHours(deadline.warningHours()));
 
+        // The draft references the case's transactions by ID only (plan conflict 7); their details
+        // are rendered from the Edge when viewed and stored only in the filed document (R9).
+        if (sar.getComplianceCase() != null && sar.getTransactionRefs().isEmpty()) {
+            sar.setTransactionReferences(
+                    complianceEntityLinkService.caseTransactionReferences(sar.getComplianceCase(), pspId));
+        }
+
         logger.info("Created new SAR draft: {}", sar.getSarReference());
         SuspiciousActivityReport saved = sarRepository.save(sar);
         complianceCalendarService.upsertSourceDeadline(

@@ -1,7 +1,11 @@
 package com.posgateway.aml.service.assessment;
 
+import com.posgateway.aml.entity.assessment.Assessment;
 import com.posgateway.aml.entity.assessment.Finding;
+import com.posgateway.aml.model.TransactionReference;
+import com.posgateway.aml.repository.assessment.AssessmentRepository;
 import com.posgateway.aml.repository.assessment.FindingRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,13 +14,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Non-blocking Finding persistence (batched async JDBC). Failures are logged only.
+ * Non-blocking Finding persistence (batched async JDBC). Failures are logged only. Each finding is
+ * stamped with its transaction's ID reference (V264, R8) from its assessment before it is stored.
  */
 @Service
 public class FindingRecorder {
@@ -24,6 +33,8 @@ public class FindingRecorder {
     private static final Logger logger = LoggerFactory.getLogger(FindingRecorder.class);
 
     private final FindingRepository findingRepository;
+    private final AssessmentRepository assessmentRepository;
+    private final TransactionReferenceResolver transactionReferences;
     private final ConcurrentLinkedQueue<FindingDraft> pending = new ConcurrentLinkedQueue<>();
     private final AtomicInteger pendingCount = new AtomicInteger();
 
@@ -33,8 +44,12 @@ public class FindingRecorder {
     @Value("${hokeka.assessment.finding.batch-size:32}")
     private int batchSize;
 
-    public FindingRecorder(FindingRepository findingRepository) {
+    public FindingRecorder(FindingRepository findingRepository,
+                           AssessmentRepository assessmentRepository,
+                           TransactionReferenceResolver transactionReferences) {
         this.findingRepository = findingRepository;
+        this.assessmentRepository = assessmentRepository;
+        this.transactionReferences = transactionReferences;
     }
 
     /**
@@ -97,9 +112,38 @@ public class FindingRecorder {
 
     private void persistBatch(List<Finding> batch) {
         try {
+            stampTransactionReferences(batch);
             findingRepository.saveAll(batch);
         } catch (Exception e) {
             logger.warn("Failed to persist {} findings (assessment ledger): {}", batch.size(), e.getMessage());
+        }
+    }
+
+    /**
+     * Stamps the ID reference of each finding's transaction, resolved once per assessment in the
+     * batch (an Edge decision record's own reference, or the legacy transaction's reference).
+     */
+    private void stampTransactionReferences(List<Finding> batch) {
+        Set<java.util.UUID> assessmentIds = new LinkedHashSet<>();
+        for (Finding finding : batch) {
+            if (finding.getEdgeAssessmentId() == null && finding.getAssessmentId() != null) {
+                assessmentIds.add(finding.getAssessmentId());
+            }
+        }
+        if (assessmentIds.isEmpty()) {
+            return;
+        }
+        Map<java.util.UUID, TransactionReference> byAssessment = new HashMap<>();
+        for (Assessment assessment : assessmentRepository.findAllById(assessmentIds)) {
+            TransactionReference reference = transactionReferences.forAssessment(assessment);
+            if (reference != null) {
+                byAssessment.put(assessment.getId(), reference);
+            }
+        }
+        for (Finding finding : batch) {
+            if (finding.getEdgeAssessmentId() == null) {
+                finding.applyTransactionReference(byAssessment.get(finding.getAssessmentId()));
+            }
         }
     }
 

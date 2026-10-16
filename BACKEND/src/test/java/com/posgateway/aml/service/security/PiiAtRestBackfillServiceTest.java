@@ -94,10 +94,11 @@ class PiiAtRestBackfillServiceTest {
         jdbc.update("INSERT INTO transactions VALUES (2, ?)", realHash);
         jdbc.update("INSERT INTO transactions VALUES (3, 'UNKNOWN')");
         jdbc.update("INSERT INTO transactions VALUES (4, '5500 0000 0000 0004')");
-        jdbc.update("INSERT INTO alerts VALUES (7, '4111111111111111')");
+        // alerts.pan_hash is retired (V264): the scrub no longer touches alerts at all.
+        jdbc.update("INSERT INTO alerts VALUES (7, NULL)");
 
         PiiAtRestBackfillService service = new PiiAtRestBackfillService(jdbc, hasher, true);
-        assertThat(service.scrubRawPanHashes()).isEqualTo(3);
+        assertThat(service.scrubRawPanHashes()).isEqualTo(2);
 
         assertThat(jdbc.queryForObject("SELECT pan_hash FROM transactions WHERE txn_id = 1", String.class))
                 .isEqualTo(realHash);
@@ -106,9 +107,9 @@ class PiiAtRestBackfillServiceTest {
         assertThat(jdbc.queryForObject("SELECT pan_hash FROM transactions WHERE txn_id = 3", String.class))
                 .isEqualTo("UNKNOWN");
         assertThat(jdbc.queryForObject("SELECT pan_hash FROM alerts WHERE alert_id = 7", String.class))
-                .isEqualTo(realHash);
+                .isNull();
         assertThat(jdbc.queryForObject("SELECT rows_changed FROM pii_backfill_runs WHERE job_name = ?",
-                Long.class, PiiAtRestBackfillService.RAW_PAN_SCRUB_JOB)).isEqualTo(3L);
+                Long.class, PiiAtRestBackfillService.RAW_PAN_SCRUB_JOB)).isEqualTo(2L);
 
         // Recorded as complete: does not run again.
         assertThat(service.scrubRawPanHashes()).isEqualTo(-1);

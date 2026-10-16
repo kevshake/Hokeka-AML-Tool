@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.dto.compliance.CreateSarRequest;
 import com.posgateway.aml.dto.compliance.SarResponse;
 import com.posgateway.aml.dto.compliance.UpdateSarRequest;
-import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.assessment.Assessment;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.model.SarStatus;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.mapper.SarMapper;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import com.posgateway.aml.service.security.PspIsolationService;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -48,15 +51,18 @@ public class ComplianceReportingService {
     private final ObjectMapper objectMapper;
     private final SarMapper sarMapper;
     private final PspIsolationService pspIsolationService;
+    private final TransactionReferenceResolver transactionReferences;
 
     public ComplianceReportingService(SuspiciousActivityReportRepository sarRepository,
             ObjectMapper objectMapper,
             SarMapper sarMapper,
-            PspIsolationService pspIsolationService) {
+            PspIsolationService pspIsolationService,
+            TransactionReferenceResolver transactionReferences) {
         this.sarRepository = sarRepository;
         this.objectMapper = objectMapper;
         this.sarMapper = sarMapper;
         this.pspIsolationService = pspIsolationService;
+        this.transactionReferences = transactionReferences;
     }
 
     /** Returns a paginated SAR list scoped to the caller's PSP (platform admins see all rows). */
@@ -187,6 +193,13 @@ public class ComplianceReportingService {
      * for submission to the FRC (Kenya) or equivalent regulator, using all
      * fields stored on the SAR and its linked compliance case.
      *
+     * <p>Data residency (plan conflict 7): the cloud holds the SAR's transactions by reference only.
+     * Each {@code <transaction>} block therefore carries the transaction reference ({@code tran_id} =
+     * txnRef, else the decision record id) and the decision record's evaluation date; it carries no
+     * amount, because the amount is transaction data on the PSP's Edge. Pulling the transaction
+     * detail at filing time and storing it in the filed document is work package R9, which this
+     * method does not do.
+     *
      * @param id the SAR database ID; throws {@link IllegalArgumentException} if not found.
      * @return well-formed XML string ready for regulatory submission.
      */
@@ -231,27 +244,27 @@ public class ComplianceReportingService {
         Long merchantId = linkedCase != null ? linkedCase.getMerchantId() : null;
         Long pspId = sar.getPspId();
 
-        // Suspicious transactions
-        List<TransactionEntity> txns = sar.getSuspiciousTransactions();
+        // Suspicious transactions: ID references, plus their decision records (class D) for dates
+        List<TransactionReference> txns = sar.getTransactionReferences();
+        Map<UUID, Assessment> records = transactionReferences.decisionRecords(pspId, txns);
         BigDecimal totalAmount = sar.getTotalSuspiciousAmount() != null
                 ? sar.getTotalSuspiciousAmount()
                 : BigDecimal.ZERO;
-        int txnCount = txns != null ? txns.size() : 0;
+        int txnCount = txns.size();
 
-        // Determine activity period
+        // Determine activity period from the decision records' evaluation times
         String activityStart = today;
         String activityEnd   = today;
-        if (txns != null && !txns.isEmpty()) {
-            java.time.LocalDateTime min = null, max = null;
-            for (TransactionEntity t : txns) {
-                if (t.getTxnTs() != null) {
-                    if (min == null || t.getTxnTs().isBefore(min)) min = t.getTxnTs();
-                    if (max == null || t.getTxnTs().isAfter(max))  max = t.getTxnTs();
-                }
+        LocalDateTime min = null, max = null;
+        for (TransactionReference t : txns) {
+            LocalDateTime at = evaluatedAt(t, records);
+            if (at != null) {
+                if (min == null || at.isBefore(min)) min = at;
+                if (max == null || at.isAfter(max))  max = at;
             }
-            if (min != null) activityStart = min.toLocalDate().format(DATE_FMT);
-            if (max != null) activityEnd   = max.toLocalDate().format(DATE_FMT);
         }
+        if (min != null) activityStart = min.toLocalDate().format(DATE_FMT);
+        if (max != null) activityEnd   = max.toLocalDate().format(DATE_FMT);
 
         StringBuilder xml = new StringBuilder(2048);
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -315,19 +328,16 @@ public class ComplianceReportingService {
         xml.append("  </reason>\n");
 
         // Transaction blocks
-        if (txns != null && !txns.isEmpty()) {
-            for (TransactionEntity tx : txns) {
-                String txDate = tx.getTxnTs() != null
-                        ? tx.getTxnTs().toLocalDate().format(DATE_FMT)
-                        : today;
-                String txAmount = tx.getAmountCents() != null
-                        ? BigDecimal.valueOf(tx.getAmountCents()).divide(BigDecimal.valueOf(100)).toPlainString()
-                        : "0.00";
+        if (!txns.isEmpty()) {
+            for (TransactionReference tx : txns) {
+                LocalDateTime at = evaluatedAt(tx, records);
+                String txDate = at != null ? at.toLocalDate().format(DATE_FMT) : today;
                 xml.append("  <transaction>\n");
                 appendXml(xml, 2, "<tran_date>", txDate, "</tran_date>");
-                appendXml(xml, 2, "<tran_id>", esc(tx.getTxnId() != null ? String.valueOf(tx.getTxnId()) : ""), "</tran_id>");
-                appendXml(xml, 2, "<tran_amount_local>", txAmount, "</tran_amount_local>");
-                appendXml(xml, 2, "<tran_amount_original>", txAmount, "</tran_amount_original>");
+                appendXml(xml, 2, "<tran_id>", esc(tx.label()), "</tran_id>");
+                if (tx.edgeAssessmentId() != null) {
+                    appendXml(xml, 2, "<tran_reference>", esc(tx.edgeAssessmentId().toString()), "</tran_reference>");
+                }
                 appendXml(xml, 2, "<mode_of_payment>E</mode_of_payment>");
                 appendXml(xml, 2, "<from_funds_code>Z</from_funds_code>");
                 appendXml(xml, 2, "<to_funds_code>Z</to_funds_code>");
@@ -375,6 +385,14 @@ public class ComplianceReportingService {
     // -------------------------------------------------------------------------
     // Private XML helpers
     // -------------------------------------------------------------------------
+
+    /** The decision record's evaluation time (class D, server zone) of a reference, or null when unknown. */
+    private static LocalDateTime evaluatedAt(TransactionReference reference, Map<UUID, Assessment> records) {
+        Assessment record = reference.edgeAssessmentId() == null ? null : records.get(reference.edgeAssessmentId());
+        return record == null || record.getEvaluatedAt() == null
+                ? null
+                : LocalDateTime.ofInstant(record.getEvaluatedAt(), ZoneId.systemDefault());
+    }
 
     private static void appendXml(StringBuilder sb, int indent, String... parts) {
         sb.append("  ".repeat(indent));

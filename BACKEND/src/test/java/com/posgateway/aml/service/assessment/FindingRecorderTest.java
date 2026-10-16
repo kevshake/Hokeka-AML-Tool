@@ -2,7 +2,11 @@ package com.posgateway.aml.service.assessment;
 
 import com.posgateway.aml.entity.assessment.Finding;
 import com.posgateway.aml.entity.assessment.FindingSourceType;
+import com.posgateway.aml.entity.assessment.Assessment;
+import com.posgateway.aml.model.TransactionReference;
+import com.posgateway.aml.repository.assessment.AssessmentRepository;
 import com.posgateway.aml.repository.assessment.FindingRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +31,12 @@ class FindingRecorderTest {
     @Mock
     private FindingRepository findingRepository;
 
+    @Mock
+    private AssessmentRepository assessmentRepository;
+
+    @Mock
+    private TransactionReferenceResolver transactionReferences;
+
     @InjectMocks
     private FindingRecorder findingRecorder;
 
@@ -44,6 +54,12 @@ class FindingRecorderTest {
         AssessmentRecordingScope.set(new AssessmentRecordingScope.Scope(assessmentId, 2L, 99L, 4L));
 
         when(findingRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        Assessment assessment = new Assessment();
+        assessment.setId(assessmentId);
+        when(assessmentRepository.findAllById(java.util.Set.of(assessmentId))).thenReturn(List.of(assessment));
+        UUID edgeId = UUID.randomUUID();
+        when(transactionReferences.forAssessment(assessment))
+                .thenReturn(new TransactionReference(99L, edgeId, "ORD-99", null));
 
         findingRecorder.record(FindingDraft.create()
                 .sourceType(FindingSourceType.LIMIT)
@@ -59,5 +75,8 @@ class FindingRecorderTest {
         assertEquals(99L, saved.getTxnId());
         assertEquals(FindingSourceType.LIMIT, saved.getSourceType());
         assertTrue(saved.isShadow());
+        // R8: the finding carries its transaction's ID reference.
+        assertEquals(edgeId, saved.getEdgeAssessmentId());
+        assertEquals("ORD-99", saved.getTxnRef());
     }
 }

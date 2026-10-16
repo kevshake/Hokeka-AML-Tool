@@ -17,10 +17,13 @@ import com.posgateway.aml.repository.alert.AlertFindingLinkRepository;
 import com.posgateway.aml.repository.assessment.FindingRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.service.ConfigService;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.service.case_management.CaseCreationService;
+import com.posgateway.aml.service.compliance.ComplianceEntityLinkService;
 import com.posgateway.aml.service.compliance.CtrFilingBridgeService;
 import com.posgateway.aml.service.kafka.KafkaOutboxService;
 import com.posgateway.aml.service.psp.WebhookOutboxService;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -74,6 +77,7 @@ public class DecisionRecordWorkflowService {
     private final PspRepository psps;
     private final MerchantRepository merchants;
     private final ObjectMapper objectMapper;
+    private final ComplianceEntityLinkService entityLinks;
 
     public DecisionRecordWorkflowService(AlertRepository alerts,
                                          AlertFindingLinkRepository alertFindingLinks,
@@ -86,7 +90,8 @@ public class DecisionRecordWorkflowService {
                                          ComplianceDeadlineRepository deadlines,
                                          PspRepository psps,
                                          MerchantRepository merchants,
-                                         ObjectMapper objectMapper) {
+                                         ObjectMapper objectMapper,
+                                         ComplianceEntityLinkService entityLinks) {
         this.alerts = alerts;
         this.alertFindingLinks = alertFindingLinks;
         this.findings = findings;
@@ -99,6 +104,7 @@ public class DecisionRecordWorkflowService {
         this.psps = psps;
         this.merchants = merchants;
         this.objectMapper = objectMapper;
+        this.entityLinks = entityLinks;
     }
 
     /** What {@link #raise} produced, for the ingest log and tests. */
@@ -122,6 +128,8 @@ public class DecisionRecordWorkflowService {
         }
         Map<Long, RuleDefinition> ruleIndex = ruleIndex(record);
         Alert alert = alerts.save(buildAlert(record, ruleIndex));
+        // The alert's primary transaction link, by reference only (V264).
+        entityLinks.linkAlertToTransaction(alert.getAlertId(), TransactionReferenceResolver.forDecisionRecord(record), true);
         linkFindings(alert, record);
 
         List<Long> caseIds = raiseCases(record, alert, ruleIndex);
@@ -145,6 +153,7 @@ public class DecisionRecordWorkflowService {
     private Alert buildAlert(Assessment record, Map<Long, RuleDefinition> ruleIndex) {
         Alert alert = new Alert();
         alert.setTxnId(null);
+        alert.applyTransactionReference(TransactionReferenceResolver.forDecisionRecord(record));
         alert.setPspId(record.getPspId());
         alert.setMerchantId(ownMerchantId(record));
         alert.setScore(record.getScore() == null ? null : record.getScore().doubleValue());
@@ -180,13 +189,14 @@ public class DecisionRecordWorkflowService {
         List<Long> caseIds = new ArrayList<>();
         Long merchantId = alert.getMerchantId();
         String reference = record.getEdgeAssessmentId().toString();
+        TransactionReference txn = TransactionReferenceResolver.forDecisionRecord(record);
         double score = record.getScore() == null ? 0.0 : record.getScore().doubleValue();
         if (Boolean.TRUE.equals(record.getSanctionsHit())) {
             String entries = record.getWatchlistEntryIds() == null ? "" : String.join(", ", record.getWatchlistEntryIds());
             ComplianceCase sanctions = caseCreation.triggerCaseFromEdgeDecision(merchantId, record.getPspId(),
                     "SANCTIONS_HIT", "Edge sanctions screening", null, null, 1.0,
                     "Sanctions/PEP match on Edge decision " + reference + " (watchlist entries: " + entries + ")",
-                    reference, record.getTxnRef(), alert.getAlertId());
+                    txn, alert.getAlertId());
             addCaseId(caseIds, sanctions);
         }
         boolean ruleDecision = record.getFailClosedCode() == null
@@ -198,7 +208,7 @@ public class DecisionRecordWorkflowService {
             if (triggered.isEmpty()) {
                 addCaseId(caseIds, caseCreation.triggerCaseFromEdgeDecision(merchantId, record.getPspId(),
                         "RULE_VIOLATION", "EDGE_DECISION", null, null, score, description,
-                        reference, record.getTxnRef(), alert.getAlertId()));
+                        txn, alert.getAlertId()));
             }
             for (Long ruleId : triggered) {
                 RuleDefinition rule = ruleIndex.get(ruleId);
@@ -206,7 +216,7 @@ public class DecisionRecordWorkflowService {
                         ? String.valueOf(rule.getCurrentVersionId()) : "unversioned";
                 addCaseId(caseIds, caseCreation.triggerCaseFromEdgeDecision(merchantId, record.getPspId(),
                         "RULE_VIOLATION", ruleLabel(ruleId, ruleIndex), String.valueOf(ruleId), ruleVersion,
-                        score, description, reference, record.getTxnRef(), alert.getAlertId()));
+                        score, description, txn, alert.getAlertId()));
             }
         }
         return caseIds;

@@ -159,7 +159,9 @@ public class RealTimeTransactionScreeningService {
 
         if (screeningActivityRecorder != null) {
             String subjectName = matches.isEmpty() ? null : matches.get(0).getScreenedName();
-            screeningActivityRecorder.recordTransactionScreening(transaction, result, "TRANSACTION", subjectName);
+            String subjectEntityType = matches.isEmpty() ? null : matches.get(0).getEntityType();
+            screeningActivityRecorder.recordTransactionScreening(transaction, result, "TRANSACTION", subjectName,
+                    subjectEntityType);
         }
 
         return result;

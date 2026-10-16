@@ -3,7 +3,7 @@ package com.posgateway.aml.service.compliance;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
-import com.posgateway.aml.entity.TransactionEntity;
+import com.posgateway.aml.entity.assessment.Assessment;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.reporting.SarTemplate;
 import com.posgateway.aml.exception.SarTemplateNotConfiguredException;
@@ -11,13 +11,17 @@ import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.MerchantRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.reporting.SarTemplateRepository;
+import com.posgateway.aml.model.TransactionReference;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +31,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * SAR Content Generation Service
- * Automatically generates SAR narratives and populates data from cases
+ * SAR Content Generation Service: generates SAR draft narratives and populates drafts from cases.
+ *
+ * <p>Data residency (plan conflict 7, contract 2.3): a draft persists transaction <b>references</b>
+ * only (decision record id / txnRef / site). Amounts, dates of the transactions themselves and other
+ * transaction data are not in the cloud: the draft's transaction table is rendered from the Edge when
+ * viewed, and stored only inside the filed document (work package R9). What this service may use
+ * besides workflow data are the decision records' class-D fields (evaluation time to the second,
+ * typology codes).
  */
 @Service
 public class SarContentGenerationService {
@@ -38,25 +48,26 @@ public class SarContentGenerationService {
     /** Mustache-style {{key}} matcher used to render template bodies. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_]+)\\s*}}");
 
-    /** Default jurisdiction / currency fallback when neither merchant nor any
-     * transaction yields a value. Kenya context for this platform. */
+    /** Default jurisdiction fallback when the merchant has no country. Kenya context for this platform. */
     private static final String DEFAULT_COUNTRY = "KE";
-    private static final String DEFAULT_CURRENCY = "KES";
 
     private final CaseTransactionRepository caseTransactionRepository;
     private final SuspiciousActivityReportRepository sarRepository;
     private final SarTemplateRepository sarTemplateRepository;
     private final MerchantRepository merchantRepository;
+    private final TransactionReferenceResolver transactionReferences;
 
     @Autowired
     public SarContentGenerationService(CaseTransactionRepository caseTransactionRepository,
                                       SuspiciousActivityReportRepository sarRepository,
                                       SarTemplateRepository sarTemplateRepository,
-                                      MerchantRepository merchantRepository) {
+                                      MerchantRepository merchantRepository,
+                                      TransactionReferenceResolver transactionReferences) {
         this.caseTransactionRepository = caseTransactionRepository;
         this.sarRepository = sarRepository;
         this.sarTemplateRepository = sarTemplateRepository;
         this.merchantRepository = merchantRepository;
+        this.transactionReferences = transactionReferences;
     }
 
     /**
@@ -75,38 +86,14 @@ public class SarContentGenerationService {
             narrative.append(complianceCase.getDescription()).append("\n\n");
         }
 
-        // Transaction summary
+        // Transaction references only: the transaction table is rendered from the Edge (R9)
         List<CaseTransaction> transactions = caseTransactionRepository.findByComplianceCase(complianceCase);
         if (!transactions.isEmpty()) {
             narrative.append("TRANSACTION SUMMARY:\n");
-            BigDecimal totalAmount = BigDecimal.ZERO;
-            int transactionCount = transactions.size();
-
-            for (CaseTransaction ct : transactions) {
-                TransactionEntity tx = ct.getTransaction();
-                if (tx.getAmountCents() != null) {
-                    totalAmount = totalAmount.add(
-                            BigDecimal.valueOf(tx.getAmountCents()).divide(new BigDecimal("100"))
-                    );
-                }
-            }
-
-            narrative.append("Total Number of Transactions: ").append(transactionCount).append("\n");
-            narrative.append("Total Amount: ").append(totalAmount).append("\n\n");
-
-            // Transaction details
-            narrative.append("TRANSACTION DETAILS:\n");
-            transactions.forEach(ct -> {
-                TransactionEntity tx = ct.getTransaction();
-                BigDecimal amount = tx.getAmountCents() != null ?
-                        BigDecimal.valueOf(tx.getAmountCents()).divide(new BigDecimal("100")) :
-                        BigDecimal.ZERO;
-                narrative.append("- Transaction ID: ").append(tx.getTxnId())
-                        .append(", Amount: ").append(amount)
-                        .append(", Date: ").append(tx.getTxnTs() != null ?
-                                tx.getTxnTs().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "N/A")
-                        .append("\n");
-            });
+            narrative.append("Total Number of Transactions: ").append(transactions.size()).append("\n\n");
+            narrative.append("TRANSACTION REFERENCES:\n");
+            transactions.forEach(ct -> narrative.append("- Transaction ")
+                    .append(ct.getTransactionReference().label()).append("\n"));
             narrative.append("\n");
         }
 
@@ -141,26 +128,14 @@ public class SarContentGenerationService {
         // Set narrative
         sar.setNarrative(generateNarrative(complianceCase));
 
-        // Calculate total suspicious amount
-        List<CaseTransaction> transactions = caseTransactionRepository.findByComplianceCase(complianceCase);
-        BigDecimal totalAmount = transactions.stream()
-                .map(ct -> {
-                    TransactionEntity tx = ct.getTransaction();
-                    return tx.getAmountCents() != null ?
-                            BigDecimal.valueOf(tx.getAmountCents()).divide(new BigDecimal("100")) :
-                            BigDecimal.ZERO;
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        sar.setTotalSuspiciousAmount(totalAmount);
-
         // Link case
         sar.setComplianceCase(complianceCase);
 
-        // Link transactions
-        List<TransactionEntity> suspiciousTransactions = transactions.stream()
-                .map(CaseTransaction::getTransaction)
-                .collect(Collectors.toList());
-        sar.setSuspiciousTransactions(suspiciousTransactions);
+        // Link transactions by ID reference only; the total amount is the analyst's / filing's (R9)
+        List<CaseTransaction> transactions = caseTransactionRepository.findByComplianceCase(complianceCase);
+        sar.setTransactionReferences(transactions.stream()
+                .map(CaseTransaction::getTransactionReference)
+                .collect(Collectors.toList()));
 
         // Determine suspicious activity type
         sar.setSuspiciousActivityType(determineActivityType(complianceCase, transactions));
@@ -169,35 +144,34 @@ public class SarContentGenerationService {
     }
 
     /**
-     * Determine suspicious activity type based on patterns
+     * Determines the suspicious activity type from the decision records' typology codes (class D):
+     * the most frequent code wins; with none, a burst of more than ten transactions is
+     * RAPID_MOVEMENT, otherwise SUSPICIOUS_PATTERN. Amount-based typing (structuring, high value) is
+     * done on the Edge and arrives as a typology code.
      */
     private String determineActivityType(ComplianceCase complianceCase, List<CaseTransaction> transactions) {
         if (transactions.isEmpty()) {
             return "OTHER";
         }
-
-        // Check for structuring (multiple transactions just below threshold)
-        long count = transactions.size();
-        BigDecimal totalAmount = transactions.stream()
-                .map(ct -> BigDecimal.valueOf(ct.getTransaction().getAmountCents()).divide(BigDecimal.valueOf(100)))
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        if (count > 5 && totalAmount.compareTo(new BigDecimal("10000")) > 0) {
-            return "STRUCTURING";
+        Map<String, Long> typologies = decisionRecords(complianceCase.getPspId(),
+                transactions.stream().map(CaseTransaction::getTransactionReference).toList())
+                .values().stream()
+                .filter(record -> record.getTypologyCodes() != null)
+                .flatMap(record -> record.getTypologyCodes().stream())
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.groupingBy(code -> code, Collectors.counting()));
+        Optional<String> dominant = typologies.entrySet().stream()
+                .max(Map.Entry.<String, Long>comparingByValue().thenComparing(Map.Entry.comparingByKey()))
+                .map(Map.Entry::getKey);
+        if (dominant.isPresent()) {
+            return dominant.get();
         }
+        return transactions.size() > 10 ? "RAPID_MOVEMENT" : "SUSPICIOUS_PATTERN";
+    }
 
-        // Check for rapid movement
-        if (count > 10) {
-            return "RAPID_MOVEMENT";
-        }
-
-        // Check for high value
-        if (totalAmount.compareTo(new BigDecimal("50000")) > 0) {
-            return "HIGH_VALUE_TRANSACTION";
-        }
-
-        return "SUSPICIOUS_PATTERN";
+    /** The PSP's decision records named by {@code references} (PSP-scoped). */
+    private Map<java.util.UUID, Assessment> decisionRecords(Long pspId, Collection<TransactionReference> references) {
+        return transactionReferences.decisionRecords(pspId, references);
     }
 
     /**
@@ -279,24 +253,27 @@ public class SarContentGenerationService {
                 sar != null && sar.getSuspiciousActivityType() != null ? sar.getSuspiciousActivityType() : "");
         v.put("total_suspicious_amount",
                 sar != null && sar.getTotalSuspiciousAmount() != null ? sar.getTotalSuspiciousAmount().toPlainString() : "0");
-        v.put("currency", resolveCurrency(sar));
+        // No "currency" value: the transactions' currency is transaction data, rendered at filing from
+        // the Edge (R9); an unfilled placeholder renders as [NOT PROVIDED].
+        List<TransactionReference> txns = sar != null ? sar.getTransactionReferences() : List.of();
+        v.put("transaction_count", String.valueOf(txns.size()));
+        v.put("transaction_references", txns.stream().map(TransactionReference::label)
+                .collect(Collectors.joining(", ")));
 
-        List<TransactionEntity> txns = sar != null ? sar.getSuspiciousTransactions() : null;
-        v.put("transaction_count", txns == null ? "0" : String.valueOf(txns.size()));
-
+        // Activity period from the decision records' evaluation times (class D, second precision)
         String activityStart = "";
         String activityEnd   = "";
-        if (txns != null && !txns.isEmpty()) {
-            java.time.LocalDateTime min = null, max = null;
-            for (TransactionEntity t : txns) {
-                if (t.getTxnTs() != null) {
-                    if (min == null || t.getTxnTs().isBefore(min)) min = t.getTxnTs();
-                    if (max == null || t.getTxnTs().isAfter(max))  max = t.getTxnTs();
-                }
+        Long pspId = sar != null ? sar.getPspId() : null;
+        LocalDateTime min = null, max = null;
+        for (Assessment record : decisionRecords(pspId, txns).values()) {
+            if (record.getEvaluatedAt() != null) {
+                LocalDateTime at = LocalDateTime.ofInstant(record.getEvaluatedAt(), ZoneId.systemDefault());
+                if (min == null || at.isBefore(min)) min = at;
+                if (max == null || at.isAfter(max))  max = at;
             }
-            if (min != null) activityStart = min.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            if (max != null) activityEnd   = max.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         }
+        if (min != null) activityStart = min.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        if (max != null) activityEnd   = max.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         v.put("activity_start_date", activityStart);
         v.put("transaction_date",    activityEnd);
 
@@ -340,14 +317,9 @@ public class SarContentGenerationService {
     }
 
     /**
-     * Resolve the customer / merchant country for the SAR.
-     *
-     * <p>Preference order:
-     * <ol>
-     *   <li>Merchant's persisted {@code country} when the case has a merchantId</li>
-     *   <li>{@code merchantCountry} of the first linked transaction</li>
-     *   <li>{@link #DEFAULT_COUNTRY} (Kenya context)</li>
-     * </ol>
+     * Resolve the customer / merchant country for the SAR: the merchant's persisted {@code country}
+     * when the case has a merchantId (cloud master data), else {@link #DEFAULT_COUNTRY}. The
+     * transaction's country is transaction data and is not read in the cloud.
      */
     private String resolveCustomerCountry(SuspiciousActivityReport sar, ComplianceCase c) {
         if (c != null && c.getMerchantId() != null) {
@@ -358,44 +330,10 @@ public class SarContentGenerationService {
                 return merchantCountry.get();
             }
         }
-        if (sar != null && sar.getSuspiciousTransactions() != null) {
-            for (TransactionEntity t : sar.getSuspiciousTransactions()) {
-                if (t.getMerchantCountry() != null && !t.getMerchantCountry().isBlank()) {
-                    return t.getMerchantCountry();
-                }
-            }
-        }
         return DEFAULT_COUNTRY;
     }
 
-    /**
-     * Resolve the SAR's reporting currency.
-     *
-     * <p>Preference order:
-     * <ol>
-     *   <li>Most common non-blank {@code currency} across the SAR's linked
-     *       transactions</li>
-     *   <li>{@link #DEFAULT_CURRENCY} (Kenya context: KES)</li>
-     * </ol>
-     *
-     * <p>The {@link SuspiciousActivityReport} entity does not carry a dedicated
-     * currency field, so we derive it from the suspicious transactions when
-     * available.
-     */
-    private String resolveCurrency(SuspiciousActivityReport sar) {
-        if (sar != null && sar.getSuspiciousTransactions() != null && !sar.getSuspiciousTransactions().isEmpty()) {
-            Map<String, Long> tally = sar.getSuspiciousTransactions().stream()
-                    .map(TransactionEntity::getCurrency)
-                    .filter(cur -> cur != null && !cur.isBlank())
-                    .collect(Collectors.groupingBy(cur -> cur, Collectors.counting()));
-            return tally.entrySet().stream()
-                    .max(Map.Entry.comparingByValue())
-                    .map(Map.Entry::getKey)
-                    .orElse(DEFAULT_CURRENCY);
-        }
-        return DEFAULT_CURRENCY;
-    }
-
+    /** Substitutes {{key}} placeholders; unknown keys render as [NOT PROVIDED]. */
     private static String substitute(String template, Map<String, String> values) {
         if (template == null) return "";
         Matcher m = PLACEHOLDER.matcher(template);

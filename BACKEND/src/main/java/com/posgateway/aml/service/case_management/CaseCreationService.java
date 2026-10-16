@@ -7,8 +7,10 @@ import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.model.CasePriority;
 import com.posgateway.aml.model.CaseStatus;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,7 @@ public class CaseCreationService {
     private final com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService;
     private final CaseEnrichmentService enrichmentService;
     private final RuleDefinitionRepository ruleDefinitionRepository;
+    private final TransactionReferenceResolver transactionReferences;
 
     @Autowired(required = false)
     private com.posgateway.aml.service.ai.decision.AiEngineAdvisor aiEngineAdvisor;
@@ -49,13 +52,15 @@ public class CaseCreationService {
                                @Nullable com.posgateway.aml.service.kafka.CaseEventProducer caseEventProducer,
                                @Nullable com.posgateway.aml.service.psp.WebhookOutboxService webhookOutboxService,
                                CaseEnrichmentService enrichmentService,
-                               RuleDefinitionRepository ruleDefinitionRepository) {
+                               RuleDefinitionRepository ruleDefinitionRepository,
+                               TransactionReferenceResolver transactionReferences) {
         this.complianceCaseRepository = complianceCaseRepository;
         this.objectMapper = objectMapper;
         this.caseEventProducer = caseEventProducer;
         this.webhookOutboxService = webhookOutboxService;
         this.enrichmentService = enrichmentService;
         this.ruleDefinitionRepository = ruleDefinitionRepository;
+        this.transactionReferences = transactionReferences;
     }
 
     /**
@@ -216,44 +221,59 @@ public class CaseCreationService {
     public ComplianceCase triggerCaseFromEdgeDecision(Long merchantId, Long pspId, String alertType,
                                                       String ruleName, String ruleId, String ruleVersion,
                                                       Double score, String description,
-                                                      String edgeAssessmentId, String txnRef,
+                                                      TransactionReference transaction,
                                                       Long sourceAlertId) {
         if (pspId == null) {
             throw new IllegalArgumentException("pspId is required for an edge decision case");
         }
-        Map<String, Object> raw = new java.util.LinkedHashMap<>();
-        raw.put("source", "EDGE_DECISION");
-        raw.put("edgeAssessmentId", edgeAssessmentId);
-        if (txnRef != null) {
-            raw.put("txnRef", txnRef);
-        }
-        raw.put("alertId", sourceAlertId);
-        String rawData;
-        try {
-            rawData = objectMapper.writeValueAsString(raw);
-        } catch (Exception e) {
-            throw new IllegalStateException("cannot serialise edge decision case reference", e);
+        if (transaction == null || transaction.edgeAssessmentId() == null) {
+            throw new IllegalArgumentException("an edge decision case needs the decision record id");
         }
         return createOrUpdateCase(merchantId, pspId, alertType, ruleName, ruleId, null, ruleVersion, score,
-                description, null, rawData, sourceAlertId, merchantId != null);
+                description, transaction, referenceRawData("EDGE_DECISION", transaction, sourceAlertId),
+                sourceAlertId, merchantId != null);
     }
 
+    /**
+     * Shared entry for the non-edge triggers. For a legacy-ingest transaction the row is in memory, but
+     * the case keeps only its ID reference (case alert raw data and case_transactions link), never a
+     * snapshot of the transaction.
+     */
     private void createOrUpdateCase(Long merchantId, Long pspId, String alertType, String ruleName, String ruleId,
             String modelVersion, String ruleVersion, Double score, String description, TransactionEntity tx) {
-        createOrUpdateCase(merchantId, pspId, alertType, ruleName, ruleId, modelVersion, ruleVersion, score,
-                description, tx, null, null, true);
+        TransactionReference reference = tx == null ? null : transactionReferences.forLegacyTransaction(tx);
+        Long tenant = pspId != null ? pspId : (tx != null ? tx.getPspId() : null);
+        String rawData = reference == null ? null : referenceRawData("LEGACY_TRANSACTION", reference, null);
+        createOrUpdateCase(merchantId, tenant, alertType, ruleName, ruleId, modelVersion, ruleVersion, score,
+                description, reference, rawData, null, true);
+    }
+
+    /** The case alert's raw data for a transaction trigger: the source and the ID reference only. */
+    private String referenceRawData(String source, TransactionReference reference, Long sourceAlertId) {
+        Map<String, Object> raw = new java.util.LinkedHashMap<>();
+        raw.put("source", source);
+        raw.putAll(reference.toMap());
+        if (sourceAlertId != null) {
+            raw.put("alertId", sourceAlertId);
+        }
+        try {
+            return objectMapper.writeValueAsString(raw);
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot serialise the case alert's transaction reference", e);
+        }
     }
 
     /**
      * Shared case lifecycle: merge into the merchant's open case (when {@code mergeIntoOpenCase}) or
      * open a new one, append a case alert, escalate critical types, publish events and webhooks.
      *
-     * @param rawDataOverride JSON stored as the case alert's raw data instead of the transaction snapshot
+     * @param transaction     the triggering transaction by ID reference (null for non-transaction triggers)
+     * @param rawDataOverride JSON stored as the case alert's raw data (the reference document)
      * @param sourceAlertId   cloud alert this case alert came from, if any
      */
     private ComplianceCase createOrUpdateCase(Long merchantId, Long pspId, String alertType, String ruleName,
             String ruleId, String modelVersion, String ruleVersion, Double score, String description,
-            TransactionEntity tx, String rawDataOverride, Long sourceAlertId, boolean mergeIntoOpenCase) {
+            TransactionReference transaction, String rawDataOverride, Long sourceAlertId, boolean mergeIntoOpenCase) {
         // Use merchantId directly
 
         // ... existing case lookup logic ...
@@ -275,7 +295,7 @@ public class CaseCreationService {
             cCase = new ComplianceCase();
             cCase.setCaseReference(generateCaseReference());
             cCase.setMerchantId(merchantId);
-            cCase.setPspId(pspId != null ? pspId : (tx != null ? tx.getPspId() : null)); // Use passed ID or fallback
+            cCase.setPspId(pspId);
             cCase.setStatus(CaseStatus.NEW);
             cCase.setPriority(CasePriority.MEDIUM);
             cCase.setCreatedAt(LocalDateTime.now());
@@ -298,17 +318,11 @@ public class CaseCreationService {
         alert.setTriggeredAt(LocalDateTime.now());
         alert.setSourceAlertId(sourceAlertId);
 
-        try {
-            if (rawDataOverride != null) {
-                alert.setRawData(rawDataOverride);
-            } else if (tx != null) {
-                alert.setRawData(objectMapper.writeValueAsString(tx));
-            } else {
-                alert.setRawData("{\"source\": \"PERIODIC_SCREENING\", \"merchantId\": " + merchantId + "}");
-            }
-        } catch (Exception e) {
-            logger.error("Failed to serialize transaction data for alert", e);
-            alert.setRawData("{\"error\": \"serialization_failed\"}");
+        // Raw data is a reference document: never a snapshot of the transaction (V264).
+        if (rawDataOverride != null) {
+            alert.setRawData(rawDataOverride);
+        } else {
+            alert.setRawData("{\"source\": \"PERIODIC_SCREENING\", \"merchantId\": " + merchantId + "}");
         }
 
         // 3. Add alert to case
@@ -343,7 +357,7 @@ public class CaseCreationService {
                     cCase.getPspId(),
                     cCase.getStatus() != null ? cCase.getStatus().name() : "NEW",
                     caseFeatures,
-                    tx != null ? tx.getTxnId() : null,
+                    transaction != null ? transaction.legacyTransactionId() : null,
                     null,
                     cCase.getId(),
                     merchantId);
@@ -356,8 +370,8 @@ public class CaseCreationService {
         final ComplianceCase committedCase = cCase;
         runAfterCommit(() -> {
             try {
-                if (tx != null) {
-                    enrichmentService.enrichWithTransaction(committedCase, tx, "TRIGGERING_TRANSACTION");
+                if (transaction != null && !transaction.isEmpty()) {
+                    enrichmentService.enrichWithTransaction(committedCase, transaction, "TRIGGERING_TRANSACTION");
                 }
                 if (merchantId != null) {
                     enrichmentService.enrichWithMerchantProfile(committedCase, merchantId);

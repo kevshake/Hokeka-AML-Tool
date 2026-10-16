@@ -103,9 +103,22 @@ public class Alert {
     @Column(name = "compliance_case_id")
     private Long complianceCaseId;
 
-    /** Denormalized card identity (pan_hash) for fast card-scoped alert queries. */
-    @Column(name = "pan_hash", length = 128)
-    private String panHash;
+    /*
+     * Transaction reference by ID only (V264, residency contract I4). alerts.pan_hash is retired
+     * (always NULL, CHECK-constrained): card identity never leaves the Edge.
+     */
+
+    /** Decision record of the alerted transaction (legacy ingest: the cloud assessment id, see V264). */
+    @Column(name = "edge_assessment_id")
+    private java.util.UUID edgeAssessmentId;
+
+    /** The PSP's opaque transaction id; never card-shaped. */
+    @Column(name = "txn_ref", length = 128)
+    private String txnRef;
+
+    /** Edge Site holding the transaction, when known. */
+    @Column(name = "site_id", length = 64)
+    private String siteId;
 
     /** Maker-checker state for true-positive dispositions (PENDING_SECOND_REVIEW / APPROVED). */
     @Column(name = "disposition_review_status", length = 32)
@@ -126,11 +139,11 @@ public class Alert {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
-    /** Stamps creation time and re-checks that no raw PAN reached {@code pan_hash}. */
+    /** Stamps creation time and re-checks that the txnRef is not card-shaped. */
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "alerts.pan_hash");
+        com.posgateway.aml.util.PanHashGuard.requireNotRawPan(txnRef, "alerts.txn_ref");
     }
 
     // Getters and Setters
@@ -302,16 +315,54 @@ public class Alert {
         this.complianceCaseId = complianceCaseId;
     }
 
-    public String getPanHash() {
-        return panHash;
+    /** Decision record id of the alerted transaction. */
+    public java.util.UUID getEdgeAssessmentId() {
+        return edgeAssessmentId;
     }
 
-    /**
-     * Sets the denormalised card identity hash. Rejects raw-PAN-shaped values (13-19 digits);
-     * see {@link com.posgateway.aml.util.PanHashGuard}.
-     */
-    public void setPanHash(String panHash) {
-        this.panHash = com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "alerts.pan_hash");
+    /** Sets the decision record id of the alerted transaction. */
+    public void setEdgeAssessmentId(java.util.UUID edgeAssessmentId) {
+        this.edgeAssessmentId = edgeAssessmentId;
+    }
+
+    /** The PSP's opaque transaction id. */
+    public String getTxnRef() {
+        return txnRef;
+    }
+
+    /** Sets the PSP's transaction id; a card-shaped or malformed value is dropped (contract 2.5). */
+    public void setTxnRef(String txnRef) {
+        this.txnRef = com.posgateway.aml.model.TransactionReference.safeTxnRef(txnRef);
+    }
+
+    /** Edge Site of the alerted transaction. */
+    public String getSiteId() {
+        return siteId;
+    }
+
+    /** Sets the Edge Site of the alerted transaction. */
+    public void setSiteId(String siteId) {
+        this.siteId = siteId;
+    }
+
+    /** The alerted transaction as an ID-only reference (never null; may be empty). */
+    @Transient
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public com.posgateway.aml.model.TransactionReference getTransactionReference() {
+        return new com.posgateway.aml.model.TransactionReference(txnId, edgeAssessmentId, txnRef, siteId);
+    }
+
+    /** Copies an ID-only reference onto the alert; the legacy txn id is only set when the reference has one. */
+    public void applyTransactionReference(com.posgateway.aml.model.TransactionReference reference) {
+        if (reference == null) {
+            return;
+        }
+        if (reference.legacyTransactionId() != null) {
+            this.txnId = reference.legacyTransactionId();
+        }
+        this.edgeAssessmentId = reference.edgeAssessmentId();
+        setTxnRef(reference.txnRef());
+        this.siteId = reference.siteId();
     }
 
     public String getDispositionReviewStatus() {

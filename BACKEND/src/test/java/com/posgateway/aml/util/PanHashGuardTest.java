@@ -58,8 +58,13 @@ class PanHashGuardTest {
         assertThat(txn.getPanHash()).isEqualTo(SHA256_HEX);
         assertThatCode(() -> txn.setPanHash(null)).doesNotThrowAnyException();
 
+        // alerts.pan_hash is retired (V264); the alert's txnRef drops card-shaped values instead.
         Alert alert = new Alert();
-        assertThatThrownBy(() -> alert.setPanHash("5500 0000 0000 0004")).isInstanceOf(IllegalArgumentException.class);
-        assertThatCode(() -> alert.setPanHash(SHA256_HEX)).doesNotThrowAnyException();
+        alert.setTxnRef("5500 0000 0000 0004");
+        assertThat(alert.getTxnRef()).isNull();
+        alert.setTxnRef(VISA_TEST_PAN);
+        assertThat(alert.getTxnRef()).isNull();
+        alert.setTxnRef("ORD-2026-0001");
+        assertThat(alert.getTxnRef()).isEqualTo("ORD-2026-0001");
     }
 }

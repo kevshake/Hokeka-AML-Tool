@@ -435,7 +435,7 @@ public class TransactionMonitoringService {
         dto.put("status", sar.getStatus() != null ? sar.getStatus().name() : "DRAFT");
         dto.put("createdAt", sar.getCreatedAt());
         dto.put("submitted", sar.getFiledAt() != null);
-        dto.put("transactionCount", sar.getSuspiciousTransactions() != null ? sar.getSuspiciousTransactions().size() : 0);
+        dto.put("transactionCount", sar.getTransactionRefs() != null ? sar.getTransactionRefs().size() : 0);
         return dto;
     }
 

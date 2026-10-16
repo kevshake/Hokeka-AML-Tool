@@ -5,11 +5,14 @@ import com.posgateway.aml.entity.compliance.CaseEvidence;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.compliance.SuspiciousActivityReport;
+import com.posgateway.aml.entity.assessment.Assessment;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.CaseActivityRepository;
 import com.posgateway.aml.repository.compliance.CaseEvidenceRepository;
 import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +20,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Case Timeline Service
@@ -38,18 +43,21 @@ public class CaseTimelineService {
     private final CaseTransactionRepository caseTransactionRepository;
     private final CaseEvidenceRepository evidenceRepository;
     private final SuspiciousActivityReportRepository sarRepository;
+    private final TransactionReferenceResolver transactionReferences;
 
     @Autowired
     public CaseTimelineService(ComplianceCaseRepository caseRepository,
                               CaseActivityRepository activityRepository,
                               CaseTransactionRepository caseTransactionRepository,
                               CaseEvidenceRepository evidenceRepository,
-                              SuspiciousActivityReportRepository sarRepository) {
+                              SuspiciousActivityReportRepository sarRepository,
+                              TransactionReferenceResolver transactionReferences) {
         this.caseRepository = caseRepository;
         this.activityRepository = activityRepository;
         this.caseTransactionRepository = caseTransactionRepository;
         this.evidenceRepository = evidenceRepository;
         this.sarRepository = sarRepository;
+        this.transactionReferences = transactionReferences;
     }
 
     /**
@@ -116,17 +124,20 @@ public class CaseTimelineService {
                     .build());
         }
 
-        // Related transactions
+        // Related transactions, by ID only (R8): placed at the decision record's evaluation time when the
+        // PSP's record is known, else at the link time. Transaction details come from the Edge (R6).
         List<CaseTransaction> caseTransactions = caseTransactionRepository.findByComplianceCase(complianceCase);
+        Map<UUID, Assessment> records = transactionReferences.decisionRecords(complianceCase.getPspId(),
+                caseTransactions.stream().map(CaseTransaction::getTransactionReference).toList());
         caseTransactions.forEach(ct -> {
-            if (ct.getTransaction() != null && ct.getTransaction().getTxnTs() != null) {
-                events.add(TimelineEvent.builder()
-                        .timestamp(ct.getTransaction().getTxnTs())
-                        .type("TRANSACTION")
-                        .description("Transaction: " + ct.getTransaction().getTxnId())
-                        .data(transactionData(ct))
-                        .build());
-            }
+            TransactionReference reference = ct.getTransactionReference();
+            Assessment record = reference.edgeAssessmentId() == null ? null : records.get(reference.edgeAssessmentId());
+            events.add(TimelineEvent.builder()
+                    .timestamp(transactionTime(ct, record))
+                    .type("TRANSACTION")
+                    .description("Transaction: " + reference.label())
+                    .data(transactionData(ct, record))
+                    .build());
         });
 
         // Case notes
@@ -269,16 +280,28 @@ public class CaseTimelineService {
                 .build();
     }
 
-    private Map<String, Object> transactionData(CaseTransaction caseTransaction) {
-        var transaction = caseTransaction.getTransaction();
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("transactionId", transaction.getTxnId());
-        putIfPresent(data, "merchantId", transaction.getMerchantId());
-        putIfPresent(data, "amountCents", transaction.getAmountCents());
-        putIfPresent(data, "currency", transaction.getCurrency());
-        putIfPresent(data, "decision", transaction.getDecision());
-        putIfPresent(data, "riskLevel", transaction.getRiskLevel());
+    /** The decision record's evaluation time (class D) when known, else when the transaction was linked. */
+    private static LocalDateTime transactionTime(CaseTransaction caseTransaction, Assessment record) {
+        if (record != null && record.getEvaluatedAt() != null) {
+            return LocalDateTime.ofInstant(record.getEvaluatedAt(), ZoneId.systemDefault());
+        }
+        return caseTransaction.getAddedAt();
+    }
+
+    /**
+     * Timeline data of a linked transaction: its ID reference, the relationship and the decision
+     * record's class-D fields (decision, merchant id). Amount, currency and other transaction details
+     * are never read from the cloud: {@code transactionDetails} is null until the Console pulls them
+     * live from the Edge (work package R6).
+     */
+    private static Map<String, Object> transactionData(CaseTransaction caseTransaction, Assessment record) {
+        Map<String, Object> data = new LinkedHashMap<>(caseTransaction.getTransactionReference().toMap());
         putIfPresent(data, "relationshipType", caseTransaction.getRelationshipType());
+        if (record != null) {
+            putIfPresent(data, "decision", record.getDecision());
+            putIfPresent(data, "merchantId", record.getMerchantId());
+        }
+        data.put("transactionDetails", null);
         return data;
     }
 

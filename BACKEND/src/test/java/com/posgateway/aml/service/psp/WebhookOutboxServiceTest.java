@@ -61,6 +61,23 @@ class WebhookOutboxServiceTest {
         verify(outboxRepository, never()).save(any());
     }
 
+    /** Plan conflict 10: a RISK_ALERT payload with anything but ids and the decision is refused, unqueued. */
+    @Test
+    void riskAlertWithTransactionDataIsRefused() {
+        OutboxEventRepository outboxRepository = mock(OutboxEventRepository.class);
+        WebhookSubscriptionRepository subscriptionRepository = mock(WebhookSubscriptionRepository.class);
+        WebhookOutboxService service = new WebhookOutboxService(
+                outboxRepository, subscriptionRepository, new ObjectMapper());
+
+        IllegalArgumentException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.enqueueForPsp(2L, "RISK_ALERT",
+                        Map.of("alertId", 70L, "score", 0.9, "amountCents", 5000L), "webhook.risk_alert:70"));
+        org.junit.jupiter.api.Assertions.assertTrue(refused.getMessage().contains("[amountCents, score]"),
+                refused.getMessage());
+        verify(outboxRepository, never()).save(any());
+        verify(subscriptionRepository, never()).findByPspIdAndEventTypeAndIsActiveTrue(any(), any());
+    }
+
     private WebhookSubscription subscription(Long id, String url) {
         WebhookSubscription sub = new WebhookSubscription();
         sub.setId(id);
