@@ -1,8 +1,6 @@
 package com.posgateway.aml.controller.ai;
 
 import com.posgateway.aml.entity.ai.AiEngineSetting;
-import com.posgateway.aml.entity.psp.Psp;
-import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.service.ai.decision.AiAuditAccessService;
 import com.posgateway.aml.service.ai.decision.AiEngineConfigService;
 import com.posgateway.aml.service.ai.decision.AiOperatorAuthorization;
@@ -23,7 +21,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,7 +46,6 @@ class AiAdminControllerAuthorizationTest {
     @MockBean AiStatusService statusService;
     @MockBean AiEngineConfigService engineConfigService;
     @MockBean AiAuditAccessService auditAccessService;
-    @MockBean PspRepository pspRepository;
     @MockBean PspIsolationService pspIsolationService;
 
     @BeforeEach
@@ -57,11 +53,6 @@ class AiAdminControllerAuthorizationTest {
         when(statusService.status()).thenReturn(Map.of("configured", true, "model", "test/model"));
         when(engineConfigService.listAll()).thenReturn(List.of(new AiEngineSetting()));
         when(auditAccessService.forAlert(1L)).thenReturn(List.of(Map.of("id", 1)));
-        Psp psp = new Psp();
-        psp.setPspId(7L);
-        psp.setAiInlineMode(false);
-        psp.setAiInlineBudgetMs(500);
-        when(pspRepository.findById(7L)).thenReturn(Optional.of(psp));
     }
 
     @Test
@@ -78,15 +69,20 @@ class AiAdminControllerAuthorizationTest {
         mvc.perform(get("/ai/engines")).andExpect(status().isForbidden());
     }
 
+    /**
+     * R10c: the per-PSP "Edge waits for AI inline" settings only served the removed Edge feature-bag
+     * POST, so the endpoints are gone, even for a platform operator.
+     */
     @Test
-    @WithMockUser(authorities = "ROLE_PSP_ADMIN")
-    void pspAdminForbiddenOnPspInlineSettings() throws Exception {
-        when(pspIsolationService.isPlatformAdministrator()).thenReturn(false);
-        mvc.perform(get("/ai/psps/7/ai-settings")).andExpect(status().isForbidden());
+    @WithMockUser(authorities = "ROLE_PLATFORM_ADMIN")
+    void pspInlineAiSettingsEndpointsAreGone() throws Exception {
+        when(pspIsolationService.isPlatformAdministrator()).thenReturn(true);
+        mvc.perform(get("/ai/psps/7/ai-settings")).andExpect(status().isNotFound());
         mvc.perform(put("/ai/psps/7/ai-settings")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"aiInlineMode\":true}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -95,7 +91,6 @@ class AiAdminControllerAuthorizationTest {
         when(pspIsolationService.isPlatformAdministrator()).thenReturn(true);
         mvc.perform(get("/ai/status")).andExpect(status().isOk());
         mvc.perform(get("/ai/engines")).andExpect(status().isOk());
-        mvc.perform(get("/ai/psps/7/ai-settings")).andExpect(status().isOk());
     }
 
     @Test

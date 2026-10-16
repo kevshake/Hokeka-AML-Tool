@@ -350,9 +350,6 @@ public class AiDecisionGateway {
         if (context.getScreeningHitId() != null) {
             return "hokeka-screen-" + context.getScreeningHitId();
         }
-        if (context.getEdgeId() != null) {
-            return "hokeka-edge-" + context.getEdgeId();
-        }
         return "hokeka-ai-" + context.getEngine().name().toLowerCase();
     }
 }

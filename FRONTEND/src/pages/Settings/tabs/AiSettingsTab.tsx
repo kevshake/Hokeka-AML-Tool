@@ -1,17 +1,6 @@
-import {
-  Box,
-  Button,
-  CircularProgress,
-  FormControlLabel,
-  MenuItem,
-  Select,
-  Switch,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Box, CircularProgress, FormControlLabel, Switch, Typography } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, Gauge, Settings2 } from "lucide-react";
-import { useState } from "react";
+import { BrainCircuit, Settings2 } from "lucide-react";
 import GlassCard from "../../../components/Common/GlassCard";
 import { apiClient } from "../../../lib/apiClient";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -31,18 +20,6 @@ interface AiStatus {
     advisoryOnly: boolean;
     promptVersion: string;
   }>;
-}
-
-interface PspOption {
-  id: number;
-  code: string;
-  name: string;
-}
-
-interface PspAiSettings {
-  pspId: number;
-  aiInlineMode: boolean;
-  aiInlineBudgetMs: number;
 }
 
 function Metric({ label, value }: { label: string; value: string | number | undefined }) {
@@ -65,34 +42,10 @@ export default function AiSettingsTab() {
     enabled: allowed,
   });
 
-  const { data: psps } = useQuery<PspOption[]>({
-    queryKey: ["settings", "psps"],
-    queryFn: () => apiClient.get<PspOption[]>("settings/psps"),
-  });
-
-  const [selectedPspId, setSelectedPspId] = useState<number | "">("");
-  const { data: pspAi } = useQuery<PspAiSettings>({
-    queryKey: ["ai", "psp-ai", selectedPspId],
-    queryFn: () => apiClient.get<PspAiSettings>(`ai/psps/${selectedPspId}/ai-settings`),
-    enabled: selectedPspId !== "",
-  });
-
-  const [inlineMode, setInlineMode] = useState(false);
-  const [inlineBudget, setInlineBudget] = useState(500);
-
   const updateEngine = useMutation({
     mutationFn: (payload: { engineCode: string; enabled: boolean }) =>
       apiClient.put(`ai/engines/${payload.engineCode}`, { enabled: payload.enabled }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ai", "status"] }),
-  });
-
-  const updatePspAi = useMutation({
-    mutationFn: () =>
-      apiClient.put(`ai/psps/${selectedPspId}/ai-settings`, {
-        aiInlineMode: inlineMode,
-        aiInlineBudgetMs: inlineBudget,
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ai", "psp-ai", selectedPspId] }),
   });
 
   if (!allowed) {
@@ -150,55 +103,6 @@ export default function AiSettingsTab() {
             />
           ))}
         </div>
-      </GlassCard>
-
-      <GlassCard className="p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Gauge size={18} className="text-gold" />
-          <Typography variant="subtitle1">PSP inline AI mode</Typography>
-        </div>
-        <Select
-          fullWidth
-          size="small"
-          displayEmpty
-          value={selectedPspId}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSelectedPspId(v === "" ? "" : Number(v));
-          }}
-          sx={{ mb: 2 }}
-        >
-          <MenuItem value="">Select PSP</MenuItem>
-          {(psps ?? []).map((p) => (
-            <MenuItem key={p.id} value={p.id}>
-              {p.name} ({p.code})
-            </MenuItem>
-          ))}
-        </Select>
-        {pspAi ? (
-          <div className="space-y-3">
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={inlineMode || pspAi.aiInlineMode}
-                  onChange={(e) => setInlineMode(e.target.checked)}
-                />
-              }
-              label="aiInlineMode — edge waits for Hokeka AI on borderline pre-auth (falls back to rules on timeout)"
-            />
-            <TextField
-              label="Inline budget (ms)"
-              type="number"
-              size="small"
-              fullWidth
-              value={inlineBudget || pspAi.aiInlineBudgetMs}
-              onChange={(e) => setInlineBudget(Number(e.target.value))}
-            />
-            <Button variant="contained" onClick={() => updatePspAi.mutate()} disabled={selectedPspId === ""}>
-              Save PSP AI settings
-            </Button>
-          </div>
-        ) : null}
       </GlassCard>
     </div>
   );

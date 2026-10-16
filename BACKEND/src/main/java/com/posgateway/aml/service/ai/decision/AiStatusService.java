@@ -49,7 +49,6 @@ public class AiStatusService {
         status.put("apiBaseUrl", properties.getApiBaseUrl());
         status.put("decisionsBaseUrl", properties.getApiBaseUrl());
         status.put("decisionsTimeoutMs", properties.getDecisionsTimeout().toMillis());
-        status.put("inlineTimeoutMs", properties.getInlineTimeout().toMillis());
         status.put("minConfidenceToApply", properties.getMinConfidenceToApply());
         status.put("minConfidenceToAutoAct", properties.getMinConfidenceToAutoAct());
         status.put("lang", blankToNull(properties.getLang()));

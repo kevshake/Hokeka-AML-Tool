@@ -71,7 +71,6 @@ public class PspActivationFilter extends OncePerRequestFilter {
             "/edge/enroll",
             "/edge/bundle",
             "/edge/metrics",
-            "/edge/decision",
             "/edge/assessments",
             "/edge/config",
             // Edge Tunnel WebSocket (mTLS + ACTIVE node, TunnelHandshakeInterceptor).
