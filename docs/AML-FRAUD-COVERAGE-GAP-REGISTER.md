@@ -72,7 +72,7 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 | ML scoring (external XGBoost) | 🟡 | Real HTTP call but `scoring.service.enabled=false` in all profiles → **rules-only, constant `ml_score=0.0`** (honestly labeled) |
 | DL4J anomaly autoencoder | 🟡 | Genuine load-from-artifact (never random); `dl4j.enabled=false`, no model path → inert |
 | **Behavioral z-score** | ✅ | `BehavioralProfilingService.isAmountAnomaly` computes real population σ and z-score (≥3σ) over merchant history |
-| **Model retraining / feedback loop** | 🟠 | Labels/chargebacks/FP collected & persisted (real), but comments claim a "nightly retrain" that **does not exist** — no trainer consumes them |
+| **Model retraining / feedback loop** | 🟠 | Labels/chargebacks/FP collected & persisted (real); **no trainer exists** and nothing retrains on a schedule. Comments now say so (P1-9 fixed; `NoPhantomRetrainClaimsTest` guards) — building a trainer remains open |
 | Proxy/VPN detection | 🟠 | Hardcoded `/8` IP-prefix guesses; no reputation/ASN |
 | Graph fraud-ring / money-trail / cycle / mule-proximity | 🟠 | Genuine Cypher but **dead code** (no callers, no `controller/network`); Neo4j off by default |
 | Email/phone intelligence, behavioral biometrics, ATO, synthetic-ID, promo abuse, triangulation | 🔴 | Not implemented |
@@ -141,20 +141,20 @@ These are recorded below as **OUT-OF-SCOPE (routing tier)** rather than gaps, so
 _Console routes for P0 verification: see `docs/UI_COVERAGE_MATRIX.md` (`/screening`, `/transaction-monitoring`)._
 
 1. ~~Sanctions **empty-data → CLEAR**~~ ✅ **FIXED** — aml-microservice returns UNAVAILABLE when dataset empty; backend `DecisionEngine` holds. **Console:** `/screening`.
-2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true`. **Console:** `/screening`.
+2. ~~**PEP classification dead**~~ 🟡 **PARTIAL** — OpenSanctions ingest sets `pepLevel`; screening propagates `isPep`; dashboard exposes PEP hits. Requires `sanctions.download.enabled=true` (`SANCTIONS_DOWNLOAD_ENABLED`), which gates the daily OpenSanctions download/ingest + staleness watchdog — the only automated PEP source. Default is still **false in every profile including production** (not flipped); `PepDataSourceStartupCheck` now logs `PEP DATA SOURCE DISABLED` at startup, and dev/prod properties + deployment runbook §8 document the flag (2026-10-16). Remaining: operators must enable it in production. **Console:** `/screening`.
 3. ~~**Batch monitoring raises no alerts**~~ ✅ **FIXED** — `BatchScoringService` → `DecisionEngine`; paginated backfill. **Console:** `/transaction-monitoring`.
 
 **P1 — reachable stub / inert control ("dummy code")**
 4. ~~`TransactionLimitService.setTemporaryLimit` persisted nothing~~ ✅ **FIXED** (V200 + enforcement).
 5. ~~`BehavioralProfilingService` fake z-score~~ ✅ **FIXED** — real σ/z-score in `isAmountAnomaly`.
 6. ~~Wire orphaned real detectors + refund/circular features~~ ✅ **FIXED** — R-119/R-125 + peer-group R-127.
-7. `SchemeReportingController` pack export ignores type → real CSV/PDF.
+7. ~~`SchemeReportingController` pack export ignores type → real CSV/PDF~~ ✅ **FIXED** (2026-10-16) — `format=JSON|CSV|PDF` drives body, Content-Type and filename via `SchemeReportPackExporter` (OpenPDF); summary, breakdowns and every row set rendered; unknown format → 400.
 8. ~~`DecisionEngine` BLOCK → invoke existing `PaymentBlacklistService`~~ ✅ **FIXED** — `takeBlockAction` adds PAN to blacklist.
-9. Remove misleading "nightly retrain" comments (or build the trainer).
+9. ~~Remove misleading "nightly retrain" comments~~ ✅ **FIXED** (2026-10-16) — comments describe label-only persistence; no trainer was built (still a capability gap).
 
 **P2 — compliance hardening**
-10. ~~Audit **hash-chaining** + verification path~~ 🟡 **PARTIAL** — V232 chain + `/audit/logs/verify`; legacy row backfill optional.
-11. Encrypt settlement/bank account numbers; guard `pan_hash` against raw PAN.
+10. ~~Audit **hash-chaining** + verification path~~ ✅ **FIXED** (2026-10-16) — V232 chain + `/audit/logs/verify`; `AuditChainBackfillService` (V252) idempotently seals legacy/unsealed rows (pre-V232 checksums verified first, original kept in `legacy_checksum`; rows matching neither format are left untouched and reported); case-decision and failed-action writers now seal via `AuditLogService.sealAndSave`.
+11. ~~Encrypt settlement/bank account numbers; guard `pan_hash` against raw PAN~~ ✅ **FIXED** (2026-10-16) — merchant settlement, PSP trust and market settlement account columns use `VersionedAesGcmStringConverter` (V252 widens to TEXT; `PiiAtRestBackfillService` encrypts legacy plaintext at startup); `FieldEncryptionKeyStartupCheck` fails the production boot without a valid `ENCRYPTION_KEY`; `PanHashGuard` rejects 13–19-digit values on `transactions`/`alerts.pan_hash` and a one-shot scrub HMACs any legacy raw PANs.
 12. Suspicion lifecycle timestamps on case/alert; 7-year retention for `TransactionEntity`; audit-retention default ≠ 90d.
 13. ~~CTR detection→filing bridge (scheduled)~~ 🟡 **PARTIAL** — `CtrFilingBridgeService` creates deadlines; transport filing still operator-driven.
 14. Scheme thresholds + MCC risk → effective-dated config tables (reuse the `rule_versions` pattern).
