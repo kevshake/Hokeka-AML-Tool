@@ -10,6 +10,7 @@ import com.posgateway.aml.repository.MerchantScreeningResultRepository;
 import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
 import com.posgateway.aml.service.cache.FeatureCacheService;
 import com.posgateway.aml.service.compliance.CashStructuringDetectionService;
+import com.posgateway.aml.service.security.PaymentBlacklistService;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,7 @@ public class RuleFeatureEnrichmentService {
     private final HighRiskCountryRepository highRiskCountryRepository;
     private final ChargebackDisputeRepository chargebackDisputeRepository;
     private final FeatureCacheService featureCacheService;
+    private final PaymentBlacklistService paymentBlacklistService;
     private final MerchantScreeningResultRepository merchantScreeningResultRepository;
     private final CashStructuringDetectionService cashStructuringDetectionService;
     private final com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService;
@@ -53,11 +55,13 @@ public class RuleFeatureEnrichmentService {
     @org.springframework.beans.factory.annotation.Value("${rules.name-similarity.max-distance:2}")
     private int nameSimilarityMaxDistance = 2;
 
+    /** Creates the enricher with tenant-aware blacklist and persisted feature dependencies. */
     public RuleFeatureEnrichmentService(TransactionRepository transactionRepository,
                                         MerchantRepository merchantRepository,
                                         HighRiskCountryRepository highRiskCountryRepository,
                                         ChargebackDisputeRepository chargebackDisputeRepository,
                                         FeatureCacheService featureCacheService,
+                                        PaymentBlacklistService paymentBlacklistService,
                                         MerchantScreeningResultRepository merchantScreeningResultRepository,
                                         CashStructuringDetectionService cashStructuringDetectionService,
                                         com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService) {
@@ -66,6 +70,7 @@ public class RuleFeatureEnrichmentService {
         this.highRiskCountryRepository = highRiskCountryRepository;
         this.chargebackDisputeRepository = chargebackDisputeRepository;
         this.featureCacheService = featureCacheService;
+        this.paymentBlacklistService = paymentBlacklistService;
         this.merchantScreeningResultRepository = merchantScreeningResultRepository;
         this.cashStructuringDetectionService = cashStructuringDetectionService;
         this.behavioralAnalyticsService = behavioralAnalyticsService;
@@ -100,6 +105,7 @@ public class RuleFeatureEnrichmentService {
         if (transaction.getCra() != null) features.put("cra_score", transaction.getCra());
 
         enrichVelocityAndHistory(transaction, features, now, merchantId, panHash, amountCents);
+        enrichZscoreAmount(transaction, features, now, panHash, amountCents);
         enrichAdvancedVelocityRatios(transaction, features, now, panHash, merchantId);
         enrichStructuringSignals(transaction, features);
         enrichFanInFanOut(transaction, features, now, panHash, merchantId);
@@ -144,6 +150,12 @@ public class RuleFeatureEnrichmentService {
         LocalDateTime thirtyDaysAgo = now.minus(30, ChronoUnit.DAYS);
 
         if (panHash != null) {
+            LocalDateTime oneMinuteAgo = now.minus(1, ChronoUnit.MINUTES);
+            LocalDateTime fiveMinutesAgo = now.minus(5, ChronoUnit.MINUTES);
+            Long panCount1m = transactionRepository.countByPanInTimeWindow(panHash, oneMinuteAgo, now);
+            features.putIfAbsent("pan_txn_count_1m", panCount1m != null ? panCount1m : 0L);
+            Long panCount5m = transactionRepository.countByPanInTimeWindow(panHash, fiveMinutesAgo, now);
+            features.putIfAbsent("pan_txn_count_5m", panCount5m != null ? panCount5m : 0L);
             Long panCount1h = transactionRepository.countByPanInTimeWindow(panHash, oneHourAgo, now);
             features.putIfAbsent("pan_txn_count_1h", panCount1h != null ? panCount1h : 0L);
 
@@ -216,6 +228,32 @@ public class RuleFeatureEnrichmentService {
             Long merchantSum24h = transactionRepository.sumAmountByMerchantInTimeWindow(merchantId, oneDayAgo, now);
             features.put("merchant_amount_sum_24h", merchantSum24h != null ? merchantSum24h / 100.0 : 0.0);
         }
+    }
+
+    /** Adds the current amount's z-score against the PAN's historical amount distribution. */
+    private void enrichZscoreAmount(TransactionEntity transaction, Map<String, Object> features,
+                                    LocalDateTime now, String panHash, Long amountCents) {
+        if (features.containsKey("zscore_amount_vs_pan_history") || panHash == null) {
+            return;
+        }
+        LocalDateTime thirtyDaysAgo = now.minus(30, ChronoUnit.DAYS);
+        List<Long> historicalAmounts = transactionRepository.findRecentAmountsByPanBefore(
+                panHash, thirtyDaysAgo, now, org.springframework.data.domain.PageRequest.of(0, 1_000));
+        if (historicalAmounts == null || historicalAmounts.isEmpty() || amountCents == null) {
+            features.putIfAbsent("zscore_amount_vs_pan_history", 0.0);
+            return;
+        }
+        double mean = historicalAmounts.stream().mapToLong(Long::longValue).average().orElse(0.0);
+        double variance = historicalAmounts.stream()
+                .mapToDouble(amount -> {
+                    double difference = amount - mean;
+                    return difference * difference;
+                })
+                .average()
+                .orElse(0.0);
+        double stddev = Math.sqrt(variance);
+        double zScore = stddev > 0 ? (amountCents - mean) / stddev : 0.0;
+        features.put("zscore_amount_vs_pan_history", zScore);
     }
 
     private void enrichAdvancedVelocityRatios(TransactionEntity transaction, Map<String, Object> features,
@@ -564,23 +602,26 @@ public class RuleFeatureEnrichmentService {
         }
     }
 
+    /** Adds TTL-aware tenant and platform blacklist matches to the rule feature map. */
     private void enrichBlacklistHits(TransactionEntity transaction, Map<String, Object> features) {
         String panHash = transaction.getPanHash();
         String deviceFp = transaction.getDeviceFingerprint();
         String walletId = transaction.getDeviceFingerprint();
         String cardCountry = transaction.getMerchantCountry();
         String reference = transaction.getIsoMsg();
+        Long pspId = transaction.getPspId();
 
+        // Same TTL-aware DB+cache truth as DecisionEngine (not Redis-only).
         features.put("variable_blacklist_hit",
-                (panHash != null && featureCacheService.isBlacklisted("pan", panHash))
-                        || (deviceFp != null && featureCacheService.isBlacklisted("device", deviceFp)));
+                (panHash != null && paymentBlacklistService.isBlacklisted(pspId, "pan", panHash))
+                        || (deviceFp != null && paymentBlacklistService.isBlacklisted(pspId, "device", deviceFp)));
         features.put("payment_details_blacklist",
-                deviceFp != null && featureCacheService.isBlacklisted("payment_details", deviceFp));
+                deviceFp != null && paymentBlacklistService.isBlacklisted(pspId, "payment_details", deviceFp));
         features.put("wallet_blacklist_hit",
-                walletId != null && featureCacheService.isBlacklisted("wallet", walletId));
+                walletId != null && paymentBlacklistService.isBlacklisted(pspId, "wallet", walletId));
         features.put("card_issuer_country_blacklist",
-                cardCountry != null && featureCacheService.isBlacklisted("card_country", cardCountry));
-        features.put("reference_keyword_blacklist", containsBlacklistedKeyword(reference));
+                cardCountry != null && paymentBlacklistService.isBlacklisted(pspId, "card_country", cardCountry));
+        features.put("reference_keyword_blacklist", containsBlacklistedKeyword(pspId, reference));
 
         // R-170 "Anonymous Payment Screening": the payer cannot be identified from this payment.
         // Was hardcoded false in BOTH producers, so the rule could never fire. Implemented from the
@@ -600,13 +641,14 @@ public class RuleFeatureEnrichmentService {
         return value == null || value.isBlank();
     }
 
-    private boolean containsBlacklistedKeyword(String reference) {
+    /** Checks whether a transaction reference contains a tenant-visible blocked keyword. */
+    private boolean containsBlacklistedKeyword(Long pspId, String reference) {
         if (reference == null || reference.isBlank()) {
             return false;
         }
         String lower = reference.toLowerCase();
         for (String keyword : List.of("casino", "crypto", "gambling", "offshore", "shell")) {
-            if (featureCacheService.isBlacklisted("reference_keyword", keyword) && lower.contains(keyword)) {
+            if (paymentBlacklistService.isBlacklisted(pspId, "reference_keyword", keyword) && lower.contains(keyword)) {
                 return true;
             }
         }

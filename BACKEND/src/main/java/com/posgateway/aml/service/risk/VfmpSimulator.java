@@ -1,8 +1,11 @@
 package com.posgateway.aml.service.risk;
 
+import com.posgateway.aml.entity.risk.SchemeProgramThreshold;
 import com.posgateway.aml.model.MerchantMetrics;
+import com.posgateway.aml.repository.risk.SchemeProgramThresholdRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,7 +13,6 @@ import java.util.Map;
  * Visa VFMP Simulator
  * Rules engine for Visa Fraud Monitoring Program
  */
-// @RequiredArgsConstructor removed
 @Service
 public class VfmpSimulator {
 
@@ -26,34 +28,53 @@ public class VfmpSimulator {
         }
     }
 
+    private final SchemeProgramThresholdRepository thresholdRepository;
+
+    /** Creates a simulator backed by effective-dated VFMP thresholds. */
+    public VfmpSimulator(SchemeProgramThresholdRepository thresholdRepository) {
+        this.thresholdRepository = thresholdRepository;
+    }
+
     /**
      * Evaluate merchant against VFMP rules
      */
     public VfmpResult evaluate(MerchantMetrics metrics) {
         double fraudRate = metrics.getFraudRate();
         long fraudTx = metrics.getFraudTx();
+        var rows = thresholdRepository.findEffectiveRows("VFMP", OffsetDateTime.now());
+        SchemeProgramThreshold row = rows == null ? null : rows.stream().findFirst().orElse(null);
+
+        double criticalRate = value(row != null ? row.getCriticalRate() : null, 0.015);
+        long criticalVol = value(row != null ? row.getCriticalVolume() : null, 500L);
+        double highRate = value(row != null ? row.getHighRate() : null, 0.009);
+        long highVol = value(row != null ? row.getHighVolume() : null, 100L);
+        double warningRate = value(row != null ? row.getWarningRate() : null, 0.006);
+        long warningVol = value(row != null ? row.getWarningVolume() : null, 75L);
+        double watchRate = value(row != null ? row.getWatchRate() : null, 0.004);
+        long watchVol = value(row != null ? row.getWatchVolume() : null, 50L);
 
         VfmpStage stage = VfmpStage.NORMAL;
-
-        // Logic based on user requirements
-        // Critical: Rate >= 1.5% and Vol >= 500
-        if (fraudRate >= 0.015 && fraudTx >= 500) {
+        if (fraudRate >= criticalRate && fraudTx >= criticalVol) {
             stage = VfmpStage.CRITICAL;
-        }
-        // High Risk: Rate >= 0.9% and Vol >= 100
-        else if (fraudRate >= 0.009 && fraudTx >= 100) {
+        } else if (fraudRate >= highRate && fraudTx >= highVol) {
             stage = VfmpStage.HIGH_RISK;
-        }
-        // Warning: Rate >= 0.6% and Vol >= 75
-        else if (fraudRate >= 0.006 && fraudTx >= 75) {
+        } else if (fraudRate >= warningRate && fraudTx >= warningVol) {
             stage = VfmpStage.WARNING;
-        }
-        // Watch: Rate >= 0.4% and Vol >= 50
-        else if (fraudRate >= 0.004 && fraudTx >= 50) {
+        } else if (fraudRate >= watchRate && fraudTx >= watchVol) {
             stage = VfmpStage.WATCH;
         }
 
         return new VfmpResult(stage, fraudRate, fraudTx);
+    }
+
+    /** Uses a configured decimal threshold when present, otherwise its regulatory fallback. */
+    private static double value(Double configured, double fallback) {
+        return configured != null ? configured : fallback;
+    }
+
+    /** Uses a configured volume threshold when present, otherwise its regulatory fallback. */
+    private static long value(Long configured, long fallback) {
+        return configured != null ? configured : fallback;
     }
 
     public static class VfmpResult {

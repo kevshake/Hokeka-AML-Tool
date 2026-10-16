@@ -22,13 +22,20 @@ import java.util.Map;
 public final class EdgeRuleInterpreter {
 
     public enum Action {
-        ALLOW(0), ALERT(1), HOLD(2), BLOCK(3);
+        ALLOW(0), ALERT(1), FLAG(2), HOLD(3), SUSPEND(4), BLOCK(5);
         final int severity;
         Action(int s) { this.severity = s; }
         Action max(Action other) { return other.severity > this.severity ? other : this; }
     }
 
-    public record Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons) {}
+    /** Evaluation result including the version ids parallel to triggered rule ids. */
+    public record Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons,
+                           List<Long> triggeredRuleVersionIds) {
+        public Decision(Action action, int score, List<Long> triggeredRuleIds, List<String> reasons) {
+            // Keeps older callers compatible when no rule-version provenance is available.
+            this(action, score, triggeredRuleIds, reasons, List.of());
+        }
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
     private volatile JsonNode bundle; // active rule bundle (atomic reference swap = hot-swap)
@@ -61,6 +68,7 @@ public final class EdgeRuleInterpreter {
         Action action = Action.ALLOW;
         int score = 0;
         List<Long> triggered = new ArrayList<>();
+        List<Long> versions = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
 
         for (JsonNode rule : b.path("rules")) {
@@ -68,11 +76,12 @@ public final class EdgeRuleInterpreter {
                 action = action.max(Action.valueOf(rule.path("action").asText("ALLOW")));
                 score += rule.path("score").asInt(0);
                 triggered.add(rule.path("id").asLong());
+                versions.add(rule.hasNonNull("rule_version_id") ? rule.path("rule_version_id").asLong() : null);
                 String desc = rule.path("description").asText(null);
                 reasons.add(desc != null && !desc.isEmpty() ? desc : rule.path("name").asText(""));
             }
         }
-        return new Decision(action, score, triggered, reasons);
+        return new Decision(action, score, triggered, reasons, versions);
     }
 
     private boolean evalCondition(JsonNode cond, Map<String, Object> f) {

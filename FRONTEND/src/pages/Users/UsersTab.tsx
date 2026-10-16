@@ -14,6 +14,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../lib/apiClient";
 import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 import { useUrlTableState } from "../../hooks/useUrlTableState";
+import { requestPasswordReset } from "../../features/api/passwordReset";
 import {
   canManageUsers,
   filterPspsForUser,
@@ -24,6 +25,7 @@ import {
   pspOptionLabel,
 } from "../../lib/userAccess";
 
+/** Manages tenant-scoped users, exports, and administrator-triggered password resets. */
 export default function UsersTab() {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
@@ -131,8 +133,7 @@ export default function UsersTab() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async (identifier: string) =>
-      apiClient.post("auth/password-reset/request", { identifier }),
+    mutationFn: (identifier: string) => requestPasswordReset(identifier),
     onSuccess: () => {
       setSnackbar({ open: true, message: "Password reset link sent.", severity: "success" });
     },

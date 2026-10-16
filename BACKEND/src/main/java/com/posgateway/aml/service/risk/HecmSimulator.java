@@ -1,8 +1,11 @@
 package com.posgateway.aml.service.risk;
 
+import com.posgateway.aml.entity.risk.SchemeProgramThreshold;
 import com.posgateway.aml.model.MerchantMetrics;
+import com.posgateway.aml.repository.risk.SchemeProgramThresholdRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,7 +13,6 @@ import java.util.Map;
  * Mastercard HECM Simulator
  * Rules engine for High Excessive Chargeback Merchant program
  */
-// @RequiredArgsConstructor removed
 @Service
 public class HecmSimulator {
 
@@ -25,30 +27,49 @@ public class HecmSimulator {
         }
     }
 
+    private final SchemeProgramThresholdRepository thresholdRepository;
+
+    /** Creates a simulator backed by effective-dated HECM thresholds. */
+    public HecmSimulator(SchemeProgramThresholdRepository thresholdRepository) {
+        this.thresholdRepository = thresholdRepository;
+    }
+
     /**
      * Evaluate merchant against HECM rules
      */
     public HecmResult evaluate(MerchantMetrics metrics) {
         double cbRatio = metrics.getChargebackRatio();
         long cbCount = metrics.getChargebackCount();
+        var rows = thresholdRepository.findEffectiveRows("HECM", OffsetDateTime.now());
+        SchemeProgramThreshold row = rows == null ? null : rows.stream().findFirst().orElse(null);
+
+        double excessiveRate = value(row != null ? row.getCriticalRate() : null, 0.015);
+        long excessiveCount = value(row != null ? row.getCriticalVolume() : null, 300L);
+        double highRate = value(row != null ? row.getHighRate() : null, 0.010);
+        long highCount = value(row != null ? row.getHighVolume() : null, 100L);
+        double watchRate = value(row != null ? row.getWatchRate() : null, 0.0065);
+        long watchCount = value(row != null ? row.getWatchVolume() : null, 75L);
 
         HecmStage stage = HecmStage.NORMAL;
-
-        // Logic based on user requirements
-        // Excessive: Ratio >= 1.5% and Count >= 300
-        if (cbRatio >= 0.015 && cbCount >= 300) {
+        if (cbRatio >= excessiveRate && cbCount >= excessiveCount) {
             stage = HecmStage.EXCESSIVE;
-        }
-        // High: Ratio >= 1.0% and Count >= 100
-        else if (cbRatio >= 0.010 && cbCount >= 100) {
+        } else if (cbRatio >= highRate && cbCount >= highCount) {
             stage = HecmStage.HIGH;
-        }
-        // Watch: Ratio >= 0.65% and Count >= 75
-        else if (cbRatio >= 0.0065 && cbCount >= 75) {
+        } else if (cbRatio >= watchRate && cbCount >= watchCount) {
             stage = HecmStage.WATCH;
         }
 
         return new HecmResult(stage, cbRatio, cbCount);
+    }
+
+    /** Uses a configured decimal threshold when present, otherwise its regulatory fallback. */
+    private static double value(Double configured, double fallback) {
+        return configured != null ? configured : fallback;
+    }
+
+    /** Uses a configured volume threshold when present, otherwise its regulatory fallback. */
+    private static long value(Long configured, long fallback) {
+        return configured != null ? configured : fallback;
     }
 
     public static class HecmResult {

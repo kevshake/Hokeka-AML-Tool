@@ -114,6 +114,8 @@ Health/status (no key exposure): `GET /api/v1/ai/status` (authenticated). Platfo
 
 Optional rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) uses Laya `/v1/ask` on the Control Plane when enabled.
 
+See [07 — AI decision layer & client install](07-ai-decision-layer-client-install.md) for the Edge/Control Plane boundary and client-install verification steps.
+
 ### Fixed inside compose (not from `.env`)
 
 - `DATABASE_URL=jdbc:postgresql://postgres-prod:5432/fraud_detector`

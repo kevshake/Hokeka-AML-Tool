@@ -79,6 +79,14 @@ export const DOC_META: Record<string, DocMetaConfig> = {
     installOrder: 0,
     illustration: "arch-overview.png",
   },
+  "07-ai-decision-layer-client-install.md": {
+    slug: "07-ai-decision-layer-client-install",
+    shortTitle: "AI Decision Layer",
+    audiences: ["Control Plane"],
+    tags: ["laya", "edge", "install", "control-plane"],
+    installOrder: 6,
+    operatorOnly: true,
+  },
 };
 
 export const ALL_AUDIENCES: Audience[] = [

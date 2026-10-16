@@ -117,6 +117,15 @@ public class Alert {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    @Column(name = "suspicion_formed_at")
+    private LocalDateTime suspicionFormedAt;
+
+    @Column(name = "investigation_started_at")
+    private LocalDateTime investigationStartedAt;
+
+    @Column(name = "mlro_notified_at")
+    private LocalDateTime mlroNotifiedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -321,6 +330,36 @@ public class Alert {
 
     public void setClosedAt(LocalDateTime closedAt) {
         this.closedAt = closedAt;
+    }
+
+    /** Returns when activity first met the suspicion threshold. */
+    public LocalDateTime getSuspicionFormedAt() {
+        return suspicionFormedAt;
+    }
+
+    /** Records when activity first met the suspicion threshold. */
+    public void setSuspicionFormedAt(LocalDateTime suspicionFormedAt) {
+        this.suspicionFormedAt = suspicionFormedAt;
+    }
+
+    /** Returns when an investigator began reviewing the alert. */
+    public LocalDateTime getInvestigationStartedAt() {
+        return investigationStartedAt;
+    }
+
+    /** Records when an investigator began reviewing the alert. */
+    public void setInvestigationStartedAt(LocalDateTime investigationStartedAt) {
+        this.investigationStartedAt = investigationStartedAt;
+    }
+
+    /** Returns when the MLRO was notified about the alert. */
+    public LocalDateTime getMlroNotifiedAt() {
+        return mlroNotifiedAt;
+    }
+
+    /** Records when the MLRO was notified about the alert. */
+    public void setMlroNotifiedAt(LocalDateTime mlroNotifiedAt) {
+        this.mlroNotifiedAt = mlroNotifiedAt;
     }
 
     // ── API aliases ──────────────────────────────────────────────────────────────────────────────

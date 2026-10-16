@@ -13,6 +13,7 @@ import java.util.Optional;
 
 /**
  * Checks and maintains the PAN/terminal/IP blacklist (Redis cache with Postgres fallback).
+ * Entries are tenant-scoped by {@code pspId}; null pspId writes are platform-wide.
  */
 @Service
 public class PaymentBlacklistService {
@@ -28,57 +29,63 @@ public class PaymentBlacklistService {
         this.blacklistRepository = blacklistRepository;
     }
 
-    public boolean isBlacklisted(String type, String value) {
+    /**
+     * True if blacklisted for this PSP or on the platform-wide list.
+     */
+    public boolean isBlacklisted(Long pspId, String type, String value) {
         if (value == null || value.isBlank()) {
             return false;
         }
-        // The cache only ever holds permanent blocks (see addToBlacklist), so a cache hit is
-        // authoritative. Time-boxed blocks (e.g. Do-Not-Honour) are resolved by the indexed
-        // expiry-aware DB query so they correctly stop matching once expired.
-        if (featureCacheService.isBlacklisted(type, value)) {
+        if (featureCacheService.isBlacklisted(pspId, type, value)
+                || featureCacheService.isBlacklisted(null, type, value)) {
             return true;
         }
-        return blacklistRepository.existsActiveNonExpired(type, value, LocalDateTime.now());
+        return blacklistRepository.existsActiveNonExpiredForTenantOrPlatform(
+                pspId, type, value, LocalDateTime.now());
     }
 
-    /**
-     * Add an identifier to the blacklist (idempotent). Persists an active entry to
-     * Postgres if one does not already exist and mirrors it into the Redis cache so
-     * subsequent {@link #isBlacklisted} checks short-circuit. Failures are swallowed
-     * so a blocklist write can never break the decision path that triggered it.
-     *
-     * @param type      identifier type, e.g. {@code "PAN"}, {@code "TERMINAL"}, {@code "IP"}
-     * @param value     the identifier value (blank values are ignored)
-     * @param reason    why it was blacklisted (audit)
-     * @param createdBy user id responsible, or null for a system action
-     */
+    /** @deprecated Prefer {@link #isBlacklisted(Long, String, String)} with a PSP id. */
+    @Deprecated
+    public boolean isBlacklisted(String type, String value) {
+        return isBlacklisted(null, type, value);
+    }
+
+    /** Adds a permanent blacklist entry in the requested tenant scope. */
+    @Transactional
+    public void addToBlacklist(Long pspId, String type, String value, String reason, Long createdBy) {
+        addToBlacklist(pspId, type, value, reason, createdBy, null);
+    }
+
+    /** Adds a permanent platform-wide blacklist entry for legacy callers. */
     @Transactional
     public void addToBlacklist(String type, String value, String reason, Long createdBy) {
-        addToBlacklist(type, value, reason, createdBy, null);
+        addToBlacklist(null, type, value, reason, createdBy, null);
+    }
+
+    /** Adds a platform-wide blacklist entry with an optional expiry for legacy callers. */
+    @Transactional
+    public void addToBlacklist(String type, String value, String reason, Long createdBy, LocalDateTime expiresAt) {
+        addToBlacklist(null, type, value, reason, createdBy, expiresAt);
     }
 
     /**
-     * Add or refresh a blacklist entry with an optional expiry.
-     *
-     * <p>{@code expiresAt == null} is a permanent block (mirrored into the fast cache). A non-null
-     * {@code expiresAt} is a time-boxed block (e.g. the 30-day Do-Not-Honour card decline): it is
-     * NOT mirrored into the permanent cache — the expiry-aware DB query in {@link #isBlacklisted}
-     * stops matching it once it lapses. If an active entry already exists its expiry is extended
-     * (never shortened), so a repeat Do-Not-Honour resets the full window and a permanent block is
-     * never downgraded to a temporary one.
+     * Add or refresh a blacklist entry with an optional expiry, scoped to {@code pspId}.
+     * Null {@code pspId} writes a platform-wide entry.
      */
     @Transactional
-    public void addToBlacklist(String type, String value, String reason, Long createdBy, LocalDateTime expiresAt) {
+    public void addToBlacklist(Long pspId, String type, String value, String reason, Long createdBy,
+                               LocalDateTime expiresAt) {
         if (type == null || type.isBlank() || value == null || value.isBlank()) {
             return;
         }
+        boolean platformWide = pspId == null;
         try {
-            Optional<PaymentBlacklistEntry> existing =
-                    blacklistRepository.findByEntryTypeAndEntryValueAndActiveTrue(type, value);
+            Optional<PaymentBlacklistEntry> existing = platformWide
+                    ? blacklistRepository.findPlatformActive(type, value)
+                    : blacklistRepository.findTenantActive(pspId, type, value);
             if (existing.isPresent()) {
                 PaymentBlacklistEntry entry = existing.get();
                 LocalDateTime current = entry.getExpiresAt();
-                // Extend only: null (permanent) wins; otherwise keep the later expiry.
                 if (expiresAt == null) {
                     entry.setExpiresAt(null);
                 } else if (current != null && expiresAt.isAfter(current)) {
@@ -87,6 +94,8 @@ public class PaymentBlacklistService {
                 blacklistRepository.save(entry);
             } else {
                 PaymentBlacklistEntry entry = new PaymentBlacklistEntry();
+                entry.setPspId(pspId);
+                entry.setPlatformWide(platformWide);
                 entry.setEntryType(type);
                 entry.setEntryValue(value);
                 entry.setReason(reason);
@@ -94,16 +103,15 @@ public class PaymentBlacklistService {
                 entry.setCreatedBy(createdBy);
                 entry.setExpiresAt(expiresAt);
                 blacklistRepository.save(entry);
-                log.info("Blacklisted {} (reason: {}, expiresAt: {})", type, reason, expiresAt);
+                log.info("Blacklisted {} for psp={} (reason: {}, expiresAt: {})",
+                        type, pspId == null ? "platform" : pspId, reason, expiresAt);
             }
-            // Only permanent blocks go in the permanent cache; time-boxed ones rely on the DB
-            // query so they expire correctly.
             if (expiresAt == null) {
-                featureCacheService.addToBlacklist(type, value);
+                featureCacheService.addToBlacklist(pspId, type, value);
             }
         } catch (Exception e) {
-            // Unique-constraint race or cache hiccup — the check path still works via DB.
-            log.warn("Failed to persist blacklist entry {}={}: {}", type, value, e.getMessage());
+            log.warn("Failed to persist blacklist entry {}={} psp={}: {}",
+                    type, value, pspId, e.getMessage());
         }
     }
 }
