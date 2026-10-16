@@ -60,6 +60,11 @@ public class PspApiKeyAuthenticationFilter extends OncePerRequestFilter {
     public static final String MACHINE_ROLE = "PSP_INTEGRATION";
     /** Request attribute carrying the authenticated key id (for audit/usage). */
     public static final String API_KEY_ID_ATTRIBUTE = PspApiKeyAuthenticationFilter.class.getName() + ".keyId";
+    /**
+     * The request attribute {@code org.springframework.security.web.session.SessionManagementFilter}
+     * sets once it has processed a request (its private FILTER_APPLIED constant); present means "skip".
+     */
+    static final String SESSION_MANAGEMENT_APPLIED_ATTRIBUTE = "__spring_security_session_mgmt_filter_applied";
 
     /** Machine endpoints, relative to the servlet context path. */
     static final List<String> MACHINE_PATTERNS = List.of(
@@ -188,6 +193,13 @@ public class PspApiKeyAuthenticationFilter extends OncePerRequestFilter {
         context.setAuthentication(auth);
         SecurityContextHolder.setContext(context);
         request.setAttribute(API_KEY_ID_ATTRIBUTE, key.keyId());
+        // Keep machine calls stateless. Spring Security's SessionManagementFilter runs after this
+        // filter; seeing a fresh non-anonymous authentication it ran the session strategies
+        // (concurrency registration creates an HTTP session) and SAVED the machine identity into that
+        // session. The JSESSIONID then authenticated later calls with no key, a tampered key or a
+        // revoked key, and every ingest call allocated a server-side session. Marking the request as
+        // already handled makes SessionManagementFilter skip it entirely.
+        request.setAttribute(SESSION_MANAGEMENT_APPLIED_ATTRIBUTE, Boolean.TRUE);
         try {
             chain.doFilter(request, response);
         } finally {

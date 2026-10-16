@@ -155,6 +155,24 @@ class PspApiKeyAuthenticationTest {
     }
 
     @Test
+    void apiKeyCallCreatesNoSessionAndItsCookieCannotReplaceTheKey() throws Exception {
+        // Regression (sim 2026-10-16): SessionManagementFilter saved the machine identity into a new
+        // HTTP session, so the JSESSIONID kept authenticating ingest after the key was tampered with
+        // or revoked, and every machine call allocated a server-side session.
+        MvcResult started = mvc.perform(post("/transactions/ingest").header("X-Api-Key", GOOD))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mvc.perform(asyncDispatch(started)).andExpect(status().isOk());
+        assertThat(started.getRequest().getSession(false)).as("no HTTP session for API-key calls").isNull();
+        assertThat(started.getResponse().getHeader("Set-Cookie")).isNull();
+
+        // Even a session explicitly carried over from that request must not authenticate a bad key.
+        org.springframework.mock.web.MockHttpSession carried = new org.springframework.mock.web.MockHttpSession();
+        mvc.perform(post("/transactions/ingest").session(carried).header("X-Api-Key", "hka_tampered"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void realIngestEndpointsAdmitTheMachineRole() throws Exception {
         for (String m : new String[]{"ingestTransaction", "batchIngestTransactions", "getTransactionAssessment"}) {
             java.lang.reflect.Method method = java.util.Arrays.stream(TransactionController.class.getMethods())
