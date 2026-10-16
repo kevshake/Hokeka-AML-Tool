@@ -57,8 +57,14 @@ public class RateLimitingFilter implements Filter {
             return;
         }
 
-        // 1) Per-minute rate limit on every tenant API call.
-        if (!quotaService.isWithinRateLimit(pspId)) {
+        // 1) Per-minute rate limit on every tenant Console/API call. API-key machine calls are
+        // excluded: PspApiKeyAuthenticationFilter already enforces their documented per-key limit
+        // (hokeka.api-keys.rate-limit-per-minute, default 1200/min). Counting them here as well
+        // capped every integration at this tenant limit (120/min by default) and starved the
+        // PSP's Console users, who share the same counter.
+        boolean machineCall = httpRequest.getAttribute(
+                com.posgateway.aml.config.security.PspApiKeyAuthenticationFilter.API_KEY_ID_ATTRIBUTE) != null;
+        if (!machineCall && !quotaService.isWithinRateLimit(pspId)) {
             log.warn("Rate limit exceeded for PSP {}", pspId);
             writeTooManyRequests(httpResponse, "Rate limit exceeded. Please slow down and retry shortly.");
             return;
