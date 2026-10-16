@@ -22,7 +22,7 @@ _Status: approved direction (owner decisions 2026-10-16). Supersedes the dual-po
   - foreign keys point at it from `transaction_features`, `alerts`, `sar_transactions`, `case_transactions`, `alert_transactions` and `screening_activities`;
   - `Alert.panHash` stores a card hash;
   - mobile-money, multi-asset/crypto and travel-rule transactions have their own cloud stores.
-- **Existing PII leak:** `edge-host/.../channel/HokekaAiDecisionClient.java` POSTs the full enriched feature bag (pan_hash, amount, merchant…) to `/api/v1/edge/decision` for every ALERT/HOLD.
+- **Existing PII leak (removed in R10c):** `edge-host/.../channel/HokekaAiDecisionClient.java` POSTed the full enriched feature bag (pan_hash, amount, merchant…) to `/api/v1/edge/decision` for every ALERT/HOLD. The client and the endpoint are gone.
 - **Edge storage won't hold 5 years.**
   - `AerospikeFeatureStore` set `txn` uses a TTL of `EDGE_RETENTION_DAYS`, default 90 days.
   - Aerospike keeps its primary index in RAM: at 1M transactions/day for 5 years, that is about 117 GB of index alone.
@@ -181,7 +181,6 @@ _Status: approved direction (owner decisions 2026-10-16). Supersedes the dual-po
 **Deleted (in R12, after parity sign-off):**
 - `POST /transactions/ingest`, `/ingest/batch`
 - `/transaction/result`
-- `POST /edge/decision`
 - the cloud stores behind `monitoring/transactions`, `mobile-money/transactions` and `virtual-assets/transactions`. Each becomes a proxy to the Edge or is removed.
 
 ## Console
@@ -227,7 +226,7 @@ _Status: approved direction (owner decisions 2026-10-16). Supersedes the dual-po
    - the graph becomes the on-demand `txn.related` op.
    - The parity gate (decision 7) applies.
    - Note: the ~60 seeded typology rules are SpEL and are currently dropped by `EdgeRuleCompiler` ("no structured rule_json"). They must be compiled to the Edge IR.
-6. **AI advisory client.** Remove `HokekaAiDecisionClient`'s feature-bag POST now, because it is an existing PII leak. AI advisory comes back later fed only by decision records.
+6. **AI advisory client.** `HokekaAiDecisionClient`'s feature-bag POST is removed (R10c), because it was a PII leak. AI advisory comes back later fed only by decision records.
 7. **SAR drafts.** Auto-generated transaction tables are rendered when viewed and persisted only at filing. Analyst narratives are workflow data; warn about PANs in narratives and redact them.
 8. **Travel Rule (VASP).** Originator/beneficiary exchange is either done by the Edge, or relayed by the cloud without persisting. Owner decision still open.
 9. **Platform admin access.** Governed by decision 10.

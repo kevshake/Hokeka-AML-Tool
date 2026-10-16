@@ -21,9 +21,8 @@ the engine can reach:
 
 The full field-by-field rules are in [`EDGE_DATA_RESIDENCY_CONTRACT.md`](EDGE_DATA_RESIDENCY_CONTRACT.md) §2.
 
-One exception exists today. For `ALERT` and `HOLD` decisions the Edge asks the Control Plane for a
-Hokeka AI recommendation and sends the evaluation's feature values with that request. Its removal is
-planned (R10c).
+There is no exception. The former Hokeka AI recommendation request, which sent the evaluation's
+feature values for `ALERT` and `HOLD` decisions, was removed in R10c.
 
 Planned, not built yet:
 
@@ -549,7 +548,7 @@ only delete ledger data when your retention obligations allow it.
 
 | Guarantee | Enforced by | Depends on you |
 |---|---|---|
-| Transaction data stays in your estate | Only decision records (IDs, action, score, rule IDs) and aggregates are shipped. Exception today: the Hokeka AI recommendation request (removal planned, R10c) | — |
+| Transaction data stays in your estate | Only decision records (IDs, action, score, rule IDs) and aggregates are shipped | — |
 | No inbound connection from Hokeka | The Edge opens every connection, outbound on 443 | Not opening ports yourself |
 | No plaintext transaction API | TLS 1.3 in-process; the engine refuses to start without a keystore | Replacing the self-signed cert (§6.1) |
 | The databases are reachable only by the engine | No published ports / loopback + firewall; ledger password | Not publishing 3000 or 5432; isolating a shared site database |

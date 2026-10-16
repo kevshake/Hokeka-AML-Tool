@@ -27,30 +27,6 @@ public final class AiDisclosureSanitizer {
     private AiDisclosureSanitizer() {
     }
 
-    /** Generic fallback text for Edge and tenant audit surfaces. */
-    public static String sanitizeFallbackReason(String internalReason) {
-        if (internalReason == null || internalReason.isBlank()) {
-            return null;
-        }
-        String lower = internalReason.toLowerCase(Locale.ROOT);
-        if (lower.contains("inline mode off") || lower.contains("async request")) {
-            return "Hokeka AI advisory deferred; rules baseline used";
-        }
-        if (lower.contains("timeout") || lower.contains("circuit breaker")) {
-            return "Hokeka AI advisory timed out; rules baseline used";
-        }
-        if (lower.contains("budget")) {
-            return "Hokeka AI advisory limit reached; rules baseline used";
-        }
-        if (lower.contains("engine disabled") || lower.contains("not configured")) {
-            return "Hokeka AI advisory unavailable; rules baseline used";
-        }
-        if (lower.contains("low confidence")) {
-            return "Hokeka AI advisory inconclusive; rules baseline used";
-        }
-        return "Hokeka AI advisory unavailable; rules baseline used";
-    }
-
     public static boolean containsForbiddenDisclosure(String text) {
         if (text == null || text.isBlank()) {
             return false;

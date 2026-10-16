@@ -107,7 +107,6 @@ class EdgeDistributionControllerTest {
                 enrollmentService,
                 distributionService,
                 new EdgeMetricsIngestService(metricsRepository),
-                org.mockito.Mockito.mock(com.posgateway.aml.service.edge.EdgeDecisionService.class),
                 org.mockito.Mockito.mock(com.posgateway.aml.service.edge.EdgeAssessmentService.class),
                 new EdgeReplayGuard(),
                 controlPlaneKeys,
@@ -157,6 +156,20 @@ class EdgeDistributionControllerTest {
 
         assertArrayEquals(BUNDLE_BYTES, result.getResponse().getContentAsByteArray());
         verify(enrollmentService).recordBundleDelivery(7L, 37L, null);
+    }
+
+    /**
+     * R10c: the feature-bag POST is removed. Even an ACTIVE edge with a verified certificate finds no
+     * {@code /edge/decision} endpoint, so no transaction features can be accepted by the cloud.
+     */
+    @Test
+    void theFeatureBagDecisionEndpointNoLongerExists() throws Exception {
+        mockMvc.perform(edgeRequest(post("/edge/decision"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engine\":\"TRANSACTION_RISK\",\"baselineDecision\":\"HOLD\","
+                                + "\"features\":{\"pan_hash\":\"h\",\"amount_cents\":1},\"async\":false}"))
+                .andExpect(status().isNotFound());
+        verify(enrollmentService, never()).recordSeen(anyLong(), any());
     }
 
     @Test

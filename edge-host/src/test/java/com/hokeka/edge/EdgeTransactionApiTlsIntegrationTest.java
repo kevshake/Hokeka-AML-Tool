@@ -24,7 +24,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,7 +52,7 @@ class EdgeTransactionApiTlsIntegrationTest {
 
     @DynamicPropertySource
     static void tlsAndChannel(DynamicPropertyRegistry registry) throws Exception {
-        keystore = generateKeystore();
+        keystore = TestTlsKeystore.generate(STORE_PASSWORD);
         Path identity = Files.createTempDirectory("edge-identity").resolve("edge-identity.json");
 
         registry.add("server.ssl.key-store", keystore::toString);
@@ -139,22 +138,4 @@ class EdgeTransactionApiTlsIntegrationTest {
                 .sslContext(ssl).sslParameters(params).build();
     }
 
-    private static Path generateKeystore() throws Exception {
-        Path dir = Files.createTempDirectory("edge-tls");
-        Path store = dir.resolve("edge-tls.p12");
-        Path keytool = Path.of(System.getProperty("java.home"), "bin",
-                System.getProperty("os.name").toLowerCase().contains("win") ? "keytool.exe" : "keytool");
-        Process process = new ProcessBuilder(keytool.toString(),
-                "-genkeypair", "-alias", "edge", "-keyalg", "EC", "-groupname", "secp384r1",
-                "-sigalg", "SHA384withECDSA", "-validity", "825", "-storetype", "PKCS12",
-                "-keystore", store.toString(), "-storepass", STORE_PASSWORD, "-keypass", STORE_PASSWORD,
-                "-dname", "CN=hokeka-edge", "-ext", "SAN=dns:localhost,ip:127.0.0.1")
-                .redirectErrorStream(true)
-                .start();
-        if (!process.waitFor(60, TimeUnit.SECONDS) || !Files.isReadable(store)) {
-            throw new IllegalStateException("keytool could not create the test keystore: "
-                    + new String(process.getInputStream().readAllBytes()));
-        }
-        return store;
-    }
 }

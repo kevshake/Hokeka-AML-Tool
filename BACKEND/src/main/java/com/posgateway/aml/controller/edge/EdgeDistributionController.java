@@ -6,8 +6,6 @@ import com.posgateway.aml.config.edge.EdgeControlPlaneKeys;
 import com.posgateway.aml.config.edge.EdgeProperties;
 import com.posgateway.aml.dto.edge.EdgeAssessmentIngestRequest;
 import com.posgateway.aml.dto.edge.EdgeAssessmentIngestResponse;
-import com.posgateway.aml.dto.edge.EdgeDecisionRequest;
-import com.posgateway.aml.dto.edge.EdgeDecisionResponse;
 import com.posgateway.aml.dto.edge.EdgeEnrollRequest;
 import com.posgateway.aml.dto.edge.EdgeEnrollResponse;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
@@ -15,7 +13,6 @@ import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.service.edge.EdgeAssessmentConflictException;
 import com.posgateway.aml.service.edge.EdgeAssessmentService;
 import com.posgateway.aml.service.edge.EdgeBundleDistributionService;
-import com.posgateway.aml.service.edge.EdgeDecisionService;
 import com.posgateway.aml.service.edge.EdgeEnrollmentException;
 import com.posgateway.aml.service.edge.EdgeEnrollmentService;
 import com.posgateway.aml.service.edge.EdgeIdentityResolver;
@@ -73,7 +70,6 @@ public class EdgeDistributionController {
     private final EdgeEnrollmentService enrollmentService;
     private final EdgeBundleDistributionService distributionService;
     private final EdgeMetricsIngestService metricsIngestService;
-    private final EdgeDecisionService edgeDecisionService;
     private final EdgeAssessmentService edgeAssessmentService;
     private final EdgeReplayGuard replayGuard;
     private final EdgeControlPlaneKeys controlPlaneKeys;
@@ -85,7 +81,6 @@ public class EdgeDistributionController {
                                       EdgeEnrollmentService enrollmentService,
                                       EdgeBundleDistributionService distributionService,
                                       EdgeMetricsIngestService metricsIngestService,
-                                      EdgeDecisionService edgeDecisionService,
                                       EdgeAssessmentService edgeAssessmentService,
                                       EdgeReplayGuard replayGuard,
                                       EdgeControlPlaneKeys controlPlaneKeys,
@@ -95,7 +90,6 @@ public class EdgeDistributionController {
         this.enrollmentService = enrollmentService;
         this.distributionService = distributionService;
         this.metricsIngestService = metricsIngestService;
-        this.edgeDecisionService = edgeDecisionService;
         this.edgeAssessmentService = edgeAssessmentService;
         this.replayGuard = replayGuard;
         this.controlPlaneKeys = controlPlaneKeys;
@@ -247,30 +241,9 @@ public class EdgeDistributionController {
         }
     }
 
-    // ── POST /edge/decision ──────────────────────────────────────────────────────────────────────
-
-    /**
-     * Edge → Control Plane JEV decision path. Authenticated via mTLS + ACTIVE node state.
-     * Laya is called only here on the Control Plane — never on the Edge Node.
-     */
-    @PostMapping(path = "/decision", consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<EdgeDecisionResponse> decision(HttpServletRequest request,
-                                                         @RequestBody EdgeDecisionRequest body) {
-        Optional<EdgeNode> authorized = authorize(request);
-        if (authorized.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        EdgeNode node = authorized.get();
-        EdgeDecisionResponse response = edgeDecisionService.handle(node, body);
-        enrollmentService.recordSeen(node.getId(), identityResolver.agentVersion(request));
-        return ResponseEntity.ok(response);
-    }
-
-
     /**
      * Accept an edge assessment envelope. Same mTLS identity and ACTIVE-node check as
-     * {@code /edge/metrics} and {@code /edge/decision}. Idempotent on {@code edgeAssessmentId}.
+     * {@code /edge/metrics}. Idempotent on {@code edgeAssessmentId}.
      */
     @PostMapping(path = "/assessments", consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)

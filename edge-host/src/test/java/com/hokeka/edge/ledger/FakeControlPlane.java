@@ -57,6 +57,20 @@ final class FakeControlPlane implements AutoCloseable {
     final List<int[]> requests = new CopyOnWriteArrayList<>();
     /** Validation problems seen on received payloads (must stay empty). */
     final List<String> problems = new CopyOnWriteArrayList<>();
+    /** Every request that reached this fake, on any path, in arrival order. */
+    final List<Outbound> outbound = new CopyOnWriteArrayList<>();
+    /** Opened (decrypted) plaintext of every sealed decision-record batch and metrics report. */
+    final List<String> openedPayloads = new CopyOnWriteArrayList<>();
+
+    /**
+     * One request as the Control Plane saw it.
+     *
+     * @param method HTTP method
+     * @param path   request path
+     * @param body   raw request body (sealed bytes for the sealed endpoints)
+     */
+    record Outbound(String method, String path, byte[] body) {
+    }
 
     FakeControlPlane(KeyPair controlPlaneX25519, PublicKey edgeEd25519, String edgeId, ContractSchemas schemas)
             throws Exception {
@@ -65,8 +79,24 @@ final class FakeControlPlane implements AutoCloseable {
         this.edgeId = edgeId;
         this.schemas = schemas;
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        // Every other path: recorded, then answered like the Control Plane would for a node with
+        // nothing new (bundle / config 304, metrics opened and 204). Anything else is 404, and is
+        // still recorded so a test can prove it was never called.
+        server.createContext("/", ex -> {
+            byte[] body = ex.getRequestBody().readAllBytes();
+            String path = ex.getRequestURI().getPath();
+            outbound.add(new Outbound(ex.getRequestMethod(), path, body));
+            int status = switch (path) {
+                case "/api/v1/edge/bundle", "/api/v1/edge/config" -> 304;
+                case "/api/v1/edge/metrics" -> openMetrics(body);
+                default -> 404;
+            };
+            ex.sendResponseHeaders(status, -1);
+            ex.close();
+        });
         server.createContext("/api/v1/edge/assessments", ex -> {
             byte[] body = ex.getRequestBody().readAllBytes();
+            outbound.add(new Outbound(ex.getRequestMethod(), ex.getRequestURI().getPath(), body));
             int status;
             byte[] out = new byte[0];
             try {
@@ -105,6 +135,7 @@ final class FakeControlPlane implements AutoCloseable {
         }
         JsonNode batch = codec.open(sealed, controlPlaneX25519.getPrivate(), edgeEd25519,
                 SealedEnvelopeCodec.CTX_DECISION_RECORDS, edgeId, Instant.now());
+        openedPayloads.add(batch.toString());
         List<String> violations = schemas.validate(ContractSchemas.DECISION_RECORD_BATCH_V2, batch);
         if (!violations.isEmpty()) {
             problems.add("batch schema: " + violations);
@@ -146,6 +177,26 @@ final class FakeControlPlane implements AutoCloseable {
             problems.add("ack schema: " + ackViolations);
         }
         return new Response(200, mapper.writeValueAsString(ack));
+    }
+
+    /**
+     * Opens a sealed metrics report (context {@code hokeka.metrics.report}) and keeps its plaintext;
+     * 204 when it opens, 400 (and a recorded problem) when it does not.
+     */
+    private int openMetrics(byte[] sealed) {
+        try {
+            openedPayloads.add(codec.open(sealed, controlPlaneX25519.getPrivate(), edgeEd25519,
+                    SealedEnvelopeCodec.CTX_METRICS_REPORT, edgeId, Instant.now()).toString());
+            return 204;
+        } catch (Exception e) {
+            problems.add("metrics: " + e);
+            return 400;
+        }
+    }
+
+    /** Paths of every request received, in order. */
+    List<String> outboundPaths() {
+        return outbound.stream().map(Outbound::path).toList();
     }
 
     /** Key-order independent JSON, so "byte-identical" means "same members and values". */

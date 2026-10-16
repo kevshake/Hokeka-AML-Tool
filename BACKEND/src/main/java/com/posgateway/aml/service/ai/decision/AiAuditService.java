@@ -87,7 +87,6 @@ public class AiAuditService {
         audit.setCaseId(context.getCaseId());
         audit.setMerchantId(context.getMerchantId());
         audit.setScreeningHitId(context.getScreeningHitId());
-        audit.setEdgeId(context.getEdgeId());
         return repository.save(audit);
     }
 
@@ -126,7 +125,6 @@ public class AiAuditService {
         audit.setCaseId(context.getCaseId());
         audit.setMerchantId(context.getMerchantId());
         audit.setScreeningHitId(context.getScreeningHitId());
-        audit.setEdgeId(context.getEdgeId());
         audit.setShadowMode(outcome.isShadowMode());
         audit.setWouldApply(outcome.isWouldApply());
         if (outcome.getBranch() != null) {

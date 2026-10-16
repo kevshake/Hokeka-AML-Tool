@@ -115,12 +115,16 @@ class PspActivationFilterTest {
      */
     @Test
     void edgeMachinePathsAreExemptButTheFleetAdminApiIsNot() throws Exception {
-        for (String path : new String[]{"/edge/enroll", "/edge/bundle", "/edge/metrics", "/edge/decision",
+        for (String path : new String[]{"/edge/enroll", "/edge/bundle", "/edge/metrics",
                 "/edge/assessments", "/edge/config", "/edge/tunnel"}) {
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1" + path);
             request.setContextPath("/api/v1");
             assertTrue(filter.shouldNotFilter(request), path + " must be exempt");
         }
+        // R10c: the feature-bag endpoint is gone, so it is no longer a machine path either.
+        MockHttpServletRequest removed = new MockHttpServletRequest("POST", "/api/v1/edge/decision");
+        removed.setContextPath("/api/v1");
+        assertFalse(filter.shouldNotFilter(removed), "/edge/decision was removed in R10c");
         MockHttpServletRequest admin = new MockHttpServletRequest("GET", "/api/v1/edge/nodes");
         admin.setContextPath("/api/v1");
         assertFalse(filter.shouldNotFilter(admin), "/edge/nodes is a user API");
