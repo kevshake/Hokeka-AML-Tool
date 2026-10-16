@@ -63,7 +63,7 @@ This installs Docker, rsyncs the repo to `/opt/aml-fraud-detector`, and brings t
 
 ### 1.3 Secrets — `/opt/aml-fraud-detector/.env`
 
-These are the variable names the compose file actually reads. Five of them are declared
+These are the variable names the compose file actually reads. The required ones are declared
 `${VAR:?...}`, so Compose **refuses to render** if they are missing — that is deliberate, do not
 paper over it with a default.
 
@@ -74,11 +74,13 @@ DATABASE_PASSWORD=<strong unique password>
 AUDIT_HMAC_KEY=<32-byte key>
 PII_LOOKUP_HMAC_KEY=<32-byte key>
 NEO4J_PASSWORD=<strong unique password>
-
-# Required in practice — auth and encryption are broken without them
 JWT_SECRET=<256-bit secret>
 ENCRYPTION_KEY=<base64 of 32 random bytes: openssl rand -base64 32>  # production boot fails if missing/invalid
 AML_MS_INTERNAL_KEY=<shared secret: backend -> aml-ms>
+AUTH_PASSWORD_RESET_PEPPER=<32-byte key>   # pepper for password-reset token hashes
+SEED_ADMIN_PASSWORD=<password for the bootstrap 'admin' login; used only when admin does not exist>
+
+# Also set
 AML_INTERNAL_API_KEY=<same shared secret; compatibility name for direct aml-ms launches>
 
 # Defaulted, override per environment

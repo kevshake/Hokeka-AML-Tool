@@ -40,6 +40,13 @@ hokeka_write_control_plane_env() {
   if ! grep -q '^ENCRYPTION_KEY=' "$env_file" 2>/dev/null; then
     hokeka_env_set "$env_file" "ENCRYPTION_KEY" "$(hokeka_random_b64 32)"
   fi
+  if ! grep -q '^AUTH_PASSWORD_RESET_PEPPER=' "$env_file" 2>/dev/null; then
+    hokeka_env_set "$env_file" "AUTH_PASSWORD_RESET_PEPPER" "$(hokeka_random_b64 32)"
+  fi
+  # Bootstrap 'admin' password (read it from the .env file; it is never printed).
+  if ! grep -q '^SEED_ADMIN_PASSWORD=' "$env_file" 2>/dev/null; then
+    hokeka_env_set "$env_file" "SEED_ADMIN_PASSWORD" "$(hokeka_random_b64 24 | tr '/+=' '_-x')"
+  fi
   if ! grep -q '^CORS_ALLOWED_ORIGINS=' "$env_file" 2>/dev/null; then
     printf 'CORS_ALLOWED_ORIGINS=%s\n' "${CORS_ALLOWED_ORIGINS:-https://aml.hokeka.com,https://testaml.hokeka.com}" >> "$env_file"
   fi

@@ -57,16 +57,30 @@ DATABASE_PASSWORD=<strong unique password>
 AUDIT_HMAC_KEY=<32-byte key>
 PII_LOOKUP_HMAC_KEY=<32-byte key>
 NEO4J_PASSWORD=<strong unique password>
-```
-
-### Required in practice (auth/encryption broken without them)
-
-```bash
 JWT_SECRET=<256-bit secret>
 ENCRYPTION_KEY=<base64 of 32 random bytes: openssl rand -base64 32>  # production boot fails if missing/invalid
 AML_MS_INTERNAL_KEY=<shared secret: backend → aml-ms>
+AUTH_PASSWORD_RESET_PEPPER=<32-byte key>   # pepper for password-reset token hashes
+SEED_ADMIN_PASSWORD=<strong unique password for the bootstrap 'admin' login>
+```
+
+### Also set
+
+```bash
 AML_INTERNAL_API_KEY=<same value as AML_MS_INTERNAL_KEY>
 ```
+
+**Bootstrap admin.** On first boot the Control Plane creates exactly one login, `admin`, with
+`SEED_ADMIN_PASSWORD`. It never resets an existing admin password. No demo accounts exist outside
+the `dev`/`test` profiles: migration V253 and the boot-time `DefaultCredentialGuard` disable any
+demo account (`super.admin`, `velocity.admin`, `compliance`, …) that still has the published default
+password, and rotate `admin` to `SEED_ADMIN_PASSWORD` if it still has it. To use one of those
+accounts, re-enable it in Console → Users and issue a password reset. The installer
+(`hokeka-install.sh`) generates both new secrets; read the admin password from `.env`.
+
+**Mail (optional).** `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`. With
+`MAIL_HOST` empty the platform runs without outbound mail and the `mail` health indicator is off,
+so it cannot pull `/actuator/health` DOWN.
 
 Generate each secret independently: `openssl rand -base64 32`. Never reuse across variables.
 
@@ -123,6 +137,28 @@ Optional rule-generator toggle (`AI_RULE_GENERATOR_ENABLED`) uses Laya `/v1/ask`
 
 Full reference: [`docs/INSTALL.md`](../INSTALL.md) §1.3.
 
+### Sanctions watchlist (first deploy)
+
+The `production` profile **refuses to start** when it cannot confirm a loaded sanctions watchlist
+(`SanctionsDataStartupCheck`): an empty list would make every screen return "no match". On a fresh
+install the aml-microservice set is empty, so choose one of:
+
+1. **Automatic (recommended):** set `SANCTIONS_DOWNLOAD_ENABLED=true` (and, if you use a licensed
+   mirror, `SANCTIONS_OPENSANCTIONS_URL`). On first boot the check sees the empty list, runs the
+   OpenSanctions download once synchronously, and continues when records are present. The full
+   dataset takes several minutes; `backend-prod` reports healthy afterwards. The daily refresh then
+   runs at 02:00 (`sanctions.download.cron`).
+2. **Pre-seeded:** start `aml-ms-prod` first and POST your watchlist to
+   `http://aml-ms-prod:8091/internal/v1/sanctions/ingest` (header `X-Internal-Auth: $AML_MS_INTERNAL_KEY`,
+   body `{"entities":[…]}`), confirm `GET /internal/v1/sanctions/count` returns `count > 0`, then
+   start `backend-prod`.
+
+Startup behaviour is deterministic: the check retries an unavailable count for
+`sanctions.startup.count-wait-seconds` (default 60 s in production), then **aborts** if the count is
+still unknown (`sanctions.startup.fail-closed-on-unavailable`, default true in production) or the list
+is still empty (`sanctions.startup.fail-closed-on-empty`, default true). The count probe has its own
+timeout, `AML_MICROSERVICE_COUNT_TIMEOUT_MS` (default 3000).
+
 ---
 
 ## Step 3 — Bring up the stack
@@ -159,7 +195,8 @@ curl -sf http://127.0.0.1:8088/
 Checklist:
 
 - [ ] No `CHANGE_ME_*` in `.env`
-- [ ] All five `${VAR:?}` secrets set
+- [ ] All required `${VAR:?}` secrets set (compose refuses to render otherwise)
+- [ ] `curl -s http://127.0.0.1:2637/actuator/health` shows `sanctionsData` UP (watchlist loaded)
 - [ ] `SPRING_PROFILES_ACTIVE=production` — **never `testenv`** (`ddl-auto=create-drop`, destroys DB)
 - [ ] Flyway migrations applied; `ddl-auto=validate`
 - [ ] Every container `(healthy)` in `docker compose ps`
@@ -234,7 +271,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 **Control plane**
 
 - [ ] No `CHANGE_ME_*` anywhere in `.env`
-- [ ] All five `${VAR:?}` secrets set; each generated independently
+- [ ] All required `${VAR:?}` secrets set (compose refuses to render otherwise)
+- [ ] `curl -s http://127.0.0.1:2637/actuator/health` shows `sanctionsData` UP (watchlist loaded); each generated independently
 - [ ] `SPRING_PROFILES_ACTIVE=production`
 - [ ] Flyway clean; `ddl-auto=validate`
 - [ ] `docker compose ps` — all `(healthy)`

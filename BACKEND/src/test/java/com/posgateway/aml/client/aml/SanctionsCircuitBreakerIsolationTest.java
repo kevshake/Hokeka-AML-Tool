@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Verifies the fix for W14-5: sanctions screening (SanctionsScreenClient, SanctionsCountClient)
@@ -14,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  * (ScoringService). Resilience4j breaker instances are shared by name application-wide, so a burst
  * of sanctions-service 503s opened the shared breaker and degraded AML risk scoring too, even
  * though nothing was actually wrong with that path. Both sanctions clients must now share a
- * DEDICATED breaker name, distinct from "amlMicroservice".
+ * DEDICATED breaker name, distinct from "amlMicroservice". The count probe (SanctionsCountClient) is
+ * deliberately not on any breaker.
  */
 class SanctionsCircuitBreakerIsolationTest {
 
@@ -31,20 +33,21 @@ class SanctionsCircuitBreakerIsolationTest {
         assertNotEquals("amlMicroservice", name);
     }
 
+    /**
+     * The count is a health probe: it carries no breaker at all, so probe timeouts can never open
+     * the breaker that protects real screening traffic, and the probe always reports live state.
+     */
     @Test
-    void sanctionsCountClientNoLongerSharesTheAmlMicroserviceBreaker() throws Exception {
-        String name = circuitBreakerNameOn(SanctionsCountClient.class, "doGetCount");
-        assertNotEquals("amlMicroservice", name);
+    void sanctionsCountProbeIsNotOnAnyBreaker() {
+        for (Method m : SanctionsCountClient.class.getDeclaredMethods()) {
+            assertNull(m.getAnnotation(CircuitBreaker.class), "unexpected breaker on " + m.getName());
+        }
     }
 
     @Test
-    void bothSanctionsClientsShareTheSameDedicatedBreaker() throws Exception {
+    void screeningUsesTheDedicatedSanctionsBreaker() throws Exception {
         String screenBreaker = circuitBreakerNameOn(SanctionsScreenClient.class, "doScreen",
                 SanctionsScreenClient.BackendSanctionsScreenRequest.class);
-        String countBreaker = circuitBreakerNameOn(SanctionsCountClient.class, "doGetCount");
-        // Same downstream dependency, same failure domain -- correctly correlated with each other,
-        // just decoupled from the unrelated AML-scoring breaker.
-        assertEquals(screenBreaker, countBreaker);
         assertEquals("sanctionsScreening", screenBreaker);
     }
 }

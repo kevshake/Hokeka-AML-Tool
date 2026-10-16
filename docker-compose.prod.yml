@@ -216,13 +216,29 @@ services:
       # Aerospike is no longer reachable from the API server — it lives in aml-ms-prod.
       AML_MICROSERVICE_URL: http://aml-ms-prod:8091
       AML_MICROSERVICE_ENABLED: "true"
-      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY}
+      AML_MS_INTERNAL_KEY: ${AML_MS_INTERNAL_KEY:?AML_MS_INTERNAL_KEY must be set}
       # application-production.properties reads ENCRYPTION_KEY (not SECURITY_ENCRYPTION_KEY)
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      # Required for JWT auth — must be set in .env or shell before docker-compose up
-      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
+      # EnvVarStartupValidator refuses to boot the production profile without these.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       AUDIT_HMAC_KEY: ${AUDIT_HMAC_KEY:?AUDIT_HMAC_KEY must be set}
       PII_LOOKUP_HMAC_KEY: ${PII_LOOKUP_HMAC_KEY:?PII_LOOKUP_HMAC_KEY must be set}
+      # Server-side pepper for password-reset token hashes (auth.password-reset.pepper).
+      AUTH_PASSWORD_RESET_PEPPER: ${AUTH_PASSWORD_RESET_PEPPER:?AUTH_PASSWORD_RESET_PEPPER must be set}
+      # Password for the single bootstrap 'admin' account. Used only when 'admin' does not exist yet
+      # (first boot), or to rotate an 'admin' that still has the shipped default password.
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD must be set}
+      # Outbound SMTP. Leave MAIL_HOST empty to run without mail (the mail health check is then off).
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@hokeka.com}
+      # Sanctions watchlist. With download enabled, an empty watchlist is seeded on first boot
+      # (see docs/install/03-control-plane.md "Sanctions watchlist (first deploy)").
+      SANCTIONS_DOWNLOAD_ENABLED: ${SANCTIONS_DOWNLOAD_ENABLED:-false}
+      SANCTIONS_OPENSANCTIONS_URL: ${SANCTIONS_OPENSANCTIONS_URL:-https://api.opensanctions.org/datasets/latest/default/entities.json}
+      AML_MICROSERVICE_COUNT_TIMEOUT_MS: ${AML_MICROSERVICE_COUNT_TIMEOUT_MS:-3000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://aml.hokeka.com,https://testaml.hokeka.com}
       SERVER_PORT: 2637
       SPRING_PROFILES_ACTIVE: production

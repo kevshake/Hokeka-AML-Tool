@@ -1,6 +1,8 @@
 package com.hokeka.aml.service;
 
 import com.aerospike.client.AerospikeClient;
+import com.aerospike.client.Info;
+import com.aerospike.client.cluster.Node;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
@@ -30,6 +32,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiFunction;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -336,11 +339,19 @@ public class SanctionsService {
     }
 
     /**
-     * Count records. Uses the secondary index if available for O(log n) count,
-     * otherwise scans keys only.
+     * Count sanctions records.
+     *
+     * <p>Primary path: Aerospike set metadata ({@link #countFromSetMetadata()}), an O(1) info call per
+     * node. The previous implementation streamed every record of the set through a secondary-index
+     * query or key scan on each call — O(n) and far slower than the Control Plane's sub-second
+     * client timeout even for a handful of records (the scan job start-up alone dominates), so the
+     * Control Plane health check and startup check always saw "count unavailable". The scan remains
+     * only as a fallback when the info protocol is not usable.
      */
     public long count() {
         if (!isAerospikeConnected()) return -1L;
+        long fromMetadata = countFromSetMetadata();
+        if (fromMetadata >= 0) return fromMetadata;
         if (useSearchIndex) {
             try {
                 Statement stmt = new Statement();
@@ -367,6 +378,60 @@ public class SanctionsService {
             return -1L;
         }
         return c.get();
+    }
+
+    /** Sends one Aerospike info command to one node; replaceable in tests. */
+    BiFunction<Node, String, String> infoRequester = (node, command) -> Info.request(null, node, command);
+
+    /**
+     * Counts the {@code sanctions} set from cluster metadata: sums {@code objects} from
+     * {@code sets/<ns>/<set>} over all nodes and divides by the namespace's effective replication
+     * factor (each node reports master and replica copies).
+     *
+     * @return the record count, or -1 when the info protocol fails (caller falls back to a scan)
+     */
+    long countFromSetMetadata() {
+        try {
+            Node[] nodes = aerospikeClient.getNodes();
+            if (nodes == null || nodes.length == 0) return -1L;
+            long objects = 0;
+            int replication = 1;
+            for (Node node : nodes) {
+                String setInfo = infoRequester.apply(node, "sets/" + namespace + "/" + SET_NAME);
+                long nodeObjects = parseInfoLong(setInfo, "objects", ":");
+                // A node that does not hold the set yet answers with an empty string -> 0 objects.
+                objects += Math.max(nodeObjects, 0L);
+                String nsInfo = infoRequester.apply(node, "namespace/" + namespace);
+                long rf = parseInfoLong(nsInfo, "effective_replication_factor", ";");
+                if (rf <= 0) rf = parseInfoLong(nsInfo, "replication-factor", ";");
+                if (rf > replication) replication = (int) rf;
+            }
+            replication = Math.max(1, Math.min(replication, nodes.length));
+            return objects / replication;
+        } catch (Exception e) {
+            log.warn("Sanctions count via set metadata failed, falling back to scan: {}", e.getMessage());
+            return -1L;
+        }
+    }
+
+    /**
+     * Extracts a numeric {@code key=value} entry from an Aerospike info response.
+     *
+     * @return the value, or -1 when absent or not numeric
+     */
+    static long parseInfoLong(String info, String key, String separator) {
+        if (info == null || info.isBlank()) return -1L;
+        for (String part : info.trim().split(java.util.regex.Pattern.quote(separator))) {
+            int eq = part.indexOf('=');
+            if (eq > 0 && part.substring(0, eq).trim().equals(key)) {
+                try {
+                    return Long.parseLong(part.substring(eq + 1).trim());
+                } catch (NumberFormatException e) {
+                    return -1L;
+                }
+            }
+        }
+        return -1L;
     }
 
     // -------------------- internals --------------------

@@ -24,9 +24,16 @@ import java.util.Arrays;
  *       under the {@code production} profile, if {@code sanctions.startup.fail-closed-on-empty=true}
  *       (default {@code true} in prod), the boot is aborted so an operator cannot unknowingly run
  *       an AML platform with no sanctions data.</li>
- *   <li>count unavailable (microservice not up yet at boot, count &lt; 0) → WARN only (transient;
- *       the {@code sanctionsData} health indicator continues to report it at runtime).</li>
+ *   <li>count unavailable (count &lt; 0) → the check retries for
+ *       {@code sanctions.startup.count-wait-seconds} (default 60 s under {@code production}, 0
+ *       elsewhere) to absorb container start-up ordering. If it is still unknown, under
+ *       {@code production} with {@code sanctions.startup.fail-closed-on-unavailable=true} (the default
+ *       there) boot is aborted: an AML platform that cannot confirm it has sanctions data must not
+ *       start serving. Elsewhere it logs a WARN and continues.</li>
  * </ul>
+ *
+ * <p>The outcome is therefore deterministic for a given configuration and microservice state; it no
+ * longer depends on whether a single 400 ms probe happened to win a race.
  *
  * <p>Fail-closed is intentionally gated to {@code production} + a flag so dev/test (where the
  * microservice may not be running) still boot; the {@link ApplicationReadyEvent} fires after the
@@ -37,10 +44,84 @@ public class SanctionsDataStartupCheck implements ApplicationListener<Applicatio
 
     private static final Logger log = LoggerFactory.getLogger(SanctionsDataStartupCheck.class);
 
-    private final SanctionsCountClient sanctionsCountClient;
+    /** Delay between count attempts while waiting for the microservice. */
+    static final long RETRY_INTERVAL_MS = 2000L;
 
-    public SanctionsDataStartupCheck(SanctionsCountClient sanctionsCountClient) {
+    private final SanctionsCountClient sanctionsCountClient;
+    /** Time source (replaced in tests together with {@link #sleeper}). */
+    java.util.function.LongSupplier clock = System::currentTimeMillis;
+    /** Sleep hook (replaced in tests so retries do not slow the suite). */
+    java.util.function.LongConsumer sleeper = ms -> {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    };
+
+    private final org.springframework.beans.factory.ObjectProvider<
+            com.posgateway.aml.service.download.SanctionsListDownloadService> downloadServiceProvider;
+
+    public SanctionsDataStartupCheck(SanctionsCountClient sanctionsCountClient,
+                                     org.springframework.beans.factory.ObjectProvider<
+                                             com.posgateway.aml.service.download.SanctionsListDownloadService>
+                                             downloadServiceProvider) {
         this.sanctionsCountClient = sanctionsCountClient;
+        this.downloadServiceProvider = downloadServiceProvider;
+    }
+
+    /**
+     * First-deploy seeding: when the watchlist is empty and the OpenSanctions download is enabled,
+     * runs the download once synchronously (the scheduled job would only run at 02:00, after the
+     * fail-closed check had already refused to boot) and re-reads the count.
+     *
+     * @return the count after seeding, or 0 when seeding is not possible or did not load anything
+     */
+    long seedEmptyWatchlist(boolean seedOnEmpty) {
+        if (!seedOnEmpty || downloadServiceProvider == null) {
+            return 0L;
+        }
+        com.posgateway.aml.service.download.SanctionsListDownloadService download =
+                downloadServiceProvider.getIfAvailable();
+        if (download == null || !download.isDownloadEnabled()) {
+            return 0L;
+        }
+        log.warn("Sanctions watchlist is EMPTY at startup and sanctions.download.enabled=true: running the "
+                + "initial OpenSanctions download now (first deploy). This can take several minutes.");
+        try {
+            download.manualDownload();
+        } catch (RuntimeException e) {
+            log.error("Initial sanctions download failed: {}", e.getMessage());
+            return 0L;
+        }
+        long after = readCountWithRetry(0);
+        return Math.max(after, 0L);
+    }
+
+    /**
+     * Reads the count, retrying while it is unavailable (-1) until {@code waitSeconds} elapse.
+     *
+     * @return the first non-negative count, or -1 if none was obtained in time
+     */
+    long readCountWithRetry(long waitSeconds) {
+        long deadline = clock.getAsLong() + Math.max(0L, waitSeconds) * 1000L;
+        int attempt = 0;
+        while (true) {
+            attempt++;
+            long count;
+            try {
+                count = sanctionsCountClient.getCount();
+            } catch (RuntimeException e) {
+                log.warn("Sanctions count attempt {} failed: {}", attempt, e.getMessage());
+                count = -1L;
+            }
+            if (count >= 0 || clock.getAsLong() >= deadline || Thread.currentThread().isInterrupted()) {
+                return count;
+            }
+            log.info("Sanctions watchlist count not available yet (attempt {}); retrying in {} ms",
+                    attempt, RETRY_INTERVAL_MS);
+            sleeper.accept(RETRY_INTERVAL_MS);
+        }
     }
 
     @Override
@@ -51,15 +132,12 @@ public class SanctionsDataStartupCheck implements ApplicationListener<Applicatio
         boolean failClosedOnEmpty = Boolean.parseBoolean(
                 env.getProperty("sanctions.startup.fail-closed-on-empty", String.valueOf(isProduction)));
 
-        long count;
-        try {
-            count = sanctionsCountClient.getCount();
-        } catch (RuntimeException e) {
-            log.warn("Sanctions watchlist startup check could not read the count: {} — "
-                    + "runtime /actuator/health (sanctionsData) will continue to report status.",
-                    e.getMessage());
-            return;
-        }
+        long waitSeconds = Long.parseLong(env.getProperty("sanctions.startup.count-wait-seconds",
+                isProduction ? "60" : "0"));
+        boolean failClosedOnUnavailable = Boolean.parseBoolean(env.getProperty(
+                "sanctions.startup.fail-closed-on-unavailable", String.valueOf(isProduction)));
+
+        long count = readCountWithRetry(waitSeconds);
 
         if (count > 0) {
             log.info("Sanctions watchlist OK: {} records loaded in the aml-microservice.", count);
@@ -67,14 +145,26 @@ public class SanctionsDataStartupCheck implements ApplicationListener<Applicatio
         }
 
         if (count < 0) {
-            // Microservice/Aerospike not reachable at boot — likely a startup ordering race, not
-            // necessarily an empty list. Warn but don't abort; the health indicator covers runtime.
-            log.warn("Sanctions watchlist count UNAVAILABLE at startup (aml-microservice not reachable). "
-                    + "Cannot confirm the watchlist is loaded — monitor /actuator/health (sanctionsData).");
+            String msg = "Sanctions watchlist count UNAVAILABLE after waiting " + waitSeconds + "s "
+                    + "(aml-microservice unreachable, Aerospike down, or internal key mismatch).";
+            if (failClosedOnUnavailable) {
+                throw new IllegalStateException("FAIL-CLOSED: " + msg + " Refusing to start without confirming "
+                        + "sanctions data. Check aml-ms health and AML_MS_INTERNAL_KEY, or set "
+                        + "sanctions.startup.fail-closed-on-unavailable=false (NOT recommended in production).");
+            }
+            log.warn("{} Continuing; monitor /actuator/health (sanctionsData).", msg);
             return;
         }
 
-        // count == 0 : microservice is up but the watchlist is EMPTY -> screening is non-functional.
+        // count == 0 : microservice is up but the watchlist is EMPTY. Try first-deploy seeding.
+        boolean seedOnEmpty = Boolean.parseBoolean(env.getProperty("sanctions.startup.seed-on-empty", "true"));
+        long seeded = seedEmptyWatchlist(seedOnEmpty);
+        if (seeded > 0) {
+            log.info("Sanctions watchlist seeded at startup: {} records loaded in the aml-microservice.", seeded);
+            return;
+        }
+
+        // Still EMPTY -> screening is non-functional.
         String banner = "\n"
                 + "============================================================================\n"
                 + "  🚨 SANCTIONS WATCHLIST IS EMPTY (0 records) — SANCTIONS SCREENING IS DEAD  \n"
