@@ -27,7 +27,7 @@ class SanctionsScreenBinsTest {
     void indexQueryProjectsEveryBinThatEvaluateRecordReads() throws Exception {
         String src = Files.readString(Path.of("src/main/java/com/hokeka/aml/service/SanctionsService.java"))
                 .replace("\r\n", "\n");
-        int start = src.indexOf("private void evaluateRecord(");
+        int start = src.indexOf("void evaluateRecord(");
         int end = src.indexOf("\n    }\n", start);
         Matcher m = Pattern.compile("record\\.getString\\(\"([A-Za-z]+)\"\\)").matcher(src.substring(start, end));
         Set<String> read = new LinkedHashSet<>();
