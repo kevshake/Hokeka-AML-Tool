@@ -53,7 +53,7 @@ class EdgeAssessmentCorrelationTest {
         server.createContext("/", ex -> {
             paths.add(ex.getRequestURI().getPath());
             bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            byte[] out = "{\"reasons\":[\"cp\"]}".getBytes(StandardCharsets.UTF_8);
+            byte[] out = "{\"reasons\":[\"cp\"],\"aiApplied\":true,\"fallback\":false}".getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", "application/json");
             ex.sendResponseHeaders(status.get(), out.length);
             ex.getResponseBody().write(out);
