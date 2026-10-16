@@ -58,6 +58,33 @@ class EdgeEngineNativeIT {
         assertTrue(miss.triggeredRuleIds().isEmpty());
     }
 
+    /**
+     * Cross-implementation parity: the shared IR v2 vectors evaluated by the real JNI build and by
+     * the Java interpreter must give identical decisions (and the recorded ones).
+     */
+    @Test
+    void nativeCoreAndJavaInterpreterAgreeOnTheSharedVectors() throws Exception {
+        com.fasterxml.jackson.databind.JsonNode file = EdgeRuleIrParityTest.vectors();
+        byte[] bundle = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(file.get("bundle"));
+        EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
+        engine.loadVerifiedBundle(bundle);
+        assertEquals(EdgeEngine.EVALUATOR_NATIVE, engine.activeEvaluator());
+        EdgeRuleInterpreter java = new EdgeRuleInterpreter();
+        java.loadBundle(bundle);
+        for (com.fasterxml.jackson.databind.JsonNode c : file.get("cases")) {
+            Map<String, Object> features = EdgeRuleIrParityTest.features(c);
+            EdgeEngine.Outcome nativeOutcome = engine.evaluateWithProvenance(features);
+            assertEquals(EdgeEngine.CONTRACT_EVALUATOR_NATIVE, nativeOutcome.evaluator(), c.get("name").asText());
+            Decision n = nativeOutcome.decision();
+            Decision j = java.evaluate(features);
+            String name = c.get("name").asText();
+            assertEquals(j.action(), n.action(), name);
+            assertEquals(j.score(), n.score(), name);
+            assertEquals(j.triggeredRuleIds(), n.triggeredRuleIds(), name);
+            assertEquals(c.get("expect").get("action").asText(), n.action().name(), name);
+        }
+    }
+
     @Test
     void malformedIrIsRejectedAndTheRunningBundleSurvives() {
         EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
