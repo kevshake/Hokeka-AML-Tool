@@ -96,72 +96,76 @@ Hokeka AML is a **single-instance, multi-tenant SaaS platform**. Each PSP
 
 ## 2. Authentication & Role-Based Access
 
-### JWT Token Flow
+The platform has two authentication modes. Use the one that matches the caller:
 
-All API requests (except login and public registration) require a
-**JWT Bearer token**.
+| Caller | Mechanism | Endpoints |
+|---|---|---|
+| **Your systems** (payment switch, back office jobs) | **PSP API key** — `X-Api-Key: hka_…` or `Authorization: Bearer hka_…` | Transaction ingest and assessment read-back (below) |
+| **People** using the Console | **Session cookie** (`JSESSIONID`) after `POST /api/v1/auth/login` | Everything the user's role allows |
 
+There is **no JWT**: a `Bearer` header is only accepted when it carries a PSP API key (`hka_…`).
+
+### 2.1 Machine integration — PSP API keys
+
+Hokeka platform administrators issue keys for your PSP (`POST /api/v1/admin/psp-api-keys?pspId=…`;
+ask your Hokeka contact). The full key (`hka_` + 43 characters) is shown **once**; only its SHA-256
+hash is stored. Keys are rotated with `POST /api/v1/admin/psp-api-keys/{id}/rotate` (the old key
+stops working immediately) and revoked with `DELETE /api/v1/admin/psp-api-keys/{id}`. Keys may
+carry an expiry (`hokeka.api-keys.default-ttl-days`).
+
+```http
+POST /api/v1/transactions/ingest
+X-Api-Key: hka_8Hq2...            # or: Authorization: Bearer hka_8Hq2...
+Idempotency-Key: auth-2026-000123
+Content-Type: application/json
 ```
-┌──────────┐                    ┌──────────┐
-│   PSP    │   POST /auth/login │  Hokeka  │
-│  System  │───────────────────▶│   AML    │
-│          │                    │ Platform │
-│          │◀───────────────────│          │
-│          │   { token, expiresIn }        │
-│          │                    │          │
-│          │   GET /alerts      │          │
-│          │   Authorization:   │          │
-│          │   Bearer eyJ...    │          │
-│          │───────────────────▶│          │
-└──────────┘                    └──────────┘
-```
 
-#### Login
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/transactions/ingest` | Ingest one transaction (§5) |
+| `POST /api/v1/transactions/ingest/batch` | Ingest a batch |
+| `GET /api/v1/transactions/{id}/assessment` | Read the assessment and findings for one of your transactions |
+
+Rules:
+
+- The key is bound to **your PSP**. Every merchant in an ingest request must belong to that PSP;
+  any other merchant id is answered `404 Merchant not found` (exactly like a non-existent one).
+- An invalid, revoked or expired key, or a key of a PSP that is not `ACTIVE`, gets
+  `401 {"error":"UNAUTHORIZED"}`. A key sent to any other endpoint is ignored (`401`/`403`).
+- Rate limits: per key `hokeka.api-keys.rate-limit-per-minute` (default 1200/min) and per client IP
+  for failed key attempts (default 20/min). Both answer `429` (`Retry-After: 60` for the per-key
+  limit).
+- Requests are stateless: no session cookie is created.
+
+### 2.2 Console users — session cookie
 
 ```http
 POST /api/v1/auth/login
 Content-Type: application/json
 
-{
-  "username": "psp_admin@mypayment.com",
-  "password": "your-secure-password"
-}
+{ "username": "psp_admin@mypayment.com", "password": "your-secure-password" }
 ```
 
-**Response**
+**Response** — the server sets the `JSESSIONID` cookie (`Secure`, `HttpOnly`, `SameSite=Strict`);
+send it on every later request.
 
 ```json
 {
-  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresIn": 86400,
-  "tokenType": "Bearer",
-  "userId": 42,
-  "pspId": 7,
-  "role": "PSP_ADMIN"
+  "success": true,
+  "user": { "id": 42, "username": "psp_admin@mypayment.com", "role": "PSP_ADMIN", "pspId": 7 },
+  "redirectUrl": "/dashboard"
 }
 ```
 
-#### Using the Token
-
-```http
-GET /api/v1/alerts
-Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-> **Important:** Tokens expire after 24 hours (configurable). Use the
-> refresh endpoint or re-login before expiry. Implement automatic
-> token refresh in your integration.
-
-#### Token Refreshing
-
-```http
-POST /api/v1/auth/session/refresh
-Authorization: Bearer <current-token>
-```
+- Idle timeout: 30 minutes (`SESSION_TIMEOUT`). `GET /api/v1/auth/session/check` reports the time
+  remaining; `POST /api/v1/auth/session/refresh` extends the session.
+- One active session per user: a new login ends the previous one.
+- `POST /api/v1/auth/logout` ends the session.
 
 ### PSP Scope Isolation
 
-The system automatically determines your PSP scope from the JWT token:
+The system determines your PSP scope from the authenticated principal (the API key's PSP, or the
+logged-in user's PSP):
 
 - **PSP_ADMIN / PSP_USER users** — all queries are automatically scoped
   to their PSP's data. They cannot see other PSPs' transactions, alerts,
@@ -187,7 +191,7 @@ An attempt to access another PSP's data returns `403 FORBIDDEN`.
 
 | Group | Base Path | Description | PSP Access |
 |---|---|---|---|
-| **Auth** | `/auth` | Login, token refresh, password reset | ✅ All roles |
+| **Auth** | `/auth` | Login (session cookie), session refresh, password reset | ✅ All roles |
 | **Transactions** | `/transactions` | Ingest & monitor transactions | ✅ PSP roles |
 | **Alerts** | `/alerts` | Fraud & AML alerts with disposition | ✅ PSP roles |
 | **Cases** | `/cases` | Case management & investigation | ✅ PSP roles |
@@ -199,7 +203,8 @@ An attempt to access another PSP's data returns `403 FORBIDDEN`.
 | **Payments** | `/billing/payments` | M-Pesa & bank payments | ✅ PSP_ADMIN |
 | **Subscriptions** | `/subscriptions` | Plan & tier management | ✅ PSP_ADMIN |
 | **PSPs** | `/psps` | PSP profile & configuration | ✅ PSP_ADMIN |
-| **Compliance** | `/compliance` | SAR, KYC, CBK reporting | ✅ Compliance roles |
+| **Compliance** | `/compliance` | SAR, KYC, CBK reporting | ✅ Compliance roles (SAR register: MLRO / COMPLIANCE_OFFICER only) |
+| **Blacklist** | `/blacklist` | Payment blacklist: PAN, terminal, IP, device, payment details, wallet | ✅ PSP_ADMIN, COMPLIANCE_OFFICER (own PSP; platform-wide list read-only) |
 | **Admin** | `/admin/psp-billing` | Billing management portal | ❌ Admin only |
 | **Users** | `/users` | User & role management | ✅ PSP_ADMIN |
 
@@ -226,6 +231,28 @@ When exceeded:
   "retryAfter": 45
 }
 ```
+
+### Payment blacklist
+
+Entries are scoped to your PSP; Hokeka also maintains a platform-wide list that applies to every
+PSP (you can read it, only Hokeka can change it). Removing an entry deactivates it (kept for audit);
+adding the same value again re-activates it. Every change is audit-logged.
+
+```http
+POST /api/v1/blacklist
+Cookie: JSESSIONID=...
+Content-Type: application/json
+
+{ "entryType": "pan", "value": "4111111111111111", "reason": "confirmed card fraud",
+  "expiresAt": "2026-12-31T23:59:59" }
+```
+
+- `entryType`: `pan`, `terminal`, `ip`, `device`, `payment_details`, `wallet`.
+- A PAN is accepted raw (12–19 digits) or as its 64-hex lookup hash; it is stored **only** as the
+  hash the ingest pipeline uses, never in clear.
+- `GET /api/v1/blacklist?type=&active=&page=&size=`, `GET /api/v1/blacklist/{id}`,
+  `PATCH /api/v1/blacklist/{id}` (`reason`, `expiresAt`, `clearExpiry`, `active`),
+  `DELETE /api/v1/blacklist/{id}?reason=`. A duplicate active entry → `409`.
 
 ---
 
@@ -259,7 +286,7 @@ subscription plan. Three billing models are available:
 **Real-time current month usage:**
 ```http
 GET /api/v1/billing/usage/{pspId}/current
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 ```
 
 **Response:**
@@ -363,7 +390,7 @@ PSP System                          Hokeka AML Platform
 
 ```http
 POST /api/v1/transactions/ingest
-Authorization: Bearer eyJ...
+X-Api-Key: hka_...
 Content-Type: application/json
 
 {
@@ -383,7 +410,13 @@ Content-Type: application/json
 }
 ```
 
-`merchantId` is the numeric platform merchant ID represented as a string.
+`merchantId` is the numeric platform merchant ID represented as a string; it must belong to your
+PSP. If you pre-authorised the transaction on an Edge Node, also send the `edgeAssessmentId` from
+the edge response (see `docs/EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`).
+
+Ingest errors are JSON: a non-numeric `merchantId` or a non-UUID `edgeAssessmentId` → `400`; a
+merchant that does not exist or belongs to another PSP → `404`; an `edgeAssessmentId` already linked
+to another transaction → `409`. Nothing is persisted for a rejected request.
 `amountCents` is an integer in the currency's minor unit. Send raw PAN only over
 TLS; the backend hashes it immediately and never persists the raw value.
 `customerAccountReference` must be a PSP-issued token or opaque reference, not
@@ -420,7 +453,7 @@ transactions, get a fraud result back per transaction) is:
 
 ```http
 POST /api/v1/transactions/ingest/batch
-Authorization: Bearer eyJ...
+X-Api-Key: hka_...
 Content-Type: application/json
 
 [
@@ -439,7 +472,7 @@ integration calls as part of normal transaction flow:
 
 ```http
 POST /api/v1/batch/score/yesterday
-Authorization: Bearer eyJ...    # SUPER_ADMIN or ADMIN role only
+Cookie: JSESSIONID=...    # Console session; SUPER_ADMIN or ADMIN role only
 ```
 
 ---
@@ -453,7 +486,7 @@ watchlists in real-time:
 
 ```http
 POST /api/v1/sanctions/screen
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -479,7 +512,7 @@ Content-Type: application/json
 
 ```http
 POST /api/v1/aml/check
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -496,7 +529,7 @@ Content-Type: application/json
 
 ```http
 GET /api/v1/risk/customer/{merchantId}/rating
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 ```
 
 ---
@@ -532,14 +565,14 @@ Case Created ──┬── APPROVE → CLOSED_CLEARED
 
 ```http
 GET /api/v1/alerts?page=0&size=25&status=open
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 ```
 
 ### Resolve an Alert
 
 ```http
 PUT /api/v1/alerts/{id}/resolve
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -588,7 +621,7 @@ POST /api/v1/cases/{id}/escalate
 
 ```http
 POST /api/v1/reports/generate
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -673,7 +706,7 @@ returned 404 before this fix; there was no controller at all) is simpler:
 
 ```http
 POST /api/v1/webhooks/subscribe
-Authorization: Bearer eyJ...
+Cookie: JSESSIONID=...
 Content-Type: application/json
 
 {
@@ -782,7 +815,7 @@ existing transaction without re-running statistics or outbox enqueue.
 | **201 Created** | Resource created | Extract ID from response |
 | **202 Accepted** | Async request accepted | Poll status endpoint |
 | **400 Bad Request** | Invalid payload | Check request format |
-| **401 Unauthorized** | Missing/invalid token | Re-authenticate |
+| **401 Unauthorized** | Missing/expired session, or invalid/revoked/expired API key | Log in again / check the key |
 | **403 Forbidden** | Insufficient permissions | Check PSP scope |
 | **404 Not Found** | Resource not found | Verify resource ID |
 | **409 Conflict** | Duplicate resource | Check idempotency key |
@@ -813,105 +846,51 @@ existing transaction without re-running statistics or outbox enqueue.
 ### cURL
 
 ```bash
-# 1. Authenticate
-TOKEN=$(curl -s -X POST https://api.hokeka.com/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"psp_admin@mypsp.com","password":"s3cr3t"}' | jq -r '.token')
+export HOKEKA_API_KEY=hka_...   # issued for your PSP; keep it in your secrets manager
 
-# 2. Ingest a transaction
-curl -s -X POST https://api.hokeka.com/api/v1/transactions/ingest \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount": 12500.00,
+# Ingest a transaction (machine integration)
+curl -s -X POST https://api.hokeka.com/api/v1/transactions/ingest   -H "X-Api-Key: $HOKEKA_API_KEY"   -H "Idempotency-Key: auth-2026-000123"   -H "Content-Type: application/json"   -d '{
+    "merchantId": "123",
+    "amountCents": 1250000,
     "currency": "KES",
-    "merchantId": "MRC-00123",
+    "pan": "4111111111111111",
     "ipAddress": "41.204.187.12",
-    "mcc": "5411"
+    "countryCode": "KE"
   }'
 
-# 3. Check your usage
-curl -s https://api.hokeka.com/api/v1/billing/usage/7/current \
-  -H "Authorization: Bearer $TOKEN"
+# Read the assessment of a transaction you ingested
+curl -s https://api.hokeka.com/api/v1/transactions/1048576/assessment   -H "X-Api-Key: $HOKEKA_API_KEY"
 ```
 
 ### Python
 
 ```python
+import os
 import requests
-import time
+
 
 class HokekaAMLClient:
-    def __init__(self, base_url, username, password):
-        self.base_url = base_url
-        self.token = None
-        self._login(username, password)
+    """Machine client: authenticates every call with the PSP API key (no login, no session)."""
 
-    def _login(self, username, password):
-        resp = requests.post(f"{self.base_url}/auth/login", json={
-            "username": username,
-            "password": password
-        })
-        resp.raise_for_status()
-        data = resp.json()
-        self.token = data["token"]
-        # Auto-refresh before expiry
-        self._expires_at = time.time() + data["expiresIn"] - 300
+    def __init__(self, base_url, api_key):
+        self.base_url = base_url.rstrip("/")
+        self.session = requests.Session()
+        self.session.headers.update({"X-Api-Key": api_key})
 
-    def _ensure_token(self):
-        if time.time() >= self._expires_at:
-            resp = requests.post(f"{self.base_url}/auth/session/refresh",
-                headers={"Authorization": f"Bearer {self.token}"})
-            resp.raise_for_status()
-            self.token = resp.json()["token"]
-
-    def _headers(self):
-        self._ensure_token()
-        return {"Authorization": f"Bearer {self.token}"}
-
-    def screen_transaction(self, amount, currency, merchant_id, **kwargs):
-        payload = {
-            "amount": amount,
-            "currency": currency,
-            "merchantId": merchant_id,
-            **kwargs
-        }
-        resp = requests.post(
-            f"{self.base_url}/transactions/ingest",
-            headers=self._headers(),
-            json=payload
-        )
-        resp.raise_for_status()
-        return resp.json()
-
-    def get_usage(self, psp_id):
-        resp = requests.get(
-            f"{self.base_url}/billing/usage/{psp_id}/current",
-            headers=self._headers()
-        )
+    def ingest(self, merchant_id, amount_cents, currency, client_reference, **fields):
+        payload = {"merchantId": str(merchant_id), "amountCents": amount_cents,
+                   "currency": currency, **fields}
+        resp = self.session.post(f"{self.base_url}/transactions/ingest", json=payload,
+                                 headers={"Idempotency-Key": client_reference}, timeout=10)
+        if resp.status_code == 429:
+            raise RuntimeError("rate limited; retry after " + resp.headers.get("Retry-After", "60") + "s")
         resp.raise_for_status()
         return resp.json()
 
 
-# Usage
-client = HokekaAMLClient(
-    base_url="https://api.hokeka.com/api/v1",
-    username="psp_admin@mypsp.com",
-    password="s3cr3t"
-)
-
-# Screen a transaction
-result = client.screen_transaction(
-    amount=12500.00,
-    currency="KES",
-    merchant_id="MRC-00123",
-    ip_address="41.204.187.12"
-)
-print(f"Decision: {result['decision']}, Score: {result['riskScore']}")
-
-# Check billing
-usage = client.get_usage(psp_id=7)
-print(f"Monthly cost: ${usage['totalCost']}")
+client = HokekaAMLClient("https://api.hokeka.com/api/v1", os.environ["HOKEKA_API_KEY"])
+result = client.ingest(123, 1250000, "KES", "auth-2026-000123", ipAddress="41.204.187.12")
+print(result["action"], result.get("score"))
 ```
 
 ### JavaScript / Node.js
@@ -919,53 +898,24 @@ print(f"Monthly cost: ${usage['totalCost']}")
 ```javascript
 const axios = require('axios');
 
-class HokekaAMLClient {
-  constructor(baseURL, username, password) {
-    this.client = axios.create({ baseURL });
-    this.username = username;
-    this.password = password;
-    this.token = null;
-    this.expiresAt = 0;
-  }
+const hokeka = axios.create({
+  baseURL: 'https://api.hokeka.com/api/v1',
+  headers: { 'X-Api-Key': process.env.HOKEKA_API_KEY },
+  timeout: 10000,
+});
 
-  async ensureToken() {
-    if (Date.now() >= this.expiresAt) {
-      const resp = await axios.post(`${this.client.defaults.baseURL}/auth/login`, {
-        username: this.username,
-        password: this.password
-      });
-      this.token = resp.data.token;
-      this.expiresAt = Date.now() + (resp.data.expiresIn - 300) * 1000;
-      this.client.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
-    }
-  }
-
-  async screenTransaction(txn) {
-    await this.ensureToken();
-    const { data } = await this.client.post('/transactions/ingest', txn);
-    return data;
-  }
-
-  async getUsage(pspId) {
-    await this.ensureToken();
-    const { data } = await this.client.get(`/billing/usage/${pspId}/current`);
-    return data;
-  }
+async function ingest(txn, clientReference) {
+  const { data } = await hokeka.post('/transactions/ingest', txn, {
+    headers: { 'Idempotency-Key': clientReference },
+  });
+  return data;
 }
 
-// Usage
-const client = new HokekaAMLClient(
-  'https://api.hokeka.com/api/v1',
-  'psp_admin@mypsp.com',
-  's3cr3t'
+const result = await ingest(
+  { merchantId: '123', amountCents: 1250000, currency: 'KES' },
+  'auth-2026-000123'
 );
-
-const result = await client.screenTransaction({
-  amount: 12500.00,
-  currency: 'KES',
-  merchantId: 'MRC-00123'
-});
-console.log(`Decision: ${result.decision}`);
+console.log(`Decision: ${result.action}`);
 ```
 
 ### Java / Spring Boot
@@ -973,33 +923,22 @@ console.log(`Decision: ${result.decision}`);
 ```java
 @Service
 public class HokekaAmlClient {
-    private final RestTemplate rest;
-    private String token;
-    private Instant expiresAt;
+    private final RestClient rest;
 
-    public HokekaAmlClient(@Value("${hokeka.api.base-url}") String baseUrl) {
-        this.rest = new RestTemplate();
-        rest.setUriTemplateHandler(new DefaultUriBuilderFactory(baseUrl));
+    public HokekaAmlClient(@Value("${hokeka.api.base-url}") String baseUrl,
+                           @Value("${hokeka.api.key}") String apiKey) {
+        this.rest = RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("X-Api-Key", apiKey)
+                .build();
     }
 
-    @PostConstruct
-    public void authenticate() {
-        var resp = rest.postForEntity("/auth/login", Map.of(
-            "username", "psp_admin@mypsp.com",
-            "password", "s3cr3t"
-        ), Map.class);
-        token = (String) resp.getBody().get("token");
-        expiresAt = Instant.now().plusSeconds((int) resp.getBody().get("expiresIn") - 300);
-    }
-
-    public Map screenTransaction(BigDecimal amount, String currency, String merchantId) {
-        if (Instant.now().isAfter(expiresAt)) authenticate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        var entity = new HttpEntity<>(Map.of(
-            "amount", amount, "currency", currency, "merchantId", merchantId
-        ), headers);
-        return rest.exchange("/transactions/ingest", HttpMethod.POST, entity, Map.class).getBody();
+    public Map<?, ?> ingest(String merchantId, long amountCents, String currency, String clientReference) {
+        return rest.post().uri("/transactions/ingest")
+                .header("Idempotency-Key", clientReference)
+                .body(Map.of("merchantId", merchantId, "amountCents", amountCents, "currency", currency))
+                .retrieve()
+                .body(Map.class);
     }
 }
 ```
