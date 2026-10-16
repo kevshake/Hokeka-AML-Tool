@@ -63,7 +63,7 @@ NEO4J_PASSWORD=<strong unique password>
 
 ```bash
 JWT_SECRET=<256-bit secret>
-ENCRYPTION_KEY=<32-byte key>
+ENCRYPTION_KEY=<base64 of 32 random bytes: openssl rand -base64 32>  # production boot fails if missing/invalid
 AML_MS_INTERNAL_KEY=<shared secret: backend → aml-ms>
 AML_INTERNAL_API_KEY=<same value as AML_MS_INTERNAL_KEY>
 ```

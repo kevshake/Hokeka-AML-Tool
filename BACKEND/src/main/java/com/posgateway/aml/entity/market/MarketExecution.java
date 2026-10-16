@@ -52,7 +52,9 @@ public class MarketExecution {
     private LocalDateTime marketCloseAt;
     @Column(name = "reference_price", precision = 28, scale = 10)
     private BigDecimal referencePrice;
-    @Column(name = "settlement_account_reference")
+    /** Settlement account identifier, AES-256-GCM encrypted at rest (V252 widened the column to TEXT). */
+    @Convert(converter = com.posgateway.aml.entity.converter.VersionedAesGcmStringConverter.class)
+    @Column(name = "settlement_account_reference", columnDefinition = "TEXT")
     private String settlementAccountReference;
     @JdbcTypeCode(SqlTypes.JSON) @Column(nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> metadata = new LinkedHashMap<>();

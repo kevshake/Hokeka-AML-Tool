@@ -52,7 +52,10 @@ public class ComplianceEntityLinkService {
             return;
         }
         if (transaction != null) {
-            if (transaction.getPanHash() != null && !transaction.getPanHash().isBlank()) {
+            // Legacy transaction rows may still carry a raw PAN until the startup scrub has run;
+            // never copy such a value onto the alert.
+            if (transaction.getPanHash() != null && !transaction.getPanHash().isBlank()
+                    && !com.posgateway.aml.util.PanHashGuard.looksLikeRawPan(transaction.getPanHash())) {
                 alert.setPanHash(transaction.getPanHash());
             }
             linkAlertToTransaction(alert.getAlertId(), transaction.getTxnId(), true);

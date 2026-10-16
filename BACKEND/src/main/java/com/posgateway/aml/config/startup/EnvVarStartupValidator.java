@@ -153,6 +153,11 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
                                 "MUST be a long random string in production — without it audit-log " +
                                 "checksums are forgeable. AuditLogService refuses to boot on prod when blank."),
 
+                EnvVarSpec.requiredIf("ENCRYPTION_KEY", isProduction,
+                        "Base64 of a 32-byte AES-256 key (e.g. `openssl rand -base64 32`) for column "
+                                + "encryption at rest: settlement/trust bank account numbers, UBO identifiers, "
+                                + "PSP secrets. Non-prod profiles may use SECURITY_ENCRYPTION_KEY instead. "
+                                + "FieldEncryptionKeyStartupCheck refuses to boot on prod when missing/invalid."),
                 EnvVarSpec.requiredIf("PII_LOOKUP_HMAC_KEY", isProduction,
                         "Stable keyed lookup secret for UBO passport and national-ID hashes. " +
                                 "Use at least 32 random characters."),
@@ -213,7 +218,9 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
 
                 // --- Sanctions / OpenSanctions ---
                 EnvVarSpec.recommended("SANCTIONS_DOWNLOAD_ENABLED",
-                        "Toggles the daily OpenSanctions downloader. When TRUE, BACKEND POSTs ingested "
+                        "Toggles the daily OpenSanctions downloader — the only automated source of sanctions "
+                                + "AND PEP/RCA classification data (PepDataSourceStartupCheck warns when off). "
+                                + "When TRUE, BACKEND POSTs ingested "
                                 + "entities to ${AML_MICROSERVICE_URL}/internal/v1/sanctions/ingest, so "
                                 + "AML_MICROSERVICE_BASE_URL and AML_MS_INTERNAL_KEY must also be set. "
                                 + "If TRUE without AML_MICROSERVICE_BASE_URL the ingest will be skipped "
@@ -291,10 +298,10 @@ public class EnvVarStartupValidator implements ApplicationListener<ApplicationRe
         return new EvaluatedVar(spec, Status.MISSING, "");
     }
 
+    /** Display form of a value: secrets show only their length, never any characters. */
     private String mask(EnvVarSpec spec, String value) {
         if (spec.isSecret()) {
-            if (value.length() <= 4) return "****";
-            return value.substring(0, 2) + "****" + value.substring(value.length() - 2);
+            return "set (" + value.length() + " chars)";
         }
         if (value.length() > 60) {
             return value.substring(0, 57) + "...";

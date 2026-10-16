@@ -17,8 +17,10 @@ import java.util.Base64;
  *
  * <p>The 256-bit symmetric key is read from the {@code SECURITY_ENCRYPTION_KEY}
  * environment variable. The key MUST be supplied as a base64-encoded 32-byte
- * value (URL-safe or standard, padded or not). {@code EnvVarStartupValidator}
- * already guards startup against a missing/short key.
+ * value (URL-safe or standard, padded or not). Production deployments set it as
+ * {@code ENCRYPTION_KEY}; Spring's {@code security.encryption.key} is bridged in by
+ * {@code FieldEncryptionKeyStartupCheck}, which also fails the production boot when the key
+ * is missing or invalid (and warns in other profiles) without logging key material.
  *
  * <p>Wire format (Postgres TEXT column): base64( IV(12 bytes) || GCM ciphertext+tag ).
  * A fresh 12-byte IV is generated per encryption with {@link SecureRandom}.
@@ -89,35 +91,101 @@ public class AesGcmStringConverter implements AttributeConverter<String, String>
         }
     }
 
+    /** Outcome of resolving the field-encryption key, without exposing key material. */
+    public enum KeyStatus {
+        /** A 32-byte key was resolved. */
+        OK,
+        /** No key source is set. */
+        MISSING,
+        /** A key source is set but is not base64 for exactly 32 bytes. */
+        INVALID
+    }
+
+    /**
+     * Resolves (and caches) the key and reports whether encryption is usable. Never throws and
+     * never returns or logs key material, so startup checks can call it safely.
+     */
+    public static KeyStatus keyStatus() {
+        try {
+            key();
+            return KeyStatus.OK;
+        } catch (IllegalStateException e) {
+            return firstKeySource() == null ? KeyStatus.MISSING : KeyStatus.INVALID;
+        } catch (IllegalArgumentException e) {
+            return KeyStatus.INVALID;
+        }
+    }
+
+    /**
+     * Supplies the key from Spring configuration ({@code security.encryption.key}) when none
+     * of the environment / system-property sources is set. Environment variables always win:
+     * if a key is already resolvable from them this call is a no-op.
+     *
+     * @param base64Key base64 (standard or URL-safe) encoding of a 32-byte key; blank is ignored
+     */
+    public static void configureKeyIfAbsent(String base64Key) {
+        if (base64Key == null || base64Key.isBlank() || firstKeySource() != null) {
+            return;
+        }
+        synchronized (AesGcmStringConverter.class) {
+            if (CACHED_KEY == null) {
+                CACHED_KEY = decodeKey(base64Key);
+            }
+        }
+    }
+
+    /** Clears the cached key so the next use re-resolves it (tests and key-source changes). */
+    static void resetCachedKey() {
+        synchronized (AesGcmStringConverter.class) {
+            CACHED_KEY = null;
+        }
+    }
+
+    /** First non-blank key source in precedence order, or null when none is set. */
+    private static String firstKeySource() {
+        String b64 = System.getenv(ENV_VAR);
+        if (b64 == null || b64.isBlank()) {
+            b64 = System.getenv(PRODUCTION_ENV_VAR);
+        }
+        if (b64 == null || b64.isBlank()) {
+            b64 = System.getProperty(ENV_VAR);
+        }
+        if (b64 == null || b64.isBlank()) {
+            b64 = System.getProperty("security.encryption.key");
+        }
+        return (b64 == null || b64.isBlank()) ? null : b64;
+    }
+
+    /** Decodes a base64 key and requires exactly 32 bytes (AES-256). */
+    private static SecretKey decodeKey(String b64) {
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(b64.trim());
+        } catch (IllegalArgumentException ex) {
+            // Allow URL-safe / unpadded encodings as well.
+            try {
+                keyBytes = Base64.getUrlDecoder().decode(b64.trim().replace("=", ""));
+            } catch (IllegalArgumentException notBase64) {
+                throw new IllegalStateException(ENV_VAR + " is not valid base64");
+            }
+        }
+        if (keyBytes.length != 32) {
+            throw new IllegalStateException(ENV_VAR + " must decode to 32 bytes (got " + keyBytes.length + ")");
+        }
+        return new SecretKeySpec(keyBytes, AES);
+    }
+
+    /** Returns the cached key, resolving it from the configured sources on first use. */
     private static SecretKey key() {
         SecretKey k = CACHED_KEY;
         if (k != null) return k;
         synchronized (AesGcmStringConverter.class) {
             if (CACHED_KEY != null) return CACHED_KEY;
-            String b64 = System.getenv(ENV_VAR);
-            if (b64 == null || b64.isBlank()) {
-                b64 = System.getenv(PRODUCTION_ENV_VAR);
-            }
+            String b64 = firstKeySource();
             if (b64 == null) {
-                b64 = System.getProperty(ENV_VAR);
-            }
-            if (b64 == null || b64.isBlank()) {
-                b64 = System.getProperty("security.encryption.key");
-            }
-            if (b64 == null || b64.isBlank()) {
                 throw new IllegalStateException(ENV_VAR + " is not set; refusing to encrypt PSP secrets");
             }
-            byte[] keyBytes;
-            try {
-                keyBytes = Base64.getDecoder().decode(b64.trim());
-            } catch (IllegalArgumentException ex) {
-                // Allow URL-safe / unpadded encodings as well.
-                keyBytes = Base64.getUrlDecoder().decode(b64.trim().replace("=", ""));
-            }
-            if (keyBytes.length != 32) {
-                throw new IllegalStateException(ENV_VAR + " must decode to 32 bytes (got " + keyBytes.length + ")");
-            }
-            CACHED_KEY = new SecretKeySpec(keyBytes, AES);
+            CACHED_KEY = decodeKey(b64);
             return CACHED_KEY;
         }
     }

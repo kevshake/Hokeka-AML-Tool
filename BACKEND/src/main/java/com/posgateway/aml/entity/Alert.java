@@ -126,9 +126,11 @@ public class Alert {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    /** Stamps creation time and re-checks that no raw PAN reached {@code pan_hash}. */
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "alerts.pan_hash");
     }
 
     // Getters and Setters
@@ -304,8 +306,12 @@ public class Alert {
         return panHash;
     }
 
+    /**
+     * Sets the denormalised card identity hash. Rejects raw-PAN-shaped values (13-19 digits);
+     * see {@link com.posgateway.aml.util.PanHashGuard}.
+     */
     public void setPanHash(String panHash) {
-        this.panHash = panHash;
+        this.panHash = com.posgateway.aml.util.PanHashGuard.requireNotRawPan(panHash, "alerts.pan_hash");
     }
 
     public String getDispositionReviewStatus() {

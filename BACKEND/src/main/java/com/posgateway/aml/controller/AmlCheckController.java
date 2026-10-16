@@ -79,6 +79,13 @@ public class AmlCheckController {
         Long pspId        = extractLong(request, "pspId", null);
         boolean cashTransaction = extractBoolean(request, "cashTransaction", false);
 
+        // panHash must be a hash/token; refuse raw card numbers before they reach any store or log.
+        if (com.posgateway.aml.util.PanHashGuard.looksLikeRawPan(panHash)) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "panHash must be a hash or token, not a raw card number");
+            return ResponseEntity.badRequest().body(error);
+        }
+
         logger.info("AML check request: txnId={} pspId={} merchant={} amount={}",
                 txnId, pspId, merchantId, amountCents);
 

@@ -25,7 +25,9 @@ public class PspTrustAccount {
     @Column(name = "bank_id", length = 64)
     private String bankId;
 
-    @Column(name = "bank_account_number", length = 128)
+    /** Trust bank account number, AES-256-GCM encrypted at rest (V252 widened the column to TEXT). */
+    @Convert(converter = com.posgateway.aml.entity.converter.VersionedAesGcmStringConverter.class)
+    @Column(name = "bank_account_number", columnDefinition = "TEXT")
     private String bankAccountNumber;
 
     @Column(name = "trust_acc_dr_type_code", length = 32)
