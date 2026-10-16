@@ -82,6 +82,23 @@ export interface SarReport {
   reviewNotes?: string;
   filedAt?: string;
   filingReference?: string;
+  /** The SAR's transactions by ID only; details are pulled live from the Edge. */
+  transactionReferences?: TransactionReference[];
+}
+
+/**
+ * How a workflow record (alert, case, SAR) references a transaction: by ID only. The cloud holds
+ * no transaction details; they are pulled live from the PSP's Edge.
+ */
+export interface TransactionReference {
+  /** Legacy cloud transaction id (legacy ingest rows only). */
+  transactionId?: number;
+  /** Decision record id. */
+  edgeAssessmentId?: string;
+  /** The PSP's own transaction id. */
+  txnRef?: string;
+  /** Edge Site holding the transaction. */
+  siteId?: string;
 }
 
 export type SarStatus = "DRAFT" | "REVIEW" | "APPROVED" | "FILED" | "REJECTED";
@@ -92,6 +109,12 @@ export interface Alert {
   priority: Priority;
   status: AlertStatus | string;
   transactionId?: number;
+  /** Decision record id of the alerted transaction. */
+  edgeAssessmentId?: string;
+  /** The PSP's own transaction id. */
+  txnRef?: string;
+  /** Edge Site holding the transaction. */
+  siteId?: string;
   caseId?: number;
   description: string;
   investigator?: string;
