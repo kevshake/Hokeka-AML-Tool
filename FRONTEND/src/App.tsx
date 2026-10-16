@@ -6,12 +6,15 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { isPlatformAdmin } from "./pages/EdgeNodes/edgeMeta";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
+import PermissionRoute from "./components/Auth/PermissionRoute";
 import HokekaLayout from "./layouts/HokekaLayout";
 import { RouteErrorBoundary } from "./components/Common/RouteErrorBoundary";
 import { LEGACY_CONSOLE_ROUTE_ALIASES } from "./lib/documentedConsoleRoutes";
 
 import LoginPage from "./pages/Auth/LoginPage";
 import SignupPage from "./pages/Auth/SignupPage";
+import ForgotPasswordPage from "./pages/Auth/ForgotPasswordPage";
+import PasswordResetConfirmPage from "./pages/Auth/PasswordResetConfirmPage";
 
 const DashboardPage = lazy(() => import("./pages/Dashboard/DashboardPage"));
 const CasesPage = lazy(() => import("./pages/Cases/CasesPage"));
@@ -80,6 +83,7 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Defines public authentication routes and protected Console routes. */
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -90,6 +94,9 @@ function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
+              <Route path="/password-reset.html" element={<PasswordResetConfirmPage />} />
               <Route
                 path="/*"
                 element={
@@ -97,6 +104,7 @@ function App() {
                     <HokekaLayout>
                       <RouteErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
+                          <PermissionRoute>
                           <Routes>
                             <Route index element={<Navigate to="/dashboard" replace />} />
                             <Route path="dashboard" element={<DashboardPage />} />
@@ -144,6 +152,7 @@ function App() {
                             <Route path="limits-aml" element={<LimitsAmlPage />} />
                             <Route path="billing" element={<BillingRoute />} />
                           </Routes>
+                          </PermissionRoute>
                         </Suspense>
                       </RouteErrorBoundary>
                     </HokekaLayout>

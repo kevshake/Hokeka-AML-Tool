@@ -318,7 +318,7 @@ function VerificationTab({ merchantId, signals, g2Scans, g2Rules, loading, lastO
       <div>
         <h2 className="text-base font-semibold text-white">Underwriting &amp; IDV evidence</h2>
         <p className="text-sm text-glass-muted">
-          Internal IDV auto-approve plus fail-closed external adapters (Smile ID, Match Pro, VMSS). Sumsub was removed; screening uses the platform engine.
+          Internal IDV auto-approve plus fail-closed external adapters (Smile ID, Match Pro, VMSS). Screening uses the platform engine.
         </p>
       </div>
       {canRun && <div className="flex flex-wrap gap-2">

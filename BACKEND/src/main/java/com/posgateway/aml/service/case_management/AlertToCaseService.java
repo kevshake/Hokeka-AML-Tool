@@ -56,19 +56,22 @@ public class AlertToCaseService {
     private final WorkflowAutomationService workflowService;
     private final CaseActivityService caseActivityService;
     private final CaseEscalationService caseEscalationService;
+    private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
 
     public AlertToCaseService(AlertRepository alertRepository,
                                ComplianceCaseRepository caseRepository,
                                MerchantRepository merchantRepository,
                                WorkflowAutomationService workflowService,
                                CaseActivityService caseActivityService,
-                               CaseEscalationService caseEscalationService) {
+                               CaseEscalationService caseEscalationService,
+                               com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService) {
         this.alertRepository = alertRepository;
         this.caseRepository = caseRepository;
         this.merchantRepository = merchantRepository;
         this.workflowService = workflowService;
         this.caseActivityService = caseActivityService;
         this.caseEscalationService = caseEscalationService;
+        this.complianceEntityLinkService = complianceEntityLinkService;
     }
 
     /**
@@ -118,6 +121,10 @@ public class AlertToCaseService {
                             .slaDeadline(slaDeadline)
                             .daysOpen(0)
                             .build();
+                    newCase.setSuspicionFormedAt(alert.getSuspicionFormedAt() != null
+                            ? alert.getSuspicionFormedAt()
+                            : LocalDateTime.now());
+                    newCase.setAlerts(new java.util.ArrayList<>());
                     ComplianceCase saved = caseRepository.save(newCase);
                     log.info("Created compliance case {} from alert #{} (disposition={})",
                             saved.getCaseReference(), alertId, disposition);
@@ -138,6 +145,7 @@ public class AlertToCaseService {
                 alert.getCreatedAt() != null ? alert.getCreatedAt() : LocalDateTime.now()
         );
         complianceCase.getAlerts().add(caseAlert);
+        complianceEntityLinkService.linkAlertToCase(alert, complianceCase, caseAlert);
 
         // Update alert status
         alert.setStatus("case_created");

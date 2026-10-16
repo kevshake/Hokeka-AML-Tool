@@ -3,6 +3,8 @@ import { useRuntimeErrors, RuntimeError } from "../../features/api/queries";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
 import TwPagination from "../../components/Common/TwPagination";
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 /**
  * W31-1: admin viewer for GET /admin/runtime-errors. The endpoint (RuntimeErrorController,
@@ -10,9 +12,9 @@ import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
  * were persisted but nobody could see them without a direct DB query.
  */
 export default function RuntimeErrorsPage() {
-  const [page, setPage] = useState({ index: 0, size: 25 });
+  const { state: tableState, setPage, setPageSize, exportFilterMap } = useUrlTableState();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const { data, isLoading } = useRuntimeErrors(page.index, page.size);
+  const { data, isLoading } = useRuntimeErrors(tableState.page, tableState.size);
 
   const content = data?.content || [];
   const totalElements = data?.totalElements ?? 0;
@@ -20,6 +22,9 @@ export default function RuntimeErrorsPage() {
 
   return (
     <HokekaPageShell title="Runtime Errors" subtitle="Persisted server errors, most recent first" noCard>
+      <div className="flex justify-end pb-3">
+        <ConsoleListExportMenu viewType="RUNTIME_ERRORS" filters={exportFilterMap} disabled={!totalElements} />
+      </div>
       <div className="overflow-hidden rounded-lg border border-white/10 bg-[var(--surface-2)]">
         <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 320px)" }}>
           {isLoading ? (
@@ -91,12 +96,12 @@ export default function RuntimeErrorsPage() {
           )}
         </div>
         <TwPagination
-          page={page.index}
+          page={tableState.page}
           totalPages={totalPages}
           totalCount={totalElements}
-          rowsPerPage={page.size}
-          onPageChange={(p) => setPage((prev) => ({ ...prev, index: p }))}
-          onRowsPerPageChange={(s) => setPage({ index: 0, size: s })}
+          rowsPerPage={tableState.size}
+          onPageChange={setPage}
+          onRowsPerPageChange={setPageSize}
         />
       </div>
     </HokekaPageShell>

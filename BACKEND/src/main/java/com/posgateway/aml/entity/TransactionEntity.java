@@ -3,6 +3,7 @@ package com.posgateway.aml.entity;
 import com.posgateway.aml.config.tenant.PspTenantFilter;
 import jakarta.persistence.*;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -53,8 +54,10 @@ public class TransactionEntity {
     @Column(name = "txn_ts")
     private LocalDateTime txnTs;
 
+    /** EMV tag map persisted as PostgreSQL JSONB (not varchar) for ingest and feature extraction. */
+    @JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "emv_tags", columnDefinition = "JSONB")
-    private String emvTags; // JSON string representation
+    private String emvTags;
 
     @Column(name = "acquirer_response")
     private String acquirerResponse;
@@ -90,6 +93,9 @@ public class TransactionEntity {
 
     @Column(name = "decision", length = 20)
     private String decision; // ALLOW, ALERT, HOLD, BLOCK (legacy values normalized on read)
+
+    @Column(name = "decision_v2", length = 16)
+    private String decisionV2; // ALLOW, FLAG, SUSPEND, BLOCK (canonical orchestrator output)
 
     @Column(name = "sar_required", nullable = false)
     private boolean sarRequired;
@@ -148,12 +154,14 @@ public class TransactionEntity {
     @Column(name = "customer_email", columnDefinition = "TEXT")
     private String customerEmail;
 
+    /** Initializes audit timestamps and legacy-column bridge defaults before insert. */
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         if (txnTs == null) {
             txnTs = LocalDateTime.now();
         }
+        TransactionLegacyColumnBridge.applyBeforePersist(this);
     }
 
     // Getters and Setters
@@ -331,6 +339,14 @@ public class TransactionEntity {
 
     public void setDecision(String decision) {
         this.decision = decision;
+    }
+
+    public String getDecisionV2() {
+        return decisionV2;
+    }
+
+    public void setDecisionV2(String decisionV2) {
+        this.decisionV2 = decisionV2;
     }
 
     public boolean isSarRequired() { return sarRequired; }

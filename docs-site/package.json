@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/verify-management-openapi.mjs && node scripts/generate-management-llms.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:openapi": "node scripts/verify-management-openapi.mjs"
   },
   "dependencies": {
     "flexsearch": "^0.7.43",

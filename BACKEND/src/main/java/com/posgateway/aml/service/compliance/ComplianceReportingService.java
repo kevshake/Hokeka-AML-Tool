@@ -59,6 +59,34 @@ public class ComplianceReportingService {
         this.pspIsolationService = pspIsolationService;
     }
 
+    /** Returns a paginated SAR list scoped to the caller's PSP (platform admins see all rows). */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<SarResponse> getSarsPage(String status, int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 100));
+        int safePage = Math.max(0, page);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                safePage, safeSize, org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        Long pspId = pspIsolationService.getCurrentUserPspId();
+        boolean isPlatformAdmin = pspIsolationService.isPlatformAdministrator();
+        org.springframework.data.domain.Page<SuspiciousActivityReport> pageResult;
+        if (status != null && !status.isEmpty()) {
+            try {
+                SarStatus sarStatus = SarStatus.valueOf(status);
+                pageResult = isPlatformAdmin
+                        ? sarRepository.findByStatus(sarStatus, pageable)
+                        : sarRepository.findByPspIdAndStatus(pspId, sarStatus, pageable);
+            } catch (IllegalArgumentException e) {
+                pageResult = org.springframework.data.domain.Page.empty();
+            }
+        } else {
+            pageResult = isPlatformAdmin
+                    ? sarRepository.findAll(pageable)
+                    : sarRepository.findByPspId(pspId, pageable);
+        }
+        return pageResult.map(sarMapper::toResponse);
+    }
+
     @Transactional(readOnly = true)
     public java.util.List<SarResponse> getAllSars(String status) {
         // HOK-61: use PspIsolationService for reliable PSP resolution.

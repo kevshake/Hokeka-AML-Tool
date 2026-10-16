@@ -58,6 +58,13 @@ Extended sizing, disk layout, and network detail: [`docs/edge-client-install-gui
 | **Native** | `--native` | Linux estates that prohibit containers |
 | **Windows** | `install.ps1` | Windows Server — container path only (no native Aerospike on Windows) |
 
+On a **fresh Linux or Windows host**, install prerequisites first with the unified bootstrap ([07 — First-run bootstrap](07-first-run-bootstrap.md)):
+
+```bash
+sudo ./scripts/install/hokeka-install.sh --role edge --yes -- \
+  --pspid <PSP_ID> --edgeid <EDGE_ID> --controlplane <URL> --enrollment-code <CODE>
+```
+
 ---
 
 ## Installation steps

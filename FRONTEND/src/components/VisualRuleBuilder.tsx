@@ -30,6 +30,7 @@ interface VisualRuleBuilderProps {
   onSave?: (rule: any) => void;
 }
 
+/** Builds rule JSON restricted to fields and operators supported by the Edge runtime. */
 export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilderProps) {
   const [groups, setGroups] = useState<RuleGroup[]>([
     {
@@ -40,8 +41,9 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
   ]);
 
   const fields = [
-    'amount', 'currency', 'country', 'merchantId', 'deviceFingerprint',
-    'ipAddress', 'velocityScore', 'roundAmount', 'levenshteinDistance'
+    'amount', 'currency', 'country_code', 'merchant_id', 'mcc', 'channel',
+    'pan_hash', 'ml_score', 'page_rank', 'connection_count', 'pan_txn_count_1m',
+    'pan_txn_count_5m', 'pan_txn_count_1h', 'krs', 'cra', 'trs'
   ];
 
   const operators = ['>=', '<=', '>', '<', '==', '!=', 'contains', 'in'];
@@ -57,8 +59,10 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     in: 'IN',
   };
 
+  /** Normalizes legacy field names before emitting Edge IR. */
   const edgeField = (field: string) => (field === 'country' ? 'country_code' : field);
 
+  /** Converts boolean and numeric form values to typed JSON scalars. */
   const coerceValue = (raw: string) => {
     if (raw === 'true') return true;
     if (raw === 'false') return false;
@@ -84,6 +88,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     return { conditions: condition };
   };
 
+  /** Publishes both the readable SpEL expression and canonical Edge IR. */
   const updateExpression = (newGroups: RuleGroup[]) => {
     let expression = '';
     const json = canonicalJson(newGroups);
@@ -92,7 +97,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
       if (gIndex > 0) expression += ` ${group.logic} `;
       expression += '(';
       group.conditions.forEach((cond, cIndex) => {
-        if (cIndex > 0) expression += ' AND ';
+        if (cIndex > 0) expression += ` ${group.logic} `;
         expression += `#tx.${cond.field} ${cond.operator} ${cond.value}`;
       });
       expression += ')';
@@ -101,6 +106,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     onChange(expression, json);
   };
 
+  /** Adds a default condition to the selected group and republishes the rule. */
   const addCondition = (groupId: string) => {
     const newGroups = groups.map(group => {
       if (group.id === groupId) {
@@ -123,6 +129,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     updateExpression(newGroups);
   };
 
+  /** Removes one condition from a group and republishes the rule. */
   const removeCondition = (groupId: string, conditionId: string) => {
     const newGroups = groups.map(group => {
       if (group.id === groupId) {
@@ -137,6 +144,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     updateExpression(newGroups);
   };
 
+  /** Updates a condition property and republishes the canonical rule. */
   const updateCondition = (groupId: string, conditionId: string, field: string, value: string) => {
     const newGroups = groups.map(group => {
       if (group.id === groupId) {
@@ -153,6 +161,7 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     updateExpression(newGroups);
   };
 
+  /** Adds a new AND group with one default amount condition. */
   const addGroup = () => {
     const newGroup: RuleGroup = {
       id: `group-${Date.now()}`,
@@ -168,6 +177,9 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
     <Paper sx={{ p: 3, backgroundColor: 'var(--surface-0)', color: 'white' }}>
       <Typography variant="h6" gutterBottom>
         Visual Rule Builder
+      </Typography>
+      <Typography variant="body2" sx={{ mb: 2, color: '#aaa' }}>
+        Only Edge-supported fields are listed; unsupported rule JSON is rejected by the API.
       </Typography>
 
       {groups.map((group, index) => (
@@ -238,10 +250,11 @@ export default function VisualRuleBuilder({ onChange, onSave }: VisualRuleBuilde
             onSave({
               ruleName: "Visual Rule",
               ruleExpression: groups
-                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(" AND ")})`)
+                .map((g) => `(${g.conditions.map((c) => `#tx.${c.field} ${c.operator} ${c.value}`).join(` ${g.logic} `)})`)
                 .join(` ${groups[0]?.logic ?? "OR"} `),
               ruleType: "SPEL",
               ruleJson: JSON.stringify(canonicalJson(groups)),
+              edgeDeployable: true,
             })
           }
           sx={{ ml: 2 }}

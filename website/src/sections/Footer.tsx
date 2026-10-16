@@ -1,3 +1,48 @@
+/** Site footer with platform, operations and contact links (original IA). */
 export default function Footer() {
-  return <footer className="footer"><div className="container"><div className="footer-grid"><div><a className="brand" href="#home"><img src="/hokeka-logo.png" alt=""/><span>Hokeka</span></a><p className="footer-summary">Unified financial crime intelligence across banking, securities, e-money and crypto.</p></div><div><h4>Platform</h4><div className="footer-links"><a href="#platform">Customer 360</a><a href="#solutions">Multi-asset AML</a><a href="#integrations">Integrations</a></div></div><div><h4>Operations</h4><div className="footer-links"><a href="#platform">Monitoring</a><a href="#platform">Investigations</a><a href="#platform">Reporting</a></div></div><div><h4>Contact</h4><div className="footer-links"><a href="mailto:info@hokeka.com">info@hokeka.com</a><a href="mailto:info@hokeka.com?subject=Hokeka%20partnership">Partnerships</a><a href="mailto:info@hokeka.com?subject=Hokeka%20support">Support</a></div></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Hokeka. All rights reserved.</span><span>Financial crime intelligence for regulated institutions.</span></div></div></footer>
+  return (
+    <footer className="footer">
+      <div className="container">
+        <div className="footer-grid">
+          <div>
+            <a className="brand" href="#home">
+              <img src="/hokeka-logo.png" alt="" />
+              <span>Hokeka</span>
+            </a>
+            <p className="footer-summary">
+              Unified financial crime intelligence across banking, securities, e-money and crypto.
+            </p>
+          </div>
+          <div>
+            <h4>Platform</h4>
+            <div className="footer-links">
+              <a href="#platform">Customer 360</a>
+              <a href="#solutions">Multi-asset AML</a>
+              <a href="#integrations">Integrations</a>
+            </div>
+          </div>
+          <div>
+            <h4>Operations</h4>
+            <div className="footer-links">
+              <a href="#platform">Monitoring</a>
+              <a href="#platform">Investigations</a>
+              <a href="#platform">Reporting</a>
+            </div>
+          </div>
+          <div>
+            <h4>Contact</h4>
+            <div className="footer-links">
+              <a href="mailto:info@hokeka.com">info@hokeka.com</a>
+              <a href="mailto:info@hokeka.com?subject=Hokeka%20partnership">Partnerships</a>
+              <a href="mailto:info@hokeka.com?subject=Hokeka%20support">Support</a>
+            </div>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <span>© {new Date().getFullYear()} Hokeka. All rights reserved.</span>
+          <span>Financial crime intelligence for regulated institutions.</span>
+        </div>
+      </div>
+    </footer>
+  )
 }

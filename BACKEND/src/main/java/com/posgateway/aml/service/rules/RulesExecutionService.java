@@ -242,15 +242,18 @@ public class RulesExecutionService {
             return current;
         }
         String normalized = candidate.toUpperCase();
-        if ("BLOCK".equals(normalized) || "SUSPEND".equals(normalized)) {
+        if ("BLOCK".equals(normalized)) {
             return "BLOCK";
         }
-        if ("HOLD".equals(normalized) && !"BLOCK".equals(current)) {
+        if ("SUSPEND".equals(normalized) && !"BLOCK".equals(current)) {
+            return "SUSPEND";
+        }
+        if ("HOLD".equals(normalized) && !"BLOCK".equals(current) && !"SUSPEND".equals(current)) {
             return "HOLD";
         }
-        if (("ALERT".equals(normalized) || "FLAG".equals(normalized) || "REVIEW".equals(normalized))
+        if (("FLAG".equals(normalized) || "ALERT".equals(normalized) || "REVIEW".equals(normalized))
                 && "ALLOW".equals(current)) {
-            return "REVIEW";
+            return "FLAG";
         }
         return current;
     }
@@ -259,9 +262,10 @@ public class RulesExecutionService {
         if (action == null || action.isBlank()) return null;
         return switch (action.trim().toUpperCase()) {
             case "ALLOW" -> "ALLOW";
-            case "ALERT", "FLAG", "REVIEW" -> "REVIEW";
+            case "ALERT", "FLAG", "REVIEW" -> "FLAG";
             case "HOLD" -> "HOLD";
-            case "BLOCK", "SUSPEND" -> "BLOCK";
+            case "SUSPEND" -> "SUSPEND";
+            case "BLOCK" -> "BLOCK";
             default -> null;
         };
     }

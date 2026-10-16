@@ -3,6 +3,10 @@ import { ArrowLeft, ExternalLink, FileText, Link2, LoaderCircle } from "lucide-r
 import { Link, useParams } from "react-router-dom";
 import { apiClient } from "../../lib/apiClient";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
+import TransactionAssessmentPanel from "../../components/TransactionMonitoring/TransactionAssessmentPanel";
+import TransactionAlertsPanel from "../../components/TransactionMonitoring/TransactionAlertsPanel";
+import ComplianceLinksPanel from "../../components/compliance/ComplianceLinksPanel";
+import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
 
 interface RecordLink {
   recordType: string;
@@ -64,10 +68,37 @@ export default function RecordDetailPage() {
       <section><h2 className="mb-3 text-sm font-semibold">Record data</h2><dl className="divide-y divide-white/8 border border-white/10">{Object.entries(record.data).map(([key, item]) => <div key={key} className="grid gap-2 px-4 py-3 md:grid-cols-[190px_1fr]"><dt className="text-xs uppercase tracking-wide text-white/40">{key.replace(/([A-Z])/g, " $1")}</dt><dd className="whitespace-pre-wrap break-words text-sm text-white/80">{value(item)}</dd></div>)}</dl>{calculationSummary && <><h2 className="mb-3 mt-6 text-sm font-semibold">Report calculations</h2><pre className="overflow-x-auto border border-white/10 bg-black/20 p-4 text-xs leading-6 text-white/70">{JSON.stringify(calculationSummary, null, 2)}</pre></>}</section>
       <aside className="space-y-6">
         {record.recordType === "TRANSACTION" && (
-          <AiVerdictPanel
-            auditPath={`ai/audit/transaction/${record.recordId}`}
-            title="Hokeka AI recommendation"
-          />
+          <>
+            <TransactionAssessmentPanel txnId={record.recordId} />
+            <TransactionAlertsPanel txnId={record.recordId} />
+            <ComplianceLinksPanel subjectType="TRANSACTION" subjectId={record.recordId} />
+            <ScreeningActivityPanel txnId={record.recordId} />
+            <AiVerdictPanel
+              auditPath={`ai/audit/transaction/${record.recordId}`}
+              title="Hokeka AI recommendation"
+            />
+          </>
+        )}
+        {record.recordType === "MERCHANT" && (
+          <ComplianceLinksPanel subjectType="MERCHANT" subjectId={record.recordId} />
+        )}
+        {record.recordType === "ALERT" && (
+          <ComplianceLinksPanel subjectType="ALERT" subjectId={record.recordId} />
+        )}
+        {record.recordType === "CASE" && (
+          <ComplianceLinksPanel subjectType="CASE" subjectId={record.recordId} />
+        )}
+        {(record.recordType === "SAR" || record.recordType === "SUSPICIOUS_ACTIVITY_REPORT") && (
+          <ComplianceLinksPanel subjectType="SAR" subjectId={record.recordId} />
+        )}
+        {record.recordType === "MULTI_ASSET_CUSTOMER" && (
+          <ComplianceLinksPanel subjectType="MULTI_ASSET_CUSTOMER" subjectId={record.recordId} />
+        )}
+        {record.recordType === "CHARGEBACK_DISPUTE" && (
+          <ComplianceLinksPanel subjectType="DISPUTE" subjectId={record.recordId} />
+        )}
+        {record.recordType === "ASSET_ACCOUNT" && (
+          <ComplianceLinksPanel subjectType="ASSET_ACCOUNT" subjectId={record.recordId} />
         )}
         <section><h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Link2 size={16} className="text-gold"/> Related records</h2><div className="divide-y divide-white/8 border border-white/10">{record.relatedRecords.map((link, index) => <RecordAnchor key={`${link.recordType}-${link.recordId}-${index}`} link={link} />)}{!record.relatedRecords.length && <p className="px-4 py-8 text-center text-sm text-white/45">No related records are available.</p>}</div></section><section><h2 className="mb-3 text-sm font-semibold">Occurrences</h2><div className="divide-y divide-white/8 border border-white/10">{record.occurrences.map((occurrence, index) => <div key={`${occurrence.occurrenceType}-${index}`} className="p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-semibold text-gold">{occurrence.occurrenceType.replace(/_/g, " ")}</span><span className="text-xs text-white/40">{date(occurrence.occurredAt)}</span></div><p className="mt-2 text-sm text-white/75">{occurrence.description || "Record occurrence"}</p>{occurrence.source && <div className="mt-3"><RecordAnchor link={occurrence.source}/></div>}</div>)}{!record.occurrences.length && <p className="px-4 py-8 text-center text-sm text-white/45">No occurrences recorded.</p>}</div></section></aside>
     </div>

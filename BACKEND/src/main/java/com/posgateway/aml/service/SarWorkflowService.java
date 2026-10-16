@@ -32,18 +32,21 @@ public class SarWorkflowService {
     private final AuditLogService auditLogService;
     private final RegulatoryDeadlineService regulatoryDeadlineService;
     private final ComplianceCalendarService complianceCalendarService;
+    private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
 
     @Autowired
     public SarWorkflowService(SuspiciousActivityReportRepository sarRepository,
             PermissionService permissionService,
             AuditLogService auditLogService,
             RegulatoryDeadlineService regulatoryDeadlineService,
-            ComplianceCalendarService complianceCalendarService) {
+            ComplianceCalendarService complianceCalendarService,
+            com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService) {
         this.sarRepository = sarRepository;
         this.permissionService = permissionService;
         this.auditLogService = auditLogService;
         this.regulatoryDeadlineService = regulatoryDeadlineService;
         this.complianceCalendarService = complianceCalendarService;
+        this.complianceEntityLinkService = complianceEntityLinkService;
     }
 
     private static final DateTimeFormatter SAR_REF_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -67,16 +70,24 @@ public class SarWorkflowService {
         Long pspId = userPspId(creator);
         sar.setPspId(pspId);
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime caseSuspicion = sar.getComplianceCase() != null
+                ? sar.getComplianceCase().getSuspicionFormedAt()
+                : null;
         LocalDateTime suspicionAroseAt = sar.getSuspicionAroseAt() != null
                 ? sar.getSuspicionAroseAt()
-                : now;
+                : (caseSuspicion != null ? caseSuspicion : now);
         if (suspicionAroseAt.isAfter(now.plusMinutes(1))) {
             throw new IllegalArgumentException("Suspicion arose timestamp cannot be in the future");
         }
         sar.setSuspicionAroseAt(suspicionAroseAt);
         if (sar.getSuspicionTimestampSource() == null || sar.getSuspicionTimestampSource().isBlank()) {
-            sar.setSuspicionTimestampSource(sar.getSuspicionAroseAt().equals(now)
-                    ? "REPORT_CREATED" : "OPERATOR_RECORDED");
+            if (sar.getSuspicionAroseAt().equals(now)) {
+                sar.setSuspicionTimestampSource("REPORT_CREATED");
+            } else if (caseSuspicion != null && sar.getSuspicionAroseAt().equals(caseSuspicion)) {
+                sar.setSuspicionTimestampSource("CASE_SUSPICION_FORMED");
+            } else {
+                sar.setSuspicionTimestampSource("OPERATOR_RECORDED");
+            }
         }
         RegulatoryDeadlineService.DeadlineCalculation deadline = regulatoryDeadlineService.calculate(
                 RegulatoryDeadlineService.SAR_STR, sar.getJurisdiction(), pspId, suspicionAroseAt);
@@ -93,6 +104,9 @@ public class SarWorkflowService {
                 saved.getSarReference() + " filing deadline (" + saved.getDeadlinePolicyCode() + ")",
                 saved.getJurisdiction(), saved.getPspId(), "SAR", saved.getId());
         auditLogService.logAction(creator, "CREATE_SAR", "SAR", String.valueOf(saved.getId()), null, saved, null, null);
+        if (saved.getComplianceCase() != null) {
+            complianceEntityLinkService.linkSarToCaseAlerts(saved.getId(), saved.getComplianceCase().getId(), null);
+        }
         return saved;
     }
 

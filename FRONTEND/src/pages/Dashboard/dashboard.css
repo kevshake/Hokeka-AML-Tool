@@ -157,6 +157,13 @@
   color: var(--db-text-muted);
 }
 
+.crm-dashboard .db-empty-compact {
+  min-height: 0;
+  padding: 0;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .crm-dashboard .db-error {
   color: var(--db-danger);
 }
@@ -229,6 +236,12 @@
   border-color: rgb(var(--success-rgb) / 0.35);
   background: var(--db-success-soft);
   color: var(--db-success);
+}
+
+.crm-dashboard .db-chip--info {
+  border-color: rgb(var(--info-rgb) / 0.35);
+  background: var(--db-info-soft);
+  color: var(--db-info);
 }
 
 .crm-dashboard .db-input {

@@ -82,7 +82,12 @@ export default function RiskHeatmap() {
           ) : error ? (
             <DashboardError message="Geographic risk data unavailable." />
           ) : !(data ?? []).length ? (
-            <DashboardEmpty message="No country-level risk aggregates yet." />
+            <DashboardEmpty
+              message="No country-level risk aggregates yet."
+              hint="Transaction volume will populate geographic risk once monitoring is active."
+              actionLabel="Open live monitoring"
+              actionTo="/transaction-monitoring/live"
+            />
           ) : (
             <>
               <div className="min-h-[160px] flex-1 rounded-[var(--db-radius-sm)] border border-[var(--db-border)] bg-[var(--db-surface-muted)]">

@@ -62,6 +62,10 @@ public class EdgeRuleCompiler {
         FIELD_MAP.put("pageRank", "page_rank");
         FIELD_MAP.put("connection_count", "connection_count");
         FIELD_MAP.put("connectionCount", "connection_count");
+        FIELD_MAP.put("pan_txn_count_1m", "pan_txn_count_1m");
+        FIELD_MAP.put("panTxnCount1m", "pan_txn_count_1m");
+        FIELD_MAP.put("pan_txn_count_5m", "pan_txn_count_5m");
+        FIELD_MAP.put("panTxnCount5m", "pan_txn_count_5m");
         FIELD_MAP.put("pan_txn_count_1h", "pan_txn_count_1h");
         FIELD_MAP.put("panTxnCount1h", "pan_txn_count_1h");
         FIELD_MAP.put("krs", "krs");
@@ -72,7 +76,7 @@ public class EdgeRuleCompiler {
     }
 
     /** Actions the edge IR understands (mirrors {@code EdgeRuleInterpreter.Action}). */
-    private static final Set<String> IR_ACTIONS = Set.of("ALLOW", "ALERT", "HOLD", "BLOCK");
+    private static final Set<String> IR_ACTIONS = Set.of("ALLOW", "ALERT", "FLAG", "HOLD", "SUSPEND", "BLOCK");
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final EdgeBundleService bundleService;
@@ -87,12 +91,20 @@ public class EdgeRuleCompiler {
      * @param rules   the compiled IR rules, in evaluation order
      * @param skipped names of rules that could not be compiled to IR
      */
-    public record CompilationResult(long version, List<CompiledRule> rules, List<String> skipped) {}
+    public record CompilationResult(long version, String manifestHash, List<CompiledRule> rules, List<String> skipped) {}
 
     /**
-     * Compile every enabled rule visible to a PSP.
-     *
-     * @param ruleDefinitions the PSP's enabled rules (its own copies, or the system defaults)
+     * Reject rule_json the Edge would skip. Throws IllegalArgumentException with the reason.
+     */
+    public void assertEdgeDeployable(String ruleJson) {
+        RuleDefinition probe = new RuleDefinition();
+        probe.setRuleJson(ruleJson);
+        probe.setRuleType("JSON");
+        compileCondition(probe);
+    }
+
+    /**
+     * Compiles every enabled rule visible to a PSP and records rules that cannot run at the Edge.
      */
     public CompilationResult compile(List<RuleDefinition> ruleDefinitions) {
         List<CompiledRule> compiled = new ArrayList<>();
@@ -110,7 +122,8 @@ public class EdgeRuleCompiler {
                         condition,
                         normaliseAction(def.getAction()),
                         def.getScore() == null ? 0 : def.getScore(),
-                        def.getPriority() == null ? 0 : def.getPriority()));
+                        def.getPriority() == null ? 0 : def.getPriority(),
+                        def.getCurrentVersionId()));
             } catch (RuntimeException e) {
                 skipped.add(def.getName());
                 log.warn("Edge bundle: rule '{}' (id {}) omitted — {}", def.getName(), def.getId(),
@@ -120,7 +133,34 @@ public class EdgeRuleCompiler {
         // Rule count participates in the version so that deleting a rule (which lowers no
         // updated_at) still produces a version the edge sees as new.
         version = version * 1000 + Math.min(999, compiled.size());
-        return new CompilationResult(version, compiled, skipped);
+        return new CompilationResult(version, manifestHash(compiled), compiled, skipped);
+    }
+
+
+    /**
+     * Content hash of the rule-version manifest. Canonical lines are {@code ruleId:ruleVersionId}
+     * sorted by rule id, joined with a newline. The edge interpreter uses the same form.
+     */
+    public static String manifestHash(List<CompiledRule> rules) {
+        List<CompiledRule> ordered = new ArrayList<>(rules);
+        ordered.sort(java.util.Comparator.comparingLong(CompiledRule::id));
+        StringBuilder canonical = new StringBuilder();
+        for (CompiledRule rule : ordered) {
+            if (canonical.length() > 0) {
+                canonical.append('\n');
+            }
+            canonical.append(rule.id()).append(':');
+            if (rule.ruleVersionId() != null) {
+                canonical.append(rule.ruleVersionId());
+            }
+        }
+        try {
+            byte[] dig = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "sha256:" + java.util.HexFormat.of().formatHex(dig);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private long mutationStamp(RuleDefinition def) {
@@ -128,6 +168,7 @@ public class EdgeRuleCompiler {
         return t == null ? 0L : t.toEpochSecond(ZoneOffset.UTC);
     }
 
+    /** Preserves native Edge actions and maps legacy Control Plane aliases to the nearest action. */
     private String normaliseAction(String action) {
         if (action == null) {
             return "ALERT";
@@ -136,10 +177,13 @@ public class EdgeRuleCompiler {
         if (IR_ACTIONS.contains(upper)) {
             return upper;
         }
-        // The central engine also emits REVIEW / FLAG; the edge's nearest equivalent is ALERT.
+        // FLAG and SUSPEND are already in IR_ACTIONS and are not rewritten.
+        // REVIEW and FLAG_CASE still map to ALERT; BLOCK_TRANSACTION maps to BLOCK.
         return switch (upper) {
-            case "REVIEW", "FLAG", "FLAG_CASE" -> "ALERT";
-            case "BLOCK_TRANSACTION", "SUSPEND" -> "BLOCK";
+            case "REVIEW", "FLAG_CASE" -> "ALERT";
+            case "BLOCK_TRANSACTION" -> "BLOCK";
+            case "FLAG" -> "FLAG";
+            case "SUSPEND" -> "SUSPEND";
             default -> "ALERT";
         };
     }
@@ -211,6 +255,7 @@ public class EdgeRuleCompiler {
         return conjunction ? bundleService.all(arr) : bundleService.any(arr);
     }
 
+    /** Compiles one authored field/operator/value condition into an Edge comparison node. */
     private ObjectNode leaf(JsonNode n) {
         String sourceField = n.path("field").asText();
         String field = FIELD_MAP.get(sourceField);
@@ -223,6 +268,15 @@ public class EdgeRuleCompiler {
             throw new IllegalArgumentException("condition on '" + sourceField + "' has no value");
         }
 
+        operator = switch (operator) {
+            case ">=" -> "GTE";
+            case "<=" -> "LTE";
+            case ">" -> "GT";
+            case "<" -> "LT";
+            case "==", "=" -> "EQ";
+            case "!=" -> "NE";
+            default -> operator;
+        };
         return switch (operator) {
             case "EQUALS", "EQ" -> bundleService.cmp(field, "EQ", scalar(value));
             case "NOT_EQUALS", "NE" -> bundleService.cmp(field, "NE", scalar(value));

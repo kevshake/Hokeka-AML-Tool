@@ -1,14 +1,19 @@
 package com.posgateway.aml.service.edge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.posgateway.aml.config.edge.EdgeControlPlaneKeys;
 import com.posgateway.aml.edge.EdgeBundleService;
 import com.posgateway.aml.edge.crypto.HokekaSecureEnvelope;
+import com.posgateway.aml.entity.edge.EdgeBundleManifest;
 import com.posgateway.aml.entity.edge.EdgeNode;
 import com.posgateway.aml.entity.rules.RuleDefinition;
 import com.posgateway.aml.entity.rules.RuleLifecycleStatus;
+import com.posgateway.aml.repository.edge.EdgeBundleManifestRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -43,18 +48,32 @@ public class EdgeBundleDistributionService {
     private final EdgeBundleService bundleService;
     private final EdgeControlPlaneKeys controlPlaneKeys;
     private final HokekaSecureEnvelope envelope;
+    private final EdgeBundleManifestRepository manifests;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** Tests that seal a bundle and do not check the manifest table. */
     public EdgeBundleDistributionService(RuleDefinitionRepository ruleDefinitionRepository,
                                          EdgeRuleCompiler compiler,
                                          EdgeBundleService bundleService,
                                          EdgeControlPlaneKeys controlPlaneKeys,
                                          HokekaSecureEnvelope envelope) {
+        this(ruleDefinitionRepository, compiler, bundleService, controlPlaneKeys, envelope, null);
+    }
+
+    /** Creates the production distributor with durable manifest persistence enabled. */
+    @Autowired
+    public EdgeBundleDistributionService(RuleDefinitionRepository ruleDefinitionRepository,
+                                         EdgeRuleCompiler compiler,
+                                         EdgeBundleService bundleService,
+                                         EdgeControlPlaneKeys controlPlaneKeys,
+                                         HokekaSecureEnvelope envelope,
+                                         EdgeBundleManifestRepository manifests) {
         this.ruleDefinitionRepository = ruleDefinitionRepository;
         this.compiler = compiler;
         this.bundleService = bundleService;
         this.controlPlaneKeys = controlPlaneKeys;
         this.envelope = envelope;
+        this.manifests = manifests;
     }
 
     /** @param version the bundle version, also used as the HTTP ETag for {@code If-None-Match}. */
@@ -76,6 +95,7 @@ public class EdgeBundleDistributionService {
      * HSE-1 envelope, validates {@code nonce}/{@code issuedAt}/{@code edgeId} against its own
      * replay guard, and only then hands the inner {@code payload} to the interpreter. Sealing the
      * bare IR would be rejected by every edge as "replay envelope has no payload".
+     * The compiled rule-version manifest is persisted in the same writable transaction.
      */
     /**
      * Thrown instead of sealing a bundle that would contain no rules. Callers must translate this to
@@ -88,7 +108,7 @@ public class EdgeBundleDistributionService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public SealedBundle sealFor(EdgeNode node) {
         EdgeRuleCompiler.CompilationResult compiled = compiler.compile(rulesFor(node.getPspId()));
 
@@ -105,8 +125,10 @@ public class EdgeBundleDistributionService {
                             + compiled.skipped().size() + " rule(s) failed to compile");
         }
 
+        persistManifest(node.getPspId(), compiled);
         byte[] plaintext = wrapInReplayEnvelope(
-                bundleService.buildBundleJson(compiled.version(), node.getPspId(), compiled.rules()),
+                bundleService.buildBundleJson(compiled.version(), node.getPspId(), compiled.rules(),
+                        compiled.manifestHash()),
                 node.getEdgeId());
 
         byte[] edgeX25519Pub = Base64.getDecoder().decode(node.getEdgeX25519PublicKey());
@@ -117,6 +139,36 @@ public class EdgeBundleDistributionService {
                 compiled.version(), node.getEdgeId(), node.getPspId(), compiled.rules().size(),
                 compiled.skipped().size());
         return new SealedBundle(compiled.version(), sealed, compiled.rules().size(), compiled.skipped());
+    }
+
+
+    /** Persists a bundle manifest once, tolerating concurrent publication of identical content. */
+    private void persistManifest(Long pspId, EdgeRuleCompiler.CompilationResult compiled) {
+        if (manifests == null || pspId == null || compiled.manifestHash() == null) {
+            return;
+        }
+        if (manifests.findByPspIdAndManifestHash(pspId, compiled.manifestHash()).isPresent()) {
+            return;
+        }
+        EdgeBundleManifest row = new EdgeBundleManifest();
+        row.setPspId(pspId);
+        row.setManifestHash(compiled.manifestHash());
+        row.setRuleCount(compiled.rules().size());
+        row.setCreatedAt(java.time.LocalDateTime.now());
+        ArrayNode rules = mapper.createArrayNode();
+        for (com.posgateway.aml.edge.EdgeBundleService.CompiledRule rule : compiled.rules()) {
+            ObjectNode item = rules.addObject();
+            item.put("ruleId", rule.id());
+            if (rule.ruleVersionId() != null) {
+                item.put("ruleVersionId", rule.ruleVersionId());
+            }
+        }
+        row.setManifest(rules.toString());
+        try {
+            manifests.save(row);
+        } catch (DataIntegrityViolationException alreadyPublished) {
+            // Another seal of the same manifest won the unique insert.
+        }
     }
 
     /** {@code {"nonce":…,"issuedAt":…,"edgeId":…,"payload":<rule IR>}} — contract §4. */

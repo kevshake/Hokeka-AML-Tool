@@ -18,6 +18,8 @@ import {
   useTransmitTravelRule, useVerifyTravelRuleIdentity,
 } from "../../features/api/mutations";
 import type { TravelRulePolicy, TravelRuleTransfer, VaspEntry } from "../../types/virtualAssets";
+import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
+import { useUrlTableState } from "../../hooks/useUrlTableState";
 
 type DialogName = "wallet" | "vasp" | "transfer" | "verify" | "policy" | "grant" | null;
 
@@ -52,11 +54,9 @@ function riskColor(score?: number): "default" | "warning" | "error" | "success" 
 }
 
 export default function WalletIntelligencePage() {
-  const [tab, setTab] = useState(0);
+  const { state: tableState, setFilter, setPage, setPageSize, exportFilterMap } = useUrlTableState();
+  const tab = Number(tableState.filters.tab ?? 0);
   const [dialog, setDialog] = useState<DialogName>(null);
-  const [walletPage, setWalletPage] = useState(0);
-  const [screeningPage, setScreeningPage] = useState(0);
-  const [transferPage, setTransferPage] = useState(0);
   const [selectedWalletId, setSelectedWalletId] = useState<number>();
   const [selectedVaspId, setSelectedVaspId] = useState<number>();
   const [selectedTransfer, setSelectedTransfer] = useState<TravelRuleTransfer | null>(null);
@@ -72,12 +72,12 @@ export default function WalletIntelligencePage() {
   const [error, setError] = useState("");
   const [issuedAccessKey, setIssuedAccessKey] = useState("");
 
-  const wallets = useCryptoWalletProfiles(walletPage, 25);
-  const screenings = useWalletScreeningHistory(selectedWalletId, screeningPage, 25);
+  const wallets = useCryptoWalletProfiles(tableState.page, tableState.size);
+  const screenings = useWalletScreeningHistory(selectedWalletId, tableState.page, tableState.size);
   const vasps = useVaspDirectory("", 0, 100);
   const vaspScreenings = useVaspScreeningHistory(selectedVaspId, 0, 50);
   const transactions = useCryptoTransactions(0, 100);
-  const transfers = useTravelRuleTransfers(transferPage, 25);
+  const transfers = useTravelRuleTransfers(tableState.page, tableState.size);
   const policies = useTravelRulePolicies();
   const grants = useRegulatorGrants();
   const customers = useMultiAssetCustomers("", 0, 100);
@@ -192,16 +192,22 @@ export default function WalletIntelligencePage() {
         One-time regulator access key: <Typography component="span" fontFamily="monospace" sx={{ wordBreak: "break-all" }}>{issuedAccessKey}</Typography>
       </Alert>}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2, flexWrap: "wrap" }}>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto">
+        <Tabs value={tab} onChange={(_, value) => setFilter("tab", String(value))} variant="scrollable" scrollButtons="auto">
           <Tab icon={<WalletCards size={17} />} iconPosition="start" label={`Wallets (${wallets.data?.totalElements ?? 0})`} />
           <Tab icon={<ShieldCheck size={17} />} iconPosition="start" label={`Screening (${screenings.data?.totalElements ?? 0})`} />
           <Tab icon={<Building2 size={17} />} iconPosition="start" label={`VASP directory (${vasps.data?.totalElements ?? 0})`} />
           <Tab icon={<Send size={17} />} iconPosition="start" label={`Travel Rule (${transfers.data?.totalElements ?? 0})`} />
           <Tab icon={<FileKey2 size={17} />} iconPosition="start" label="Governance" />
         </Tabs>
-        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setDialog(tab === 0 ? "wallet" : tab === 2 ? "vasp" : tab === 3 ? "transfer" : tab === 4 ? "policy" : "wallet")}>
-          {tab === 0 ? "Wallet" : tab === 2 ? "VASP" : tab === 3 ? "Transfer" : tab === 4 ? "Policy" : "Wallet"}
-        </Button>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <ConsoleListExportMenu
+            viewType={tab === 1 || tab === 2 ? "SCREENING_ACTIVITY" : tab === 3 ? "TRANSACTIONS" : "ASSET_ACCOUNTS"}
+            filters={exportFilterMap}
+          />
+          <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setDialog(tab === 0 ? "wallet" : tab === 2 ? "vasp" : tab === 3 ? "transfer" : tab === 4 ? "policy" : "wallet")}>
+            {tab === 0 ? "Wallet" : tab === 2 ? "VASP" : tab === 3 ? "Transfer" : tab === 4 ? "Policy" : "Wallet"}
+          </Button>
+        </Box>
       </Box>
 
       {tab === 0 && <Paper variant="outlined"><TableContainer><Table size="small"><TableHead><TableRow>
@@ -216,17 +222,17 @@ export default function WalletIntelligencePage() {
           <TableCell><Chip size="small" color={item.screeningAvailable ? "success" : "error"} label={item.screeningStatus} /><Typography variant="caption" display="block">{item.latestProvider || "No provider result"}</Typography></TableCell>
           <TableCell><Chip size="small" color={riskColor(item.latestRiskScore)} label={item.latestRiskScore ?? "Unavailable"} /> <Typography variant="caption">{item.latestCategories.join(", ") || "No categories"}</Typography></TableCell>
           <TableCell>{displayDate(item.nextScreeningAt)}</TableCell>
-          <TableCell align="right"><Button size="small" onClick={() => { setSelectedWalletId(item.id); setScreeningPage(0); setTab(1); }}>History</Button><Button size="small" startIcon={<RefreshCw size={14} />} disabled={screenWallet.isPending} onClick={() => screenWallet.mutate({ id: item.id, trigger: "MANUAL" }, { onSuccess: () => setNotice("Wallet rescreened."), onError: (value) => setError(mutationError(value)) })}>Screen</Button></TableCell>
+          <TableCell align="right"><Button size="small" onClick={() => { setSelectedWalletId(item.id); setPage(0); setFilter("tab", "1"); }}>History</Button><Button size="small" startIcon={<RefreshCw size={14} />} disabled={screenWallet.isPending} onClick={() => screenWallet.mutate({ id: item.id, trigger: "MANUAL" }, { onSuccess: () => setNotice("Wallet rescreened."), onError: (value) => setError(mutationError(value)) })}>Screen</Button></TableCell>
         </TableRow>)}
-      </TableBody></Table></TableContainer><TablePagination component="div" count={wallets.data?.totalElements ?? 0} page={walletPage} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, page) => setWalletPage(page)} /></Paper>}
+      </TableBody></Table></TableContainer><TablePagination component="div" count={wallets.data?.totalElements ?? 0} page={tableState.page} rowsPerPage={tableState.size} rowsPerPageOptions={[10, 25, 50]} onPageChange={(_, page) => setPage(page)} onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))} /></Paper>}
 
-      {tab === 1 && <Paper variant="outlined"><Box sx={{ p: 2, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}><TextField select size="small" label="Wallet evidence" value={selectedWalletId ?? ""} onChange={(e) => { setSelectedWalletId(e.target.value ? Number(e.target.value) : undefined); setScreeningPage(0); }} sx={{ minWidth: 300 }}><MenuItem value="">All wallets</MenuItem>{wallets.data?.content.map((item) => <MenuItem key={item.id} value={item.id}>{item.walletAddress} / {item.network}</MenuItem>)}</TextField></Box><TableContainer><Table size="small"><TableHead><TableRow>
+      {tab === 1 && <Paper variant="outlined"><Box sx={{ p: 2, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}><TextField select size="small" label="Wallet evidence" value={selectedWalletId ?? ""} onChange={(e) => { setSelectedWalletId(e.target.value ? Number(e.target.value) : undefined); setPage(0); }} sx={{ minWidth: 300 }}><MenuItem value="">All wallets</MenuItem>{wallets.data?.content.map((item) => <MenuItem key={item.id} value={item.id}>{item.walletAddress} / {item.network}</MenuItem>)}</TextField></Box><TableContainer><Table size="small"><TableHead><TableRow>
         <TableCell>Screened</TableCell><TableCell>Address</TableCell><TableCell>Customer / transaction</TableCell><TableCell>Trigger</TableCell><TableCell>Provider evidence</TableCell><TableCell>Risk</TableCell><TableCell>Direct / indirect</TableCell><TableCell>Depth</TableCell><TableCell>Retention</TableCell>
       </TableRow></TableHead><TableBody>
         {screenings.isLoading && <TableRow><TableCell colSpan={9} align="center">Loading immutable evidence...</TableCell></TableRow>}
         {!screenings.isLoading && !screenings.data?.content.length && <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>No wallet screening evidence.</TableCell></TableRow>}
         {screenings.data?.content.map((item) => <TableRow key={item.id} hover><TableCell><Link to={`/records/WALLET_SCREENING_RECORD/${item.id}`}>{displayDate(item.screenedAt)}</Link></TableCell><TableCell><Typography fontFamily="monospace" variant="body2" sx={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{item.screenedAddress || "Address unavailable"}</Typography><Typography variant="caption">{item.network || "Network unavailable"}</Typography></TableCell><TableCell><Link to={`/records/MULTI_ASSET_CUSTOMER/${item.customerId}`}>{item.customerName}</Link>{item.transactionId && <Typography variant="caption" display="block"><Link to={`/records/MULTI_ASSET_TRANSACTION/${item.transactionId}`}>Transaction #{item.transactionId}</Link></Typography>}</TableCell><TableCell>{item.triggerType.replaceAll("_", " ")}</TableCell><TableCell>{item.provider}<Typography variant="caption" display="block" color={item.available ? "text.secondary" : "error"}>{item.providerReference || item.unavailableReason || "No reference"}</Typography></TableCell><TableCell><Chip size="small" color={riskColor(item.riskScore)} label={item.riskScore ?? "Unavailable"} /><Typography variant="caption" display="block">{item.categories.join(", ") || "No categories"}</Typography></TableCell><TableCell>{item.directExposurePercent ?? "-"}% / {item.indirectExposurePercent ?? "-"}%</TableCell><TableCell>{item.maximumExposureDepth ?? "-"}</TableCell><TableCell>{item.retainUntil}</TableCell></TableRow>)}
-      </TableBody></Table></TableContainer><TablePagination component="div" count={screenings.data?.totalElements ?? 0} page={screeningPage} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, page) => setScreeningPage(page)} /></Paper>}
+      </TableBody></Table></TableContainer><TablePagination component="div" count={screenings.data?.totalElements ?? 0} page={tableState.page} rowsPerPage={tableState.size} rowsPerPageOptions={[10, 25, 50]} onPageChange={(_, page) => setPage(page)} onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))} /></Paper>}
 
       {tab === 2 && <Box sx={{ display: "grid", gap: 2 }}><Paper variant="outlined"><TableContainer><Table size="small"><TableHead><TableRow>
         <TableCell>VASP</TableCell><TableCell>Licence</TableCell><TableCell>Sanctions</TableCell><TableCell>Protocols</TableCell><TableCell>Risk</TableCell><TableCell>Decision</TableCell><TableCell>Review due</TableCell><TableCell />
@@ -242,7 +248,7 @@ export default function WalletIntelligencePage() {
       </TableRow></TableHead><TableBody>
         {!transfers.isLoading && !transfers.data?.content.length && <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}>No Travel Rule transfer records.</TableCell></TableRow>}
         {transfers.data?.content.map((item) => <TableRow key={item.id} hover><TableCell><Link to={`/records/TRAVEL_RULE_TRANSFER/${item.id}`}>{displayDate(item.createdAt)}</Link></TableCell><TableCell><Link to={`/records/MULTI_ASSET_TRANSACTION/${item.transactionId}`}>{item.externalTransactionId}</Link></TableCell><TableCell>{item.originatorVaspName || "Unspecified"} to {item.beneficiaryVaspName || "Unspecified"}<Typography variant="caption" display="block">{item.protocol || "Protocol unselected"}</Typography></TableCell><TableCell>{item.policyId ? <Link to={`/records/TRAVEL_RULE_JURISDICTION_POLICY/${item.policyId}`}>{item.policyCode}</Link> : "No applicable policy"}</TableCell><TableCell><Button size="small" color={item.originatorVerification === "VERIFIED" ? "success" : "primary"} disabled={item.originatorVerification === "VERIFIED"} onClick={() => openVerify(item, "ORIGINATOR")}>Originator: {item.originatorVerification}</Button><Typography variant="caption" display="block">{item.originatorVerificationReference || "No evidence reference"}</Typography><Button size="small" color={item.beneficiaryVerification === "VERIFIED" ? "success" : "primary"} disabled={item.beneficiaryVerification === "VERIFIED"} onClick={() => openVerify(item, "BENEFICIARY")}>Beneficiary: {item.beneficiaryVerification}</Button><Typography variant="caption" display="block">{item.beneficiaryVerificationReference || "No evidence reference"}</Typography></TableCell><TableCell><Chip size="small" color={item.status === "FAILED" || item.status === "REJECTED" || item.status === "PENDING_DATA" ? "error" : item.status === "ACKNOWLEDGED" || item.status === "TRANSMITTED" ? "success" : "warning"} label={item.status} /><Typography variant="caption" display="block" color="error">{item.failureReason}</Typography></TableCell><TableCell><Button size="small" startIcon={<Send size={14} />} disabled={!(["READY", "FAILED"].includes(item.status)) || transmit.isPending} onClick={() => transmit.mutate(item.id, { onSuccess: (result) => setNotice(`Transmission ${result.status.toLowerCase()}.`), onError: (value) => setError(mutationError(value)) })}>Transmit</Button><Typography variant="caption" display="block">{item.transmissionAttempts} attempt(s)</Typography></TableCell></TableRow>)}
-      </TableBody></Table></TableContainer><TablePagination component="div" count={transfers.data?.totalElements ?? 0} page={transferPage} rowsPerPage={25} rowsPerPageOptions={[25]} onPageChange={(_, page) => setTransferPage(page)} /></Paper>}
+      </TableBody></Table></TableContainer><TablePagination component="div" count={transfers.data?.totalElements ?? 0} page={tableState.page} rowsPerPage={tableState.size} rowsPerPageOptions={[10, 25, 50]} onPageChange={(_, page) => setPage(page)} onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))} /></Paper>}
 
       {tab === 4 && <Box sx={{ display: "grid", gap: 2 }}>
         <Paper variant="outlined"><Box sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}><Typography variant="h6" sx={{ fontSize: "1rem" }}>Jurisdiction policies</Typography><Button size="small" startIcon={<Plus size={15} />} onClick={() => setDialog("policy")}>Policy</Button></Box><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Jurisdiction</TableCell><TableCell>Policy</TableCell><TableCell>Threshold</TableCell><TableCell>Required data</TableCell><TableCell>Protocols</TableCell><TableCell>Effective</TableCell><TableCell /></TableRow></TableHead><TableBody>{policies.data?.map((item) => <TableRow key={item.id}><TableCell>{item.jurisdiction}</TableCell><TableCell><Link to={`/records/TRAVEL_RULE_JURISDICTION_POLICY/${item.id}`}>{item.policyCode}</Link><Chip size="small" sx={{ ml: 1 }} label={item.enabled ? "Enabled" : "Disabled"} /></TableCell><TableCell>{item.appliesToAllTransfers ? "All transfers" : `$${item.thresholdUsd.toLocaleString()}`}</TableCell><TableCell>{item.requiredFields.join(", ")}</TableCell><TableCell>{item.acceptedProtocols.join(", ")}</TableCell><TableCell>{displayDate(item.effectiveFrom)}</TableCell><TableCell><Button size="small" onClick={() => editPolicy(item)}>Edit</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper>

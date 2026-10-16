@@ -8,6 +8,7 @@ import com.posgateway.aml.repository.MerchantScreeningResultRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.service.cache.FeatureCacheService;
 import com.posgateway.aml.service.compliance.CashStructuringDetectionService;
+import com.posgateway.aml.service.security.PaymentBlacklistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,7 @@ class RuleFeatureEnrichmentServiceTest {
     @Mock private HighRiskCountryRepository highRiskCountryRepository;
     @Mock private ChargebackDisputeRepository chargebackDisputeRepository;
     @Mock private FeatureCacheService featureCacheService;
+    @Mock private PaymentBlacklistService paymentBlacklistService;
     @Mock private MerchantScreeningResultRepository merchantScreeningResultRepository;
     @Mock private CashStructuringDetectionService cashStructuringDetectionService;
     @Mock private com.posgateway.aml.service.analytics.BehavioralAnalyticsService behavioralAnalyticsService;
@@ -47,7 +49,7 @@ class RuleFeatureEnrichmentServiceTest {
     void setUp() {
         service = new RuleFeatureEnrichmentService(transactionRepository, merchantRepository,
                 highRiskCountryRepository, chargebackDisputeRepository, featureCacheService,
-                merchantScreeningResultRepository, cashStructuringDetectionService,
+                paymentBlacklistService, merchantScreeningResultRepository, cashStructuringDetectionService,
                 behavioralAnalyticsService);
     }
 

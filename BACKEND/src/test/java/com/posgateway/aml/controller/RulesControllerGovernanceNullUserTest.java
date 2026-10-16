@@ -53,7 +53,8 @@ class RulesControllerGovernanceNullUserTest {
                 mock(PspIsolationService.class),
                 userRepository,
                 mock(RuleEffectivenessService.class),
-                governanceService);
+                governanceService,
+                mock(com.posgateway.aml.service.edge.EdgeRuleCompiler.class));
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("ghost-user", "n/a", Collections.emptyList()));

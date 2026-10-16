@@ -19,6 +19,7 @@ public class OnboardingInviteAdminController {
         this.service = service;
     }
 
+    /** Creates a time-bound onboarding invite token for a PSP tenant and target Console role. */
     @PostMapping
     public ResponseEntity<OnboardingInviteService.IssuedInvite> issue(
             @RequestBody InviteRequest request, @AuthenticationPrincipal User user) {

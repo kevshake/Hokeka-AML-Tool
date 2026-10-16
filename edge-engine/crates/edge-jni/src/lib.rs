@@ -133,6 +133,7 @@ fn fail_closed() -> Decision {
         action: rule_core::Action::Hold,
         score: 0,
         triggered_rule_ids: vec![],
+        triggered_rule_version_ids: vec![],
         reasons: vec!["edge engine unavailable — no active rule bundle (fail-closed)".to_string()],
     }
 }

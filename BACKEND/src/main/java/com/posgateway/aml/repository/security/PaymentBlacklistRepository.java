@@ -12,16 +12,38 @@ import java.util.Optional;
 @Repository
 public interface PaymentBlacklistRepository extends JpaRepository<PaymentBlacklistEntry, Long> {
 
-    Optional<PaymentBlacklistEntry> findByEntryTypeAndEntryValueAndActiveTrue(String entryType, String entryValue);
+    /** Finds an active entry owned by the requested PSP. */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE e.pspId = :pspId AND e.entryType = :type "
+            + "AND e.entryValue = :value AND e.active = true")
+    Optional<PaymentBlacklistEntry> findTenantActive(@Param("pspId") Long pspId,
+                                                     @Param("type") String type,
+                                                     @Param("value") String value);
 
-    boolean existsByEntryTypeAndEntryValueAndActiveTrue(String entryType, String entryValue);
+    /** Finds an active entry explicitly shared across the platform. */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE e.pspId IS NULL AND e.platformWide = true "
+            + "AND e.entryType = :type AND e.entryValue = :value AND e.active = true")
+    Optional<PaymentBlacklistEntry> findPlatformActive(@Param("type") String type,
+                                                       @Param("value") String value);
 
     /**
-     * True when an active block exists that has not expired. A null {@code expires_at} is a
-     * permanent block; a non-null one only counts while it is still in the future. This is the
-     * expiry-aware check the transaction decision path uses (fastest check, indexed on
-     * entry_type+entry_value).
+     * True when an active tenant or platform-wide block exists and has not expired.
      */
+    @Query("SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END FROM PaymentBlacklistEntry e "
+            + "WHERE e.entryType = :type AND e.entryValue = :value AND e.active = true "
+            + "AND (e.expiresAt IS NULL OR e.expiresAt > :now) "
+            + "AND ((e.pspId IS NULL AND e.platformWide = true) "
+            + "     OR (:pspId IS NOT NULL AND e.pspId = :pspId))")
+    boolean existsActiveNonExpiredForTenantOrPlatform(@Param("pspId") Long pspId,
+                                                      @Param("type") String type,
+                                                      @Param("value") String value,
+                                                      @Param("now") LocalDateTime now);
+
+    /** @deprecated Prefer tenant-aware queries. */
+    @Deprecated
+    Optional<PaymentBlacklistEntry> findByEntryTypeAndEntryValueAndActiveTrue(String entryType, String entryValue);
+
+    /** @deprecated Prefer {@link #existsActiveNonExpiredForTenantOrPlatform}. */
+    @Deprecated
     @Query("SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END FROM PaymentBlacklistEntry e "
             + "WHERE e.entryType = :type AND e.entryValue = :value AND e.active = true "
             + "AND (e.expiresAt IS NULL OR e.expiresAt > :now)")

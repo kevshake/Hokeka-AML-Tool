@@ -70,11 +70,13 @@ public class CaseCreationService {
         // Derive a version string from the rule's last-updated timestamp.
         // Pattern: "v<year>.<month>" (e.g. "v2026.5").
         // Falls back to "v0.0" when the rule is not found in the DB.
-        String ruleVersion = ruleDefinitionRepository.findFirstByNameOrderByIdAsc(ruleName)
-                .map(RuleDefinition::getUpdatedAt)
-                .map(ts -> "v" + ts.getYear() + "." + ts.getMonthValue())
-                .orElse("v0.0");
-        createOrUpdateCase(merchantIdLong, tx.getPspId(), "RULE_VIOLATION", ruleName, null,
+        var ruleOpt = ruleDefinitionRepository.findFirstByNameOrderByIdAsc(ruleName);
+        String ruleVersion = ruleOpt
+                .map(RuleDefinition::getCurrentVersionId)
+                .map(String::valueOf)
+                .orElse("unversioned");
+        String ruleId = ruleOpt.map(r -> r.getId() != null ? String.valueOf(r.getId()) : null).orElse(null);
+        createOrUpdateCase(merchantIdLong, tx.getPspId(), "RULE_VIOLATION", ruleName, ruleId,
                 null, ruleVersion, 1.0, ruleDescription, tx);
     }
 
@@ -226,6 +228,7 @@ public class CaseCreationService {
             cCase.setCreatedAt(LocalDateTime.now());
             cCase.setDescription("Auto-generated case from " + alertType);
             cCase.setAlerts(new ArrayList<>());
+            cCase.setSuspicionFormedAt(LocalDateTime.now());
             logger.info("Creating new case {} for alert {}", cCase.getCaseReference(), alertType);
         }
 

@@ -6,6 +6,61 @@
     <meta name="description" content="Hokeka unifies financial crime intelligence across banking, securities, e-money and crypto." />
     <link rel="icon" type="image/png" href="/hokeka-logo.png" />
     <title>Hokeka | Multi-Asset Financial Crime Intelligence</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080909;
+        --ink: #f5f2eb;
+        --gold: #d3b371;
+        --muted: #a8aba8;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif; }
+      .site-shell-static { overflow: clip; }
+      .container { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+      .hero-poster {
+        position: relative; min-height: min(840px, 96vh); display: flex; align-items: flex-end;
+        padding: 140px 0 72px; isolation: isolate;
+        background:
+          radial-gradient(55% 45% at 20% 20%, rgb(211 179 113 / 0.22), transparent 60%),
+          radial-gradient(45% 40% at 80% 30%, rgb(117 183 171 / 0.16), transparent 62%),
+          linear-gradient(180deg, #050707 0%, #080909 55%, #0c0e0d 100%);
+      }
+      .hero-poster::before {
+        content: ''; position: absolute; inset: 0;
+        background: linear-gradient(180deg, #050707cc 0%, #050707a6 40%, #050707e8 100%);
+        z-index: 0;
+      }
+      .hero-content { position: relative; z-index: 1; max-width: 880px; }
+      .eyebrow {
+        margin: 0 0 14px; color: var(--gold); font-size: 12px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.16em;
+      }
+      .hero h1 {
+        margin: 0; font-size: clamp(64px, 11vw, 150px); font-weight: 600; color: #fffdf7;
+        line-height: 0.84; letter-spacing: -0.02em;
+      }
+      .hero-statement {
+        max-width: 780px; margin: 24px 0 0; font-size: clamp(27px, 4vw, 50px); font-weight: 500;
+        line-height: 1.1; color: var(--ink);
+      }
+      .static-lcp-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    </style>
   </head>
-  <body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
+  <body>
+    <div id="root">
+      <div class="site-shell site-shell-static" id="static-lcp-shell">
+        <main>
+          <section class="hero hero-poster" id="home" aria-label="Hokeka hero">
+            <div class="container hero-content">
+              <p class="eyebrow">Unified financial crime intelligence</p>
+              <h1>Hokeka</h1>
+              <p class="hero-statement">See the whole financial story, across every asset.</p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

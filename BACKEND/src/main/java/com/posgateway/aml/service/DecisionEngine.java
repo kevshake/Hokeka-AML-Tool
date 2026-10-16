@@ -43,6 +43,9 @@ public class DecisionEngine {
     @Autowired(required = false)
     private com.posgateway.aml.service.case_management.CaseCreationService caseCreationService;
 
+    @Autowired(required = false)
+    private com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
+
     /**
      * How long (days) a card is auto-declined after a Do-Not-Honour (BLOCK) decision. The goal is
      * "decline that card for a month", so the default is 30. Tunable via {@code fraud.dnh.block-days}.
@@ -95,6 +98,27 @@ public class DecisionEngine {
 
     @Transactional
     public DecisionResult evaluate(TransactionEntity transaction, Double score,
+                                   Map<String, Object> features, Long latencyMs,
+                                   Map<String, Object> riskDetails) {
+        String orchestratorMode = orchestratorModeService.getMode();
+        if ("live".equalsIgnoreCase(orchestratorMode)) {
+            return evaluateComputeAll(transaction, score, features, latencyMs, riskDetails, true);
+        }
+        DecisionResult legacy = evaluateLegacyShortCircuit(transaction, score, features, latencyMs, riskDetails);
+        if ("shadow".equalsIgnoreCase(orchestratorMode) && decisionOrchestrator != null) {
+            evaluateComputeAll(transaction, score, features, latencyMs, riskDetails, false);
+            com.posgateway.aml.service.decision.DecisionOrchestrator.ResolvedDecision orchestrated =
+                    decisionOrchestrator.resolveBufferedFindings(transaction, score, legacy.getReasons());
+            decisionOrchestrator.logShadowDisagreement(transaction, legacy.getAction(), orchestrated);
+            com.posgateway.aml.service.assessment.AssessmentFindingBuffer.clear();
+        }
+        return legacy;
+    }
+
+    /**
+     * Legacy short-circuit decision path (limits → blacklist → rules → ML) retained for shadow comparison.
+     */
+    private DecisionResult evaluateLegacyShortCircuit(TransactionEntity transaction, Double score,
                                    Map<String, Object> features, Long latencyMs,
                                    Map<String, Object> riskDetails) {
         logger.info("Evaluating transaction {} with score {}", transaction.getTxnId(), score);
@@ -289,30 +313,141 @@ public class DecisionEngine {
     }
 
     private String mapRuleDecisionToAction(String ruleDecision) {
-        return switch (ruleDecision) {
-            case "BLOCK", "SUSPEND" -> "BLOCK";
-            case "HOLD" -> "HOLD";
-            case "ALERT", "FLAG", "REVIEW" -> "ALERT";
-            default -> "ALLOW";
-        };
+        return com.posgateway.aml.service.decision.CanonicalDecision.toLegacyAction(
+                com.posgateway.aml.service.decision.CanonicalDecision.fromLegacyAction(ruleDecision));
+    }
+
+    /**
+     * Runs every synchronous engine and resolves BLOCK &gt; SUSPEND &gt; FLAG &gt; ALLOW from recorded findings.
+     */
+    private DecisionResult evaluateComputeAll(TransactionEntity transaction, Double score,
+                                              Map<String, Object> features, Long latencyMs,
+                                              Map<String, Object> riskDetails, boolean applySideEffects) {
+        logger.info("Orchestrator evaluate (compute-all) txnId={} sideEffects={}",
+                transaction.getTxnId(), applySideEffects);
+        applyRuleEvidence(transaction, riskDetails);
+
+        Optional<com.posgateway.aml.service.limits.TransactionLimitEnforcementService.LimitBreach> limitBreach =
+                limitEnforcementService.checkLimits(transaction);
+        if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordLimits(limitBreach.orElse(null));
+        }
+
+        List<String> blacklistReasons = collectBlacklistReasons(transaction);
+        if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordBlacklistChecks(blacklistReasons);
+        }
+
+        checkSanctionsScreening(transaction);
+        if (crossPspFraudService != null) {
+            checkCrossPspFraud(transaction);
+        } else if (assessmentEngineRecorder != null) {
+            assessmentEngineRecorder.recordCrossPsp(false, List.of(), "ALLOW", 0.0);
+        }
+
+        Double blockThreshold = configService.getFraudBlockThreshold();
+        Double holdThreshold = configService.getFraudHoldThreshold();
+        final boolean isBlock = score != null && score >= blockThreshold;
+        final boolean isHold = score != null && score >= holdThreshold;
+        if (assessmentEngineRecorder != null) {
+            if (isBlock) {
+                assessmentEngineRecorder.recordMlThresholdDecision("BLOCK", score,
+                        String.format("Score %.3f >= block threshold %.3f", score, blockThreshold));
+            } else if (isHold) {
+                assessmentEngineRecorder.recordMlThresholdDecision("HOLD", score,
+                        String.format("Score %.3f >= hold threshold %.3f", score, holdThreshold));
+            } else {
+                assessmentEngineRecorder.recordMlThresholdDecision("ALLOW", score,
+                        String.format("Score %.3f < hold threshold %.3f", score, holdThreshold));
+            }
+        }
+
+        com.posgateway.aml.service.decision.DecisionOrchestrator.ResolvedDecision resolved =
+                decisionOrchestrator != null
+                        ? decisionOrchestrator.resolveBufferedFindings(transaction, score, List.of())
+                        : new com.posgateway.aml.service.decision.DecisionOrchestrator.ResolvedDecision(
+                        com.posgateway.aml.service.decision.CanonicalDecision.ALLOW, "ALLOW",
+                        score != null ? score : 0.0, List.of());
+
+        DecisionResult decision = new DecisionResult(resolved.legacyAction(), resolved.score(), resolved.reasons());
+        checkAmlRules(transaction, features, decision, decision.getReasons());
+
+        if (applySideEffects) {
+            applyDecisionAction(transaction, decision);
+            saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs,
+                    resolved.canonical().name());
+            maybeConsultAi(transaction, score, features, decision);
+        }
+        logger.info("Orchestrator decision txnId={} legacy={} canonical={}",
+                transaction.getTxnId(), decision.getAction(), resolved.canonical());
+        return decision;
+    }
+
+    private static List<String> mergeReasons(List<String> left, List<String> right) {
+        List<String> merged = new ArrayList<>();
+        if (left != null) {
+            merged.addAll(left);
+        }
+        if (right != null) {
+            merged.addAll(right);
+        }
+        return merged;
+    }
+
+    private DecisionResult buildRuleDecisionWithoutSideEffects(TransactionEntity transaction, Double score,
+                                                               Map<String, Object> riskDetails) {
+        if (riskDetails == null || riskDetails.isEmpty()) {
+            return null;
+        }
+        Object decisionObj = riskDetails.get("rule_decision");
+        if (decisionObj == null) {
+            return null;
+        }
+        String ruleDecision = decisionObj.toString().toUpperCase();
+        @SuppressWarnings("unchecked")
+        List<String> triggered = riskDetails.get("rules_triggered") instanceof List
+                ? (List<String>) riskDetails.get("rules_triggered") : List.of();
+        @SuppressWarnings("unchecked")
+        List<String> ruleReasons = riskDetails.get("rule_reasons") instanceof List
+                ? (List<String>) riskDetails.get("rule_reasons") : List.of();
+        if (triggered.isEmpty() && "ALLOW".equals(ruleDecision)) {
+            return null;
+        }
+        List<String> reasons = new ArrayList<>(ruleReasons);
+        if (reasons.isEmpty() && !triggered.isEmpty()) {
+            reasons.add("Rules triggered: " + String.join(", ", triggered));
+        }
+        String action = mapRuleDecisionToAction(ruleDecision);
+        if ("ALLOW".equals(action) && triggered.isEmpty()) {
+            return null;
+        }
+        return new DecisionResult(action, score, reasons);
+    }
+
+    /** Collects tenant and platform blacklist matches for the transaction's identifiers. */
+    private List<String> collectBlacklistReasons(TransactionEntity transaction) {
+        List<String> reasons = new ArrayList<>();
+        if (!configService.isBlacklistEnabled()) {
+            return reasons;
+        }
+        String panHash = transaction.getPanHash();
+        if (panHash != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "pan", panHash)) {
+            reasons.add("BLACKLIST: PAN hash is blacklisted");
+        }
+        String terminalId = transaction.getTerminalId();
+        if (terminalId != null
+                && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "terminal", terminalId)) {
+            reasons.add("BLACKLIST: Terminal is blacklisted");
+        }
+        String ip = transaction.getIpAddress();
+        if (ip != null && paymentBlacklistService.isBlacklisted(transaction.getPspId(), "ip", ip)) {
+            reasons.add("BLACKLIST: IP address is blacklisted");
+        }
+        return reasons;
     }
 
     private DecisionResult checkHardRules(TransactionEntity transaction) {
-        List<String> reasons = new ArrayList<>();
-        if (configService.isBlacklistEnabled()) {
-            String panHash = transaction.getPanHash();
-            if (panHash != null && paymentBlacklistService.isBlacklisted("pan", panHash)) {
-                reasons.add("BLACKLIST: PAN hash is blacklisted");
-            }
-            String terminalId = transaction.getTerminalId();
-            if (terminalId != null && paymentBlacklistService.isBlacklisted("terminal", terminalId)) {
-                reasons.add("BLACKLIST: Terminal is blacklisted");
-            }
-            String ip = transaction.getIpAddress();
-            if (ip != null && paymentBlacklistService.isBlacklisted("ip", ip)) {
-                reasons.add("BLACKLIST: IP address is blacklisted");
-            }
-        }
+        List<String> reasons = collectBlacklistReasons(transaction);
         if (assessmentEngineRecorder != null) {
             assessmentEngineRecorder.recordBlacklistChecks(reasons);
         }
@@ -359,6 +494,15 @@ public class DecisionEngine {
 
     @Autowired(required = false)
     private com.posgateway.aml.service.assessment.AssessmentEngineRecorder assessmentEngineRecorder;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.decision.DecisionOrchestrator decisionOrchestrator;
+
+    @Autowired(required = false)
+    private com.posgateway.aml.service.alert.AlertLinkageService alertLinkageService;
+
+    @Autowired
+    private com.posgateway.aml.service.decision.DecisionOrchestratorModeService orchestratorModeService;
 
     private DecisionResult checkSanctionsScreening(TransactionEntity transaction) {
         if (realTimeScreeningService == null) {
@@ -533,7 +677,7 @@ public class DecisionEngine {
         // Idempotent and best-effort — never breaks the decline path; a repeat DNH extends the window.
         String panHash = transaction.getPanHash();
         if (panHash != null && !panHash.isBlank()) {
-            paymentBlacklistService.addToBlacklist("pan", panHash,
+            paymentBlacklistService.addToBlacklist(transaction.getPspId(), "pan", panHash,
                     "Do Not Honour — auto-declined by DecisionEngine: " + String.join("; ", reasons),
                     null, LocalDateTime.now().plusDays(dnhBlockDays));
         }
@@ -562,8 +706,16 @@ public class DecisionEngine {
         alert.setSarRequired(transaction.isSarRequired());
         alert.setCtrRequired(transaction.isCtrRequired());
         alert.setTriggeredRules(transaction.getTriggeredRules());
+        alert.setSuspicionFormedAt(LocalDateTime.now());
 
         Alert saved = alertRepository.save(alert);
+        if (alertLinkageService != null) {
+            alertLinkageService.applyRuleProvenance(saved, null, null);
+            alertLinkageService.linkFindingsForTransaction(saved.getAlertId(), transaction.getTxnId());
+        }
+        if (complianceEntityLinkService != null) {
+            complianceEntityLinkService.registerNewFraudAlert(saved, transaction);
+        }
         logger.info("Created alert for transaction {}: {} - {}",
             transaction.getTxnId(), action, reason);
 
@@ -705,11 +857,26 @@ public class DecisionEngine {
                                         Map<String, Object> features, Map<String, Object> riskDetails,
                                         DecisionResult decision,
                                         Long latencyMs) {
+        saveFeaturesAndDecision(transaction, score, features, riskDetails, decision, latencyMs, null);
+    }
+
+    /**
+     * Persists legacy and canonical decision columns plus feature snapshot for the transaction.
+     */
+    private void saveFeaturesAndDecision(TransactionEntity transaction, Double score,
+                                        Map<String, Object> features, Map<String, Object> riskDetails,
+                                        DecisionResult decision,
+                                        Long latencyMs, String decisionV2) {
         try {
             transaction.setDecision(decision.getAction());
+            if (decisionV2 != null) {
+                transaction.setDecisionV2(decisionV2);
+            } else {
+                transaction.setDecisionV2(
+                        com.posgateway.aml.service.decision.CanonicalDecision.fromLegacyAction(decision.getAction()).name());
+            }
             transaction.setRiskLevel(resolveFinalRiskLevel(decision.getAction(), transaction.getRiskLevel()));
             transactionRepository.save(transaction);
-
             TransactionFeatures txnFeatures = new TransactionFeatures();
             txnFeatures.setTxnId(transaction.getTxnId());
             txnFeatures.setScore(score);

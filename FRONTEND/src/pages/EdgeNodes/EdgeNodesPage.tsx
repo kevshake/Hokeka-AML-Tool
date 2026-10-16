@@ -29,6 +29,8 @@ import SetupWizard from './SetupWizard';
 import { edgeKeys, resolveEdgeError, useEdgeNodes, useNodeAction } from './edgeApi';
 import { formatAbsolute, formatRelative, isPlatformAdmin, pspLabel, statusBlurb } from './edgeMeta';
 import type { EdgeNodeView, NodeAction } from './types';
+import ConsoleListExportMenu from '../../components/Common/ConsoleListExportMenu';
+import { useUrlTableState } from '../../hooks/useUrlTableState';
 
 const CONTROL_PLANE_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
@@ -79,8 +81,9 @@ export default function EdgeNodesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const platformAdmin = isPlatformAdmin(user?.role?.name);
+  const { state: tableState, setFilter, exportFilterMap } = useUrlTableState();
 
-  const [pspFilter, setPspFilter] = useState<number | ''>('');
+  const pspFilter = tableState.filters.pspId ? Number(tableState.filters.pspId) : '';
   const filterValue = platformAdmin && pspFilter !== '' ? pspFilter : undefined;
 
   const { data: nodes, isLoading, isError, error } = useEdgeNodes(filterValue);
@@ -137,7 +140,7 @@ export default function EdgeNodesPage() {
         <Select
           size="small"
           value={pspFilter === '' ? 'all' : String(pspFilter)}
-          onChange={(e) => setPspFilter(e.target.value === 'all' ? '' : Number(e.target.value))}
+          onChange={(e) => setFilter('pspId', e.target.value === 'all' ? '' : e.target.value)}
           sx={{ minWidth: 180 }}
         >
           <MenuItem value="all">All PSPs</MenuItem>
@@ -148,6 +151,7 @@ export default function EdgeNodesPage() {
           ))}
         </Select>
       )}
+      <ConsoleListExportMenu viewType="EDGE_NODES" filters={exportFilterMap} disabled={!rows.length} />
       <Tooltip title="Refresh">
         <IconButton onClick={refresh} aria-label="Refresh fleet">
           <RefreshCw size={17} />

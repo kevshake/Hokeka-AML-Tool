@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 
 interface HokekaHeaderProps {
   userName?: string
+  pageTitle?: string
   notificationCount?: number
   showMobileMenu?: boolean
   onOpenMobileMenu?: () => void
@@ -21,6 +22,7 @@ function formatTime(d: Date) {
 
 export default function HokekaHeader({
   userName = 'Admin',
+  pageTitle = 'Dashboard',
   notificationCount,
   showMobileMenu = false,
   onOpenMobileMenu,
@@ -61,12 +63,13 @@ export default function HokekaHeader({
           </button>
         ) : null}
         <div className="min-w-0">
-        <h1 className="truncate text-[1.2rem] font-semibold tracking-tight text-white leading-tight">
-          Welcome back, {userName}
-        </h1>
-        <p className="mt-0.5 truncate text-xs leading-relaxed text-glass-muted">
-          Here&apos;s what&apos;s happening in your compliance environment today.
-        </p>
+          <h1 className="truncate text-[1.05rem] font-semibold leading-tight tracking-tight text-white md:text-[1.2rem]">
+            <span className="md:hidden">{pageTitle}</span>
+            <span className="hidden md:inline">Welcome back, {userName}</span>
+          </h1>
+          <p className="mt-0.5 hidden truncate text-xs leading-relaxed text-glass-muted md:block">
+            Here&apos;s what&apos;s happening in your compliance environment today.
+          </p>
         </div>
       </div>
 

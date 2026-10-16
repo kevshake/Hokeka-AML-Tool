@@ -4,13 +4,21 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "payment_blacklist_entries",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"entry_type", "entry_value"}))
+@Table(name = "payment_blacklist_entries")
 public class PaymentBlacklistEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * Owning PSP. Null with {@link #platformWide}=true means a platform-shared list entry.
+     */
+    @Column(name = "psp_id")
+    private Long pspId;
+
+    @Column(name = "platform_wide", nullable = false)
+    private Boolean platformWide = false;
 
     @Column(name = "entry_type", nullable = false, length = 32)
     private String entryType;
@@ -47,6 +55,14 @@ public class PaymentBlacklistEntry {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    /** Returns the owning PSP, or null for a shared entry. */
+    public Long getPspId() { return pspId; }
+    /** Sets the owning PSP, or null for a shared entry. */
+    public void setPspId(Long pspId) { this.pspId = pspId; }
+    /** Returns whether this null-PSP entry is shared platform-wide. */
+    public Boolean getPlatformWide() { return platformWide; }
+    /** Marks whether this null-PSP entry is shared platform-wide. */
+    public void setPlatformWide(Boolean platformWide) { this.platformWide = platformWide; }
     public String getEntryType() { return entryType; }
     public void setEntryType(String entryType) { this.entryType = entryType; }
     public String getEntryValue() { return entryValue; }

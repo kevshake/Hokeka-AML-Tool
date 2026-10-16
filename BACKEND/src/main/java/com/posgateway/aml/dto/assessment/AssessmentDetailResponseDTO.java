@@ -16,7 +16,7 @@ public class AssessmentDetailResponseDTO {
     private String triggerRef;
     private Long txnId;
     private UUID parentAssessmentId;
-    private UUID edgeAssessmentId;
+    private String edgeAssessmentId;
     private Map<String, Object> versions;
     private String contextHash;
     private String decision;
@@ -72,11 +72,13 @@ public class AssessmentDetailResponseDTO {
         this.parentAssessmentId = parentAssessmentId;
     }
 
-    public UUID getEdgeAssessmentId() {
+    /** Returns the opaque identifier assigned by the Edge Node. */
+    public String getEdgeAssessmentId() {
         return edgeAssessmentId;
     }
 
-    public void setEdgeAssessmentId(UUID edgeAssessmentId) {
+    /** Sets the opaque identifier assigned by the Edge Node. */
+    public void setEdgeAssessmentId(String edgeAssessmentId) {
         this.edgeAssessmentId = edgeAssessmentId;
     }
 

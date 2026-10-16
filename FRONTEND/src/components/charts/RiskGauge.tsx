@@ -78,7 +78,12 @@ export default function RiskGauge() {
       ) : error ? (
         <DashboardError message="Risk distribution unavailable." />
       ) : total === 0 ? (
-        <DashboardEmpty message="No merchants with risk ratings yet." />
+        <DashboardEmpty
+          message="No merchants with risk ratings yet."
+          hint="Onboard merchants or import KYB records to populate portfolio risk."
+          actionLabel="View merchants"
+          actionTo="/merchants"
+        />
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="relative flex min-h-[140px] flex-col items-center justify-center">

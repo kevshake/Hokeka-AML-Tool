@@ -1,7 +1,2 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
-import './assets.css'
-
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
+/** Entry re-exports bootstrap so Vite keeps a stable /src/main.tsx entry point. */
+import './bootstrap'

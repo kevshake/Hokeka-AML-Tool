@@ -64,6 +64,9 @@ public class NotificationService {
             return;
         }
 
+        subject = TippingOffGuard.sanitizeCustomerText(subject);
+        body = TippingOffGuard.sanitizeCustomerText(body);
+
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromAddress);

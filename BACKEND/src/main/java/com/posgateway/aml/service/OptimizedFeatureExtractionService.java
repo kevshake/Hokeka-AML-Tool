@@ -30,6 +30,7 @@ public class OptimizedFeatureExtractionService {
     private final TransactionRepository transactionRepository;
     private final ObjectMapper objectMapper;
     private final com.posgateway.aml.service.enrichment.IpReputationService ipReputationService;
+    private final com.posgateway.aml.service.rules.RuleFeatureEnrichmentService ruleFeatureEnrichmentService;
 
     @Value("${throughput.parallel.feature.extraction:true}")
     private boolean parallelEnabled;
@@ -40,10 +41,12 @@ public class OptimizedFeatureExtractionService {
     @Autowired
     public OptimizedFeatureExtractionService(TransactionRepository transactionRepository,
                                            ObjectMapper objectMapper,
-                                           com.posgateway.aml.service.enrichment.IpReputationService ipReputationService) {
+                                           com.posgateway.aml.service.enrichment.IpReputationService ipReputationService,
+                                           com.posgateway.aml.service.rules.RuleFeatureEnrichmentService ruleFeatureEnrichmentService) {
         this.transactionRepository = transactionRepository;
         this.objectMapper = objectMapper;
         this.ipReputationService = ipReputationService;
+        this.ruleFeatureEnrichmentService = ruleFeatureEnrichmentService;
     }
 
     /**
@@ -86,6 +89,9 @@ public class OptimizedFeatureExtractionService {
         // IP reputation (VPN/proxy/manipulated) — deterministic, no I/O
         extractIpReputationFeatures(transaction, features);
 
+        // Same SpEL catalogue keys as FeatureExtractionService (z-score, 1m/5m velocity, screening).
+        ruleFeatureEnrichmentService.enrich(transaction, features);
+
         return features;
     }
 
@@ -105,6 +111,7 @@ public class OptimizedFeatureExtractionService {
         extractEmvFeatures(transaction, features);
         extractAmlFeatures(transaction, features);
         extractIpReputationFeatures(transaction, features);
+        ruleFeatureEnrichmentService.enrich(transaction, features);
     }
 
     /**

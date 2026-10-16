@@ -11,4 +11,7 @@ public interface AssessmentRepository extends JpaRepository<Assessment, UUID> {
     Optional<Assessment> findFirstByTxnIdOrderByCreatedAtDesc(Long txnId);
 
     Optional<Assessment> findByIdAndPspId(UUID id, Long pspId);
+
+    /** Lookup by opaque edge assessment id (dual-post adopt path). */
+    Optional<Assessment> findByEdgeAssessmentId(String edgeAssessmentId);
 }

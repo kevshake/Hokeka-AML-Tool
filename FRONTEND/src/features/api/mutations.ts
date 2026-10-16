@@ -380,6 +380,29 @@ export const useUpdateAlertStatus = () => {
   });
 };
 
+/** Resolves an alert with a regulatory disposition (maker-checker for true positives). */
+export const useResolveAlert = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      disposition,
+      notes,
+    }: {
+      id: number;
+      disposition: string;
+      notes?: string;
+    }) =>
+      apiClient.put<import("../../types").Alert>(`alerts/${id}/resolve`, {
+        disposition,
+        notes,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+};
+
 // Merchant Mutations
 export interface CreateMerchantRequest {
   pspId: number;
