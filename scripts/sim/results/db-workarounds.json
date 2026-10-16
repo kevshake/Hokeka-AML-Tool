@@ -1,0 +1,135 @@
+{
+  "defects": [
+    {
+      "defect": "missing sequence revinfo_seq (Envers DefaultRevisionEntity)",
+      "fix": "CREATE SEQUENCE IF NOT EXISTS revinfo_seq START WITH 1 INCREMENT BY 50;"
+    },
+    {
+      "defect": "case_alerts_aud lacks column created_at present on case_alerts",
+      "fix": "ALTER TABLE case_alerts_aud ADD COLUMN IF NOT EXISTS created_at timestamp without time zone;"
+    },
+    {
+      "defect": "case_alerts_aud lacks column severity present on case_alerts",
+      "fix": "ALTER TABLE case_alerts_aud ADD COLUMN IF NOT EXISTS severity character varying;"
+    },
+    {
+      "defect": "case_evidence_aud lacks column checksum present on case_evidence",
+      "fix": "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS checksum character varying;"
+    },
+    {
+      "defect": "case_evidence_aud lacks column evidence_type present on case_evidence",
+      "fix": "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS evidence_type character varying;"
+    },
+    {
+      "defect": "case_evidence_aud lacks column file_size present on case_evidence",
+      "fix": "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS file_size bigint;"
+    },
+    {
+      "defect": "case_notes_aud lacks column parent_note_id present on case_notes",
+      "fix": "ALTER TABLE case_notes_aud ADD COLUMN IF NOT EXISTS parent_note_id bigint;"
+    },
+    {
+      "defect": "case_notes_aud lacks column updated_at present on case_notes",
+      "fix": "ALTER TABLE case_notes_aud ADD COLUMN IF NOT EXISTS updated_at timestamp without time zone;"
+    },
+    {
+      "defect": "cbk_submissions_aud lacks column source_record_count present on cbk_submissions",
+      "fix": "ALTER TABLE cbk_submissions_aud ADD COLUMN IF NOT EXISTS source_record_count integer;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column assigned_to present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS assigned_to character varying;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column case_id present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_id bigint;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column case_status present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_status character varying;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column case_type present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_type character varying;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column closed_at present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS closed_at timestamp without time zone;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column created_by present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS created_by character varying;"
+    },
+    {
+      "defect": "compliance_cases_aud lacks column due_date present on compliance_cases",
+      "fix": "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS due_date timestamp without time zone;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column applies_to present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS applies_to character varying;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column category present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS category character varying;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column checks_for present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS checks_for text;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column external_code present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS external_code character varying;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column is_system_managed present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS is_system_managed boolean;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column parameters present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS parameters text;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column recommended present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS recommended boolean;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column rule_subtype present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS rule_subtype character varying;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column sample_use_case present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS sample_use_case text;"
+    },
+    {
+      "defect": "rule_definitions_aud lacks column typology present on rule_definitions",
+      "fix": "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS typology character varying;"
+    }
+  ],
+  "appliedThisRun": [
+    "ALTER TABLE case_alerts_aud ADD COLUMN IF NOT EXISTS created_at timestamp without time zone;",
+    "ALTER TABLE case_alerts_aud ADD COLUMN IF NOT EXISTS severity character varying;",
+    "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS checksum character varying;",
+    "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS evidence_type character varying;",
+    "ALTER TABLE case_evidence_aud ADD COLUMN IF NOT EXISTS file_size bigint;",
+    "ALTER TABLE case_notes_aud ADD COLUMN IF NOT EXISTS parent_note_id bigint;",
+    "ALTER TABLE case_notes_aud ADD COLUMN IF NOT EXISTS updated_at timestamp without time zone;",
+    "ALTER TABLE cbk_submissions_aud ADD COLUMN IF NOT EXISTS source_record_count integer;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS assigned_to character varying;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_id bigint;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_status character varying;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS case_type character varying;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS closed_at timestamp without time zone;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS created_by character varying;",
+    "ALTER TABLE compliance_cases_aud ADD COLUMN IF NOT EXISTS due_date timestamp without time zone;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS applies_to character varying;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS category character varying;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS checks_for text;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS external_code character varying;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS is_system_managed boolean;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS parameters text;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS recommended boolean;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS rule_subtype character varying;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS sample_use_case text;",
+    "ALTER TABLE rule_definitions_aud ADD COLUMN IF NOT EXISTS typology character varying;"
+  ]
+}

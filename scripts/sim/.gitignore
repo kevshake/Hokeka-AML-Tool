@@ -1,0 +1,7 @@
+# Local-only sim artefacts: secrets, process logs, edge identity/keystores, per-run raw evidence.
+results/sim-secrets.env
+results/logs/
+results/edge/
+results/runs/
+results/*.pid
+__pycache__/
