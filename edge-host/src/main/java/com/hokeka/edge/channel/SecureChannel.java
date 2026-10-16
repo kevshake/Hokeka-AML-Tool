@@ -108,22 +108,37 @@ public class SecureChannel {
         return c;
     }
 
-    private RestClient build(boolean requireClientCertificate) {
-        String base = baseUrl();
-        SSLContext sslContext = sslContext(requireClientCertificate);
+    /**
+     * A JDK {@link HttpClient} with the same mTLS identity, TLS 1.3 suites and hostname verification
+     * as {@link #mutualTlsClient()}: the transport of the Edge Tunnel WebSocket
+     * (EDGE_DATA_RESIDENCY_CONTRACT.md §7.1, "the existing SecureChannel SSLContext, no new
+     * dependency"). A fresh client per call, so a rotated keystore is picked up on reconnect.
+     *
+     * @throws SecurityException when the client keystore ({@code EDGE_MTLS_KEYSTORE}) is missing
+     */
+    public HttpClient mutualTlsHttpClient() {
+        return httpClient(true);
+    }
 
+    /** TLS 1.3 + (optionally mandatory) client certificate, HTTP/1.1, no redirects. */
+    private HttpClient httpClient(boolean requireClientCertificate) {
+        SSLContext sslContext = sslContext(requireClientCertificate);
         SSLParameters params = sslContext.getDefaultSSLParameters();
         params.setProtocols(new String[]{"TLSv1.3"});
         params.setCipherSuites(TLS13_CIPHERS);
         params.setEndpointIdentificationAlgorithm("HTTPS"); // hostname verification, always on
-
-        HttpClient httpClient = HttpClient.newBuilder()
+        return HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(properties.getRequestTimeout())
                 .sslContext(sslContext)
                 .sslParameters(params)
                 .build();
+    }
+
+    private RestClient build(boolean requireClientCertificate) {
+        String base = baseUrl();
+        HttpClient httpClient = httpClient(requireClientCertificate);
 
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(properties.getRequestTimeout());

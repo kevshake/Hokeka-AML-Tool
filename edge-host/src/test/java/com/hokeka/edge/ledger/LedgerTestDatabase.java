@@ -26,7 +26,7 @@ import java.util.UUID;
  * <p>Every test gets its own schema ({@link #newSchema()}), so tests are isolated and can run
  * against a shared database; {@link #dropSchema} removes it afterwards.
  */
-final class LedgerTestDatabase {
+public final class LedgerTestDatabase {
 
     private static final String URL_PROPERTY = "ledger.it.jdbc-url";
     private static volatile PostgreSQLContainer<?> container;
@@ -35,11 +35,11 @@ final class LedgerTestDatabase {
     }
 
     /** Connection coordinates of the test database. */
-    record Coordinates(String url, String user, String password) {
+    public record Coordinates(String url, String user, String password) {
     }
 
     /** The database to use, or aborts the test when none is available. */
-    static synchronized Coordinates coordinates() {
+    public static synchronized Coordinates coordinates() {
         String url = System.getProperty(URL_PROPERTY, "").trim();
         if (!url.isEmpty()) {
             return new Coordinates(url, System.getProperty("ledger.it.user", "ledger"),
@@ -62,12 +62,12 @@ final class LedgerTestDatabase {
     }
 
     /** A fresh, unique schema name for one test. */
-    static String newSchema() {
+    public static String newSchema() {
         return "it_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toLowerCase(Locale.ROOT);
     }
 
     /** Ledger properties pointing at the test database and the given schema. */
-    static LedgerProperties properties(String schema) {
+    public static LedgerProperties properties(String schema) {
         Coordinates c = coordinates();
         LedgerProperties p = new LedgerProperties();
         p.setUrl(c.url());
@@ -80,7 +80,7 @@ final class LedgerTestDatabase {
     }
 
     /** An initialised ledger over a fresh schema. */
-    static EdgeLedger openLedger(LedgerProperties properties, String nodeId) {
+    public static EdgeLedger openLedger(LedgerProperties properties, String nodeId) {
         EdgeLedger ledger = new EdgeLedger(properties, new ObjectMapper(), nodeId);
         if (!ledger.initialize()) {
             throw new IllegalStateException("test ledger did not initialise: " + ledger.stateReason());
@@ -89,7 +89,7 @@ final class LedgerTestDatabase {
     }
 
     /** A direct JDBC connection with the schema on the search path. */
-    static Connection connect(String schema) throws SQLException {
+    public static Connection connect(String schema) throws SQLException {
         Coordinates c = coordinates();
         Connection conn = DriverManager.getConnection(c.url(), c.user(), c.password());
         conn.setSchema(schema);
@@ -97,7 +97,7 @@ final class LedgerTestDatabase {
     }
 
     /** Drops a test schema and everything in it. */
-    static void dropSchema(String schema) {
+    public static void dropSchema(String schema) {
         try (Connection conn = connect("public"); Statement st = conn.createStatement()) {
             st.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         } catch (SQLException e) {

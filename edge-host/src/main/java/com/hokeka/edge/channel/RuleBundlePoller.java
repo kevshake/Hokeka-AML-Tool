@@ -108,8 +108,28 @@ public class RuleBundlePoller {
         return lastError;
     }
 
-    /** One poll cycle. Never throws — the caller is a scheduler and the edge must keep serving. */
-    public void poll() {
+    /**
+     * Polls once on a virtual thread right away (tunnel {@code notify bundle.updated}, or a
+     * {@code hello.ack} naming a newer bundle: "poll /edge/bundle within 5 s", contract §7.10). A
+     * burst of triggers collapses into one extra poll.
+     */
+    public void pollSoon() {
+        if (soonScheduled.compareAndSet(false, true)) {
+            Thread.ofVirtual().name("edge-bundle-poll").start(() -> {
+                soonScheduled.set(false);
+                poll();
+            });
+        }
+    }
+
+    private final java.util.concurrent.atomic.AtomicBoolean soonScheduled =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * One poll cycle. Never throws — the caller is a scheduler and the edge must keep serving.
+     * Serialised, so a {@link #pollSoon()} never races the scheduled poll.
+     */
+    public synchronized void poll() {
         if (!properties.isEnabled()) {
             return;
         }

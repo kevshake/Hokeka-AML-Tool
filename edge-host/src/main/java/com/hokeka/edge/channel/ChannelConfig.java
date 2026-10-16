@@ -5,6 +5,8 @@ import com.hokeka.edge.activation.ActivationService;
 import com.hokeka.edge.contract.ContractSchemas;
 import com.hokeka.edge.ledger.EdgeLedger;
 import com.hokeka.edge.ledger.LedgerProperties;
+import com.hokeka.edge.residency.EdgeConfigPoller;
+import com.hokeka.edge.residency.EdgeConfigStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -47,6 +49,19 @@ public class ChannelConfig {
     }
 
     /**
+     * The sealed Edge config consumer (EDGE_DATA_RESIDENCY_CONTRACT.md §6.2): polled on the
+     * bundle-poll cycle, and early on tunnel {@code notify config.updated}.
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "hokeka.controlplane", name = "enabled", havingValue = "true",
+            matchIfMissing = true)
+    public EdgeConfigPoller edgeConfigPoller(ControlPlaneProperties properties, SecureChannel channel,
+                                             SealedEnvelopeCodec codec, ActivationService activation,
+                                             EdgeConfigStore store) {
+        return new EdgeConfigPoller(properties, channel, codec, activation, store, Clock.systemUTC());
+    }
+
+    /**
      * Fixed-delay loops driven by the configured {@link java.time.Duration}s. Registered
      * programmatically so the intervals bind once, on {@link ControlPlaneProperties}.
      */
@@ -60,19 +75,22 @@ public class ChannelConfig {
         private final RuleBundlePoller poller;
         private final MetricsShipper shipper;
         private final OutboxShipper outboxShipper;
+        private final EdgeConfigPoller configPoller;
 
         ChannelSchedulingConfig(ControlPlaneProperties properties, RuleBundlePoller poller, MetricsShipper shipper,
-                                OutboxShipper outboxShipper) {
+                                OutboxShipper outboxShipper, EdgeConfigPoller configPoller) {
             this.properties = properties;
             this.poller = poller;
             this.shipper = shipper;
             this.outboxShipper = outboxShipper;
+            this.configPoller = configPoller;
         }
 
-        /** Registers the bundle poll, the metrics window and the outbox drain. */
+        /** Registers the bundle poll, the config poll (same cycle), the metrics window and the outbox drain. */
         @Override
         public void configureTasks(ScheduledTaskRegistrar registrar) {
             registrar.addFixedDelayTask(poller::poll, properties.getBundlePollInterval());
+            registrar.addFixedDelayTask(configPoller::poll, properties.getBundlePollInterval());
             registrar.addFixedDelayTask(shipper::ship, properties.getMetricsInterval());
             registrar.addFixedDelayTask(outboxShipper::ship, properties.getAssessmentShipInterval());
         }

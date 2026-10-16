@@ -7,7 +7,13 @@ import com.hokeka.edge.ledger.EvaluationRecorder;
 import com.hokeka.edge.ledger.LedgerEvaluation;
 import com.hokeka.edge.ledger.LedgerEvaluations;
 import com.hokeka.edge.ledger.LedgerProperties;
+import com.hokeka.edge.residency.EdgeConfigDocument;
+import com.hokeka.edge.residency.EdgeConfigPoller;
+import com.hokeka.edge.residency.EdgeConfigStore;
+import com.hokeka.edge.residency.RetentionPolicy;
+import com.hokeka.edge.residency.RetentionPurger;
 import com.hokeka.edge.store.EdgeFeatureStore;
+import com.hokeka.edge.tunnel.EdgeTunnelClient;
 import com.hokeka.edge.store.FeatureDerivation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,6 +58,39 @@ public class EdgeController {
 
     @Value("${featurestore.fail-closed:true}")
     private boolean failClosedOnStoreUnavailable;
+
+    private EdgeTunnelClient tunnel;
+    private EdgeConfigStore edgeConfig;
+    private EdgeConfigPoller edgeConfigPoller;
+    private RetentionPurger purger;
+    private LedgerProperties ledgerProperties;
+
+    /** Data-residency status sources (R2/R5); each is optional so the controller works without them. */
+    @Autowired(required = false)
+    public void setResidencyStatus(EdgeTunnelClient tunnel, EdgeConfigStore edgeConfig,
+                                   EdgeConfigPoller edgeConfigPoller, RetentionPurger purger,
+                                   LedgerProperties ledgerProperties) {
+        this.tunnel = tunnel;
+        this.edgeConfig = edgeConfig;
+        this.edgeConfigPoller = edgeConfigPoller;
+        this.purger = purger;
+        this.ledgerProperties = ledgerProperties;
+    }
+
+    /** Status sources that exist without the control-plane channel (config in force, purge). */
+    @Autowired(required = false)
+    public void setLocalResidencyStatus(EdgeConfigStore edgeConfig, RetentionPurger purger,
+                                        LedgerProperties ledgerProperties) {
+        if (this.edgeConfig == null) {
+            this.edgeConfig = edgeConfig;
+        }
+        if (this.purger == null) {
+            this.purger = purger;
+        }
+        if (this.ledgerProperties == null) {
+            this.ledgerProperties = ledgerProperties;
+        }
+    }
 
     /**
      * Spring constructor: node and site ids come from {@code EDGE_EDGEID} / {@code EDGE_SITE_ID}.
@@ -105,7 +144,59 @@ public class EdgeController {
         // mistaken for a healthy one.
         status.put("featureStore", featureStore.available() ? "connected" : "unavailable");
         status.put("ledger", ledgerStatus());
+        status.put("edgeConfig", edgeConfigStatus());
+        status.put("retention", retentionStatus());
+        status.put("tunnel", tunnel == null ? Map.of("state", "NOT_CONFIGURED") : tunnel.status());
         return status;
+    }
+
+    /** The config document in force (version, key settings) and the last fetch outcome — no values beyond those. */
+    private Map<String, Object> edgeConfigStatus() {
+        Map<String, Object> s = new LinkedHashMap<>();
+        if (edgeConfig == null) {
+            s.put("state", "NOT_CONFIGURED");
+            return s;
+        }
+        java.util.Optional<EdgeConfigDocument> doc = edgeConfig.current();
+        s.put("configVersion", doc.map(EdgeConfigDocument::configVersion).orElse(null));
+        s.put("acceptedAt", edgeConfig.acceptedAt() == null ? null : edgeConfig.acceptedAt().toString());
+        s.put("supportAccess", doc.map(EdgeConfigDocument::supportAccess).orElse(false));
+        s.put("crossPspIntelligence", doc.map(EdgeConfigDocument::crossPspOptIn).orElse(false));
+        s.put("ctrEnabled", doc.map(d -> d.ctr().enabled()).orElse(false));
+        s.put("limits", doc.map(EdgeConfigDocument::limitCount).orElse(0));
+        s.put("merchantBlocklistVersion", doc.map(EdgeConfigDocument::blocklistVersion).orElse(null));
+        s.put("merchantBlocklistEntries", doc.map(d -> d.blockedMerchants().size()).orElse(0));
+        s.put("sanctionsListVersion", doc.map(EdgeConfigDocument::sanctionsListVersion).orElse(null));
+        s.put("tunnelEnabled", doc.map(d -> d.tunnel().enabled()).orElse(null));
+        s.put("opsAllowed", doc.map(EdgeConfigDocument::opsAllowedList).orElse(List.of()));
+        s.put("backfillAllowed", doc.map(d -> d.tunnel().backfillAllowed()).orElse(false));
+        s.put("lastRefusal", edgeConfig.lastRefusal());
+        if (edgeConfigPoller != null) {
+            s.put("lastPollSuccess", edgeConfigPoller.lastSuccess() == null ? null
+                    : edgeConfigPoller.lastSuccess().toString());
+            s.put("lastPollError", edgeConfigPoller.lastError());
+        }
+        return s;
+    }
+
+    /** Effective retention and the last purge run (counts only). */
+    private Map<String, Object> retentionStatus() {
+        Map<String, Object> s = new LinkedHashMap<>();
+        if (edgeConfig == null || purger == null || ledgerProperties == null) {
+            s.put("state", "NOT_CONFIGURED");
+            return s;
+        }
+        java.util.OptionalInt years = RetentionPolicy.effectiveYears(edgeConfig.current(),
+                ledgerProperties.getRetentionMinYears());
+        s.put("effectiveYears", years.isPresent() ? years.getAsInt() : null);
+        s.put("purging", years.isPresent());
+        RetentionPurger.Report last = purger.lastReport();
+        s.put("lastRunAt", last == null ? null : last.runAt().toString());
+        s.put("lastOutcome", last == null ? null : last.outcome());
+        s.put("lastDroppedPartitions", last == null ? 0 : last.droppedPartitions().size());
+        s.put("lastHeldRowsCopied", last == null ? 0 : last.heldRowsCopied());
+        s.put("nextPurgeAt", purger.nextPurgeAt(Instant.now()).toString());
+        return s;
     }
 
     /** Ledger part of {@link #status()}: state, reason and counters only — no row data. */

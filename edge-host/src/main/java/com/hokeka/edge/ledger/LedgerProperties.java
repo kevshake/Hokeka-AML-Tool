@@ -82,6 +82,37 @@ public class LedgerProperties {
     private int outboxMaxPayloadBytes = 256 * 1024;
 
     /**
+     * Connections of the separate read pool used by Edge Tunnel requests (contract §7.6). Kept apart
+     * from the evaluate-path pool so a burst of cloud reads can never starve evaluations, and
+     * configured without the write-path socket timeout: tunnel statements are bounded by
+     * {@code statement_timeout} from each request's deadline instead.
+     */
+    private int readPoolSize = 4;
+
+    /**
+     * Local retention floor in years ({@code EDGE_RETENTION_MIN_YEARS}, contract §6.3): effective
+     * retention = max(config {@code retention.years}, this). Values below the contract floor of 5
+     * are ignored with a warning; it can only raise retention, never lower it.
+     */
+    private int retentionMinYears = 5;
+
+    /** Site-local time of the daily purge (contract §8.2 default 02:00), {@code HH:mm}. */
+    private String purgeTime = "02:00";
+
+    /** IANA zone of the site's local clock for the purge time; empty = the host's default zone. */
+    private String siteTimezone = "";
+
+    /** How often the purge scheduler checks whether today's run is due. */
+    private Duration purgeCheckInterval = Duration.ofMinutes(5);
+
+    /**
+     * Longest wait for the lock needed to drop one partition. A partition DROP takes an exclusive
+     * lock on edge_evaluations; capping the wait keeps evaluations from queueing behind it. On a
+     * timeout that run fails without dropping anything and is retried the next day (§8.2).
+     */
+    private Duration purgeLockTimeout = Duration.ofSeconds(1);
+
+    /**
      * Names of the environment variables that must be set but are not. Values are never returned,
      * so the result is safe to log.
      *
@@ -303,5 +334,65 @@ public class LedgerProperties {
     /** @param outboxMaxPayloadBytes the maximum sealed batch size in bytes */
     public void setOutboxMaxPayloadBytes(int outboxMaxPayloadBytes) {
         this.outboxMaxPayloadBytes = outboxMaxPayloadBytes;
+    }
+
+    /** @return connections of the tunnel read pool */
+    public int getReadPoolSize() {
+        return readPoolSize;
+    }
+
+    /** @param readPoolSize connections of the tunnel read pool */
+    public void setReadPoolSize(int readPoolSize) {
+        this.readPoolSize = readPoolSize;
+    }
+
+    /** @return the configured local retention floor in years (may be below 5; see RetentionPolicy) */
+    public int getRetentionMinYears() {
+        return retentionMinYears;
+    }
+
+    /** @param retentionMinYears the local retention floor in years */
+    public void setRetentionMinYears(int retentionMinYears) {
+        this.retentionMinYears = retentionMinYears;
+    }
+
+    /** @return the site-local purge time, {@code HH:mm} */
+    public String getPurgeTime() {
+        return purgeTime;
+    }
+
+    /** @param purgeTime the site-local purge time, {@code HH:mm} */
+    public void setPurgeTime(String purgeTime) {
+        this.purgeTime = purgeTime;
+    }
+
+    /** @return the IANA zone of the site clock, or blank for the host default */
+    public String getSiteTimezone() {
+        return siteTimezone;
+    }
+
+    /** @param siteTimezone the IANA zone of the site clock */
+    public void setSiteTimezone(String siteTimezone) {
+        this.siteTimezone = siteTimezone;
+    }
+
+    /** @return how often the purge scheduler checks for a due run */
+    public Duration getPurgeCheckInterval() {
+        return purgeCheckInterval;
+    }
+
+    /** @param purgeCheckInterval how often the purge scheduler checks for a due run */
+    public void setPurgeCheckInterval(Duration purgeCheckInterval) {
+        this.purgeCheckInterval = purgeCheckInterval;
+    }
+
+    /** @return the longest wait for a partition-drop lock */
+    public Duration getPurgeLockTimeout() {
+        return purgeLockTimeout;
+    }
+
+    /** @param purgeLockTimeout the longest wait for a partition-drop lock */
+    public void setPurgeLockTimeout(Duration purgeLockTimeout) {
+        this.purgeLockTimeout = purgeLockTimeout;
     }
 }
