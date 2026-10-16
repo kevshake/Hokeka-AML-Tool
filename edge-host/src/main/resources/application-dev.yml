@@ -10,3 +10,7 @@ server:
 hokeka:
   controlplane:
     enabled: false
+  ledger:
+    # Dev only: without a local Postgres (EDGE_LEDGER_URL/USER/PASSWORD) evaluations still answer,
+    # but are NOT recorded. Logged loudly at startup. Production keeps the fail-closed default.
+    fail-closed: ${EDGE_LEDGER_FAIL_CLOSED:false}

@@ -38,6 +38,35 @@ API is published bound to `127.0.0.1` by default (widen with `--bind`/`--allow-s
 `3000` is firewalled (ufw / firewalld / iptables) so it is unreachable from the network; only local
 processes (the edge) connect.
 
+## Edge Ledger — PostgreSQL 16, the site's system of record
+
+Every `POST /edge/evaluate` is recorded on the **Edge Ledger** (PostgreSQL 16) together with its
+decision record v2, in one local transaction (`docs/EDGE_DATA_RESIDENCY_CONTRACT.md` §4.3). The
+decision record (ids and outcome only — no PAN hash, amount, currency, country, customer data or
+reason text) is the only per-transaction data that leaves the site; it is shipped from the
+`edge_outbox` table, so a restart or a Control Plane outage loses nothing. Aerospike keeps only the
+26 h velocity buckets and the rule bundle.
+
+- **Container mode:** the `ledger` service (`postgres:16-alpine`, profile `local-ledger`) runs on the
+  private network with no published port and scram-sha-256 auth. The installers generate a random
+  password into `secrets/edge-ledger.pass` and `.env` (`EDGE_LEDGER_PASSWORD`).
+- **Native mode:** `install.sh --native` installs PostgreSQL 16 (PGDG repositories), creates the
+  `hokeka_edge` role and `hokeka_ledger` database, keeps it on `127.0.0.1` and firewalls 5432.
+- **Multi-node Edge Site:** all nodes share one site database: `--ledger-url jdbc:postgresql://…`
+  `--ledger-user …` with the password in `HOKEKA_LEDGER_PASSWORD`, and the same `--site-id`.
+- **Fail-closed:** `EDGE_LEDGER_FAIL_CLOSED=true` (default). If `EDGE_LEDGER_URL`, `_USER` or
+  `_PASSWORD` is missing the edge logs which variable is missing (never a value), and while the
+  ledger cannot be written every evaluation answers `HOLD` (`LEDGER_UNAVAILABLE`). `/edge/status`
+  shows the ledger state, outbox backlog and write failures.
+- **Schema:** Flyway inside edge-host (`edge_ledger` schema): `edge_evaluations` (monthly range
+  partitions on `evaluated_at`, created three months ahead), `edge_outbox`, `edge_legal_holds`,
+  `edge_held_evaluations`, `edge_config`, `edge_purge_log`, `edge_access_log`.
+- **Retention:** set per PSP in the Console (minimum and default 5 years) and enforced on the ledger;
+  `--retention-days` is no longer used. **Size the ledger disk for 5+ years** (`--peak-tps` prints
+  an estimate) and back the volume up.
+- A `txn_id` that looks like a card number is refused with `422 {"error":"TXN_REF_LOOKS_LIKE_PAN"}`
+  and nothing is stored.
+
 ## Transport security — TLS terminates in the app, not in a sidecar
 
 The transaction API is **TLS 1.3 only** and terminates inside the edge process. There is no sidecar
@@ -87,8 +116,10 @@ the issued mTLS client certificate at `secrets/edge-client.p12`.
 
 `--pspid` `--edgeid` `--controlplane` `--edge-image` `--bind <ip>` `--allow-subnet <cidr>`
 `--data-dir <path>` `--enrollment-code <code>` `--tls-client-auth none|want|need` `--native`
+`--ledger-url <jdbc>` `--ledger-user <role>` `--site-id <id>` `--peak-tps <n>` `--data-file-size <16G>`
 `--insecure-skip-signature` ·
-Windows: `-PspId -EdgeId -ControlPlane -EdgeImage -Bind -AllowSubnet -EnrollmentCode -TlsClientAuth`
+Windows: `-PspId -EdgeId -ControlPlane -EdgeImage -Bind -AllowSubnet -EnrollmentCode -TlsClientAuth
+-LedgerUrl -LedgerUser -SiteId`
 
 ## Artifact authenticity
 
@@ -127,6 +158,7 @@ Releases are produced by `.github/workflows/release.yml` — see `docs/INSTALL.m
   validation in CI.
 - `install.sh` — Linux installer (container + `--native`).
 - `install.ps1` — Windows installer (container).
-- `docker-compose.yml` — the isolated edge + Aerospike stack (Aerospike **not** port-published);
+- `docker-compose.yml` — the isolated edge + Aerospike + Edge Ledger stack (neither database is
+  port-published);
   mounts `secrets/` read-only and `data/` read-write, and passes the TLS + channel env through.
 - `aerospike/aerospike.conf` — single-node feature-store config (`hokeka` namespace, hardening notes).

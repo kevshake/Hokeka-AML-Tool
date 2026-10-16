@@ -4,21 +4,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The on-premises datastore behind the edge engine.
+ * The on-premises velocity and rule-bundle store behind the edge engine (Aerospike).
  *
- * <p>Everything a client's transactions produce stays on their premises: the raw transactions, the
- * velocity counters derived from them, and the last verified rule bundle. The control plane only ever
- * receives the aggregate metrics windows.
- *
- * <p>Two jobs, both of which the edge previously could not do at all:
+ * <p>Two jobs:
  * <ol>
- *   <li><b>History for future rule checks.</b> Transactions are persisted locally and rolled into
- *       velocity counters, so a rule can be evaluated against what this card/merchant did before.
- *       Without a store the edge only ever saw the single request body, so every rule using a
- *       velocity/history feature silently never fired (a missing feature evaluates to false).</li>
+ *   <li><b>Velocity history for rule checks.</b> Every evaluation advances the card's hourly
+ *       counters, so a rule can be evaluated against what this card did before. Without a store the
+ *       edge only ever saw the single request body, so every rule using a velocity feature silently
+ *       never fired (a missing feature evaluates to false).</li>
  *   <li><b>Rule bundle durability.</b> The verified bundle is persisted, so a restart resumes
  *       enforcing immediately instead of HOLDing all traffic until the next successful poll.</li>
  * </ol>
+ *
+ * <p>Evaluations themselves are recorded on the Edge Ledger ({@code com.hokeka.edge.ledger}), not
+ * here.
  */
 public interface EdgeFeatureStore {
 
@@ -43,15 +42,14 @@ public interface EdgeFeatureStore {
     }
 
     /**
-     * Persist the transaction, the decision it received, and advance its velocity counters, so
-     * subsequent evaluations can be checked against it and an investigator can see what was decided
-     * and which rules fired. Must never throw — a store failure degrades enrichment, it does not fail
+     * Advance the card's velocity counters by one transaction of {@code amountCents}, so subsequent
+     * evaluations see it. Must never throw — a store failure degrades enrichment, it does not fail
      * the decision.
      *
-     * @param decision the evaluation outcome; may be null if unavailable
+     * @param panHash     the card identifier; null/blank records nothing
+     * @param amountCents the amount in minor units (negative values count as 0)
      */
-    void recordTransaction(String panHash, Map<String, Object> features,
-                           com.hokeka.edge.EdgeRuleInterpreter.Decision decision);
+    void recordVelocity(String panHash, long amountCents);
 
     /** Persist the last verified rule IR so a restart can resume enforcing without a poll. */
     void saveRuleBundle(long version, byte[] ruleIrJson);

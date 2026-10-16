@@ -17,6 +17,31 @@ import static org.mockito.Mockito.when;
 
 class AerospikeFeatureStoreTest {
 
+    /**
+     * Velocity is kept (one atomic operate on the card's hourly bucket in the velocity set) and no
+     * transaction record is written to Aerospike any more — evaluations live on the Edge Ledger.
+     */
+    @Test
+    void recordVelocityAdvancesTheHourlyBucketAndStoresNoTransaction() {
+        AerospikeClient client = mock(AerospikeClient.class);
+        AerospikeFeatureStore store = new AerospikeFeatureStore(client, "hokeka");
+
+        store.recordVelocity("abc123", 1250L);
+        store.recordVelocity("", 99L);
+        store.recordVelocity(null, 99L);
+
+        ArgumentCaptor<Key> key = ArgumentCaptor.forClass(Key.class);
+        ArgumentCaptor<com.aerospike.client.policy.WritePolicy> policy =
+                ArgumentCaptor.forClass(com.aerospike.client.policy.WritePolicy.class);
+        verify(client, org.mockito.Mockito.times(1)).operate(policy.capture(), key.capture(),
+                any(com.aerospike.client.Operation[].class));
+        assertEquals("velocity", key.getValue().setName);
+        assertTrue(key.getValue().userKey.toString().startsWith("abc123:"));
+        assertEquals(26 * 3600, policy.getValue().expiration);
+        verify(client, org.mockito.Mockito.never()).put(any(com.aerospike.client.policy.WritePolicy.class),
+                any(Key.class), any(com.aerospike.client.Bin[].class));
+    }
+
     @Test
     void deriveFeaturesUsesSingleBatchGetForTwentyFourHourWindow() {
         AerospikeClient client = mock(AerospikeClient.class);
@@ -25,7 +50,7 @@ class AerospikeFeatureStoreTest {
         records[0] = record(3, 500L);
         when(client.get(any(BatchPolicy.class), any(Key[].class))).thenReturn(records);
 
-        AerospikeFeatureStore store = new AerospikeFeatureStore(client, "hokeka", 90);
+        AerospikeFeatureStore store = new AerospikeFeatureStore(client, "hokeka");
         FeatureDerivation derived = store.deriveFeaturesDetailed("abc123");
 
         ArgumentCaptor<Key[]> keysCaptor = ArgumentCaptor.forClass(Key[].class);
@@ -44,7 +69,7 @@ class AerospikeFeatureStoreTest {
         when(client.get(any(BatchPolicy.class), any(Key[].class)))
                 .thenThrow(new RuntimeException("cluster down"));
 
-        AerospikeFeatureStore store = new AerospikeFeatureStore(client, "hokeka", 90);
+        AerospikeFeatureStore store = new AerospikeFeatureStore(client, "hokeka");
         FeatureDerivation derived = store.deriveFeaturesDetailed("abc123");
 
         assertTrue(derived.storeUnavailable());

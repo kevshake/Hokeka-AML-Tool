@@ -28,6 +28,14 @@
         <image.tag>${project.version}</image.tag>
         <!-- Where a locally built Rust core lives; used only by the `native-core` profile. -->
         <native.core.dir>${project.basedir}/../edge-engine/target/release</native.core.dir>
+        <!-- Shared Edge data residency contract (schemas + fixtures). The schemas are packaged into
+             the jar (the Edge validates every decision record before it enters the outbox) and the
+             tests load the fixtures straight from here, never from a copy. -->
+        <contracts.dir>${project.basedir}/../docs/contracts</contracts.dir>
+        <!-- Virtual-thread friendly JDBC: pgjdbc 42.7 and HikariCP 5.1 replaced the synchronized
+             blocks that pin a carrier thread (the evaluate path runs on virtual threads). -->
+        <postgresql.version>42.7.4</postgresql.version>
+        <HikariCP.version>5.1.0</HikariCP.version>
     </properties>
 
     <profiles>
@@ -76,18 +84,73 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Edge Ledger (contract section 1): the site's PostgreSQL 16 system of record for
+             evaluations and the decision-record outbox. Plain JDBC over HikariCP, schema managed by
+             Flyway inside edge-host. Deliberately no spring-jdbc: the ledger owns its DataSource
+             and Spring Boot's DataSource/Flyway auto-configuration stays out of the way, so a
+             ledger outage can never stop the node from booting (it answers HOLD instead). -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <!-- JSON Schema draft 2020-12 validator: decision records are validated against
+             docs/contracts/decision-record-v2.schema.json before they are written to edge_outbox. -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>1.5.1</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Ledger integration tests: Testcontainers when Docker is detectable, otherwise an explicit
+             -Dledger.it.jdbc-url (see LedgerTestDatabase). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- Package the contract schemas from their single source (docs/contracts) under
+                 classpath:contracts/ — no checked-in copy that could drift. -->
+            <resource>
+                <directory>${contracts.dir}</directory>
+                <targetPath>contracts</targetPath>
+                <includes>
+                    <include>**/*.schema.json</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- Tests read the shared fixtures from here (contract section 13). -->
+                        <contracts.dir>${contracts.dir}</contracts.dir>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
 
             <!-- Jib: build the container image directly from Maven.

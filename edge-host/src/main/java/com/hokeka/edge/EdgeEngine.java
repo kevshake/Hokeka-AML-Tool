@@ -243,24 +243,67 @@ public class EdgeEngine {
         activeBundleHash = sha256(source);
     }
 
+    /**
+     * An evaluation together with its provenance, as the Edge Ledger and the decision record v2
+     * need it (EDGE_DATA_RESIDENCY_CONTRACT.md §4.1).
+     *
+     * @param decision       the decision
+     * @param evaluator      {@code native} or {@code java} when rules ran; {@code none} when a
+     *                       fail-closed gate answered
+     * @param failClosedCode {@code NODE_NOT_AUTHORIZED}, {@code NO_BUNDLE} or {@code EVALUATOR_FAULT}
+     *                       when a gate answered, else null
+     */
+    public record Outcome(EdgeRuleInterpreter.Decision decision, String evaluator, String failClosedCode) {
+    }
+
+    /** Contract evaluator name of the native kernel. */
+    public static final String CONTRACT_EVALUATOR_NATIVE = "native";
+    /** Contract evaluator name of the Java interpreter. */
+    public static final String CONTRACT_EVALUATOR_JAVA = "java";
+    /** Contract evaluator name when no evaluator ran. */
+    public static final String CONTRACT_EVALUATOR_NONE = "none";
+
     /** Evaluate one transaction's features. Uses the native kernel when it holds an active bundle. */
     public EdgeRuleInterpreter.Decision evaluate(Map<String, Object> features) {
+        return evaluateWithProvenance(features).decision();
+    }
+
+    /**
+     * Evaluates and reports which evaluator answered, or which fail-closed gate did. The gates, in
+     * order: node not authorised ({@code NODE_NOT_AUTHORIZED}); native kernel faulted with no warm
+     * standby to take over ({@code EVALUATOR_FAULT}); no verified bundle at all ({@code NO_BUNDLE}).
+     * An unexpected exception from the interpreter is also answered {@code HOLD / EVALUATOR_FAULT}
+     * rather than escaping as an HTTP 500. Every gate answers HOLD — never ALLOW.
+     */
+    public Outcome evaluateWithProvenance(Map<String, Object> features) {
         if (!authorizationGate.authorized()) {
-            return new EdgeRuleInterpreter.Decision(EdgeRuleInterpreter.Action.HOLD, 0, List.of(),
+            return new Outcome(new EdgeRuleInterpreter.Decision(EdgeRuleInterpreter.Action.HOLD, 0, List.of(),
                     List.of("edge node is not authorized by the control plane (fail-closed): "
-                            + authorizationGate.reason()));
+                            + authorizationGate.reason())), CONTRACT_EVALUATOR_NONE, "NODE_NOT_AUTHORIZED");
         }
         if (core.available() && nativeBundleLoaded && !nativeDegraded) {
             try {
                 byte[] out = core.evaluate(mapper.writeValueAsBytes(features));
-                return nativeMapper.readValue(out, EdgeRuleInterpreter.Decision.class);
+                return new Outcome(nativeMapper.readValue(out, EdgeRuleInterpreter.Decision.class),
+                        CONTRACT_EVALUATOR_NATIVE, null);
             } catch (Exception e) {
                 degradeToStandby(e);
             }
         }
         // Warm standby. With no bundle ever verified the interpreter itself answers HOLD — that case
         // stays fail-closed; this fallback only covers a bundle we already hold and have verified.
-        return interpreter.evaluate(features);
+        if (!interpreter.hasBundle()) {
+            String code = nativeDegraded ? "EVALUATOR_FAULT" : "NO_BUNDLE";
+            return new Outcome(interpreter.evaluate(features), CONTRACT_EVALUATOR_NONE, code);
+        }
+        try {
+            return new Outcome(interpreter.evaluate(features), CONTRACT_EVALUATOR_JAVA, null);
+        } catch (RuntimeException e) {
+            log.error("Java interpreter faulted ({}) — answering HOLD (fail-closed)", e.getClass().getSimpleName());
+            return new Outcome(new EdgeRuleInterpreter.Decision(EdgeRuleInterpreter.Action.HOLD, 0, List.of(),
+                    List.of("edge evaluator fault (fail-closed): decision withheld")),
+                    CONTRACT_EVALUATOR_NONE, "EVALUATOR_FAULT");
+        }
     }
 
     /**

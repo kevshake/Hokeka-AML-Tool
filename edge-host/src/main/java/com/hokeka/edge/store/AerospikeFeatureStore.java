@@ -18,15 +18,19 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Aerospike-backed on-premises store for transactions, velocity counters and the rule bundle.
+ * Aerospike-backed on-premises store for velocity counters and the rule bundle.
  *
  * <h2>Data model</h2>
  * <pre>
  *   namespace &lt;configured, default "hokeka"&gt;
- *     set txn       key = txnId                    full transaction, TTL = retention days
- *     set velocity  key = "&lt;panHash&gt;:yyyyMMddHH"   hourly counters {count, amount_cents}
- *     set rules     key = "active"                 {version, ir, saved_at}
+ *     set velocity  key = "&lt;panHash&gt;:yyyyMMddHH"   hourly counters {count, amount_cents}, TTL 26 h
+ *     set rules     key = "active"                 {version, ir, saved_at}, never expires
  * </pre>
+ *
+ * <p>Transactions are <b>not</b> stored here any more: the system of record for evaluations is the
+ * Edge Ledger (PostgreSQL, {@code com.hokeka.edge.ledger}), which holds them for the PSP's
+ * multi-year retention with range queries and partition purges — neither of which an in-RAM primary
+ * index can afford (EDGE_DATA_RESIDENCY_PLAN.md, "Edge storage"). The former {@code txn} set is gone.
  *
  * <h2>Why hourly buckets</h2>
  * Aerospike is a key-value store: counting a card's recent transactions by scanning is O(n) and
@@ -42,7 +46,6 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
 
     private static final Logger log = LoggerFactory.getLogger(AerospikeFeatureStore.class);
 
-    static final String SET_TXN = "txn";
     static final String SET_VELOCITY = "velocity";
     static final String SET_RULES = "rules";
     static final String RULES_KEY = "active";
@@ -60,13 +63,15 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
 
     private final AerospikeClient client;
     private final String namespace;
-    private final int txnTtlSeconds;
     private final int velocityTtlSeconds;
 
-    public AerospikeFeatureStore(AerospikeClient client, String namespace, int txnRetentionDays) {
+    /**
+     * @param client    connected Aerospike client
+     * @param namespace namespace holding the velocity and rules sets
+     */
+    public AerospikeFeatureStore(AerospikeClient client, String namespace) {
         this.client = client;
         this.namespace = namespace;
-        this.txnTtlSeconds = Math.max(1, txnRetentionDays) * 24 * 3600;
         // Keep buckets a little past the widest window so a boundary read never misses a live bucket.
         this.velocityTtlSeconds = (WINDOW_HOURS + 2) * 3600;
     }
@@ -131,48 +136,24 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
         }
     }
 
+    /**
+     * Advances this card's hourly velocity bucket: count + 1 and amount sum + {@code amountCents},
+     * as one atomic server-side {@code operate}. A blank pan hash records nothing. Never throws.
+     */
     @Override
-    public void recordTransaction(String panHash, Map<String, Object> features,
-                                  com.hokeka.edge.EdgeRuleInterpreter.Decision decision) {
+    public void recordVelocity(String panHash, long amountCents) {
+        if (isBlank(panHash)) {
+            return;
+        }
         try {
-            long amountCents = asLong(features.get("amount_cents"));
-            Instant now = Instant.now();
-
-            // 1) Advance the velocity counters for this card — a single atomic server-side op.
-            if (!isBlank(panHash)) {
-                WritePolicy velocityPolicy = new WritePolicy();
-                velocityPolicy.expiration = velocityTtlSeconds;
-                client.operate(velocityPolicy, velocityKey(panHash, now),
-                        Operation.add(new Bin(BIN_COUNT, 1L)),
-                        Operation.add(new Bin(BIN_AMOUNT, amountCents)));
-            }
-
-            // 2) Persist the transaction itself so future rule checks have real history to read.
-            Object txnId = features.get("txn_id");
-            if (txnId != null) {
-                WritePolicy txnPolicy = new WritePolicy();
-                txnPolicy.expiration = txnTtlSeconds;
-                client.put(txnPolicy, new Key(namespace, SET_TXN, String.valueOf(txnId)),
-                        new Bin("pan_hash", panHash == null ? "" : panHash),
-                        new Bin(BIN_AMOUNT, amountCents),
-                        new Bin("ts", now.toEpochMilli()),
-                        new Bin("merchant_id", String.valueOf(features.getOrDefault("merchant_id", ""))),
-                        new Bin("currency", String.valueOf(features.getOrDefault("currency", ""))),
-                        new Bin("country_code", String.valueOf(features.getOrDefault("country_code", ""))),
-                        new Bin("mcc", String.valueOf(features.getOrDefault("mcc", ""))),
-                        // The decision and its rule attribution are the audit-relevant part: without
-                        // them the stored transaction cannot answer "what did we do, and why?".
-                        new Bin("decision", decision == null ? "" : decision.action().name()),
-                        new Bin("score", decision == null ? 0 : decision.score()),
-                        new Bin("triggered_rule_ids", decision == null ? ""
-                                : decision.triggeredRuleIds().stream().map(String::valueOf)
-                                          .collect(java.util.stream.Collectors.joining(","))),
-                        new Bin("reasons", decision == null ? ""
-                                : String.join(" | ", decision.reasons())));
-            }
+            WritePolicy velocityPolicy = new WritePolicy();
+            velocityPolicy.expiration = velocityTtlSeconds;
+            client.operate(velocityPolicy, velocityKey(panHash, Instant.now()),
+                    Operation.add(new Bin(BIN_COUNT, 1L)),
+                    Operation.add(new Bin(BIN_AMOUNT, Math.max(0L, amountCents))));
         } catch (Exception e) {
             // Never fail the decision because the store is unhappy.
-            log.warn("Could not record transaction locally: {}", e.getMessage());
+            log.warn("Could not advance velocity counters locally: {}", e.getMessage());
         }
     }
 
@@ -216,20 +197,6 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
 
     private Key velocityKey(String panHash, Instant at) {
         return new Key(namespace, SET_VELOCITY, panHash + ":" + HOUR.format(at));
-    }
-
-    private static long asLong(Object value) {
-        if (value instanceof Number n) {
-            return n.longValue();
-        }
-        if (value != null) {
-            try {
-                return Long.parseLong(value.toString());
-            } catch (NumberFormatException ignored) {
-                return 0L;
-            }
-        }
-        return 0L;
     }
 
     private static boolean isBlank(String s) {
