@@ -1,6 +1,10 @@
 package com.posgateway.aml.dto.compliance;
 
+import com.posgateway.aml.model.TransactionReference;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class SarResponse {
@@ -15,8 +19,36 @@ public class SarResponse {
     private Map<String, Object> activityInfo;
     private LocalDateTime createdAt;
     private String createdBy;
+    /** The SAR's transactions by ID only (decision record id / txnRef / site; legacy id for old rows). */
+    private List<TransactionReference> transactionReferences = new ArrayList<>();
+    /**
+     * Always null from the cloud: a SAR draft stores no transaction data (plan conflict 7). The Console
+     * fills it by pulling the referenced transactions live from the PSP's Edge (work package R6);
+     * filing stores the pulled data in the filed document (R9).
+     */
+    private List<Map<String, Object>> transactionDetails;
 
     public SarResponse() {
+    }
+
+    /** The SAR's transaction references. */
+    public List<TransactionReference> getTransactionReferences() {
+        return transactionReferences;
+    }
+
+    /** Sets the SAR's transaction references. */
+    public void setTransactionReferences(List<TransactionReference> transactionReferences) {
+        this.transactionReferences = transactionReferences;
+    }
+
+    /** Null from the cloud; see the field note (R6 live pull). */
+    public List<Map<String, Object>> getTransactionDetails() {
+        return transactionDetails;
+    }
+
+    /** Sets transaction details pulled live from the Edge (R6); never persisted. */
+    public void setTransactionDetails(List<Map<String, Object>> transactionDetails) {
+        this.transactionDetails = transactionDetails;
     }
 
     public SarResponse(Long reportId, Long merchantId, Long caseId, String status, String priority,
@@ -139,6 +171,8 @@ public class SarResponse {
         private Map<String, Object> activityInfo;
         private LocalDateTime createdAt;
         private String createdBy;
+        private List<TransactionReference> transactionReferences;
+        private List<Map<String, Object>> transactionDetails;
 
         SarResponseBuilder() {
         }
@@ -198,9 +232,26 @@ public class SarResponse {
             return this;
         }
 
+        /** The SAR's transactions by ID only. */
+        public SarResponseBuilder transactionReferences(List<TransactionReference> transactionReferences) {
+            this.transactionReferences = transactionReferences;
+            return this;
+        }
+
+        /** Transaction details pulled live from the Edge (R6); the cloud leaves this null. */
+        public SarResponseBuilder transactionDetails(List<Map<String, Object>> transactionDetails) {
+            this.transactionDetails = transactionDetails;
+            return this;
+        }
+
         public SarResponse build() {
-            return new SarResponse(reportId, merchantId, caseId, status, priority, filingDate, narrative, suspectInfo,
-                    activityInfo, createdAt, createdBy);
+            SarResponse response = new SarResponse(reportId, merchantId, caseId, status, priority, filingDate,
+                    narrative, suspectInfo, activityInfo, createdAt, createdBy);
+            if (transactionReferences != null) {
+                response.setTransactionReferences(transactionReferences);
+            }
+            response.setTransactionDetails(transactionDetails);
+            return response;
         }
 
         public String toString() {

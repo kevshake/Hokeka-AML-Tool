@@ -194,6 +194,9 @@ public class DecisionRecordStore {
         finding.setId(UUID.randomUUID());
         finding.setAssessmentId(row.getId());
         finding.setTxnId(null);
+        // The transaction by ID reference (V264): edgeAssessmentId, txnRef and site of the record.
+        finding.applyTransactionReference(
+                com.posgateway.aml.service.residency.TransactionReferenceResolver.forDecisionRecord(row));
         finding.setPhase(FindingPhase.EDGE_SYNC);
         finding.setShadow(false);
         finding.setTriggered(true);

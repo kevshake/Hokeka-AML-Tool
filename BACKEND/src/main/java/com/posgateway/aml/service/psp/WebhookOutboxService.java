@@ -22,6 +22,14 @@ public class WebhookOutboxService {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookOutboxService.class);
 
+    /**
+     * Keys a transaction-scoped webhook may carry (plan conflict 10: IDs and decision only). Anything
+     * else (score, rule text, amount, card data) is refused before it is queued.
+     */
+    public static final java.util.Set<String> RISK_ALERT_KEYS = java.util.Set.of(
+            "alertId", "txnId", "edgeAssessmentId", "txnRef", "siteId", "decision", "pspId",
+            "merchantId", "caseId", "timestamp");
+
     private final OutboxEventRepository outboxRepository;
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final ObjectMapper objectMapper;
@@ -46,6 +54,7 @@ public class WebhookOutboxService {
             log.warn("Refusing to enqueue '{}' webhook with no PSP scope", eventType);
             return;
         }
+        requireIdsAndDecisionOnly(eventType, payload);
         List<WebhookSubscription> subscriptions =
                 subscriptionRepository.findByPspIdAndEventTypeAndIsActiveTrue(
                         String.valueOf(pspId), eventType);
@@ -78,6 +87,21 @@ public class WebhookOutboxService {
             outboxRepository.save(event);
             log.debug("Queued webhook delivery: eventKey={} url={}", eventKey,
                     subscription.getCallbackUrl());
+        }
+    }
+
+    /**
+     * Fails closed (contract I8) when a RISK_ALERT payload carries a key outside
+     * {@link #RISK_ALERT_KEYS}; the message names the keys, never their values.
+     */
+    static void requireIdsAndDecisionOnly(String eventType, Map<String, Object> payload) {
+        if (!"RISK_ALERT".equals(eventType) || payload == null) {
+            return;
+        }
+        List<String> extra = payload.keySet().stream().filter(k -> !RISK_ALERT_KEYS.contains(k)).sorted().toList();
+        if (!extra.isEmpty()) {
+            throw new IllegalArgumentException("RISK_ALERT webhook may carry ids and the decision only; refused keys "
+                    + extra);
         }
     }
 }

@@ -1,11 +1,11 @@
 package com.posgateway.aml.service.case_management;
 
-import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.entity.compliance.CaseEntity;
 import com.posgateway.aml.entity.compliance.CaseNote;
 import com.posgateway.aml.entity.compliance.CaseTransaction;
 import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.entity.merchant.Merchant;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.CaseEntityRepository;
 import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
@@ -58,24 +58,20 @@ public class CaseEnrichmentService {
      */
     @Async
     @Transactional
-    public void enrichWithTransaction(ComplianceCase cCase, TransactionEntity tx, String relationshipType) {
-        if (tx == null)
+    public void enrichWithTransaction(ComplianceCase cCase, TransactionReference transaction, String relationshipType) {
+        if (cCase == null || cCase.getId() == null || transaction == null || transaction.isEmpty())
             return;
 
-        // Check if already linked
+        // Check if already linked (same decision record, else same legacy id, else same txnRef)
         boolean exists = caseTransactionRepository.findByComplianceCase_Id(cCase.getId()).stream()
-                .anyMatch(ct -> ct.getTransaction().getTxnId().equals(tx.getTxnId()));
+                .anyMatch(ct -> transaction.sameTransactionAs(ct.getTransactionReference()));
 
         if (!exists) {
-            CaseTransaction link = new CaseTransaction();
-            link.setComplianceCase(cCase);
-            link.setTransaction(tx);
-            link.setRelationshipType(relationshipType);
+            // The transaction is linked by ID only (V264); addedBy null = system
+            CaseTransaction link = new CaseTransaction(cCase, transaction, relationshipType, null);
             link.setAddedAt(LocalDateTime.now());
-            // AddedBy is null (System)
-
             caseTransactionRepository.save(link);
-            logger.debug("Linked transaction {} to case {}", tx.getTxnId(), cCase.getCaseReference());
+            logger.debug("Linked transaction {} to case {}", transaction.label(), cCase.getCaseReference());
         }
     }
 

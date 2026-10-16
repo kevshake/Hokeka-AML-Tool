@@ -40,7 +40,8 @@ class SuspicionLifecycleTest {
         when(rules.findFirstByNameOrderByIdAsc(any())).thenReturn(Optional.empty());
 
         CaseCreationService service = new CaseCreationService(cases, new ObjectMapper(),
-                null, null, mock(CaseEnrichmentService.class), rules);
+                null, null, mock(CaseEnrichmentService.class), rules,
+                mock(com.posgateway.aml.service.residency.TransactionReferenceResolver.class));
         TransactionEntity tx = new TransactionEntity();
         tx.setMerchantId("5");
         tx.setPspId(9L);

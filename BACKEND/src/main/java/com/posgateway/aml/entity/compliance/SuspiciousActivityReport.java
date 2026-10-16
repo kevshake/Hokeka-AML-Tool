@@ -1,8 +1,8 @@
 package com.posgateway.aml.entity.compliance;
 
 import com.posgateway.aml.entity.User;
-import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.model.SarStatus;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.model.SarType;
 import jakarta.persistence.*;
 
@@ -11,6 +11,7 @@ import org.hibernate.envers.RelationTargetAuditMode;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -124,10 +125,14 @@ public class SuspiciousActivityReport {
     @JoinColumn(name = "case_id")
     private ComplianceCase complianceCase;
 
-    @ManyToMany
-    @JoinTable(name = "sar_transactions", joinColumns = @JoinColumn(name = "sar_id"), inverseJoinColumns = @JoinColumn(name = "txn_id"))
-    @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
-    private List<TransactionEntity> suspiciousTransactions;
+    /**
+     * The transactions the SAR is about, by ID only (V264, plan conflict 7). A draft stores these
+     * references and no transaction data; the transaction table is rendered from the Edge when viewed
+     * and stored only in the filed document (R9).
+     */
+    @OneToMany(mappedBy = "sar", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<SarTransaction> transactionRefs = new ArrayList<>();
 
     // Amendment Tracking
     @OneToOne(fetch = FetchType.LAZY)
@@ -149,7 +154,7 @@ public class SuspiciousActivityReport {
             LocalDateTime filedAt, User filedBy, String filingReceipt, SarType sarType, String jurisdiction,
             LocalDateTime filingDeadline, String suspiciousActivityType, String narrative,
             BigDecimal totalSuspiciousAmount, ComplianceCase complianceCase,
-            List<TransactionEntity> suspiciousTransactions, SuspiciousActivityReport amendsSar, String amendmentReason,
+            List<TransactionReference> transactionReferences, SuspiciousActivityReport amendsSar, String amendmentReason,
             LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.sarReference = sarReference;
@@ -170,7 +175,7 @@ public class SuspiciousActivityReport {
         this.narrative = narrative;
         this.totalSuspiciousAmount = totalSuspiciousAmount;
         this.complianceCase = complianceCase;
-        this.suspiciousTransactions = suspiciousTransactions;
+        setTransactionReferences(transactionReferences);
         this.amendsSar = amendsSar;
         this.amendmentReason = amendmentReason;
         this.createdAt = createdAt;
@@ -353,12 +358,49 @@ public class SuspiciousActivityReport {
         this.complianceCase = complianceCase;
     }
 
-    public List<TransactionEntity> getSuspiciousTransactions() {
-        return suspiciousTransactions;
+    /** The SAR's transaction reference rows (JPA collection; serialised as {@link #getTransactionReferences()}). */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<SarTransaction> getTransactionRefs() {
+        return transactionRefs;
     }
 
-    public void setSuspiciousTransactions(List<TransactionEntity> suspiciousTransactions) {
-        this.suspiciousTransactions = suspiciousTransactions;
+    /** The transactions the SAR is about, as ID-only references in insertion order. */
+    public List<TransactionReference> getTransactionReferences() {
+        List<TransactionReference> references = new ArrayList<>();
+        if (transactionRefs != null) {
+            for (SarTransaction row : transactionRefs) {
+                references.add(row.getTransactionReference());
+            }
+        }
+        return references;
+    }
+
+    /**
+     * Replaces the SAR's transaction references: rows for references no longer listed are removed
+     * (orphan removal), new ones added, duplicates (same transaction) ignored. Empty references are
+     * skipped. No transaction data is stored.
+     */
+    public void setTransactionReferences(List<TransactionReference> references) {
+        if (transactionRefs == null) {
+            transactionRefs = new ArrayList<>();
+        }
+        List<TransactionReference> wanted = new ArrayList<>();
+        if (references != null) {
+            for (TransactionReference reference : references) {
+                if (reference != null && !reference.isEmpty()
+                        && wanted.stream().noneMatch(w -> w.sameTransactionAs(reference))) {
+                    wanted.add(reference);
+                }
+            }
+        }
+        transactionRefs.removeIf(row -> wanted.stream().noneMatch(w -> w.sameTransactionAs(row.getTransactionReference())));
+        for (TransactionReference reference : wanted) {
+            boolean present = transactionRefs.stream()
+                    .anyMatch(row -> row.getTransactionReference().sameTransactionAs(reference));
+            if (!present) {
+                transactionRefs.add(new SarTransaction(this, reference));
+            }
+        }
     }
 
     public SuspiciousActivityReport getAmendsSar() {
@@ -437,7 +479,7 @@ public class SuspiciousActivityReport {
         private String narrative;
         private BigDecimal totalSuspiciousAmount;
         private ComplianceCase complianceCase;
-        private List<TransactionEntity> suspiciousTransactions;
+        private List<TransactionReference> transactionReferences;
         private SuspiciousActivityReport amendsSar;
         private String amendmentReason;
         private LocalDateTime createdAt;
@@ -541,8 +583,9 @@ public class SuspiciousActivityReport {
             return this;
         }
 
-        public SuspiciousActivityReportBuilder suspiciousTransactions(List<TransactionEntity> suspiciousTransactions) {
-            this.suspiciousTransactions = suspiciousTransactions;
+        /** The transactions the SAR is about, by ID only. */
+        public SuspiciousActivityReportBuilder transactionReferences(List<TransactionReference> transactionReferences) {
+            this.transactionReferences = transactionReferences;
             return this;
         }
 
@@ -570,7 +613,7 @@ public class SuspiciousActivityReport {
             return new SuspiciousActivityReport(id, sarReference, pspId, status, createdBy, reviewedBy, approvedBy,
                     approvedAt, filingReferenceNumber, filedAt, filedBy, filingReceipt, sarType, jurisdiction,
                     filingDeadline, suspiciousActivityType, narrative, totalSuspiciousAmount, complianceCase,
-                    suspiciousTransactions, amendsSar, amendmentReason, createdAt, updatedAt);
+                    transactionReferences, amendsSar, amendmentReason, createdAt, updatedAt);
         }
 
         public String toString() {
@@ -583,7 +626,7 @@ public class SuspiciousActivityReport {
                     + ", filingDeadline=" + this.filingDeadline + ", suspiciousActivityType="
                     + this.suspiciousActivityType + ", narrative=" + this.narrative + ", totalSuspiciousAmount="
                     + this.totalSuspiciousAmount + ", complianceCase=" + this.complianceCase
-                    + ", suspiciousTransactions=" + this.suspiciousTransactions + ", amendsSar=" + this.amendsSar
+                    + ", transactionReferences=" + this.transactionReferences + ", amendsSar=" + this.amendsSar
                     + ", amendmentReason=" + this.amendmentReason + ", createdAt=" + this.createdAt + ", updatedAt="
                     + this.updatedAt + ")";
         }

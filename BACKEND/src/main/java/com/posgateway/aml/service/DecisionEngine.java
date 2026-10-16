@@ -46,6 +46,10 @@ public class DecisionEngine {
     @Autowired(required = false)
     private com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
 
+    /** Builds the ID-only transaction reference stamped on every alert (R8, contract I4). */
+    @Autowired(required = false)
+    private com.posgateway.aml.service.residency.TransactionReferenceResolver transactionReferenceResolver;
+
     /**
      * How long (days) a card is auto-declined after a Do-Not-Honour (BLOCK) decision. The goal is
      * "decline that card for a month", so the default is 30. Tunable via {@code fraud.dnh.block-days}.
@@ -722,6 +726,10 @@ public class DecisionEngine {
         alert.setCtrRequired(transaction.isCtrRequired());
         alert.setTriggeredRules(transaction.getTriggeredRules());
         alert.setSuspicionFormedAt(LocalDateTime.now());
+        // Reference the transaction by ID only: decision record / cloud assessment id and txnRef.
+        if (transactionReferenceResolver != null) {
+            alert.applyTransactionReference(transactionReferenceResolver.forLegacyTransaction(transaction));
+        }
 
         Alert saved = alertRepository.save(alert);
         if (alertLinkageService != null) {
@@ -760,6 +768,12 @@ public class DecisionEngine {
             Map<String, Object> event = new HashMap<>();
             event.put("alertId",    alert.getAlertId());
             event.put("txnId",      alert.getTxnId());
+            if (alert.getEdgeAssessmentId() != null) {
+                event.put("edgeAssessmentId", alert.getEdgeAssessmentId().toString());
+            }
+            if (alert.getTxnRef() != null) {
+                event.put("txnRef", alert.getTxnRef());
+            }
             event.put("action",     alert.getAction());
             event.put("score",      alert.getScore());
             event.put("status",     alert.getStatus());
@@ -781,18 +795,47 @@ public class DecisionEngine {
                     payload);
             logger.debug("Queued alert-generated event: alertId={}", alert.getAlertId());
 
-            // Durable webhook delivery: enqueued in the same transaction as the alert row.
+            // Durable webhook delivery: enqueued in the same transaction as the alert row. The PSP
+            // webhook carries IDs and the decision only (plan conflict 10), never score or rule text.
             if (webhookOutboxService != null && transaction.getPspId() != null) {
                 webhookOutboxService.enqueueForPsp(
                         transaction.getPspId(),
                         "RISK_ALERT",
-                        event,
+                        riskAlertWebhookPayload(alert, transaction),
                         "webhook.risk_alert:" + alert.getAlertId());
             }
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Failed to serialize or enqueue alert event for alertId=" + alert.getAlertId(), e);
         }
+    }
+
+    /**
+     * The RISK_ALERT webhook body: alert, transaction reference, decision, tenant and merchant ids and
+     * the event time. The same shape as the decision-record path (DecisionRecordWorkflowService).
+     */
+    static Map<String, Object> riskAlertWebhookPayload(Alert alert, TransactionEntity transaction) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("alertId", alert.getAlertId());
+        if (alert.getTxnId() != null) {
+            payload.put("txnId", alert.getTxnId());
+        }
+        if (alert.getEdgeAssessmentId() != null) {
+            payload.put("edgeAssessmentId", alert.getEdgeAssessmentId().toString());
+        }
+        if (alert.getTxnRef() != null) {
+            payload.put("txnRef", alert.getTxnRef());
+        }
+        payload.put("decision", alert.getAction());
+        payload.put("pspId", transaction.getPspId());
+        if (alert.getMerchantId() != null) {
+            payload.put("merchantId", alert.getMerchantId());
+        }
+        if (alert.getComplianceCaseId() != null) {
+            payload.put("caseId", alert.getComplianceCaseId());
+        }
+        payload.put("timestamp", LocalDateTime.now().toString());
+        return payload;
     }
 
     private Long parseMerchantId(String merchantId) {

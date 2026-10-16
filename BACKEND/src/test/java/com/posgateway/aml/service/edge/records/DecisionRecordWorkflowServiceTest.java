@@ -11,6 +11,7 @@ import com.posgateway.aml.entity.compliance.ComplianceDeadline;
 import com.posgateway.aml.entity.merchant.Merchant;
 import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.entity.rules.RuleDefinition;
+import com.posgateway.aml.model.TransactionReference;
 import com.posgateway.aml.repository.AlertRepository;
 import com.posgateway.aml.repository.ComplianceDeadlineRepository;
 import com.posgateway.aml.repository.MerchantRepository;
@@ -20,6 +21,7 @@ import com.posgateway.aml.repository.assessment.FindingRepository;
 import com.posgateway.aml.repository.rules.RuleDefinitionRepository;
 import com.posgateway.aml.service.ConfigService;
 import com.posgateway.aml.service.case_management.CaseCreationService;
+import com.posgateway.aml.service.compliance.ComplianceEntityLinkService;
 import com.posgateway.aml.service.kafka.KafkaOutboxService;
 import com.posgateway.aml.service.psp.WebhookOutboxService;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,6 +65,7 @@ class DecisionRecordWorkflowServiceTest {
     private ComplianceDeadlineRepository deadlines;
     private AlertFindingLinkRepository links;
     private FindingRepository findings;
+    private ComplianceEntityLinkService entityLinks;
     private DecisionRecordWorkflowService service;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -76,6 +79,7 @@ class DecisionRecordWorkflowServiceTest {
         deadlines = mock(ComplianceDeadlineRepository.class);
         links = mock(AlertFindingLinkRepository.class);
         findings = mock(FindingRepository.class);
+        entityLinks = mock(ComplianceEntityLinkService.class);
         RuleDefinitionRepository rules = mock(RuleDefinitionRepository.class);
         PspRepository psps = mock(PspRepository.class);
         MerchantRepository merchants = mock(MerchantRepository.class);
@@ -103,7 +107,7 @@ class DecisionRecordWorkflowServiceTest {
         ComplianceCase c = new ComplianceCase();
         c.setId(77L);
         when(cases.triggerCaseFromEdgeDecision(any(), anyLong(), anyString(), any(), any(), any(), any(), anyString(),
-                anyString(), any(), anyLong())).thenReturn(c);
+                any(TransactionReference.class), anyLong())).thenReturn(c);
         when(deadlines.findBySourceTypeAndSourceId(anyString(), anyLong())).thenReturn(Optional.empty());
         when(deadlines.save(any(ComplianceDeadline.class))).thenAnswer(i -> {
             ComplianceDeadline d = i.getArgument(0);
@@ -115,7 +119,7 @@ class DecisionRecordWorkflowServiceTest {
         when(findings.findByAssessmentIdOrderByCreatedAtAsc(any())).thenReturn(List.of(f));
 
         service = new DecisionRecordWorkflowService(alerts, links, findings, rules, cases, config, kafka, webhooks,
-                deadlines, psps, merchants, mapper);
+                deadlines, psps, merchants, mapper, entityLinks);
     }
 
     @Test
@@ -128,6 +132,9 @@ class DecisionRecordWorkflowServiceTest {
         verify(alerts, org.mockito.Mockito.atLeastOnce()).save(alert.capture());
         Alert saved = alert.getValue();
         assertNull(saved.getTxnId(), "no TransactionEntity reference");
+        assertEquals(EDGE_ID, saved.getEdgeAssessmentId(), "the alert references the decision record by id");
+        assertEquals("AUTH-1", saved.getTxnRef());
+        assertEquals("site-nbo-1", saved.getSiteId());
         assertEquals("EDGE_DECISION", saved.getSourceType());
         assertEquals(EDGE_ID.toString(), saved.getSourceReference());
         assertEquals("BLOCK", saved.getAction());
@@ -138,10 +145,12 @@ class DecisionRecordWorkflowServiceTest {
         assertEquals(77L, saved.getComplianceCaseId());
         assertEquals("[\"Sanctioned counterparty\"]", saved.getTriggeredRules());
 
+        TransactionReference ref = TransactionReference.ofDecisionRecord(EDGE_ID, "AUTH-1", "site-nbo-1");
         verify(cases).triggerCaseFromEdgeDecision(eq(421L), eq(12L), eq("SANCTIONS_HIT"), any(), isNull(), isNull(),
-                eq(1.0), anyString(), eq(EDGE_ID.toString()), eq("AUTH-1"), eq(501L));
+                eq(1.0), anyString(), eq(ref), eq(501L));
         verify(cases).triggerCaseFromEdgeDecision(eq(421L), eq(12L), eq("RULE_VIOLATION"), eq("Sanctioned counterparty"),
-                eq("9001"), any(), eq(100.0), anyString(), eq(EDGE_ID.toString()), eq("AUTH-1"), eq(501L));
+                eq("9001"), any(), eq(100.0), anyString(), eq(ref), eq(501L));
+        verify(entityLinks).linkAlertToTransaction(501L, ref, true);
         assertEquals(List.of(77L), outcome.caseIds());
 
         ArgumentCaptor<ComplianceDeadline> deadline = ArgumentCaptor.forClass(ComplianceDeadline.class);
@@ -200,7 +209,7 @@ class DecisionRecordWorkflowServiceTest {
         DecisionRecordWorkflowService.Outcome outcome = service.raise(record("ALERT", 45, List.of(9001L), false, false, "421"));
         assertTrue(outcome.caseIds().isEmpty());
         verify(cases, never()).triggerCaseFromEdgeDecision(any(), anyLong(), anyString(), any(), any(), any(), any(),
-                anyString(), anyString(), any(), anyLong());
+                anyString(), any(TransactionReference.class), anyLong());
     }
 
     @Test
@@ -229,6 +238,7 @@ class DecisionRecordWorkflowServiceTest {
         a.setPspId(12L);
         a.setEdgeAssessmentId(EDGE_ID);
         a.setTxnRef("AUTH-1");
+        a.setSiteId("site-nbo-1");
         a.setRecordVersion(2);
         a.setDecision(decision);
         a.setScore(score);

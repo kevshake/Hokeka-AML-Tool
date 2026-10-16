@@ -174,6 +174,73 @@ class ProductionSchemaValidationIntegrationTest {
         }
     }
 
+    /**
+     * R8 / V264: a SAR draft's transaction references (SarTransaction, Envers-audited, PK id+rev) and
+     * a case's transaction link persist by ID only and are audited with their reference columns.
+     */
+    @Test
+    void auditedTransactionReferencesPersistByIdOnly() throws Exception {
+        Flyway.configure()
+                .dataSource(jdbcUrl, user, password)
+                .locations("classpath:db/migration")
+                .placeholderReplacement(false)
+                .load()
+                .migrate();
+        java.util.UUID edgeId = java.util.UUID.randomUUID();
+        Long sarId;
+        Long linkId;
+        LocalContainerEntityManagerFactoryBean emf = buildEntityManagerFactory("validate", null);
+        try {
+            jakarta.persistence.EntityManager em = emf.getNativeEntityManagerFactory().createEntityManager();
+            try {
+                em.getTransaction().begin();
+                com.posgateway.aml.entity.compliance.ComplianceCase c = new com.posgateway.aml.entity.compliance.ComplianceCase();
+                c.setCaseReference("CASE-R8-" + edgeId.toString().substring(0, 8));
+                c.setPspId(1L);
+                em.persist(c);
+                com.posgateway.aml.model.TransactionReference ref =
+                        com.posgateway.aml.model.TransactionReference.ofDecisionRecord(edgeId, "AUTH-R8", "site-r8");
+                com.posgateway.aml.entity.compliance.CaseTransaction link =
+                        new com.posgateway.aml.entity.compliance.CaseTransaction(c, ref, "PRIMARY", null);
+                em.persist(link);
+                com.posgateway.aml.entity.compliance.SuspiciousActivityReport sar =
+                        new com.posgateway.aml.entity.compliance.SuspiciousActivityReport();
+                sar.setSarReference("SAR-R8-" + edgeId);
+                sar.setPspId(1L);
+                sar.setJurisdiction("KE");
+                sar.setNarrative("refs only");
+                sar.setSuspiciousActivityType("STRUCTURING");
+                sar.setComplianceCase(c);
+                sar.setTransactionReferences(java.util.List.of(ref));
+                em.persist(sar);
+                em.getTransaction().commit();
+                sarId = sar.getId();
+                linkId = link.getId();
+            } finally {
+                em.close();
+            }
+        } finally {
+            emf.destroy();
+        }
+        try (Connection c = dataSource().getConnection();
+             ResultSet rs = c.createStatement().executeQuery(
+                     "SELECT st.txn_id, st.txn_ref, a.edge_assessment_id, a.site_id FROM sar_transactions st "
+                             + "JOIN sar_transactions_aud a ON a.id = st.id WHERE st.sar_id = " + sarId)) {
+            assertTrue(rs.next(), "SAR reference row and its audit row");
+            assertEquals(null, rs.getObject(1), "no legacy transaction id for an Edge decision record");
+            assertEquals("AUTH-R8", rs.getString(2));
+            assertEquals(edgeId, rs.getObject(3));
+            assertEquals("site-r8", rs.getString(4));
+        }
+        try (Connection c = dataSource().getConnection();
+             ResultSet rs = c.createStatement().executeQuery(
+                     "SELECT edge_assessment_id, transaction_id FROM case_transactions_aud WHERE id = " + linkId)) {
+            assertTrue(rs.next(), "case link audited");
+            assertEquals(edgeId, rs.getObject(1));
+            assertEquals(null, rs.getObject(2));
+        }
+    }
+
     /** Builds a JPA EntityManagerFactory over all application entities with Spring Boot's naming rules. */
     private static LocalContainerEntityManagerFactoryBean buildEntityManagerFactory(String hbm2ddl,
                                                                                    Map<String, Object> extra) {

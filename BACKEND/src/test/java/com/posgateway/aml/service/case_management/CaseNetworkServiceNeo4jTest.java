@@ -4,9 +4,9 @@ import com.posgateway.aml.entity.compliance.ComplianceCase;
 import com.posgateway.aml.repository.CaseTransactionRepository;
 import com.posgateway.aml.repository.ComplianceCaseRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
-import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.repository.UserRepository;
 import com.posgateway.aml.service.graph.Neo4jGdsService;
+import com.posgateway.aml.service.residency.TransactionReferenceResolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -38,7 +38,7 @@ class CaseNetworkServiceNeo4jTest {
         when(gds.detectMuleProximity("88")).thenReturn(Map.of("hops", 2));
 
         CaseNetworkService service = new CaseNetworkService(cases, caseTransactions,
-                mock(TransactionRepository.class), sars, mock(UserRepository.class), gds);
+                mock(TransactionReferenceResolver.class), sars, mock(UserRepository.class), gds);
 
         CaseNetworkService.NetworkGraphDTO graph = service.buildNetworkGraph(11L, 1);
 
@@ -59,7 +59,7 @@ class CaseNetworkServiceNeo4jTest {
         when(sars.findByComplianceCase_Id(12L)).thenReturn(List.of());
 
         CaseNetworkService service = new CaseNetworkService(cases, caseTransactions,
-                mock(TransactionRepository.class), sars, mock(UserRepository.class), null);
+                mock(TransactionReferenceResolver.class), sars, mock(UserRepository.class), null);
 
         CaseNetworkService.NetworkGraphDTO graph = service.buildNetworkGraph(12L, 1);
 
@@ -80,7 +80,7 @@ class CaseNetworkServiceNeo4jTest {
         when(gds.detectCycles(anyString())).thenThrow(new RuntimeException("neo4j down"));
 
         CaseNetworkService service = new CaseNetworkService(cases, caseTransactions,
-                mock(TransactionRepository.class), sars, mock(UserRepository.class), gds);
+                mock(TransactionReferenceResolver.class), sars, mock(UserRepository.class), gds);
 
         CaseNetworkService.NetworkGraphDTO graph = service.buildNetworkGraph(13L, 1);
 

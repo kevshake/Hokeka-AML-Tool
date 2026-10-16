@@ -238,6 +238,9 @@ public class EdgeAssessmentService {
         finding.setId(UUID.randomUUID());
         finding.setAssessmentId(assessment.getId());
         finding.setTxnId(assessment.getTxnId());
+        // The transaction by ID reference (V264): the Edge assessment id, txnRef and site.
+        finding.applyTransactionReference(
+                com.posgateway.aml.service.residency.TransactionReferenceResolver.forDecisionRecord(assessment));
         finding.setPhase(FindingPhase.EDGE_SYNC);
         finding.setShadow(false);
         finding.setCreatedAt(now);

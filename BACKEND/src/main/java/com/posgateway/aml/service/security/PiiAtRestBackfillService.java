@@ -59,9 +59,9 @@ public class PiiAtRestBackfillService {
             new EncryptedColumn("psp_trust_accounts", "id", "bank_account_number", null),
             new EncryptedColumn("market_executions", "id", "settlement_account_reference", null));
 
+    /** alerts.pan_hash is not listed: V264 nulled it and a CHECK keeps it NULL (card identity is Edge-only). */
     static final List<PanColumn> PAN_COLUMNS = List.of(
-            new PanColumn("transactions", "txn_id", "pan_hash"),
-            new PanColumn("alerts", "alert_id", "pan_hash"));
+            new PanColumn("transactions", "txn_id", "pan_hash"));
 
     private final JdbcTemplate jdbc;
     private final PiiLookupHasher hasher;

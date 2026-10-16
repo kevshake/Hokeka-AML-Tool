@@ -1,17 +1,31 @@
 package com.posgateway.aml.dto.alert;
 
 import com.posgateway.aml.dto.assessment.FindingResponseDTO;
+import com.posgateway.aml.model.TransactionReference;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Enriched alert payload for GET /alerts/{id} (transactions, findings, rule version).
+ *
+ * <p>Transactions are returned by ID only (residency contract I4, plan R8):
+ * <ul>
+ *   <li>{@code transactionRefs}: every linked transaction as decision record id / txnRef / site
+ *       (and the legacy cloud id for legacy-ingest rows);</li>
+ *   <li>{@code transactionIds}: the legacy cloud ids only, kept for existing callers until R12;</li>
+ *   <li>{@code transactionDetails}: always null from this endpoint. The cloud holds no transaction
+ *       detail; the Console fills it by pulling the referenced transactions live from the PSP's Edge
+ *       (work package R6).</li>
+ * </ul>
  */
 public class AlertDetailResponseDTO {
 
     private Long alertId;
+    private List<TransactionReference> transactionRefs = new ArrayList<>();
+    private List<Map<String, Object>> transactionDetails;
     private String action;
     private String status;
     private String severity;
@@ -101,6 +115,26 @@ public class AlertDetailResponseDTO {
 
     public void setTransactionIds(List<Long> transactionIds) {
         this.transactionIds = transactionIds;
+    }
+
+    /** Linked transactions by ID reference. */
+    public List<TransactionReference> getTransactionRefs() {
+        return transactionRefs;
+    }
+
+    /** Sets the linked transaction references. */
+    public void setTransactionRefs(List<TransactionReference> transactionRefs) {
+        this.transactionRefs = transactionRefs;
+    }
+
+    /** Null from the cloud; filled by the R6 live pull from the Edge. */
+    public List<Map<String, Object>> getTransactionDetails() {
+        return transactionDetails;
+    }
+
+    /** Sets transaction details pulled live from the Edge (R6); never persisted. */
+    public void setTransactionDetails(List<Map<String, Object>> transactionDetails) {
+        this.transactionDetails = transactionDetails;
     }
 
     public List<FindingResponseDTO> getFindings() {

@@ -137,6 +137,23 @@ class EdgeResidencyPostgresIntegrationTest {
                 + "VALUES (?, ?, 'TXN', ?, ?, 'ALLOW', ?)", UUID.randomUUID(), psp, v1Row.toString(), v1Row,
                 OffsetDateTime.ofInstant(old, ZoneOffset.UTC));
         UUID otherTenant = record(otherPsp, old);
+        // R8 (V264): workflow that references a record only by edge_assessment_id also holds it.
+        UUID viaOpenCaseLink = record(psp, old);
+        caseLink(newCase(psp, "IN_PROGRESS", null), viaOpenCaseLink);
+        UUID viaClosedCaseLink = record(psp, old);
+        caseLink(newCase(psp, "CLOSED_CLEARED", longAgo), viaClosedCaseLink);
+        UUID viaDraftSarRef = record(psp, old);
+        sarRef(sarReturningId(newCase(psp, "CLOSED_CLEARED", longAgo), "DRAFT", null), viaDraftSarRef);
+        UUID viaAlertLink = record(psp, old);
+        long linkedAlert = jdbc.queryForObject("INSERT INTO alerts (psp_id, source_type, source_reference, status, action, "
+                + "created_at) VALUES (?, 'TRANSACTION_MONITORING', '1', 'open', 'ALERT', NOW()) RETURNING alert_id",
+                Long.class, psp);
+        jdbc.update("INSERT INTO alert_transactions (alert_id, edge_assessment_id, primary_link) VALUES (?, ?, false)",
+                linkedAlert, viaAlertLink);
+        UUID viaAlertColumn = record(psp, old);
+        jdbc.update("INSERT INTO alerts (psp_id, source_type, source_reference, status, action, created_at, "
+                + "edge_assessment_id) VALUES (?, 'TRANSACTION_MONITORING', '2', 'open', 'ALERT', NOW(), ?)",
+                psp, viaAlertColumn);
 
         PspDataSettingsService settings = mock(PspDataSettingsService.class);
         when(settings.retentionState(any())).thenReturn(new PspDataSettingsService.RetentionState(5, NOW, null));
@@ -144,7 +161,7 @@ class EdgeResidencyPostgresIntegrationTest {
         DecisionRecordPurgeService purge = new DecisionRecordPurgeService(mock(PspRepository.class), settings, jdbc,
                 transactions, audit, Clock.fixed(NOW, ZoneOffset.UTC));
 
-        assertEquals(3, purge.purgePsp(psp));
+        assertEquals(4, purge.purgePsp(psp));
 
         assertFalse(exists(unreferenced), "expired and unreferenced");
         assertFalse(exists(closedLongAgo), "alert closed longer ago than retention");
@@ -158,6 +175,11 @@ class EdgeResidencyPostgresIntegrationTest {
         assertTrue(exists(recent), "within retention");
         assertTrue(exists(v1Row), "v1 rows are not decision records");
         assertTrue(exists(otherTenant), "another PSP is untouched");
+        assertTrue(exists(viaOpenCaseLink), "open case linking the record by edge_assessment_id");
+        assertFalse(exists(viaClosedCaseLink), "case link of a case closed longer ago than retention");
+        assertTrue(exists(viaDraftSarRef), "draft SAR referencing the record by edge_assessment_id");
+        assertTrue(exists(viaAlertLink), "open alert linking the record through alert_transactions");
+        assertTrue(exists(viaAlertColumn), "open alert carrying the record's edge_assessment_id");
         Integer findings = jdbc.queryForObject("SELECT COUNT(*) FROM findings f JOIN assessments a ON a.id = f.assessment_id "
                 + "WHERE a.edge_assessment_id = ?", Integer.class, unreferenced);
         assertEquals(0, findings, "findings go with the record");
@@ -244,6 +266,25 @@ class EdgeResidencyPostgresIntegrationTest {
                         + "jurisdiction, narrative, sar_type, suspicion_arose_at, suspicion_timestamp_source, "
                         + "suspicious_activity_type) VALUES (?, ?, ?, ?, NOW(), 'KE', 'n', 'INITIAL', NOW(), 'MANUAL', 'FRAUD')",
                 "SAR-IT-" + UUID.randomUUID(), status, caseId, filedAt);
+    }
+
+    private static long sarReturningId(long caseId, String status, LocalDateTime filedAt) {
+        return jdbc.queryForObject("INSERT INTO suspicious_activity_reports (sar_reference, status, case_id, filed_at, "
+                        + "created_at, jurisdiction, narrative, sar_type, suspicion_arose_at, suspicion_timestamp_source, "
+                        + "suspicious_activity_type) VALUES (?, ?, ?, ?, NOW(), 'KE', 'n', 'INITIAL', NOW(), 'MANUAL', "
+                        + "'FRAUD') RETURNING id",
+                Long.class, "SAR-IT-" + UUID.randomUUID(), status, caseId, filedAt);
+    }
+
+    /** A case_transactions row referencing a decision record by id only (V264). */
+    private static void caseLink(long caseId, UUID edgeId) {
+        jdbc.update("INSERT INTO case_transactions (case_id, edge_assessment_id, relationship_type, added_at) "
+                + "VALUES (?, ?, 'PRIMARY', NOW())", caseId, edgeId);
+    }
+
+    /** A sar_transactions row referencing a decision record by id only (V264). */
+    private static void sarRef(long sarId, UUID edgeId) {
+        jdbc.update("INSERT INTO sar_transactions (sar_id, edge_assessment_id) VALUES (?, ?)", sarId, edgeId);
     }
 
     private static boolean exists(UUID edgeId) {
