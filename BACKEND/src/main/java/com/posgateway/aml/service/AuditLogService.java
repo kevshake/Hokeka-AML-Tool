@@ -110,9 +110,11 @@ public class AuditLogService {
             Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : 0L;
 
             AuditLog log = AuditLog.builder()
-                    .userId(user != null ? user.getId().toString() : "SYSTEM")
+                    // Machine principals (PSP API keys) are transient users without a database id.
+                    .userId(user == null ? "SYSTEM"
+                            : user.getId() != null ? user.getId().toString() : user.getUsername())
                     .username(user != null ? user.getUsername() : "SYSTEM")
-                    .userRole(user != null ? user.getRole().getName() : "SYSTEM")
+                    .userRole(user != null && user.getRole() != null ? user.getRole().getName() : "SYSTEM")
                     .pspId(pspId)
                     .actionType(actionType)
                     .entityType(entityType)

@@ -12,8 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.MessageDigest;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -293,28 +291,16 @@ public class TransactionIngestionService {
      * <p>Fallback (dev/test only): if {@code PII_LOOKUP_HMAC_KEY} is not configured we use a plain
      * SHA-256 digest so local ingestion still works. Production <b>requires</b> the key (enforced at
      * startup by {@code EnvVarStartupValidator}), so the secure HMAC path is always used there.
+     *
+     * <p>The digest itself is {@link com.posgateway.aml.service.security.PiiLookupHasher#hashPan}, the
+     * single implementation shared with the payment blacklist API.
      */
     private String hashPan(String pan) {
-        if (piiLookupHasher.isConfigured()) {
-            return piiLookupHasher.hashIdentifier(pan);
+        if (!piiLookupHasher.isConfigured()) {
+            logger.warn("PII_LOOKUP_HMAC_KEY not configured — using unkeyed PAN digest (dev/test only; "
+                    + "production enforces the HMAC key)");
         }
-        logger.warn("PII_LOOKUP_HMAC_KEY not configured — using unkeyed PAN digest (dev/test only; "
-                + "production enforces the HMAC key)");
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(pan.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("PAN hashing failed; refusing to persist raw PAN", e);
-        }
+        return piiLookupHasher.hashPan(pan);
     }
 
     /**

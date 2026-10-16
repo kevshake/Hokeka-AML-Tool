@@ -37,4 +37,23 @@ public class PiiLookupHasher {
     public boolean isConfigured() {
         return key.length >= 32;
     }
+
+    /**
+     * The PAN lookup key stored as {@code transactions.pan_hash} and used by the payment blacklist:
+     * the HMAC of {@link #hashIdentifier} when the key is configured, otherwise (dev/test only — the
+     * production profile requires the key) the unkeyed SHA-256 hex digest of the raw PAN. Shared by
+     * transaction ingest and the blacklist API so a blacklisted PAN matches ingested transactions.
+     */
+    public String hashPan(String pan) {
+        if (pan == null || pan.isBlank()) return null;
+        if (isConfigured()) {
+            return hashIdentifier(pan);
+        }
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(pan.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("PAN hashing failed; refusing to persist raw PAN", e);
+        }
+    }
 }

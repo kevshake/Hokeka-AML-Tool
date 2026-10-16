@@ -36,6 +36,39 @@ public interface PaymentBlacklistRepository extends JpaRepository<PaymentBlackli
                                                       @Param("value") String value,
                                                       @Param("now") LocalDateTime now);
 
+    /** Tenant row for (psp, type, value) regardless of active flag (unique per V250 index). */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE e.pspId = :pspId AND e.entryType = :type "
+            + "AND e.entryValue = :value")
+    Optional<PaymentBlacklistEntry> findTenantAny(@Param("pspId") Long pspId,
+                                                  @Param("type") String type,
+                                                  @Param("value") String value);
+
+    /** Platform-wide row for (type, value) regardless of active flag (unique per V250 index). */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE e.pspId IS NULL AND e.platformWide = true "
+            + "AND e.entryType = :type AND e.entryValue = :value")
+    Optional<PaymentBlacklistEntry> findPlatformAny(@Param("type") String type,
+                                                    @Param("value") String value);
+
+    /** A PSP's own entries plus the platform-wide list, optionally filtered by type / active flag. */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE "
+            + "(e.pspId = :pspId OR (e.pspId IS NULL AND e.platformWide = true)) "
+            + "AND (:type IS NULL OR e.entryType = :type) "
+            + "AND (:active IS NULL OR e.active = :active)")
+    org.springframework.data.domain.Page<PaymentBlacklistEntry> searchForTenant(
+            @Param("pspId") Long pspId, @Param("type") String type, @Param("active") Boolean active,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** Every entry (platform view), optionally filtered by owning PSP, platform-wide flag, type, active. */
+    @Query("SELECT e FROM PaymentBlacklistEntry e WHERE "
+            + "(:pspId IS NULL OR e.pspId = :pspId) "
+            + "AND (:platformWide IS NULL OR e.platformWide = :platformWide) "
+            + "AND (:type IS NULL OR e.entryType = :type) "
+            + "AND (:active IS NULL OR e.active = :active)")
+    org.springframework.data.domain.Page<PaymentBlacklistEntry> searchAll(
+            @Param("pspId") Long pspId, @Param("platformWide") Boolean platformWide,
+            @Param("type") String type, @Param("active") Boolean active,
+            org.springframework.data.domain.Pageable pageable);
+
     /** @deprecated Prefer tenant-aware queries. */
     @Deprecated
     Optional<PaymentBlacklistEntry> findByEntryTypeAndEntryValueAndActiveTrue(String entryType, String entryValue);

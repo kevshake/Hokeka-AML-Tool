@@ -314,6 +314,30 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Honour the status carried by a {@link org.springframework.web.server.ResponseStatusException}
+     * (e.g. 409 CONFLICT, 401). Without this handler the RuntimeException catch-all below turned
+     * every one of them into a 500.
+     */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(
+            org.springframework.web.server.ResponseStatusException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(status.name())
+                .message(ex.getReason() != null ? ex.getReason() : status.getReasonPhrase())
+                .errorCode("ERR_HTTP_" + status.value())
+                .httpStatus(status.value())
+                .path(request.getRequestURI())
+                .method(request.getMethod())
+                .traceId(UUID.randomUUID().toString())
+                .build();
+        return ResponseEntity.status(status).body(errorResponse);
+    }
+
+    /**
      * Handle runtime exceptions (catch-all for business logic errors)
      */
     @ExceptionHandler(RuntimeException.class)
