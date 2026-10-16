@@ -293,20 +293,23 @@ public class CaseCreationService {
                     merchantId);
         }
 
-        // 5. Enrich Case (Async link creation)
-        try {
-            if (tx != null) {
-                enrichmentService.enrichWithTransaction(cCase, tx, "TRIGGERING_TRANSACTION");
+        // 5. Enrich Case (async link creation) AFTER the case row is committed. The enrichment
+        // methods are @Async and run in their own transactions; started here, before commit, they
+        // raced the insert and failed on fk_case_transactions_case / fk_case_entities_case (or
+        // linked a case that was then rolled back).
+        final ComplianceCase committedCase = cCase;
+        runAfterCommit(() -> {
+            try {
+                if (tx != null) {
+                    enrichmentService.enrichWithTransaction(committedCase, tx, "TRIGGERING_TRANSACTION");
+                }
+                if (merchantId != null) {
+                    enrichmentService.enrichWithMerchantProfile(committedCase, merchantId);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to enrich case {} with context", committedCase.getCaseReference(), e);
             }
-            if (merchantId != null) {
-                enrichmentService.enrichWithMerchantProfile(cCase, merchantId);
-            }
-            // If risk details are available (serialized in Alert or passed differently), we
-            // could enrich.
-            // For now, Alert contains the main summary.
-        } catch (Exception e) {
-            logger.warn("Failed to enrich case {} with context", cCase.getCaseReference(), e);
-        }
+        });
 
         // 6. Publish Kafka Event (only if producer is configured/enabled)
         if (caseEventProducer != null) {
@@ -320,6 +323,25 @@ public class CaseCreationService {
         }
 
         enqueueCaseUpdateWebhook(cCase);
+    }
+
+    /**
+     * Runs {@code task} once the surrounding transaction has committed, or immediately when no
+     * transaction synchronization is active. Used for async follow-up work that reads the rows this
+     * transaction writes (it must never see, or be lost with, an uncommitted case).
+     */
+    static void runAfterCommit(Runnable task) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            task.run();
+                        }
+                    });
+        } else {
+            task.run();
+        }
     }
 
     private void enqueueCaseUpdateWebhook(ComplianceCase cCase) {
