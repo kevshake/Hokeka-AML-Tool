@@ -19,7 +19,7 @@ class EdgeControllerFailClosedTest {
         EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore(), null);
         ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", true);
 
-        EdgeRuleInterpreter.Decision decision = controller.evaluate(
+        EdgeEvaluation decision = controller.evaluate(
                 Map.of("pan_hash", "card-hash", "amount_cents", 1000)).getBody();
 
         assertEquals(EdgeRuleInterpreter.Action.HOLD, decision.action());
@@ -39,7 +39,7 @@ class EdgeControllerFailClosedTest {
         EdgeController controller = new EdgeController(engine, metrics, new NoOpFeatureStore(), null);
         ReflectionTestUtils.setField(controller, "failClosedOnStoreUnavailable", false);
 
-        EdgeRuleInterpreter.Decision decision = controller.evaluate(
+        EdgeEvaluation decision = controller.evaluate(
                 Map.of("pan_hash", "card-hash", "amount_cents", 1000)).getBody();
 
         assertEquals(EdgeRuleInterpreter.Action.ALLOW, decision.action());

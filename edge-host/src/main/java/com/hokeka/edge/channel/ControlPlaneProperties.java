@@ -63,6 +63,12 @@ public class ControlPlaneProperties {
     /** Metrics reports buffered on failure before the oldest is dropped (store-and-forward). */
     private int metricsBufferSize = 240;
 
+    /** Edge assessment envelopes buffered while the control plane is unreachable (oldest dropped). */
+    private int assessmentBufferSize = 10_000;
+
+    /** How often buffered edge assessment envelopes are shipped to {@code POST /api/v1/edge/assessments}. */
+    private Duration assessmentShipInterval = Duration.ofSeconds(2);
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -221,6 +227,26 @@ public class ControlPlaneProperties {
 
     public void setNonceCacheSize(int nonceCacheSize) {
         this.nonceCacheSize = nonceCacheSize;
+    }
+
+    /** Capacity of the edge assessment envelope buffer. */
+    public int getAssessmentBufferSize() {
+        return assessmentBufferSize;
+    }
+
+    /** Sets the capacity of the edge assessment envelope buffer. */
+    public void setAssessmentBufferSize(int assessmentBufferSize) {
+        this.assessmentBufferSize = assessmentBufferSize;
+    }
+
+    /** Interval between edge assessment shipping runs. */
+    public Duration getAssessmentShipInterval() {
+        return assessmentShipInterval;
+    }
+
+    /** Sets the interval between edge assessment shipping runs. */
+    public void setAssessmentShipInterval(Duration assessmentShipInterval) {
+        this.assessmentShipInterval = assessmentShipInterval;
     }
 
     public int getMetricsBufferSize() {

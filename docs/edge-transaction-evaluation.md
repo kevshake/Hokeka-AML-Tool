@@ -29,7 +29,10 @@ EdgeController
     │  7. RECORD the transaction + advance velocity counters (after the decision)
     │  8. count the decision into the aggregate metrics
     ▼
-    └─► 200 OK  { action, score, triggeredRuleIds, reasons }
+    │  9. MINT edgeAssessmentId (UUID); queue the decision envelope for the Control Plane
+    ▼
+    └─► 200 OK  { action, score, triggeredRuleIds, reasons, triggeredRuleVersionIds,
+                  edgeAssessmentId, ruleBundleVersion, ruleBundleHash }
 ```
 
 Two ordering details are deliberate and worth knowing:
@@ -125,7 +128,11 @@ available to rules. That is how you extend the feature set without a code change
   "reasons": [
     "Card velocity above 10 transactions per hour",
     "High-value transaction at a grocery MCC"
-  ]
+  ],
+  "triggeredRuleVersionIds": [88012, 88140],
+  "edgeAssessmentId": "3f0c9a2e-7d41-4b8e-9a51-0c2f6b1d7e44",
+  "ruleBundleVersion": 37,
+  "ruleBundleHash": "sha256:9b1f…"
 }
 ```
 
@@ -135,6 +142,9 @@ available to rules. That is how you extend the feature set without a code change
 | `score` | **Sum** of the `score` of every triggered rule (see §4.3) |
 | `triggeredRuleIds` | Ids of all rules whose condition matched, in bundle order |
 | `reasons` | Each triggered rule's `description`, falling back to its `name` |
+| `triggeredRuleVersionIds` | Rule version ids that fired, when the bundle carries them |
+| `edgeAssessmentId` | UUID minted for this evaluation (also on fail-closed `HOLD`). Send it as `edgeAssessmentId` on the cloud ingest — see [`EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md`](EDGE_AND_CLOUD_DUAL_POST_CONTRACT.md) |
+| `ruleBundleVersion` / `ruleBundleHash` | The bundle the decision was taken against (`-1` / `""` before the first bundle) |
 
 ### 3.1 What the actions mean for your flow
 

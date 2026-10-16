@@ -24,6 +24,13 @@ public class HokekaAiDecisionClient {
 
     private static final Logger log = LoggerFactory.getLogger(HokekaAiDecisionClient.class);
 
+    /**
+     * Control Plane decision endpoint. The Control Plane serves its API under the {@code /api/v1}
+     * context path, like {@code /api/v1/edge/bundle} and {@code /api/v1/edge/metrics}; the former
+     * {@code /edge/decision} never reached it, so every advisory call silently fell back.
+     */
+    static final String DECISION_PATH = "/api/v1/edge/decision";
+
     private final SecureChannel channel;
     private final ActivationService activation;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -53,7 +60,7 @@ public class HokekaAiDecisionClient {
 
             String json = mapper.writeValueAsString(body);
             String response = channel.mutualTlsClient().post()
-                    .uri("/edge/decision")
+                    .uri(DECISION_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(json)
                     .retrieve()

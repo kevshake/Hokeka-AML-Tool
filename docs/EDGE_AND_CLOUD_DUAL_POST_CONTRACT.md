@@ -11,7 +11,7 @@ This is the authoritative contract for how the **on-premises edge** and the **cl
 | Path | Endpoint | Creates cloud txn? | Creates alerts/cases/SAR? | Sends webhooks? |
 |------|----------|-------------------|---------------------------|-----------------|
 | **Edge (pre-auth)** | `POST /edge/evaluate` | No | No | No |
-| **Cloud (post-auth typical)** | `POST /api/v1/transactions/ingest` | Yes | Yes (via fraud pipeline) | Yes (via durable outbox) |
+| **Cloud (post-auth typical)** | `POST /api/v1/transactions/ingest` | Yes | Yes (via fraud pipeline, or adopted edge decision — §2.1) | Yes (via durable outbox) |
 
 **Integrators that need cloud compliance artifacts must dual-post:** call `/edge/evaluate` for the pre-auth decision, then call `/api/v1/transactions/ingest` with the same transaction context (typically after authorisation) so the control plane can persist the transaction, run the full fraud/AML pipeline, raise alerts/cases, and deliver webhooks.
 
@@ -21,9 +21,9 @@ This is the authoritative contract for how the **on-premises edge** and the **cl
 
 - Served on the PSP's edge node over TLS; transaction payloads **do not leave the premises**.
 - Evaluates caller-supplied features plus locally-derived velocity history (Aerospike).
-- Returns `{ action, score, triggeredRuleIds, reasons }` synchronously.
-- **Does not** call the cloud control plane, **does not** write to cloud Postgres, **does not** create alerts, cases, SAR filings, or webhook deliveries.
-- Only aggregate metrics windows are shipped upward (see `docs/architecture/edge-channel-contract.md`).
+- Returns `{ action, score, triggeredRuleIds, reasons, triggeredRuleVersionIds, edgeAssessmentId, ruleBundleVersion, ruleBundleHash }` synchronously. `edgeAssessmentId` is a UUID minted by the edge for **every** evaluation, including the fail-closed `HOLD`.
+- **Does not** write to cloud Postgres in the request path, **does not** create alerts, cases, SAR filings, or webhook deliveries.
+- What is shipped upward (mTLS): aggregate metrics windows (`docs/architecture/edge-channel-contract.md`) and, asynchronously, one **decision envelope** per evaluation to `POST /api/v1/edge/assessments`: `edgeAssessmentId`, decision, score, triggered rule ids / rule version ids, bundle manifest hash, latency. The envelope's feature snapshot is **empty** — no PAN hash, amount, merchant or other request field leaves the premises. Delivery is at-least-once from a bounded in-memory buffer (`EDGE_ASSESSMENT_BUFFER_SIZE`, default 10 000; shipped every `EDGE_ASSESSMENT_SHIP_INTERVAL`, default 2 s); the cloud endpoint is idempotent on the id. Envelopes still buffered when the node restarts during a Control Plane outage are lost (the cloud then keeps that assessment pending).
 
 When `featurestore.fail-closed=true` (default), an unavailable local feature store returns `HOLD` instead of evaluating without velocity history. See `docs/edge-transaction-evaluation.md` §5.
 
@@ -31,12 +31,26 @@ When `featurestore.fail-closed=true` (default), an unavailable local feature sto
 
 ## 2. Cloud `/api/v1/transactions/ingest` — compliance artifacts
 
-- Authenticated cloud API (`Bearer` token, PSP-scoped roles).
+- Authenticated cloud API: a PSP machine API key (`X-Api-Key: hka_…` or `Authorization: Bearer hka_…`), or a Console session for operators. The merchant must belong to the caller's PSP (otherwise `404`).
 - Persists the transaction, enqueues Kafka outbox events, runs fraud detection (rules, ML, sanctions, limits).
 - **Alerts** are created by `DecisionEngine` on HOLD/BLOCK/ALERT paths.
 - **Cases** may be auto-created from rule outcomes when configured.
 - **Webhooks** (`RISK_ALERT`, `CASE_UPDATE`, `MERCHANT_STATUS_CHANGE`) are enqueued in the **transactional outbox** (`event_outbox` channel `WEBHOOK`) atomically with the triggering write.
 - Supports **idempotent ingest** via `Idempotency-Key` header or `clientReference` body field (unique per PSP).
+
+### 2.1 Correlation with the edge decision (`edgeAssessmentId`)
+
+Send the `edgeAssessmentId` from the edge response in the ingest body. The Control Plane then:
+
+1. validates it is a UUID (`400` otherwise — nothing is persisted);
+2. links the transaction to the assessment with that id (created by whichever arrives first: the
+   edge envelope or the ingest); an id already linked to another transaction, or owned by another
+   PSP, is refused with `409`;
+3. **adopts** the edge decision as the transaction's synchronous result instead of re-deciding
+   (`riskDetails.decidedAtEdge=true`). If the envelope has not arrived yet the response says
+   `edgeAssessmentPending=true` and the decision is copied onto the transaction when it lands.
+
+Without `edgeAssessmentId` the ingest runs the full cloud fraud/AML pipeline as before.
 
 ---
 
@@ -46,15 +60,16 @@ When `featurestore.fail-closed=true` (default), an unavailable local feature sto
 1. Pre-auth (edge)
    POST https://edge-node.internal/edge/evaluate
    { pan_hash, txn_id, amount_cents, merchant_id, ... }
-   → ALLOW | HOLD | BLOCK
+   → { action: ALLOW | HOLD | BLOCK, edgeAssessmentId: "<uuid>", ... }
 
 2. Apply acquirer decision based on edge action (do not auto-approve HOLD/BLOCK)
 
 3. Post-auth (cloud) — required for compliance coverage
    POST https://api.hokeka.com/api/v1/transactions/ingest
    Idempotency-Key: <stable client reference for this txn>
-   Authorization: Bearer ...
-   { merchantId, amountCents, currency, pan, clientReference, acquirerResponse, ... }
+   X-Api-Key: hka_...            (PSP machine API key)
+   { merchantId, amountCents, currency, pan, clientReference, acquirerResponse,
+     edgeAssessmentId: "<uuid from step 1>", ... }
    → fraud detection result; alerts/cases/webhooks as applicable
 ```
 

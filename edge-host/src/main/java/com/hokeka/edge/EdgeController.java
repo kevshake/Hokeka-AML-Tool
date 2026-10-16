@@ -28,18 +28,44 @@ public class EdgeController {
     private final EdgeMetricsAggregator metrics;
     private final EdgeFeatureStore featureStore;
     private final com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient;
+    private final com.hokeka.edge.channel.EdgeAssessmentShipper assessmentShipper;
 
     @Value("${featurestore.fail-closed:true}")
     private boolean failClosedOnStoreUnavailable;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics,
                           EdgeFeatureStore featureStore,
                           @org.springframework.beans.factory.annotation.Autowired(required = false)
-                          com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient) {
+                          com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient,
+                          @org.springframework.beans.factory.annotation.Autowired(required = false)
+                          com.hokeka.edge.channel.EdgeAssessmentShipper assessmentShipper) {
         this.engine = engine;
         this.metrics = metrics;
         this.featureStore = featureStore;
         this.aiDecisionClient = aiDecisionClient;
+        this.assessmentShipper = assessmentShipper;
+    }
+
+    /** Backwards-compatible constructor without an assessment shipper (control plane disabled / tests). */
+    public EdgeController(EdgeEngine engine, EdgeMetricsAggregator metrics, EdgeFeatureStore featureStore,
+                          com.hokeka.edge.channel.HokekaAiDecisionClient aiDecisionClient) {
+        this(engine, metrics, featureStore, aiDecisionClient, null);
+    }
+
+    /**
+     * Mints the evaluation's {@code edgeAssessmentId}, records metrics, queues the decision envelope
+     * for the Control Plane and builds the response.
+     */
+    private ResponseEntity<EdgeEvaluation> respond(EdgeRuleInterpreter.Decision decision, long startNanos) {
+        double micros = (System.nanoTime() - startNanos) / 1000.0;
+        metrics.record(decision, micros);
+        EdgeEvaluation evaluation = EdgeEvaluation.of(decision, java.util.UUID.randomUUID().toString(),
+                engine.activeVersion(), engine.activeBundleHash());
+        if (assessmentShipper != null) {
+            assessmentShipper.enqueue(evaluation, Math.max(0L, Math.round(micros / 1000.0)));
+        }
+        return ResponseEntity.ok(evaluation);
     }
 
     /**
@@ -74,9 +100,13 @@ public class EdgeController {
      * recorded locally so it counts toward future evaluations. When
      * {@code featurestore.fail-closed=true} (default), an unavailable store yields HOLD instead of
      * evaluating without velocity history.
+     *
+     * <p>Every response (including the fail-closed HOLD) carries a fresh {@code edgeAssessmentId}
+     * (UUID) for the PSP's cloud dual-post, and a transaction-free decision envelope with the same id
+     * is queued for {@code POST /api/v1/edge/assessments}.
      */
     @PostMapping("/evaluate")
-    public ResponseEntity<EdgeRuleInterpreter.Decision> evaluate(@RequestBody Map<String, Object> features) {
+    public ResponseEntity<EdgeEvaluation> evaluate(@RequestBody Map<String, Object> features) {
         long startNanos = System.nanoTime();
 
         String panHash = features.get("pan_hash") == null ? null : String.valueOf(features.get("pan_hash"));
@@ -89,8 +119,7 @@ public class EdgeController {
                     0,
                     List.of(),
                     List.of("feature store unavailable (fail-closed): pre-auth evaluation withheld"));
-            metrics.record(hold, (System.nanoTime() - startNanos) / 1000.0);
-            return ResponseEntity.ok(hold);
+            return respond(hold, startNanos);
         }
 
         // Caller-supplied values win over derived ones, so an integrator can override for testing
@@ -107,7 +136,6 @@ public class EdgeController {
         // Record AFTER evaluating, so a transaction never inflates its own velocity counters.
         featureStore.recordTransaction(panHash, enriched, decision);
 
-        metrics.record(decision, (System.nanoTime() - startNanos) / 1000.0);
-        return ResponseEntity.ok(decision);
+        return respond(decision, startNanos);
     }
 }

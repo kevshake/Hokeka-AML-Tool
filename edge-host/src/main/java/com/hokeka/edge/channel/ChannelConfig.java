@@ -37,17 +37,21 @@ public class ChannelConfig {
         private final ControlPlaneProperties properties;
         private final RuleBundlePoller poller;
         private final MetricsShipper shipper;
+        private final EdgeAssessmentShipper assessmentShipper;
 
-        ChannelSchedulingConfig(ControlPlaneProperties properties, RuleBundlePoller poller, MetricsShipper shipper) {
+        ChannelSchedulingConfig(ControlPlaneProperties properties, RuleBundlePoller poller, MetricsShipper shipper,
+                                EdgeAssessmentShipper assessmentShipper) {
             this.properties = properties;
             this.poller = poller;
             this.shipper = shipper;
+            this.assessmentShipper = assessmentShipper;
         }
 
         @Override
         public void configureTasks(ScheduledTaskRegistrar registrar) {
             registrar.addFixedDelayTask(poller::poll, properties.getBundlePollInterval());
             registrar.addFixedDelayTask(shipper::ship, properties.getMetricsInterval());
+            registrar.addFixedDelayTask(assessmentShipper::ship, properties.getAssessmentShipInterval());
         }
     }
 }

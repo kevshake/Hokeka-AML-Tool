@@ -34,6 +34,9 @@ hokeka:
     enrollment-code: ${EDGE_ENROLLMENT_CODE:}
     bundle-poll-interval: ${EDGE_BUNDLE_POLL_INTERVAL:15s}
     metrics-interval: ${EDGE_METRICS_INTERVAL:60s}
+    # Decision envelopes (no transaction data) correlated with the cloud ingest by edgeAssessmentId.
+    assessment-ship-interval: ${EDGE_ASSESSMENT_SHIP_INTERVAL:2s}
+    assessment-buffer-size: ${EDGE_ASSESSMENT_BUFFER_SIZE:10000}
     request-timeout: ${EDGE_CONTROLPLANE_TIMEOUT:20s}
     # mTLS identity presented to the control plane (contract §5).
     keystore: ${EDGE_MTLS_KEYSTORE:/opt/hokeka/secrets/edge-client.p12}
