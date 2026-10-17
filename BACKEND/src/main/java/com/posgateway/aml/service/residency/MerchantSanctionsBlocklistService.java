@@ -86,7 +86,9 @@ public class MerchantSanctionsBlocklistService {
      * @param merchant the screened merchant (must belong to a PSP to be blocked)
      * @param result   its screening result (legal and trading name)
      */
-    @Transactional
+    // Own transaction: a blocklist failure must not mark the caller's screening transaction
+    // rollback-only (the callers catch it and keep the screening result).
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public Change apply(Merchant merchant, ScreeningResult result) {
         if (merchant == null || merchant.getMerchantId() == null || merchant.getPsp() == null
                 || merchant.getPsp().getPspId() == null) {
