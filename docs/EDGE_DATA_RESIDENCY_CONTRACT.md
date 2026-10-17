@@ -790,6 +790,40 @@ their DTO shape, add `source: "EDGE"`, and wrap lists as
 MUST NOT be served from any cache. Errors use §7.11 bodies with the listed HTTP status. The export
 is streamed to the client (`text/csv` or `application/x-ndjson`) and never written to disk.
 
+Implementation notes (R6):
+
+- **PSP scope.** A PSP user always reads its own PSP; a `pspId` parameter naming another PSP is
+  `403 TENANT_MISMATCH` before anything is pulled. Platform staff MUST name `pspId` (else
+  `400 INVALID_PARAMS`, `param: /pspId`) and give `supportReason` (parameter or
+  `X-Support-Reason` header); the §9 gate applies and is audited either way.
+- **Envelope.** Lists also carry `source`; batchGet carries `missing`. Items keep the Console's
+  transaction names next to the contract names (`id` = `edgeAssessmentId`, `txnTs` =
+  `evaluatedAt`, `amountCents` = `amountMinor`). `GET /{id}` adds the cloud `decisionRecord`
+  (class D). List paging is cursor only (`page > 0` without a cursor is `INVALID_PARAMS /page`);
+  the default window is the last 30 days.
+- **Routing.** `/{id}` and batchGet go to the site in the PSP's decision record (one pull per site
+  group); ids with no cloud record fan out. `related` goes to the anchor's site.
+- **Legacy rows.** The source is chosen per PSP, never per row: a PSP with an Edge Node that ever
+  activated is served from its Edge only (legacy rows become readable there after the §11
+  back-fill; a legacy numeric id is translated to its reference id). A PSP with no activated node
+  is served its legacy cloud rows with `source: "CLOUD_LEGACY"`, the same envelope, gate and
+  access-log row. `related` is `403 OP_NOT_ALLOWED` for such a PSP.
+- **Export completeness.** Sites already failed when the stream opens are named in
+  `X-Edge-Incomplete` / `X-Edge-Unavailable-Sites`; NDJSON ends with one `{"@summary": {rows,
+  incomplete, unavailableSites, edgeTotalRows}}` line; an incomplete CSV ends with a
+  `# INCOMPLETE EXPORT: …` line; trailer fields repeat it for clients that accept trailers.
+- **Workflow views.** Alert detail (`GET /alerts/{id}`), SAR detail
+  (`GET /compliance/sar/{id}/detail`), case timeline and case network fill `transactionDetails` by
+  a batchGet when viewed (`transactionDetails=false` skips it; the case network adds `txn.related`
+  links with `related=CARD,DEVICE,…`) and report `transactionDetailsStatus`
+  (`OK`/`PARTIAL`/`NONE`/`NOT_REQUESTED` or the §7.11 code) instead of failing the view.
+- **Logs.** Response bodies are written through a wrapper whose `toString()` is fixed, so web-layer
+  DEBUG/TRACE logging never prints pulled data.
+- `GET /api/v1/edge-data/status` reports per site the tunnel state (registry), nodes and the
+  `ledger.health` item (or the §7.11 code of a failed health pull); `GET /api/v1/edge-data/access-log`
+  is paged (`page`, `size` ≤ 200, filters `from`, `to`, `op`, `actorKind`, `supportAccess`,
+  `outcome`) and exportable at `/access-log/export` (CSV / NDJSON).
+
 ### 7.15 Audit
 
 Every request MUST produce one row on each side, sharing `auditId` (minted by the cloud before
@@ -1036,3 +1070,5 @@ Each item is a choice made here for the owner to confirm or overturn.
 21. **WebSocket subprotocol** `hokeka-tunnel.v1` and the close-code table (§7.2) are new names.
 22. **Travel Rule (VASP) exchange** remains an open owner decision (plan conflict 8); this
     contract does not cover it.
+23. **Legacy rows are served per PSP, never mixed (R6):** Edge PSPs read only their Edge; PSPs with
+    no activated Edge Node read their legacy cloud rows flagged `CLOUD_LEGACY` until R12 (§7.14).
