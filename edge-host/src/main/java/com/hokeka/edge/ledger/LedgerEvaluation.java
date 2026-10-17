@@ -107,6 +107,20 @@ public record LedgerEvaluation(UUID edgeAssessmentId,
     }
 
     /**
+     * The same evaluation with the Edge compliance overlay's outcome (R10a): the decision record's
+     * {@code ctrRequired} and {@code typologyCodes}.
+     *
+     * @param ctr   CTR flag
+     * @param codes typology codes ({@code ^[A-Z][A-Z0-9_]{1,63}$})
+     */
+    public LedgerEvaluation withCompliance(boolean ctr, List<String> codes) {
+        return new LedgerEvaluation(edgeAssessmentId, txnRef, siteId, nodeId, evaluatedAt, panHash,
+                amountCents, currency, merchantId, mcc, countryCode, channel, features, decision, score,
+                triggeredRuleIds, ruleVersionIds, reasons, bundleVersion, bundleHash, evaluator, latencyUs,
+                failClosedCode, ctr, sanctionsHits, codes);
+    }
+
+    /**
      * The same evaluation answered by the ledger fail-closed gate instead (§4.3): {@code HOLD},
      * {@code evaluator = none}, no triggered rules, score 0, {@code LEDGER_UNAVAILABLE}. The id,
      * time, transaction columns and features are kept, because the ledger row (once written) must

@@ -1,0 +1,918 @@
+{
+  "version" : 1767225600050,
+  "psp_id" : 42,
+  "ir_version" : 2,
+  "manifest_hash" : "sha256:7a0dd7303ecb2c6b6a3f39bd293c45cbaf957cdff62c60fe466226fabb80d4c8",
+  "lists" : {
+    "blacklist_card_country" : [ ],
+    "blacklist_device" : [ "dev-blocked" ],
+    "blacklist_pan" : [ "pan-blocked" ],
+    "blacklist_payment_details" : [ ],
+    "blacklist_wallet" : [ ],
+    "high_risk_countries" : [ "IR", "KP", "MM" ],
+    "merchants_high_risk_country" : [ "m-hrc" ]
+  },
+  "uncompiled" : [ {
+    "id" : 16,
+    "name" : "Consumer User Screening",
+    "reason" : "merchant/counterparty screening result: the Edge sanctions matcher and merchant blocklist are work package R10b"
+  }, {
+    "id" : 24,
+    "name" : "Bank Name Screening",
+    "reason" : "merchant/counterparty screening result: the Edge sanctions matcher and merchant blocklist are work package R10b"
+  }, {
+    "id" : 27,
+    "name" : "Bank Account Holder Name Mismatch",
+    "reason" : "needs merchant legal-name master data, which is not distributed to the Edge (a per-PSP name map can exceed the 1 MiB Aerospike record that persists the bundle)"
+  }, {
+    "id" : 31,
+    "name" : "User Address Change",
+    "reason" : "needs merchant legal-name master data, which is not distributed to the Edge (a per-PSP name map can exceed the 1 MiB Aerospike record that persists the bundle)"
+  }, {
+    "id" : 39,
+    "name" : "Account Holder Name Levenshtein Mismatch",
+    "reason" : "needs merchant legal-name master data, which is not distributed to the Edge (a per-PSP name map can exceed the 1 MiB Aerospike record that persists the bundle)"
+  }, {
+    "id" : 48,
+    "name" : "Business Entity Screening",
+    "reason" : "merchant/counterparty screening result: the Edge sanctions matcher and merchant blocklist are work package R10b"
+  }, {
+    "id" : 54,
+    "name" : "Counterparty Screening",
+    "reason" : "merchant/counterparty screening result: the Edge sanctions matcher and merchant blocklist are work package R10b"
+  }, {
+    "id" : 56,
+    "name" : "Merchant Chargeback Ratio Exceeded",
+    "reason" : "chargeback/dispute records reach the cloud from scheme and Verifi feeds; the Edge has no dispute feed"
+  }, {
+    "id" : 57,
+    "name" : "Chargeback Velocity Spike",
+    "reason" : "chargeback/dispute records reach the cloud from scheme and Verifi feeds; the Edge has no dispute feed"
+  }, {
+    "id" : 58,
+    "name" : "High-Value Chargeback",
+    "reason" : "chargeback/dispute records reach the cloud from scheme and Verifi feeds; the Edge has no dispute feed"
+  }, {
+    "id" : 59,
+    "name" : "Fraud-Category Dispute Alert",
+    "reason" : "chargeback/dispute records reach the cloud from scheme and Verifi feeds; the Edge has no dispute feed"
+  }, {
+    "id" : 60,
+    "name" : "RDR Prevention Match",
+    "reason" : "chargeback/dispute records reach the cloud from scheme and Verifi feeds; the Edge has no dispute feed"
+  }, {
+    "id" : 301,
+    "name" : "Peer Group Volume Deviation",
+    "reason" : "cross-merchant peer-group aggregate computed only in the cloud"
+  }, {
+    "id" : 303,
+    "name" : "Scheme monitoring high stage",
+    "reason" : "scheme monitoring programme stage (VFMP/HECM) computed only in the cloud"
+  } ],
+  "rules" : [ {
+    "id" : 1,
+    "name" : "First Transaction of a User",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "is_first_transaction",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "ALERT",
+    "score" : 30,
+    "priority" : 100
+  }, {
+    "id" : 2,
+    "name" : "High Value Transaction Threshold",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "amount"
+      }, {
+        "type" : "cmp",
+        "field" : "amount",
+        "op" : "GTE",
+        "value" : 10000.0
+      } ]
+    },
+    "action" : "HOLD",
+    "score" : 60,
+    "priority" : 20
+  }, {
+    "id" : 3,
+    "name" : "New Country Transaction (after N txns)",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "is_new_country",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 4,
+    "name" : "New Currency Transaction (after N txns)",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "is_new_currency",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "ALERT",
+    "score" : 30,
+    "priority" : 100
+  }, {
+    "id" : 5,
+    "name" : "Reactivation After Inactivity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "days_since_last_activity"
+      }, {
+        "type" : "cmp",
+        "field" : "days_since_last_activity",
+        "op" : "GTE",
+        "value" : 180.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 6,
+    "name" : "High-Risk Currency Transaction",
+    "condition" : {
+      "type" : "const",
+      "value" : false
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 7,
+    "name" : "Structuring — Incoming Sub-Threshold Burst",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "cmp",
+        "field" : "amount",
+        "op" : "GTE",
+        "value" : 8100.0
+      }, {
+        "type" : "any",
+        "any" : [ {
+          "type" : "not",
+          "not" : {
+            "type" : "exists",
+            "field" : "amount"
+          }
+        }, {
+          "type" : "cmp",
+          "field" : "amount",
+          "op" : "LT",
+          "value" : 9000.0
+        } ]
+      }, {
+        "type" : "cmp",
+        "field" : "pan_txn_count_24h",
+        "op" : "GTE",
+        "value" : 5.0
+      }, {
+        "type" : "cmp",
+        "field" : "txn_direction",
+        "op" : "EQ",
+        "value" : "INBOUND"
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 8,
+    "name" : "Structuring — Outgoing Sub-Threshold Burst",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "cmp",
+        "field" : "amount",
+        "op" : "GTE",
+        "value" : 8100.0
+      }, {
+        "type" : "any",
+        "any" : [ {
+          "type" : "not",
+          "not" : {
+            "type" : "exists",
+            "field" : "amount"
+          }
+        }, {
+          "type" : "cmp",
+          "field" : "amount",
+          "op" : "LT",
+          "value" : 9000.0
+        } ]
+      }, {
+        "type" : "cmp",
+        "field" : "pan_txn_count_24h",
+        "op" : "GTE",
+        "value" : 5.0
+      }, {
+        "type" : "cmp",
+        "field" : "txn_direction",
+        "op" : "EQ",
+        "value" : "OUTBOUND"
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 9,
+    "name" : "Many-Senders-One-Receiver",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "unique_senders"
+      }, {
+        "type" : "cmp",
+        "field" : "unique_senders",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 55,
+    "priority" : 50
+  }, {
+    "id" : 10,
+    "name" : "Many-Counterparties-One-User (Inbound)",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "unique_counterparties"
+      }, {
+        "type" : "cmp",
+        "field" : "unique_counterparties",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 55,
+    "priority" : 50
+  }, {
+    "id" : 11,
+    "name" : "Anomalous Transaction Volume",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "volume_deviation_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "volume_deviation_ratio",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 100
+  }, {
+    "id" : 12,
+    "name" : "Anomalous Transaction Pattern",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "txn_count_deviation_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "txn_count_deviation_ratio",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 13,
+    "name" : "Receiver Wallet Blacklist",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "device_key",
+      "list" : "blacklist_wallet"
+    },
+    "action" : "ALERT",
+    "score" : 70,
+    "priority" : 10
+  }, {
+    "id" : 14,
+    "name" : "High-Risk Country Transaction",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "country_code",
+      "list" : "high_risk_countries"
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 15,
+    "name" : "Multi-Bank Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "distinct_banks"
+      }, {
+        "type" : "cmp",
+        "field" : "distinct_banks",
+        "op" : "GTE",
+        "value" : 4.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 50
+  }, {
+    "id" : 17,
+    "name" : "User Onboarded From High-Risk Country",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "merchant_id",
+      "list" : "merchants_high_risk_country"
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 50
+  }, {
+    "id" : 18,
+    "name" : "Card-Issued Country Blacklist",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "country_code",
+      "list" : "blacklist_card_country"
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 30
+  }, {
+    "id" : 19,
+    "name" : "Transaction Reference Keyword Blacklist",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "reference_lc",
+      "op" : "CONTAINS",
+      "value" : "casino"
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 30
+  }, {
+    "id" : 20,
+    "name" : "Average Amount Spike",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "avg_amount_spike_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "avg_amount_spike_ratio",
+        "op" : "GTE",
+        "value" : 100.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 21,
+    "name" : "Round-Value Transaction Spike",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "round_value_share_pct"
+      }, {
+        "type" : "cmp",
+        "field" : "round_value_share_pct",
+        "op" : "GTE",
+        "value" : 60.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 22,
+    "name" : "Volume Ratio Across Windows",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "volume_ratio_t1_t2"
+      }, {
+        "type" : "cmp",
+        "field" : "volume_ratio_t1_t2",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 100
+  }, {
+    "id" : 23,
+    "name" : "Transaction Velocity (count in time)",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "pan_txn_count_24h",
+      "op" : "GTE",
+      "value" : 10.0
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 50
+  }, {
+    "id" : 25,
+    "name" : "User Inactivity Watch",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "days_since_last_activity"
+      }, {
+        "type" : "cmp",
+        "field" : "days_since_last_activity",
+        "op" : "GTE",
+        "value" : 365.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 25,
+    "priority" : 200
+  }, {
+    "id" : 26,
+    "name" : "Send-vs-Receive Volume Mismatch",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "send_receive_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "send_receive_ratio",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 100
+  }, {
+    "id" : 28,
+    "name" : "Same IP — Many Users",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "distinct_users_per_ip"
+      }, {
+        "type" : "cmp",
+        "field" : "distinct_users_per_ip",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 29,
+    "name" : "Same Payment Identifier — Many Users",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "distinct_users_per_payment_id"
+      }, {
+        "type" : "cmp",
+        "field" : "distinct_users_per_payment_id",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 55,
+    "priority" : 50
+  }, {
+    "id" : 30,
+    "name" : "Same Sender — Many Payment Identifiers",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "distinct_payment_ids"
+      }, {
+        "type" : "cmp",
+        "field" : "distinct_payment_ids",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 32,
+    "name" : "Spend/Receive Above Expected",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "spend_receive_spike_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "spend_receive_spike_ratio",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 33,
+    "name" : "Velocity From High-Risk Country",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "in_list",
+        "field" : "country_code",
+        "list" : "high_risk_countries"
+      }, {
+        "type" : "cmp",
+        "field" : "pan_txn_count_24h",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 34,
+    "name" : "Transaction From High-Risk IP Country",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "merchant_id",
+      "list" : "merchants_high_risk_country"
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 50
+  }, {
+    "id" : 35,
+    "name" : "IP Geolocation Outside Expected",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "ip_outside_expected_location",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 36,
+    "name" : "Payment Identifier Reuse Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "payment_id_use_count"
+      }, {
+        "type" : "cmp",
+        "field" : "payment_id_use_count",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 50
+  }, {
+    "id" : 37,
+    "name" : "IP Address Change Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "ip_change_count"
+      }, {
+        "type" : "cmp",
+        "field" : "ip_change_count",
+        "op" : "GT",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 38,
+    "name" : "Recurring Suspicious Amount Pattern",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "amount_ending_pattern",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "ALERT",
+    "score" : 30,
+    "priority" : 200
+  }, {
+    "id" : 40,
+    "name" : "Circular Trading Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "circular_trading_count"
+      }, {
+        "type" : "cmp",
+        "field" : "circular_trading_count",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 50,
+    "priority" : 50
+  }, {
+    "id" : 41,
+    "name" : "Average Amount Drop/Rise Across Windows",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "avg_amount_window_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "avg_amount_window_ratio",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 42,
+    "name" : "Daily Transaction Count Ratio Across Windows",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "daily_txn_count_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "daily_txn_count_ratio",
+        "op" : "GTE",
+        "value" : 3.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 43,
+    "name" : "Daily Average Amount Ratio Across Windows",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "daily_avg_amount_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "daily_avg_amount_ratio",
+        "op" : "GTE",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 44,
+    "name" : "Multi-Country Diversity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "distinct_countries"
+      }, {
+        "type" : "cmp",
+        "field" : "distinct_countries",
+        "op" : "GT",
+        "value" : 5.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 50
+  }, {
+    "id" : 45,
+    "name" : "Round-Value Transaction Share",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "round_value_share_pct"
+      }, {
+        "type" : "cmp",
+        "field" : "round_value_share_pct",
+        "op" : "GTE",
+        "value" : 50.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 46,
+    "name" : "Transaction State Anomaly",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "refund_share_pct"
+      }, {
+        "type" : "cmp",
+        "field" : "refund_share_pct",
+        "op" : "GTE",
+        "value" : 30.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 40,
+    "priority" : 100
+  }, {
+    "id" : 47,
+    "name" : "Same-Parties Volume",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "same_parties_volume"
+      }, {
+        "type" : "cmp",
+        "field" : "same_parties_volume",
+        "op" : "GTE",
+        "value" : 10000.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 45,
+    "priority" : 50
+  }, {
+    "id" : 49,
+    "name" : "Payment Details Blacklist",
+    "condition" : {
+      "type" : "in_list",
+      "field" : "device_key",
+      "list" : "blacklist_payment_details"
+    },
+    "action" : "ALERT",
+    "score" : 60,
+    "priority" : 30
+  }, {
+    "id" : 50,
+    "name" : "Round-Value Transaction Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "round_value_txn_count"
+      }, {
+        "type" : "cmp",
+        "field" : "round_value_txn_count",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 51,
+    "name" : "Daily Transaction Count Ratio",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "txn_count_window_ratio"
+      }, {
+        "type" : "cmp",
+        "field" : "txn_count_window_ratio",
+        "op" : "GTE",
+        "value" : 10.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 52,
+    "name" : "Variable Value Blacklist (Block)",
+    "condition" : {
+      "type" : "any",
+      "any" : [ {
+        "type" : "in_list",
+        "field" : "pan_hash",
+        "list" : "blacklist_pan"
+      }, {
+        "type" : "in_list",
+        "field" : "device_key",
+        "list" : "blacklist_device"
+      } ]
+    },
+    "action" : "BLOCK",
+    "score" : 90,
+    "priority" : 5
+  }, {
+    "id" : 53,
+    "name" : "Bank Name Change Velocity",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "bank_name_changes"
+      }, {
+        "type" : "cmp",
+        "field" : "bank_name_changes",
+        "op" : "GT",
+        "value" : 2.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 55,
+    "name" : "Anonymous Payment Screening",
+    "condition" : {
+      "type" : "cmp",
+      "field" : "anonymous_payment_screening_hit",
+      "op" : "EQ",
+      "value" : true
+    },
+    "action" : "HOLD",
+    "score" : 75,
+    "priority" : 10
+  }, {
+    "id" : 302,
+    "name" : "PAN amount z-score vs history",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "zscore_amount_vs_pan_history"
+      }, {
+        "type" : "cmp",
+        "field" : "zscore_amount_vs_pan_history",
+        "op" : "GTE",
+        "value" : 3.0
+      } ]
+    },
+    "action" : "HOLD",
+    "score" : 35,
+    "priority" : 100
+  }, {
+    "id" : 304,
+    "name" : "PAN velocity 1 minute",
+    "condition" : {
+      "type" : "all",
+      "all" : [ {
+        "type" : "exists",
+        "field" : "pan_txn_count_1m"
+      }, {
+        "type" : "cmp",
+        "field" : "pan_txn_count_1m",
+        "op" : "GTE",
+        "value" : 8.0
+      } ]
+    },
+    "action" : "ALERT",
+    "score" : 20,
+    "priority" : 80
+  } ]
+}

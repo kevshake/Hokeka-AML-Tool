@@ -37,6 +37,10 @@
       "CASH_IN",
       "AGENT"
     ],
+    "structuring": {
+      "floorRatio": "0.80",
+      "minTransactions": 2
+    },
     "fx": {
       "asOf": "2026-10-16T06:00:00Z",
       "base": "USD",

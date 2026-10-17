@@ -187,7 +187,8 @@ class EdgeRuleCompilerTest {
     void compilesCatalogAmountThresholdFromParameters() {
         RuleDefinition rule = ruleDefinition(2L, "High Value Transaction Threshold", "HOLD", 60, 20, null);
         rule.setRuleType("SPEL");
-        rule.setRuleExpression("#tx.amount != null && #tx.amount.compareTo(T(java.math.BigDecimal).valueOf(#params['threshold_amount'] ?: 1000000)) >= 0");
+        // R-2 as V212 left it (the sandbox forbids T(...)).
+        rule.setRuleExpression("#tx.amount != null && #tx.amount.doubleValue() >= (#params['threshold_amount'] ?: 1000000)");
         rule.setParameters("{\"threshold_amount\": 10000}");
 
         EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
@@ -199,15 +200,38 @@ class EdgeRuleCompilerTest {
         assertEquals(EdgeRuleInterpreter.Action.ALLOW, interpreter.evaluate(Map.of("amount", 9999)).action());
     }
 
+    /** R10a: feature-backed catalog rules compile against the Edge-derived feature of the same name. */
     @Test
-    void leavesFeatureBackedCatalogRulesOffTheEdgeBundle() {
+    void compilesFeatureBackedCatalogRulesOntoEdgeDerivedFeatures() {
         RuleDefinition rule = ruleDefinition(1L, "First Transaction of a User", "ALERT", 30, 100, null);
+        rule.setRuleType("SPEL");
         rule.setRuleExpression("#features['is_first_transaction'] == true");
 
         EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
 
+        assertEquals(1, result.rules().size(), result.uncompiled().toString());
+        assertTrue(result.skipped().isEmpty());
+        EdgeRuleInterpreter interpreter = new EdgeRuleInterpreter();
+        interpreter.loadBundle(bundleService.buildBundleJson(result.version(), 42L, result.rules()));
+        assertEquals(EdgeRuleInterpreter.Action.ALERT,
+                interpreter.evaluate(Map.of("is_first_transaction", true)).action());
+        assertEquals(EdgeRuleInterpreter.Action.ALLOW,
+                interpreter.evaluate(Map.of("is_first_transaction", false)).action());
+    }
+
+    /** A feature the Edge does not derive is reported with its reason, never emitted. */
+    @Test
+    void leavesRulesOnCloudOnlyInputsOffTheEdgeBundle() {
+        RuleDefinition rule = ruleDefinition(5L, "Merchant Chargeback Ratio Exceeded", "ALERT", 70, 15, null);
+        rule.setRuleType("SPEL");
+        rule.setRuleExpression("#features['merchant_chargeback_ratio'] != null && "
+                + "#features['merchant_chargeback_ratio'] > (#params['ratio_threshold'] ?: 0.01)");
+
+        EdgeRuleCompiler.CompilationResult result = compiler.compile(List.of(rule));
+
         assertTrue(result.rules().isEmpty());
-        assertEquals(List.of("First Transaction of a User"), result.skipped());
+        assertEquals(List.of("Merchant Chargeback Ratio Exceeded"), result.skipped());
+        assertTrue(result.uncompiled().get(0).reason().contains("chargeback"));
     }
 
     @Test

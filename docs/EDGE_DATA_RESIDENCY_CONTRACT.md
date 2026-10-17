@@ -306,7 +306,7 @@ Schema: [`contracts/edge-config.schema.json`](contracts/edge-config.schema.json)
 | `retention` | `years` in force (5..25), `effectiveSince`, optional `pendingChange` (approved reduction not yet in force) | 5 |
 | `supportAccess` | `enabled`, `changedAt` | `false` |
 | `crossPspIntelligence` | `optIn`, `changedAt`, `indicatorSetVersion` | `false` |
-| `ctr` | `enabled`, `aggregation = CARD_BUSINESS_DAY`, `businessDayTimezone` (IANA), `reportingCurrency`, `thresholds[]` (minor units), `cashChannels[]`, `fx {asOf, base, rates{CCY: decimal string}}` | per PSP jurisdiction |
+| `ctr` | `enabled`, `aggregation = CARD_BUSINESS_DAY`, `businessDayTimezone` (IANA), `reportingCurrency`, `thresholds[]` (minor units), `cashChannels[]`, optional `structuring {floorRatio (decimal string), minTransactions ≥ 2}`, `fx {asOf, base, rates{CCY: decimal string}}` | per PSP jurisdiction; structuring 0.80 / 2 |
 | `limits[]` | `{limitId, scope CARD/MERCHANT/PSP, metric COUNT/AMOUNT, window PT1H/P1D/P7D/P30D, currency (AMOUNT), max, action, merchantId?, mcc?}` | none |
 | `merchantBlocklist` | `version`, `entries[{merchantId, reasonCode, since}]` | empty |
 | `sanctions` | `listVersion`, `listHash`, `publishedAt` of the list snapshot to screen with (§6.4) | `none` |
@@ -336,6 +336,21 @@ lower `configVersion` than the one it holds (rollback protection). A refused doc
 previous one in force and does not advance the ETag. Every accepted document is appended to
 `edge_config` (history) before use. A document with `retention.years < 5` cannot pass the schema;
 an Edge MUST additionally clamp the effective retention to at least 5 years in code.
+
+**CTR, FX and limits on evaluate (R10a).** For a cash transaction (request `cash_transaction`, or
+`channel` ∈ `ctr.cashChannels`) the Edge converts the amount to `ctr.reportingCurrency` with
+`ctr.fx`, adds it to the card's business-day total (`ctr.businessDayTimezone`) and sets
+`ctrRequired` on the decision record of the transaction that takes the total to
+`thresholds[reportingCurrency]` or above (typology code `CTR_REPORTABLE`). The Edge MUST NOT
+under-report: when it cannot convert the amount (no or zero rate, no currency), has no threshold for
+the reporting currency, or cannot read the card-day total, it answers `HOLD` with
+`ctrRequired = true` and typology code `CTR_FX_UNAVAILABLE`, `CTR_CONFIG_INVALID` or
+`CTR_AGGREGATE_UNAVAILABLE`. The optional `ctr.structuring` section (`floorRatio`,
+`minTransactions`; defaults 0.80 and 2) drives cash structuring: `HOLD`, `CASH_STRUCTURING_24H`.
+Each applicable `limits[]` entry is enforced with its `action` and typology code
+`LIMIT_<limitId>`; a limit that cannot be evaluated (no FX to its currency, unreadable counters)
+answers `HOLD` with `LIMIT_FX_UNAVAILABLE` / `LIMITS_UNAVAILABLE`. Details:
+[`edge-transaction-evaluation.md`](edge-transaction-evaluation.md) §6.1.
 
 Until the first document is accepted the Edge uses: no purge at all (§8.2), support access off,
 cross-PSP off, CTR off, no limits, empty blocklist, tunnel per local settings. Rule evaluation is
@@ -416,6 +431,12 @@ name ever goes to the cloud or to aml-microservice.
   carrying a name to screen is held (`EDGE_SANCTIONS_HOLD_WHEN_LIST_MISSING`, default true). Before
   the first config, or while the config says `none`, screening is off.
 - **Fail-closed.** A fail-closed evaluation keeps its `HOLD` (§4.1); its hits are still recorded.
+- **Combining with the R10a overlay and the rules.** Screening runs before limit usage is
+  recorded. The final decision is the strongest of the rules, the CTR/structuring/limit overlay
+  (§6.3) and screening (`BLOCK` > `HOLD` > `ALERT` > `ALLOW`). Limit usage is recorded with that
+  final decision, so a transaction blocked by screening or the merchant blocklist uses no limit. The
+  CTR card-day total still counts it, so the CTR is never under-reported. One decision record
+  carries `sanctionsHit` / `watchlistEntryIds` and `ctrRequired` / `typologyCodes` together.
 
 ## 7. Edge Tunnel protocol
 

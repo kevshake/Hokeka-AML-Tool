@@ -25,7 +25,7 @@ import java.util.Set;
  * @param supportAccess   {@code supportAccess.enabled} (§9)
  * @param crossPspOptIn   {@code crossPspIntelligence.optIn} (§10)
  * @param ctr             CTR settings used by {@code filing.extract} (§7.6)
- * @param limitCount      number of {@code limits[]} entries
+ * @param limits          {@code limits[]}, enforced on evaluate by {@code ComplianceOverlay}
  * @param blocklistVersion {@code merchantBlocklist.version}
  * @param blockedMerchants merchant ids on the blocklist
  * @param sanctionsListVersion {@code sanctions.listVersion}
@@ -40,7 +40,7 @@ public record EdgeConfigDocument(long configVersion,
                                  boolean supportAccess,
                                  boolean crossPspOptIn,
                                  Ctr ctr,
-                                 int limitCount,
+                                 List<Limit> limits,
                                  long blocklistVersion,
                                  Set<String> blockedMerchants,
                                  String sanctionsListVersion,
@@ -59,9 +59,35 @@ public record EdgeConfigDocument(long configVersion,
      * @param fxAsOf            when the FX rates were taken
      * @param fxBase            the rates' base currency
      * @param rates             units of {@code fxBase} per one unit of the keyed currency
+     * @param structuringFloorRatio  share of the threshold where the structuring band starts
+     *                               ({@code ctr.structuring.floorRatio}, default 0.80)
+     * @param structuringMinTransactions band transactions in 24 h that make structuring (default 2)
      */
     public record Ctr(boolean enabled, ZoneId timezone, String reportingCurrency, Map<String, Long> thresholds,
-                      Set<String> cashChannels, Instant fxAsOf, String fxBase, Map<String, BigDecimal> rates) {
+                      Set<String> cashChannels, Instant fxAsOf, String fxBase, Map<String, BigDecimal> rates,
+                      BigDecimal structuringFloorRatio, int structuringMinTransactions) {
+
+        /** The cloud detector's defaults, used when the document has no {@code structuring} section. */
+        public static final BigDecimal DEFAULT_FLOOR_RATIO = new BigDecimal("0.80");
+        /** Default repeat count. */
+        public static final int DEFAULT_MIN_TRANSACTIONS = 2;
+    }
+
+    /**
+     * One {@code limits[]} entry (§6.1).
+     *
+     * @param limitId    id
+     * @param scope      CARD / MERCHANT / PSP
+     * @param metric     COUNT / AMOUNT
+     * @param window     PT1H / P1D / P7D / P30D
+     * @param currency   currency of {@code max} for AMOUNT, else null
+     * @param max        the maximum (count, or minor units of {@code currency})
+     * @param action     ALERT / HOLD / BLOCK
+     * @param merchantId optional filter: only this merchant's transactions
+     * @param mcc        optional filter: only this MCC
+     */
+    public record Limit(long limitId, String scope, String metric, String window, String currency, long max,
+                        String action, String merchantId, String mcc) {
     }
 
     /**
@@ -92,10 +118,23 @@ public record EdgeConfigDocument(long configVersion,
         Map<String, BigDecimal> rates = new LinkedHashMap<>();
         JsonNode fx = ctrNode.get("fx");
         fx.get("rates").fields().forEachRemaining(e -> rates.put(e.getKey(), new BigDecimal(e.getValue().asText())));
+        JsonNode structuring = ctrNode.get("structuring");
+        BigDecimal floor = structuring == null ? Ctr.DEFAULT_FLOOR_RATIO
+                : new BigDecimal(structuring.get("floorRatio").asText());
+        int minTxns = structuring == null ? Ctr.DEFAULT_MIN_TRANSACTIONS : structuring.get("minTransactions").asInt();
         Ctr ctr = new Ctr(ctrNode.get("enabled").asBoolean(), ZoneId.of(ctrNode.get("businessDayTimezone").asText()),
                 ctrNode.get("reportingCurrency").asText(), Collections.unmodifiableMap(thresholds),
                 Collections.unmodifiableSet(cash), Instant.parse(fx.get("asOf").asText()), fx.get("base").asText(),
-                Collections.unmodifiableMap(rates));
+                Collections.unmodifiableMap(rates), floor, minTxns);
+
+        List<Limit> limits = new java.util.ArrayList<>();
+        for (JsonNode l : doc.get("limits")) {
+            limits.add(new Limit(l.get("limitId").asLong(), l.get("scope").asText(), l.get("metric").asText(),
+                    l.get("window").asText(), l.hasNonNull("currency") ? l.get("currency").asText() : null,
+                    l.get("max").asLong(), l.get("action").asText(),
+                    l.hasNonNull("merchantId") ? l.get("merchantId").asText() : null,
+                    l.hasNonNull("mcc") ? l.get("mcc").asText() : null));
+        }
 
         JsonNode tunnelNode = doc.get("tunnel");
         Set<String> ops = new LinkedHashSet<>();
@@ -110,9 +149,14 @@ public record EdgeConfigDocument(long configVersion,
         return new EdgeConfigDocument(doc.get("configVersion").asLong(), doc.get("pspId").asLong(),
                 Instant.parse(doc.get("issuedAt").asText()), doc.get("retention").get("years").asInt(),
                 doc.get("supportAccess").get("enabled").asBoolean(),
-                doc.get("crossPspIntelligence").get("optIn").asBoolean(), ctr, doc.get("limits").size(),
+                doc.get("crossPspIntelligence").get("optIn").asBoolean(), ctr, List.copyOf(limits),
                 blocklist.get("version").asLong(), Collections.unmodifiableSet(blocked),
                 doc.get("sanctions").get("listVersion").asText(), tunnel, doc.deepCopy(), sha256);
+    }
+
+    /** Number of {@code limits[]} entries (status output). */
+    public int limitCount() {
+        return limits.size();
     }
 
     /** Whether {@code merchantId} is on the PSP's merchant blocklist. */

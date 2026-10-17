@@ -5,7 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.posgateway.aml.edge.EdgeBundleService;
 import com.posgateway.aml.edge.EdgeBundleService.CompiledRule;
+import com.posgateway.aml.edge.EdgeBundleService.UncompiledRule;
 import com.posgateway.aml.entity.rules.RuleDefinition;
+import com.posgateway.aml.service.edge.typology.EdgeReferenceLists;
+import com.posgateway.aml.service.edge.typology.SpelEdgeTranslator;
+import com.posgateway.aml.service.edge.typology.UncompilableRuleException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -76,24 +81,42 @@ public class EdgeRuleCompiler {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final EdgeBundleService bundleService;
+    private final EdgeReferenceLists referenceLists;
 
+    /**
+     * Compiler without a reference-list source: rules that need a list (high-risk countries,
+     * blacklists) are reported as uncompiled with that reason. Tests and tools only.
+     */
     public EdgeRuleCompiler(EdgeBundleService bundleService) {
-        this.bundleService = bundleService;
+        this(bundleService, EdgeReferenceLists.unavailable("no reference-list source is wired into this compiler"));
     }
 
     /**
-     * @param version the bundle version — monotonic in the PSP's rule-set mutation time, so an edge
-     *                can compare it against its running version with a plain {@code >}
-     * @param rules   the compiled IR rules, in evaluation order
-     * @param skipped names of rules that could not be compiled to IR
+     * @param bundleService  IR node builders
+     * @param referenceLists source of the lists carried in the bundle
      */
-    public record CompilationResult(long version, String manifestHash, List<CompiledRule> rules, List<String> skipped) {}
+    @Autowired
+    public EdgeRuleCompiler(EdgeBundleService bundleService, EdgeReferenceLists referenceLists) {
+        this.bundleService = bundleService;
+        this.referenceLists = referenceLists;
+    }
 
     /**
-     * Compile every enabled rule visible to a PSP.
-     *
-     * @param ruleDefinitions the PSP's enabled rules (its own copies, or the system defaults)
+     * @param version    the bundle version — monotonic in the PSP's rule-set and list mutation time,
+     *                   so an edge can compare it against its running version with a plain {@code >}
+     * @param rules      the compiled IR rules, in evaluation order
+     * @param skipped    names of rules that could not be compiled to IR
+     * @param lists      bundle {@code lists} section (only lists a compiled rule reads)
+     * @param uncompiled every rule left off the Edge, with the reason (bundle {@code uncompiled})
      */
+    public record CompilationResult(long version, String manifestHash, List<CompiledRule> rules, List<String> skipped,
+                                    Map<String, List<String>> lists, List<UncompiledRule> uncompiled) {
+        /** A result with no lists and names-only omissions. */
+        public CompilationResult(long version, String manifestHash, List<CompiledRule> rules, List<String> skipped) {
+            this(version, manifestHash, rules, skipped, Map.of(), List.of());
+        }
+    }
+
     /**
      * Reject rule_json the Edge would skip. Throws IllegalArgumentException with the reason.
      */
@@ -101,18 +124,36 @@ public class EdgeRuleCompiler {
         RuleDefinition probe = new RuleDefinition();
         probe.setRuleJson(ruleJson);
         probe.setRuleType("JSON");
-        compileCondition(probe);
+        compileCondition(probe, null, new java.util.TreeMap<>());
     }
 
+    /** Compile for the global default rule set (no PSP-specific lists). */
     public CompilationResult compile(List<RuleDefinition> ruleDefinitions) {
+        return compile(ruleDefinitions, null);
+    }
+
+    /**
+     * Compile every enabled rule visible to a PSP. Catalog SpEL rules are translated with
+     * {@link SpelEdgeTranslator}; a rule that cannot run on the Edge is listed in
+     * {@link CompilationResult#uncompiled()} with its reason, never dropped silently and never
+     * emitted as a permissive placeholder.
+     *
+     * @param ruleDefinitions the PSP's enabled rules (its own copies, or the system defaults)
+     * @param pspId           the PSP the bundle is for (selects its blacklists and merchant lists)
+     */
+    public CompilationResult compile(List<RuleDefinition> ruleDefinitions, Long pspId) {
         List<CompiledRule> compiled = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
+        List<UncompiledRule> uncompiled = new ArrayList<>();
+        Map<String, List<String>> lists = new java.util.TreeMap<>();
         long version = 0L;
 
         for (RuleDefinition def : ruleDefinitions) {
             version = Math.max(version, mutationStamp(def));
+            Map<String, List<String>> ruleLists = new java.util.TreeMap<>();
             try {
-                ObjectNode condition = compileCondition(def);
+                ObjectNode condition = compileCondition(def, pspId, ruleLists);
+                lists.putAll(ruleLists);
                 compiled.add(new CompiledRule(
                         def.getId(),
                         def.getName(),
@@ -124,14 +165,19 @@ public class EdgeRuleCompiler {
                         def.getCurrentVersionId()));
             } catch (RuntimeException e) {
                 skipped.add(def.getName());
-                log.warn("Edge bundle: rule '{}' (id {}) omitted — {}", def.getName(), def.getId(),
-                        e.getMessage());
+                String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                uncompiled.add(new UncompiledRule(def.getId() == null ? 0L : def.getId(), def.getName(), reason));
+                log.warn("Edge bundle: rule '{}' (id {}) not compiled to Edge IR — {}", def.getName(), def.getId(),
+                        reason);
             }
+        }
+        if (!lists.isEmpty()) {
+            version = Math.max(version, referenceLists.stamp(pspId));
         }
         // Rule count participates in the version so that deleting a rule (which lowers no
         // updated_at) still produces a version the edge sees as new.
         version = version * 1000 + Math.min(999, compiled.size());
-        return new CompilationResult(version, manifestHash(compiled), compiled, skipped);
+        return new CompilationResult(version, manifestHash(compiled), compiled, skipped, lists, uncompiled);
     }
 
 
@@ -185,10 +231,11 @@ public class EdgeRuleCompiler {
         };
     }
 
-    private ObjectNode compileCondition(RuleDefinition def) {
+    /** The IR condition of one rule: structured rule_json, or a catalog SpEL expression. */
+    private ObjectNode compileCondition(RuleDefinition def, Long pspId, Map<String, List<String>> ruleLists) {
         String json = def.getRuleJson();
         if (json == null || json.isBlank()) {
-            return compileCatalogExpression(def);
+            return compileCatalogExpression(def, pspId, ruleLists);
         }
         JsonNode root;
         try {
@@ -274,6 +321,10 @@ public class EdgeRuleCompiler {
         String sourceField = n.path("field").asText();
         String field = FIELD_MAP.get(sourceField);
         if (field == null) {
+            // Any feature the Edge derives (velocity windows, z-score, ...) is addressable too.
+            field = com.posgateway.aml.service.edge.typology.EdgeFeatureCatalog.feature(sourceField);
+        }
+        if (field == null) {
             throw new IllegalArgumentException("field '" + sourceField + "' has no edge feature mapping");
         }
         String operator = canonicalOperator(n.path("operator").asText("EQUALS"));
@@ -306,43 +357,48 @@ public class EdgeRuleCompiler {
     }
 
     /**
-     * Catalog rules (V143) are stored as SpEL plus a {@code parameters} JSON object, not as
-     * {@code rule_json}. Only expressions that are a single comparison on a field the edge
-     * actually has are compiled. Anything that reads {@code #features} or calls a method stays
-     * omitted — dropping that clause would make the rule more permissive than the one the
-     * operator approved.
+     * Catalog rules (V143 onwards) are stored as SpEL plus a {@code parameters} JSON object, not as
+     * {@code rule_json}. The expression is parsed and translated by {@link SpelEdgeTranslator} with
+     * the parameters folded in. DRL-only rules and expressions reading inputs the Edge does not have
+     * are rejected with the reason — dropping a clause would make the rule more permissive than the
+     * one the operator approved.
      */
-    private ObjectNode compileCatalogExpression(RuleDefinition def) {
+    private ObjectNode compileCatalogExpression(RuleDefinition def, Long pspId, Map<String, List<String>> ruleLists) {
+        String type = def.getRuleType() == null ? "" : def.getRuleType().trim().toUpperCase();
         String expr = def.getRuleExpression();
-        boolean methodCall = expr != null && expr.contains("#tx.is");
-        if (expr == null || expr.isBlank() || expr.contains("#features") || methodCall) {
-            throw new IllegalArgumentException(
-                    "no structured rule_json to compile (rule_type=" + def.getRuleType() + ")");
+        if (expr == null || expr.isBlank()) {
+            if ("DROOLS_DRL".equals(type) || (def.getDrlContent() != null && !def.getDrlContent().isBlank())) {
+                throw new UncompilableRuleException("DRL-only rule: Drools does not run on the Edge and the rule has "
+                        + "no structured rule_json or SpEL expression");
+            }
+            throw new UncompilableRuleException("no structured rule_json or SpEL expression to compile (rule_type="
+                    + def.getRuleType() + ")");
+        }
+        if (!type.isEmpty() && !"SPEL".equals(type)) {
+            throw new UncompilableRuleException("rule_type " + def.getRuleType() + " has no Edge form");
         }
         JsonNode params = readParams(def.getParameters());
-        String compact = expr.replaceAll("\\s+", "");
-        if (compact.contains("#tx.amount") && compact.contains("threshold_amount") && !compact.contains("#features")) {
-            double threshold = params.path("threshold_amount").asDouble(1_000_000d);
-            return bundleService.cmp("amount", "GTE", threshold);
-        }
-        if (compact.contains("#tx.panTxnCount1h") && compact.contains("max_transactions")
-                && !compact.contains("#tx.amount")) {
-            double max = params.path("max_transactions").asDouble(10d);
-            return bundleService.cmp("pan_txn_count_1h", "GTE", max);
-        }
-        throw new IllegalArgumentException(
-                "SpEL expression has no edge equivalent (rule_type=" + def.getRuleType() + ")");
+        return new SpelEdgeTranslator(bundleService, params, pspId, referenceLists, ruleLists).translate(expr);
     }
 
+    /** The rule's parameters object; unparseable parameters make the rule uncompilable. */
     private JsonNode readParams(String parameters) {
         if (parameters == null || parameters.isBlank()) {
             return mapper.createObjectNode();
         }
+        JsonNode node;
         try {
-            return mapper.readTree(parameters);
+            node = mapper.readTree(parameters);
+            if (node != null && node.isTextual()) {
+                node = mapper.readTree(node.textValue());
+            }
         } catch (Exception e) {
-            return mapper.createObjectNode();
+            throw new UncompilableRuleException("rule parameters are not valid JSON");
         }
+        if (node == null || !node.isObject()) {
+            throw new UncompilableRuleException("rule parameters are not a JSON object");
+        }
+        return node;
     }
 
     /**
