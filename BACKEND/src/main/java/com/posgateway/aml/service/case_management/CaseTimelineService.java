@@ -291,8 +291,8 @@ public class CaseTimelineService {
     /**
      * Timeline data of a linked transaction: its ID reference, the relationship and the decision
      * record's class-D fields (decision, merchant id). Amount, currency and other transaction details
-     * are never read from the cloud: {@code transactionDetails} is null until the Console pulls them
-     * live from the Edge (work package R6).
+     * are never read from the cloud: {@code transactionDetails} is filled per view by the R6 live pull
+     * ({@code CaseTransactionDetailsEnricher}) and is never persisted.
      */
     private static Map<String, Object> transactionData(CaseTransaction caseTransaction, Assessment record) {
         Map<String, Object> data = new LinkedHashMap<>(caseTransaction.getTransactionReference().toMap());
@@ -396,6 +396,7 @@ public class CaseTimelineService {
         private Long caseId;
         private String caseReference;
         private List<TimelineEvent> events;
+        private com.posgateway.aml.dto.edgedata.EdgePullStatus transactionDetailsStatus;
 
         public static CaseTimelineDTOBuilder builder() {
             return new CaseTimelineDTOBuilder();
@@ -411,6 +412,16 @@ public class CaseTimelineService {
 
         public List<TimelineEvent> getEvents() {
             return events;
+        }
+
+        /** How the live pull of the TRANSACTION events' details went (R6); null until enriched. */
+        public com.posgateway.aml.dto.edgedata.EdgePullStatus getTransactionDetailsStatus() {
+            return transactionDetailsStatus;
+        }
+
+        /** Sets the live pull status (R6); the details themselves are never persisted. */
+        public void setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus status) {
+            this.transactionDetailsStatus = status;
         }
 
         public static class CaseTimelineDTOBuilder {

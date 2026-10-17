@@ -48,6 +48,28 @@ public class TransactionAlertQueryService {
         return dto;
     }
 
+    /**
+     * Alert summaries of a decision record (R6, by ID reference): alerts that name it directly plus
+     * those linked through {@code alert_transactions}. {@code pspId} scopes them to one PSP;
+     * {@code null} is the platform-administrator view across PSPs.
+     */
+    public TransactionAlertsResponseDTO getAlertsForDecisionRecord(Long pspId, java.util.UUID edgeAssessmentId) {
+        if (edgeAssessmentId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "edgeAssessmentId is required");
+        }
+        java.util.Map<Long, Alert> byId = new java.util.LinkedHashMap<>();
+        (pspId == null ? alertRepository.findByEdgeAssessmentIdOrderByCreatedAtDesc(edgeAssessmentId)
+                : alertRepository.findByPspIdAndEdgeAssessmentIdOrderByCreatedAtDesc(pspId, edgeAssessmentId))
+                .forEach(a -> byId.putIfAbsent(a.getAlertId(), a));
+        alertLinkageService.findAlertIdsByDecisionRecord(edgeAssessmentId).forEach(id ->
+                alertRepository.findById(id).filter(a -> pspId == null || pspId.equals(a.getPspId()))
+                        .ifPresent(a -> byId.putIfAbsent(a.getAlertId(), a)));
+        TransactionAlertsResponseDTO dto = new TransactionAlertsResponseDTO();
+        dto.setEdgeAssessmentId(edgeAssessmentId);
+        dto.setAlerts(byId.values().stream().map(TransactionAlertQueryService::toSummary).toList());
+        return dto;
+    }
+
     private static AlertSummaryDTO toSummary(Alert alert) {
         AlertSummaryDTO dto = new AlertSummaryDTO();
         dto.setAlertId(alert.getAlertId());

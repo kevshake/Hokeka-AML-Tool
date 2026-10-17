@@ -1,8 +1,6 @@
 package com.posgateway.aml.controller;
 
 import com.posgateway.aml.dto.FraudDetectionResponseDTO;
-import com.posgateway.aml.dto.alert.TransactionAlertsResponseDTO;
-import com.posgateway.aml.dto.assessment.AssessmentDetailResponseDTO;
 import com.posgateway.aml.dto.TransactionRequestDTO;
 import com.posgateway.aml.entity.TransactionEntity;
 import com.posgateway.aml.service.AsyncFraudDetectionOrchestrator;
@@ -19,20 +17,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
-import com.posgateway.aml.service.security.PspIsolationService;
 import com.posgateway.aml.service.edge.EdgeAssessmentConflictException;
 import com.posgateway.aml.service.edge.EdgeAssessmentService;
 
 import com.posgateway.aml.mapper.FraudDetectionMapper;
-import com.posgateway.aml.repository.TransactionRepository;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,6 +36,10 @@ import java.util.stream.Collectors;
  * Receives transactions from all merchants and processes them through fraud
  * detection
  * Optimized for high throughput with async processing
+ *
+ * <p>Reads ({@code GET /transactions}, {@code /{id}}, {@code /{id}/alerts}, {@code /{id}/assessment},
+ * {@code /{id}/compliance-links}) are served by {@code EdgeTransactionController} from the PSP's Edge
+ * (work package R6); this controller keeps the legacy ingest path until R12.
  */
 @RestController
 @RequestMapping("/transactions")
@@ -55,17 +52,11 @@ public class TransactionController {
     private final FraudDetectionOrchestrator fraudOrchestrator;
     private final AsyncFraudDetectionOrchestrator asyncFraudOrchestrator;
     private final HighConcurrencyFraudOrchestrator highConcurrencyOrchestrator;
-    private final TransactionRepository transactionRepository;
     private final FraudDetectionMapper fraudMapper;
     private final RequestBufferingService requestBufferingService;
     private final RequestRateLimiter rateLimiter;
     private final ConnectionCleanupService cleanupService;
-    private final PspIsolationService pspIsolationService;
     private final EdgeAssessmentService edgeAssessments;
-    private final com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService;
-    private final com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService;
-    private final com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService;
-    private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
     /** Merchant ownership / edge id validation, run before anything is persisted. */
     private final com.posgateway.aml.service.security.TransactionIngestGuard ingestGuard;
 
@@ -89,14 +80,8 @@ public class TransactionController {
             RequestBufferingService requestBufferingService,
             RequestRateLimiter rateLimiter,
             ConnectionCleanupService cleanupService,
-            TransactionRepository transactionRepository,
             FraudDetectionMapper fraudMapper,
-            PspIsolationService pspIsolationService,
             EdgeAssessmentService edgeAssessments,
-            com.posgateway.aml.service.assessment.AssessmentQueryService assessmentQueryService,
-            com.posgateway.aml.service.alert.TransactionAlertQueryService transactionAlertQueryService,
-            com.posgateway.aml.service.compliance.ComplianceLinksQueryService complianceLinksQueryService,
-            com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService,
             com.posgateway.aml.service.security.TransactionIngestGuard ingestGuard) {
         this.ingestGuard = ingestGuard;
         this.ingestionService = ingestionService;
@@ -107,14 +92,8 @@ public class TransactionController {
         this.requestBufferingService = requestBufferingService;
         this.rateLimiter = rateLimiter;
         this.cleanupService = cleanupService;
-        this.transactionRepository = transactionRepository;
         this.fraudMapper = fraudMapper;
-        this.pspIsolationService = pspIsolationService;
         this.edgeAssessments = edgeAssessments;
-        this.assessmentQueryService = assessmentQueryService;
-        this.transactionAlertQueryService = transactionAlertQueryService;
-        this.complianceLinksQueryService = complianceLinksQueryService;
-        this.keysetSliceService = keysetSliceService;
     }
 
     /**
@@ -370,119 +349,6 @@ public class TransactionController {
         dto.setAction("ERROR");
         dto.setReasons(java.util.List.of(message));
         return dto;
-    }
-
-    /**
-     * Latest assessment and findings for a transaction (read-only, shadow ledger).
-     * GET /api/v1/transactions/{id}/assessment
-     */
-    @GetMapping("/{id}/assessment")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'PSP_USER', 'VIEWER', 'PSP_INTEGRATION')")
-    public ResponseEntity<AssessmentDetailResponseDTO> getTransactionAssessment(@PathVariable Long id) {
-        return ResponseEntity.ok(assessmentQueryService.getLatestByTransactionId(id));
-    }
-
-    /**
-     * Get transaction by ID
-     * GET /transactions/{id}
-     */
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','PSP_ADMIN','PSP_USER')")
-    public ResponseEntity<TransactionEntity> getTransactionById(@PathVariable Long id) {
-        logger.info("Get transaction by ID: {}", id);
-        return transactionRepository.findById(id)
-                .map(transaction -> {
-                    try {
-                        pspIsolationService.validateTransactionAccess(transaction);
-                    } catch (SecurityException denied) {
-                        throw new AccessDeniedException("Cannot access a transaction from another PSP", denied);
-                    }
-                    return ResponseEntity.ok(transaction);
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Lists fraud/AML alerts for a transaction (primary txn_id plus V239 alert_transactions joins).
-     * GET /api/v1/transactions/{id}/alerts
-     */
-    @GetMapping("/{id}/alerts")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER','PSP_ANALYST','VIEWER')")
-    public ResponseEntity<TransactionAlertsResponseDTO> getAlertsForTransaction(@PathVariable Long id) {
-        return transactionRepository.findById(id)
-                .map(transaction -> {
-                    pspIsolationService.validateTransactionAccess(transaction);
-                    return ResponseEntity.ok(transactionAlertQueryService.getAlertsForTransaction(id));
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Returns indexed cross-links (cases, SARs, disputes, screening) for a transaction investigation graph.
-     */
-    @GetMapping("/{id}/compliance-links")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','COMPLIANCE_OFFICER','INVESTIGATOR','ANALYST','PSP_ADMIN','PSP_USER')")
-    public ResponseEntity<com.posgateway.aml.dto.compliance.ComplianceLinksResponse> getComplianceLinks(
-            @PathVariable Long id) {
-        return transactionRepository.findById(id)
-                .map(transaction -> {
-                    pspIsolationService.validateTransactionAccess(transaction);
-                    return ResponseEntity.ok(complianceLinksQueryService.forTransaction(id));
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Get all transactions with pagination
-     * GET /transactions
-     * 
-     * Security: PSP users can only see their own PSP's transactions.
-     * Platform Administrators can see all transactions or filter by PSP.
-     */
-    @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'ANALYST', 'PSP_ADMIN', 'PSP_ANALYST', 'VIEWER')")
-    public ResponseEntity<?> getAllTransactions(
-            @RequestParam(required = false, defaultValue = "0") int page,
-            @RequestParam(required = false, defaultValue = "25") int size,
-            @RequestParam(required = false) Long pspId,
-            @RequestParam(required = false) String cursor) {
-        logger.info("Get all transactions request (page: {}, size: {}, pspId: {})", page, size, pspId);
-        try {
-            int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
-            int safePage = Math.max(0, page);
-            
-            // Enforce PSP isolation - sanitize PSP ID parameter
-            Long sanitizedPspId = pspIsolationService.sanitizePspId(pspId);
-            
-            // Build Specification for filtering
-            Specification<TransactionEntity> spec = Specification.where(null);
-            
-            // PSP Isolation Logic
-            if (sanitizedPspId != null) {
-                // Filter by PSP ID - PSP users automatically get their PSP, Platform Admins can specify
-                spec = spec.and((root, query, cb) -> cb.equal(root.get("pspId"), sanitizedPspId));
-            }
-            
-            // Filter out null timestamps
-            spec = spec.and((root, query, cb) -> cb.isNotNull(root.get("txnTs")));
-            
-            var pageResult = keysetSliceService.slice(
-                    transactionRepository,
-                    spec,
-                    safePage,
-                    safeSize,
-                    cursor,
-                    "txnTs",
-                    "txnId",
-                    TransactionEntity::getTxnTs,
-                    TransactionEntity::getTxnId);
-            logger.info("Returning page {} with {} transactions (total: {})",
-                    safePage, pageResult.content().size(), pageResult.totalElements());
-            return ResponseEntity.ok(pageResult);
-        } catch (Exception e) {
-            logger.error("Error fetching transactions: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
     }
 
     /**

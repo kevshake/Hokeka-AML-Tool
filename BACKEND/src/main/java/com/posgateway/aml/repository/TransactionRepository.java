@@ -52,6 +52,15 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     @Query("SELECT t.clientReference FROM TransactionEntity t WHERE t.pspId = :pspId AND t.txnId = :txnId")
     Optional<String> findClientReferenceByPspIdAndTxnId(@Param("pspId") Long pspId, @Param("txnId") Long txnId);
 
+    /** One legacy cloud-ingest row, PSP-scoped (R6 serves it flagged {@code CLOUD_LEGACY}). */
+    Optional<TransactionEntity> findByTxnIdAndPspId(Long txnId, Long pspId);
+
+    /** True when the legacy row exists for that PSP (tenant check of the R6 links endpoints). */
+    boolean existsByTxnIdAndPspId(Long txnId, Long pspId);
+
+    /** Several legacy rows of one PSP (R6 detail panels of PSPs without an Edge). */
+    List<TransactionEntity> findByPspIdAndTxnIdIn(Long pspId, java.util.Collection<Long> txnIds);
+
     /**
      * Find transactions by merchant ID
      */

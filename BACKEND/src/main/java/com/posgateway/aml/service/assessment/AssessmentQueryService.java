@@ -37,6 +37,18 @@ public class AssessmentQueryService {
         return toDetail(assessment, true);
     }
 
+    /**
+     * The decision record (or legacy assessment) named by a workflow reference id: an Edge
+     * {@code edgeAssessmentId}, else a legacy assessment's own id (R8 reference), tenant-checked.
+     */
+    public AssessmentDetailResponseDTO getByReferenceId(UUID referenceId) {
+        Assessment assessment = assessmentRepository.findByEdgeAssessmentId(referenceId)
+                .or(() -> assessmentRepository.findById(referenceId).filter(a -> a.getEdgeAssessmentId() == null))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assessment not found"));
+        pspIsolationService.validatePspAccess(assessment.getPspId());
+        return toDetail(assessment, true);
+    }
+
     public AssessmentDetailResponseDTO getLatestByTransactionId(Long txnId) {
         Assessment assessment = assessmentRepository.findFirstByTxnIdOrderByCreatedAtDesc(txnId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -59,6 +71,7 @@ public class AssessmentQueryService {
         dto.setDecision(assessment.getDecision());
         dto.setLatencyMs(assessment.getLatencyMs());
         dto.setCreatedAt(assessment.getCreatedAt());
+        dto.setSource(assessment.getEdgeAssessmentId() != null ? "EDGE" : "CLOUD_LEGACY");
         if (includeFindings) {
             List<Finding> findings = findingRepository.findByAssessmentIdOrderByCreatedAtAsc(assessment.getId());
             dto.setFindings(findings.stream().map(this::toFindingDto).toList());

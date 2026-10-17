@@ -50,6 +50,8 @@ export interface CaseTimeline {
   caseId: number;
   caseReference: string;
   events: CaseTimelineEvent[];
+  /** How the live pull of the TRANSACTION events' details went (R6). */
+  transactionDetailsStatus?: EdgePullStatus;
 }
 
 export type CaseStatus =
@@ -129,8 +131,10 @@ export interface Alert {
 export type AlertStatus = "OPEN" | "INVESTIGATING" | "RESOLVED" | "pending_second_review";
 
 export interface Transaction {
-  id: number;
-  pan: string;
+  /** Decision record id for Edge items; the legacy numeric id for CLOUD_LEGACY items. */
+  id: number | string;
+  /** Legacy cloud-ingest rows only; never sent for Edge items. */
+  pan?: string;
   merchantId: string;
   terminalId?: string;
   amountCents: number;
@@ -138,6 +142,26 @@ export interface Transaction {
   txnTs: string;
   decision: "BLOCK" | "HOLD" | "ALERT" | "ALLOW";
   score?: number;
+  /** Where the transaction fields came from (R6). */
+  source?: TransactionSource;
+  /** Decision record id. */
+  edgeAssessmentId?: string;
+  /** The PSP's own transaction id. */
+  txnRef?: string;
+  /** Edge Site holding the transaction. */
+  siteId?: string;
+  nodeId?: string;
+  /** Evaluation time on the Edge (same instant as txnTs). */
+  evaluatedAt?: string;
+  /** Amount in minor units (same value as amountCents). */
+  amountMinor?: number;
+  mcc?: string;
+  countryCode?: string;
+  channel?: string;
+  triggeredRuleIds?: number[];
+  ctrRequired?: boolean;
+  sanctionsHit?: boolean;
+  origin?: "LIVE" | "BACKFILL";
   scores?: {
     mlScore?: number;
     krsScore?: number;
@@ -221,4 +245,180 @@ export interface Psp {
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
+}
+
+// ── Edge data residency (R6): tunnel-backed endpoints ───────────────────────────────────────────
+
+/** Source of a transaction's fields: pulled live from the PSP's Edge, or a legacy cloud row. */
+export type TransactionSource = "EDGE" | "CLOUD_LEGACY";
+
+/** Contract section 7.11 error codes the Console can receive from tunnel-backed endpoints. */
+export type EdgeDataErrorCode =
+  | "INVALID_PARAMS"
+  | "INVALID_CURSOR"
+  | "PAGE_LIMIT_EXCEEDED"
+  | "OP_NOT_ALLOWED"
+  | "TENANT_MISMATCH"
+  | "SUPPORT_ACCESS_DISABLED"
+  | "NOT_FOUND"
+  | "STREAM_STALLED"
+  | "EDGE_BUSY"
+  | "CANCELLED"
+  | "INTERNAL"
+  | "LEDGER_UNAVAILABLE"
+  | "EDGE_OFFLINE"
+  | "DEADLINE_EXCEEDED"
+  | "EDGE_TIMEOUT";
+
+/** Error body of a tunnel-backed endpoint (HTTP status = httpStatus). */
+export interface EdgeDataError {
+  code: EdgeDataErrorCode;
+  httpStatus: number;
+  message: string;
+  retryable: boolean;
+  retryAfterMs?: number;
+  /** Required for EDGE_OFFLINE: when the site was last heard from. */
+  lastSeenAt?: string;
+  siteId?: string;
+  /** JSON pointer of the offending parameter (never its value). */
+  param?: string;
+}
+
+/** A site that did not answer a pull. */
+export interface EdgeUnavailableSite {
+  siteId: string;
+  code: EdgeDataErrorCode;
+  lastSeenAt?: string;
+}
+
+/** List envelope of the tunnel-backed endpoints (contract section 7.14). */
+export interface EdgeDataEnvelope<T> {
+  items: T[];
+  nextCursor: string | null;
+  /** Some site did not answer, or reported an incomplete page. */
+  incomplete: boolean;
+  incompleteReason?: string;
+  unavailableSites: EdgeUnavailableSite[];
+  /** batchGet only: ids no answering site holds. */
+  missing?: string[];
+  source: TransactionSource;
+}
+
+/** Cloud-held decision record fields shown next to an Edge transaction detail. */
+export interface EdgeDecisionRecord {
+  assessmentId: string;
+  edgeAssessmentId?: string;
+  txnRef?: string;
+  siteId?: string;
+  edgeNodeId?: string;
+  evaluatedAt?: string;
+  decision?: string;
+  score?: number;
+  merchantId?: string;
+  bundleVersion?: number;
+  evaluator?: string;
+  failClosedCode?: string;
+  ctrRequired?: boolean;
+  sanctionsHit?: boolean;
+  triggeredRuleIds?: number[];
+  ruleVersionIds?: number[];
+  watchlistEntryIds?: string[];
+  typologyCodes?: string[];
+  recordedAt?: string;
+}
+
+/** GET /transactions/{id}: the Edge detail plus the cloud decision record. */
+export interface EdgeTransactionDetail extends Transaction {
+  reasons?: string[];
+  features?: Record<string, unknown>;
+  legalHold?: boolean;
+  decisionRecord?: EdgeDecisionRecord;
+  incomplete?: boolean;
+}
+
+/** GET /transactions/{edgeAssessmentId}/related item. */
+export interface EdgeRelatedTransaction {
+  link: "CARD" | "MERCHANT" | "DEVICE" | "ACCOUNT" | "IP";
+  hop: 1 | 2;
+  viaEdgeAssessmentId: string;
+  transaction: Transaction;
+  source: TransactionSource;
+}
+
+/** How the live pull behind a workflow view went (alert detail, SAR detail, case timeline/graph). */
+export interface EdgePullStatus {
+  source?: TransactionSource;
+  /** OK, PARTIAL, NOT_REQUESTED, NONE or the error code of a failed pull. */
+  state: "OK" | "PARTIAL" | "NOT_REQUESTED" | "NONE" | EdgeDataErrorCode;
+  incomplete: boolean;
+  unavailableSites: EdgeUnavailableSite[];
+  missing: string[];
+  error?: EdgeDataError;
+}
+
+/** Ledger health of one site (counts and timestamps only), or the state of a failed health pull. */
+export interface EdgeLedgerHealth {
+  state?: string;
+  status?: "OK" | "DEGRADED" | "DOWN";
+  schemaVersion?: number;
+  rows?: { approxCount: number; oldestEvaluatedAt?: string; newestEvaluatedAt?: string };
+  outbox?: { backlog: number; oldestPendingAt?: string; lastShippedAt?: string; failedAttempts24h: number };
+  retention?: { years: number; configVersion?: number; lastPurgeAt?: string; lastPurgeDroppedPartitions: number;
+    nextPurgeAt?: string };
+  holds?: { active: number; heldRows: number; activeHoldDigest: string };
+  storage?: { dbSizeBytes: number; diskFreeBytes: number };
+  writeFailures24h?: number;
+}
+
+/** GET /edge-data/status */
+export interface EdgeDataStatus {
+  pspId: number;
+  source: TransactionSource;
+  tunnelEnabled: boolean;
+  generatedAt: string;
+  sites: Array<{
+    siteId: string;
+    tunnel: "ONLINE" | "OFFLINE" | "DISABLED";
+    liveSessions: number;
+    lastSeenAt?: string;
+    nodes: Array<{
+      edgeId: string;
+      displayName?: string;
+      status?: string;
+      connected: boolean;
+      inflight: number;
+      lastPolledAt?: string;
+      agentVersion?: string;
+    }>;
+    ledger: EdgeLedgerHealth;
+  }>;
+}
+
+/** One row of GET /edge-data/access-log (contract section 7.15). */
+export interface EdgeDataAccessLogEntry {
+  auditId: string;
+  requestedAt: string;
+  completedAt?: string | null;
+  actorKind: "PSP_USER" | "PLATFORM_USER" | "SYSTEM";
+  actorUserId: string;
+  actorRole: string;
+  purpose: string;
+  caseId?: string | null;
+  alertId?: string | null;
+  filingRef?: string | null;
+  supportAccess: boolean;
+  supportReason?: string | null;
+  op: string;
+  paramsSummary: Record<string, unknown>;
+  paramsDigest: string;
+  sitesContacted: string[];
+  sitesAnswered: string[];
+  itemCount: number;
+  bytes: number;
+  outcome?: string | null;
+}
+
+/** GET /edge-data/access-log page. */
+export interface EdgeDataAccessLogPage extends PageResponse<EdgeDataAccessLogEntry> {
+  pspId: number;
 }

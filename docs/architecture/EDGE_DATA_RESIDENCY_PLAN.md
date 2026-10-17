@@ -178,6 +178,13 @@ _Status: approved direction (owner decisions 2026-10-16). Supersedes the dual-po
 - `GET /transactions`, `/transactions/{id}`, `/{id}/alerts`, `/{id}/assessment` and `/{id}/compliance-links` are re-backed by the tunnel. The DTO shape stays the same, plus a new field `source:"EDGE"`.
 - `POST /edge/assessments` accepts decision record v2, singly or in batches, and now raises alerts and cases.
 
+**R6 status (implemented):** the endpoints above are served by `EdgeTransactionController` and
+`EdgeDataController` over the R4 `EdgeDataGateway`; `TransactionController` keeps only ingest.
+Legacy-row rule: a PSP with an activated Edge Node is read from its Edge only; a PSP without one
+is served its legacy cloud rows flagged `source: "CLOUD_LEGACY"` (gated and audited the same way)
+until R12. Alert detail, `GET /compliance/sar/{id}/detail`, case timeline and case network fill
+`transactionDetails` live per view. Details: contract §7.14 "Implementation notes (R6)".
+
 **Deleted (in R12, after parity sign-off):**
 - `POST /transactions/ingest`, `/ingest/batch`
 - `/transaction/result`

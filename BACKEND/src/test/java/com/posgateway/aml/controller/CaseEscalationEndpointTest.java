@@ -60,7 +60,8 @@ class CaseEscalationEndpointTest {
     void setUp() {
         controller = new CaseWorkflowController(mock(CaseTimelineService.class), mock(CaseNetworkService.class),
                 mock(CaseDecisionService.class), escalation, mock(CaseAssignmentService.class), users,
-                permissions, audit, cases, isolation);
+                permissions, audit, cases, isolation,
+                mock(com.posgateway.aml.service.edgedata.CaseTransactionDetailsEnricher.class));
         Role role = new Role();
         role.setName("COMPLIANCE_OFFICER");
         Psp psp = new Psp();

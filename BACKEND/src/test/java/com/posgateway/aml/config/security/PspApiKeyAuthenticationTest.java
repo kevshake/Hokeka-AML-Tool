@@ -174,10 +174,15 @@ class PspApiKeyAuthenticationTest {
 
     @Test
     void realIngestEndpointsAdmitTheMachineRole() throws Exception {
-        for (String m : new String[]{"ingestTransaction", "batchIngestTransactions", "getTransactionAssessment"}) {
+        for (String m : new String[]{"ingestTransaction", "batchIngestTransactions"}) {
             java.lang.reflect.Method method = java.util.Arrays.stream(TransactionController.class.getMethods())
                     .filter(x -> x.getName().equals(m)).findFirst().orElseThrow();
             assertThat(method.getAnnotation(PreAuthorize.class).value()).contains("PSP_INTEGRATION");
         }
+        // GET /transactions/{id}/assessment moved to the R6 tunnel-backed controller.
+        java.lang.reflect.Method assessment = java.util.Arrays.stream(
+                        com.posgateway.aml.controller.transaction.EdgeTransactionController.class.getMethods())
+                .filter(x -> x.getName().equals("getTransactionAssessment")).findFirst().orElseThrow();
+        assertThat(assessment.getAnnotation(PreAuthorize.class).value()).contains("PSP_INTEGRATION");
     }
 }

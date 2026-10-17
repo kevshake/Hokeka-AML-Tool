@@ -41,6 +41,8 @@ public class CaseWorkflowController {
     private final CaseAuditService auditService;
     private final com.posgateway.aml.repository.ComplianceCaseRepository caseRepository;
     private final com.posgateway.aml.service.security.PspIsolationService pspIsolationService;
+    /** Live pull of the case transactions' details when the timeline / graph is viewed (R6). */
+    private final com.posgateway.aml.service.edgedata.CaseTransactionDetailsEnricher edgeDetails;
 
     @Autowired
     public CaseWorkflowController(CaseTimelineService timelineService,
@@ -52,7 +54,9 @@ public class CaseWorkflowController {
             CasePermissionService permissionService,
             CaseAuditService auditService,
             com.posgateway.aml.repository.ComplianceCaseRepository caseRepository,
-            com.posgateway.aml.service.security.PspIsolationService pspIsolationService) {
+            com.posgateway.aml.service.security.PspIsolationService pspIsolationService,
+            com.posgateway.aml.service.edgedata.CaseTransactionDetailsEnricher edgeDetails) {
+        this.edgeDetails = edgeDetails;
         this.caseRepository = caseRepository;
         this.pspIsolationService = pspIsolationService;
         this.timelineService = timelineService;
@@ -70,12 +74,29 @@ public class CaseWorkflowController {
      * GET /api/cases/{id}/timeline
      */
     @GetMapping("/{id}/timeline")
-    public ResponseEntity<CaseTimelineService.CaseTimelineDTO> getCaseTimeline(@PathVariable Long id) {
+    public ResponseEntity<CaseTimelineService.CaseTimelineDTO> getCaseTimeline(@PathVariable Long id,
+            @RequestParam(defaultValue = "true") boolean transactionDetails,
+            @RequestParam(required = false) String supportReason,
+            @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         User currentUser = getCurrentUser();
         if (!permissionService.canView(id, currentUser)) {
             return ResponseEntity.status(403).build();
         }
-        return ResponseEntity.ok(timelineService.buildTimeline(id));
+        CaseTimelineService.CaseTimelineDTO timeline = timelineService.buildTimeline(id);
+        // R6: transaction details pulled live per view (never persisted).
+        Long casePsp = caseRepository.findById(id).map(com.posgateway.aml.entity.compliance.ComplianceCase::getPspId)
+                .orElse(null);
+        if (casePsp != null) {
+            edgeDetails.enrichTimeline(casePsp, id, timeline, transactionDetails, reason(supportReason, reasonHeader));
+        } else {
+            timeline.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.none());
+        }
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(timeline);
+    }
+
+    /** The support reason from the parameter, else the header. */
+    private static String reason(String param, String header) {
+        return param != null && !param.isBlank() ? param : header;
     }
 
     /**
@@ -84,12 +105,28 @@ public class CaseWorkflowController {
      */
     @GetMapping("/{id}/graph")
     public ResponseEntity<CaseNetworkService.NetworkGraphDTO> getCaseGraph(@PathVariable Long id,
-            @RequestParam(defaultValue = "1") int depth) {
+            @RequestParam(defaultValue = "1") int depth,
+            @RequestParam(defaultValue = "true") boolean transactionDetails,
+            @RequestParam(required = false) java.util.List<String> related,
+            @RequestParam(required = false) Integer relatedDepth,
+            @RequestParam(required = false) Integer relatedWindowDays,
+            @RequestParam(required = false) String supportReason,
+            @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         User currentUser = getCurrentUser();
         if (!permissionService.canView(id, currentUser)) {
             return ResponseEntity.status(403).build();
         }
-        return ResponseEntity.ok(networkService.buildNetworkGraph(id, depth));
+        CaseNetworkService.NetworkGraphDTO graph = networkService.buildNetworkGraph(id, depth);
+        // R6: transaction details (batchGet) and, when asked, txn.related links pulled live per view.
+        Long casePsp = caseRepository.findById(id).map(com.posgateway.aml.entity.compliance.ComplianceCase::getPspId)
+                .orElse(null);
+        if (casePsp != null) {
+            edgeDetails.enrichGraph(casePsp, id, graph, transactionDetails, related, relatedDepth, relatedWindowDays,
+                    reason(supportReason, reasonHeader));
+        } else {
+            graph.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.none());
+        }
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(graph);
     }
 
     /**

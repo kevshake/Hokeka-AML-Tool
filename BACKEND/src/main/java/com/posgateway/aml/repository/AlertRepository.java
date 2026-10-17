@@ -45,6 +45,9 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
      */
     List<Alert> findByPspIdAndEdgeAssessmentIdOrderByCreatedAtDesc(Long pspId, java.util.UUID edgeAssessmentId);
 
+    /** Every alert on one decision record, across PSPs (platform administrators only, R6 links view). */
+    List<Alert> findByEdgeAssessmentIdOrderByCreatedAtDesc(java.util.UUID edgeAssessmentId);
+
     /** A PSP's alerts on one transaction, by the PSP's transaction id (V264 reference). */
     List<Alert> findByPspIdAndTxnRefOrderByCreatedAtDesc(Long pspId, String txnRef);
 
