@@ -8,6 +8,7 @@ import { TwInput, TwSelect } from "../../components/Common/TwInput";
 import TwPagination from "../../components/Common/TwPagination";
 import ConsoleListExportMenu from "../../components/Common/ConsoleListExportMenu";
 import { useUrlTableState } from "../../hooks/useUrlTableState";
+import WorkflowDetailTransactions from "../../components/EdgeData/WorkflowDetailTransactions";
 import { Eye, Loader2, Plus, X } from "lucide-react";
 
 const statusBadge = (s: string | undefined): "default" | "warning" | "info" | "success" | "danger" | "info" => {
@@ -191,7 +192,7 @@ export default function TransactionMonitoringSars() {
       {viewSar && (
         <>
           <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setViewSar(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2">
+          <div className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto">
             <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-2)] shadow-2xl">
               <div className="flex items-start justify-between border-b border-white/10 px-6 py-4">
                 <div>
@@ -214,6 +215,11 @@ export default function TransactionMonitoringSars() {
                   {viewSar.filedAt && <div><p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Filed</p><p className="mt-0.5 text-sm text-emerald-400">{new Date(viewSar.filedAt).toLocaleString()}</p></div>}
                   {viewSar.filingReference && <div><p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Filing Reference</p><p className="mt-0.5 font-mono text-sm text-white/80">{viewSar.filingReference}</p></div>}
                 </div>
+                <WorkflowDetailTransactions
+                  path={`compliance/sar/${viewSar.id}/detail`}
+                  title="Reported transactions (live from the Edge)"
+                  cloudNote="The draft stores only transaction references; its narrative and workflow fields are held in the cloud and stay available."
+                />
                 {viewSar.reviewNotes && <div><p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Review decision</p><p className="mt-1 text-sm leading-relaxed text-white/80">{viewSar.reviewNotes}</p>{viewSar.reviewedAt && <p className="mt-1 text-xs text-glass-muted">{new Date(viewSar.reviewedAt).toLocaleString()}</p>}</div>}
               </div>
               <div className="flex justify-end border-t border-white/10 px-6 py-3">

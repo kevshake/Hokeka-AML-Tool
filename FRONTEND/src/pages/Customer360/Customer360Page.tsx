@@ -26,6 +26,7 @@ import {
 } from "@mui/material";
 import { apiClient } from "../../lib/apiClient";
 import { useCustomer360, useMultiAssetCustomers } from "../../features/api/queries";
+import Customer360EdgeHistory from "./Customer360EdgeHistory";
 import type {
   AssetAccountType,
   AssetClass,
@@ -254,6 +255,7 @@ function CustomerView({ data }: { data: Customer360 }) {
     </section>
 
     <section><h3 className="mb-3 text-sm font-semibold">Recent cross-asset activity</h3><div className="overflow-x-auto border border-white/10"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-white/5 text-xs text-white/45"><tr><th className="px-4 py-3">Time</th><th className="px-4 py-3">Activity</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Counterparty</th><th className="px-4 py-3">Risk</th><th className="px-4 py-3">Decision</th></tr></thead><tbody className="divide-y divide-white/8">{data.recentTransactions.map((tx) => <tr key={tx.id}><td className="px-4 py-3 text-white/50">{formatDate(tx.executedAt)}</td><td className="px-4 py-3"><div>{assetMeta[tx.assetClass].label}</div><div className="text-xs text-white/35">{tx.transactionType}</div></td><td className="px-4 py-3">{formatAmount(tx.amount, tx.currency)}</td><td className="px-4 py-3 text-white/50">{tx.counterpartyReference || "-"}</td><td className="px-4 py-3">{tx.riskScore}</td><td className="px-4 py-3"><span className={tx.decision === "ALLOW" ? "text-emerald-300" : "text-amber-300"}>{tx.decision}</span>{tx.travelRuleRequired && <div className="mt-1 text-[10px] text-white/35">TRAVEL RULE: {tx.travelRuleStatus}</div>}</td></tr>)}</tbody></table>{!data.recentTransactions.length && <EmptyState text="No activity has been ingested." />}</div></section>
+    <Customer360EdgeHistory key={data.customer.id} transactions={data.recentTransactions} />
   </div>;
 }
 

@@ -26,6 +26,7 @@ import { HealthChip, StatusChip } from './EdgeChips';
 import ConfirmActionDialog from './ConfirmActionDialog';
 import NodeDetailDrawer from './NodeDetailDrawer';
 import SetupWizard from './SetupWizard';
+import EdgeSitesPanel from './EdgeSitesPanel';
 import { edgeKeys, resolveEdgeError, useEdgeNodes, useNodeAction } from './edgeApi';
 import { formatAbsolute, formatRelative, isPlatformAdmin, pspLabel, statusBlurb } from './edgeMeta';
 import type { EdgeNodeView, NodeAction } from './types';
@@ -341,6 +342,8 @@ export default function EdgeNodesPage() {
           </TableContainer>
         </Paper>
       )}
+
+      <EdgeSitesPanel />
 
       <SetupWizard
         open={wizardOpen}

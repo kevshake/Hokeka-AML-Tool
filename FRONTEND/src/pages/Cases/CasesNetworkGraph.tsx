@@ -29,7 +29,12 @@ import {
   Store as MerchantIcon,
   HelpOutline as UnknownIcon,
 } from "@mui/icons-material";
-import { useCases, useCaseNetwork, useGraphAnalysisStatus } from "../../features/api/queries";
+import { useCases, useGraphAnalysisStatus } from "../../features/api/queries";
+import { useCaseNetwork } from "../../features/api/caseEdgeViews";
+import EdgeOfflineBanner from "../../components/EdgeData/EdgeOfflineBanner";
+import EdgeSupportGate from "../../components/EdgeData/EdgeSupportGate";
+import { lastSeenOf, stateForPullStatus } from "../../lib/edgeData";
+import { formatMinorAmount } from "../../lib/edgeFormat";
 import type { Case, CaseStatus } from "../../types";
 import {
   NetworkGraphAnalysisDisabledState,
@@ -42,6 +47,8 @@ interface NetworkNode {
   id: string;
   type: string;
   label: string;
+  /** TRANSACTION nodes carry {@code transactionDetails} pulled from the Edge for this view. */
+  data?: Record<string, unknown>;
 }
 
 interface NetworkEdge {
@@ -54,6 +61,25 @@ interface NetworkEdge {
 interface NetworkGraphDTO {
   nodes: NetworkNode[];
   edges: NetworkEdge[];
+}
+
+/** Edge link types the analyst can expand the graph with ({@code txn.related}). */
+const RELATED_LINKS = ["CARD", "DEVICE", "ACCOUNT", "IP"] as const;
+
+/** Short summary of a TRANSACTION node's live-pulled details. */
+function transactionSummary(node: NetworkNode): string | null {
+  const details = node.data?.transactionDetails as
+    | { decision?: string; amountCents?: number; amountMinor?: number; currency?: string; txnTs?: string; merchantId?: string }
+    | null
+    | undefined;
+  if (!details || typeof details !== "object") return null;
+  const parts = [
+    details.decision,
+    formatMinorAmount(details.amountCents ?? details.amountMinor, details.currency),
+    details.merchantId,
+    details.txnTs ? new Date(details.txnTs).toLocaleString() : undefined,
+  ].filter((part): part is string => !!part && part !== "-");
+  return parts.join(" · ");
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -527,6 +553,22 @@ function DetailPanel({ node, edges, allNodes, onClose }: DetailPanelProps) {
         </IconButton>
       </Box>
 
+      {node.type === "TRANSACTION" && (
+        <Box sx={{ px: 2, pt: 1.5 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+            Transaction (live from the Edge)
+          </Typography>
+          <Typography variant="body2" sx={{ fontSize: "0.72rem" }} data-testid="graph-txn-details">
+            {transactionSummary(node) ?? "Details not available from the Edge."}
+          </Typography>
+          {typeof node.data?.link === "string" && (
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+              Linked by {String(node.data.link).toLowerCase()} (hop {String(node.data.hop ?? 1)})
+            </Typography>
+          )}
+        </Box>
+      )}
+
       {/* Connections */}
       <Box sx={{ px: 2, py: 1.5 }}>
         <Typography variant="overline" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
@@ -598,7 +640,13 @@ interface CaseGraphInnerProps {
 }
 
 function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
-  const { data, isLoading, isError } = useCaseNetwork(caseId);
+  const [related, setRelated] = useState<string[]>([]);
+  const network = useCaseNetwork(caseId, related);
+  const data = network.data;
+  const isLoading = network.state === "loading";
+  const isError = !["loading", "ready", "idle"].includes(network.state);
+  const detailsState = stateForPullStatus(data?.transactionDetailsStatus);
+  const relatedState = stateForPullStatus(data?.relatedStatus);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [simNodes, setSimNodes] = useState<SimNode[]>([]);
   const [layoutSize, setLayoutSize] = useState({ w: 640, h: 360 });
@@ -665,10 +713,60 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
     </Box>
   );
 
+  const edgeControls = (
+    <Box sx={{ px: 2, py: 1, display: "flex", flexDirection: "column", gap: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+      <EdgeSupportGate />
+      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+          Add Edge-linked transactions:
+        </Typography>
+        {RELATED_LINKS.map((link) => {
+          const on = related.includes(link);
+          return (
+            <Chip
+              key={link}
+              label={link.toLowerCase()}
+              size="small"
+              variant={on ? "filled" : "outlined"}
+              color={on ? "primary" : "default"}
+              onClick={() => setRelated((prev) => (on ? prev.filter((l) => l !== link) : [...prev, link]))}
+              sx={{ fontSize: "0.65rem", height: 20 }}
+            />
+          );
+        })}
+      </Box>
+      {data && (
+        <EdgeOfflineBanner
+          state={detailsState}
+          error={data.transactionDetailsStatus?.error}
+          unavailableSites={data.transactionDetailsStatus?.unavailableSites ?? []}
+          lastSeenAt={lastSeenOf(data.transactionDetailsStatus?.error, data.transactionDetailsStatus?.unavailableSites)}
+          onRetry={network.refetch}
+          cloudNote="The case, alert, merchant and SAR nodes are held in the cloud and are still drawn."
+        />
+      )}
+      {data?.relatedStatus && relatedState !== "ready" && (
+        <EdgeOfflineBanner
+          state={relatedState}
+          error={data.relatedStatus.error}
+          unavailableSites={data.relatedStatus.unavailableSites ?? []}
+          lastSeenAt={lastSeenOf(data.relatedStatus.error, data.relatedStatus.unavailableSites)}
+          onRetry={network.refetch}
+        />
+      )}
+      {network.state !== "loading" && network.state !== "ready" && network.state !== "idle" && (
+        <EdgeOfflineBanner state={network.state} error={network.error} onRetry={network.refetch} />
+      )}
+    </Box>
+  );
+
   if (isLoading || isError || !graphData?.nodes?.length) {
     return (
-      <Box ref={viewportRef} sx={{ display: "flex", flex: 1, minHeight: 0, width: "100%" }}>
-        {centerState}
+      <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, width: "100%" }}>
+        {edgeControls}
+        <Box ref={viewportRef} sx={{ display: "flex", flex: 1, minHeight: 0, width: "100%" }}>
+          {centerState}
+        </Box>
       </Box>
     );
   }
@@ -676,6 +774,8 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
   const selectedNode = simNodes.find((n) => n.id === selectedId) ?? null;
 
   return (
+    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, width: "100%" }}>
+    {edgeControls}
     <Box ref={viewportRef} sx={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
       <GraphCanvas
         nodes={simNodes}
@@ -690,6 +790,7 @@ function CaseGraphInner({ caseId }: CaseGraphInnerProps) {
         allNodes={simNodes}
         onClose={() => setSelectedId(null)}
       />
+    </Box>
     </Box>
   );
 }

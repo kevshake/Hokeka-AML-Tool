@@ -213,6 +213,29 @@ until R12. Alert detail, `GET /compliance/sar/{id}/detail`, case timeline and ca
   - Edge Nodes: site grouping, tunnel state, ledger health, outbox backlog, last purge;
   - a data-access audit viewer that PSPs can see.
 
+**R11 status (implemented):**
+- `useEdgeData` (`FRONTEND/src/hooks/useEdgeData.ts`) wraps every tunnel-backed pull: 30 s `gcTime`,
+  `staleTime` 0, no retry, `cache: "no-store"`, no browser storage. States: loading, ready, partial,
+  offline, timeout, busy, tenant-error, support-required, support-disabled, not-found, error.
+  `EdgeOfflineBanner` shows them with `lastSeenAt` and the unavailable sites.
+- Platform staff open a support session (PSP + 10..500-character reason, at most 60 minutes, React
+  state only); the reason goes out as `X-Support-Reason` and ending the session drops every pulled
+  result from memory.
+- Live pulls: Live Monitoring list (cursor paging only, fixed window per search, streamed CSV / NDJSON
+  export with the incomplete warning), the transaction record page (`/transactions/{id}` + `related`),
+  alert detail, SAR detail (`/compliance/sar/{id}/detail`), case timeline and case transactions,
+  the case / network graph (`related=CARD,DEVICE,ACCOUNT,IP`) and the Customer 360 Edge history
+  (anchored on a transaction reference, then `txn.related`).
+- Dashboards: `GET /api/v1/decision-stats/summary` and `/recent` (PSP-scoped; aggregates of
+  `decision_stats_hourly` and decision records only). `/dashboard/stats` (transactions monitored and
+  flagged today, deltas), `/dashboard/transaction-volume` and the sparklines' volume series now read
+  the rollup; `/dashboard/recent-transactions` is removed. Monitoring analytics and reports use the
+  summary. Still on the legacy table until R12: `/dashboard/risk-heatmap` (needs the country, which
+  decision records do not carry) and the `monitoring/*` stats endpoints, which the Console no longer
+  calls.
+- New pages: Edge Sites panel on Edge Nodes (`/edge-data/status`), Data access log
+  (`/data-access-log`, server-paged, filters, streamed export, support pulls highlighted).
+
 ## Conflicts and resolutions
 
 1. **Sanctions.** The Edge must not send names to aml-microservice.

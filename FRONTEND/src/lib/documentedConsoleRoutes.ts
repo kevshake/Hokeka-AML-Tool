@@ -35,6 +35,7 @@ export const DOCUMENTED_PRIMARY_CONSOLE_ROUTES: readonly string[] = [
   "/messages",
   "/compliance-calendar",
   "/audit",
+  "/data-access-log",
   "/profile",
   "/analytics",
   "/edge-nodes",

@@ -16,9 +16,13 @@ import {
   UserRoundCheck,
   WalletCards,
 } from "lucide-react";
-import { useAllPsps, useCases, useCaseTimeline } from "../../features/api/queries";
+import { useAllPsps, useCases } from "../../features/api/queries";
+import { useCaseTimeline } from "../../features/api/caseEdgeViews";
+import WorkflowTransactionsPanel from "../../components/EdgeData/WorkflowTransactionsPanel";
+import EdgeSupportGate from "../../components/EdgeData/EdgeSupportGate";
+import { formatMinorAmount } from "../../lib/edgeFormat";
 import { useAuth } from "../../contexts/AuthContext";
-import type { Case, CaseStatus, CaseTimelineEvent } from "../../types";
+import type { Case, CaseStatus, CaseTimelineEvent, Transaction } from "../../types";
 
 const STATUS_LABELS: Record<CaseStatus, string> = {
   NEW: "New",
@@ -76,7 +80,15 @@ function displayValue(value: unknown): string | null {
   return null;
 }
 
+/** The live-pulled transaction of a TRANSACTION event, if the pull returned it. */
+function eventTransaction(event: CaseTimelineEvent): Partial<Transaction> | null {
+  const details = event.data?.transactionDetails;
+  return details && typeof details === "object" ? (details as Partial<Transaction>) : null;
+}
+
+/** One lifecycle event; TRANSACTION events show the details pulled from the Edge for this view. */
 function TimelineEventRow({ event, isLast }: { event: CaseTimelineEvent; isLast: boolean }) {
+  const txn = event.type === "TRANSACTION" ? eventTransaction(event) : null;
   const style = EVENT_STYLES[event.type] ?? FALLBACK_EVENT_STYLE;
   const Icon = style.icon;
   const metadata = Object.entries(event.data ?? {})
@@ -109,6 +121,13 @@ function TimelineEventRow({ event, isLast }: { event: CaseTimelineEvent; isLast:
               </div>
             ))}
           </dl>
+        )}
+        {txn && (
+          <p className="mt-2 border-t border-hairline pt-2 text-xs text-ink-muted" data-testid="timeline-txn">
+            {txn.decision ?? "-"} · {formatMinorAmount(txn.amountCents ?? txn.amountMinor, txn.currency)}
+            {txn.merchantId ? ` · ${txn.merchantId}` : ""}
+            {txn.txnTs ? ` · ${new Date(txn.txnTs).toLocaleString()}` : ""}
+          </p>
         )}
       </div>
     </div>
@@ -145,6 +164,12 @@ export default function CasesTimeline() {
 
   const timelineQuery = useCaseTimeline(selectedCaseId);
   const selectedCase: Case | undefined = cases.find((item) => item.id === selectedCaseId);
+  const timelineLoading = timelineQuery.state === "loading";
+  const timelineFailed = !["loading", "ready", "idle"].includes(timelineQuery.state);
+  const caseTransactions = (timelineQuery.data?.events ?? [])
+    .filter((event) => event.type === "TRANSACTION")
+    .map(eventTransaction)
+    .filter((txn): txn is Partial<Transaction> => txn !== null);
   const events = [...(timelineQuery.data?.events ?? [])].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
@@ -216,11 +241,11 @@ export default function CasesTimeline() {
         </div>
       )}
 
-      {(casesQuery.isLoading || timelineQuery.isLoading) && (
+      {(casesQuery.isLoading || timelineLoading) && (
         <div className="flex justify-center py-12"><Loader2 size={28} className="animate-spin text-burgundy-400" /></div>
       )}
 
-      {(casesQuery.isError || timelineQuery.isError) && (
+      {(casesQuery.isError || timelineFailed) && (
         <div className="rounded-lg border border-red-700/30 bg-red-900/20 px-4 py-3 text-sm text-red-200">
           The case timeline could not be loaded. Check your case access and try again.
         </div>
@@ -232,13 +257,24 @@ export default function CasesTimeline() {
         </div>
       )}
 
-      {!timelineQuery.isLoading && !timelineQuery.isError && selectedCaseId > 0 && events.length === 0 && (
+      {!timelineLoading && !timelineFailed && selectedCaseId > 0 && events.length === 0 && (
         <div className="border-y border-hairline py-12 text-center text-sm text-glass-muted">
           No lifecycle events have been recorded for this case.
         </div>
       )}
 
-      {!timelineQuery.isLoading && !timelineQuery.isError && events.length > 0 && (
+      <EdgeSupportGate />
+      {!timelineLoading && !timelineFailed && timelineQuery.data && (
+        <WorkflowTransactionsPanel
+          title="Case transactions (live from the Edge)"
+          details={caseTransactions}
+          status={timelineQuery.data.transactionDetailsStatus}
+          onRetry={timelineQuery.refetch}
+          cloudNote="The case's lifecycle events are held in the cloud and are shown below."
+        />
+      )}
+
+      {!timelineLoading && !timelineFailed && events.length > 0 && (
         <div>
           {events.map((event, index) => (
             <TimelineEventRow

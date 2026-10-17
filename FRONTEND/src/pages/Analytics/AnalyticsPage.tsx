@@ -31,15 +31,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useDecisionStatsSummary } from "../../features/api/decisionStats";
 import {
-  useTransactionVolume,
   useRiskDistribution,
   useRiskTrends,
   useFraudMetrics,
   useModelMetricsLatest,
   useModelMetricsRange,
   useAlertTrends,
-  useDashboardGlobalStats,
   type ModelMetrics,
 } from "../../features/api/queries";
 import HokekaPageShell from "../../components/Layout/HokekaPageShell";
@@ -121,17 +120,12 @@ function ChartShell({
 
 // ─── Tab: Transaction Overview ────────────────────────────────────────────────
 
+/** Transaction overview built from the Edge's decision records (daily rollup), never from pulls. */
 function TransactionOverviewTab() {
-  const { data: volumeRaw, isLoading: volLoading } = useTransactionVolume(30);
-  const { data: globalStats, isLoading: statsLoading } = useDashboardGlobalStats();
+  const { data: summary, isLoading: volLoading } = useDecisionStatsSummary(30);
+  const statsLoading = volLoading;
 
-  const volData: { date: string; count: number }[] = (() => {
-    if (!volumeRaw) return [];
-    const raw = volumeRaw as { labels?: string[]; data?: number[] };
-    const labels: string[] = raw.labels ?? [];
-    const data: number[] = raw.data ?? [];
-    return labels.map((d, i) => ({ date: d, count: data[i] ?? 0 }));
-  })();
+  const volData: { date: string; count: number }[] = (summary?.daily ?? []).map((d) => ({ date: d.label, count: d.records }));
 
   const totalMonth = volData.reduce((s, r) => s + r.count, 0);
   const avgPerDay = volData.length > 0 ? Math.round(totalMonth / volData.length) : 0;
@@ -140,11 +134,11 @@ function TransactionOverviewTab() {
       ? volData.reduce((best, r) => (r.count > best.count ? r : best), volData[0])
       : null;
 
-  const stats = globalStats as Record<string, unknown> | undefined;
+  const window30 = summary?.window;
   const decisionData = [
-    { name: "Approved", value: Number(stats?.approvedTransactions ?? 0), color: COLORS.approved },
-    { name: "Declined", value: Number(stats?.declinedTransactions ?? 0), color: COLORS.declined },
-    { name: "Manual Review", value: Number(stats?.manualReviewTransactions ?? 0), color: COLORS.manual },
+    { name: "Allowed", value: window30?.allow ?? 0, color: COLORS.approved },
+    { name: "Blocked", value: window30?.block ?? 0, color: COLORS.declined },
+    { name: "Alert / Hold", value: (window30?.alert ?? 0) + (window30?.hold ?? 0), color: COLORS.manual },
   ].filter((d) => d.value > 0);
 
   return (
