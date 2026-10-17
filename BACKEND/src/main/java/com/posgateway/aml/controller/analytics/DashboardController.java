@@ -16,6 +16,8 @@ import com.posgateway.aml.repository.ModelMetricsRepository;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.repository.TransactionRepository;
 import com.posgateway.aml.repository.risk.HighRiskCountryRepository;
+import com.posgateway.aml.service.analytics.DecisionStatsService;
+import com.posgateway.aml.service.security.PspIsolationService;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,6 +52,9 @@ public class DashboardController {
     private final ModelMetricsRepository modelMetricsRepository;
     private final SuspiciousActivityReportRepository sarRepository;
     private final HighRiskCountryRepository highRiskCountryRepository;
+    /** Decision-record aggregates (R11): transaction counts never come from the legacy table. */
+    private final DecisionStatsService decisionStats;
+    private final PspIsolationService pspIsolationService;
 
     /**
      * Transactions are considered "flagged" when their stored risk score
@@ -78,7 +83,9 @@ public class DashboardController {
             MerchantScreeningResultRepository screeningResultRepository,
             ModelMetricsRepository modelMetricsRepository,
             SuspiciousActivityReportRepository sarRepository,
-            HighRiskCountryRepository highRiskCountryRepository) {
+            HighRiskCountryRepository highRiskCountryRepository,
+            DecisionStatsService decisionStats,
+            PspIsolationService pspIsolationService) {
         this.merchantRepository = merchantRepository;
         this.caseRepository = caseRepository;
         this.userRepository = userRepository;
@@ -88,6 +95,16 @@ public class DashboardController {
         this.modelMetricsRepository = modelMetricsRepository;
         this.sarRepository = sarRepository;
         this.highRiskCountryRepository = highRiskCountryRepository;
+        this.decisionStats = decisionStats;
+        this.pspIsolationService = pspIsolationService;
+    }
+
+    /**
+     * PSP whose decision-record aggregates the caller sees: {@code null} (every PSP) for platform
+     * staff, whose user row points at the platform sentinel PSP, else the user's own PSP.
+     */
+    private Long decisionScope(com.posgateway.aml.entity.User user, Long pspId) {
+        return user != null && pspIsolationService.isPlatformAdministrator(user) ? null : pspId;
     }
 
     public com.posgateway.aml.entity.User getCurrentUser() {
@@ -139,17 +156,17 @@ public class DashboardController {
         stats.put("urgentCases", Math.max(0L, urgentCaseCount));
 
         // --- Extended KPI fields (Phase 4) ---------------------------------
-        LocalDateTime now = LocalDateTime.now();
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
         LocalDateTime startOfYesterday = startOfToday.minusDays(1);
 
-        // Flagged transactions today
-        long flaggedToday = pspId != null
-                ? transactionRepository.countFlaggedInPeriodByPsp(pspId, startOfToday, now, FLAGGED_RISK_THRESHOLD)
-                : transactionRepository.countFlaggedInPeriod(startOfToday, now, FLAGGED_RISK_THRESHOLD);
-        long flaggedYesterday = pspId != null
-                ? transactionRepository.countFlaggedInPeriodByPsp(pspId, startOfYesterday, startOfToday, FLAGGED_RISK_THRESHOLD)
-                : transactionRepository.countFlaggedInPeriod(startOfYesterday, startOfToday, FLAGGED_RISK_THRESHOLD);
+        // Flagged decisions today (ALERT/HOLD/BLOCK), from the decision-record rollup (R11).
+        Long decisionPsp = decisionScope(user, pspId);
+        DecisionStatsService.Counts decisionsToday = decisionStats.between(decisionPsp,
+                decisionStats.startOfToday(), decisionStats.now().plusSeconds(1));
+        DecisionStatsService.Counts decisionsYesterday = decisionStats.between(decisionPsp,
+                decisionStats.startOfToday().minus(java.time.Duration.ofDays(1)), decisionStats.startOfToday());
+        long flaggedToday = decisionsToday.flagged();
+        long flaggedYesterday = decisionsYesterday.flagged();
         stats.put("flaggedToday", flaggedToday);
 
         long openAlerts = pspId != null
@@ -171,15 +188,11 @@ public class DashboardController {
                 + health.get("sarFilingSla")) / 4;
         stats.put("complianceHealthScore", complianceHealthScore);
 
-        // Trends — yesterday vs today
-        long totalTxnToday = pspId != null
-                ? transactionRepository.countByPspAndPeriod(pspId, startOfToday, now)
-                : transactionRepository.countByPspAndPeriod(null, startOfToday, now);
+        // Trends — yesterday vs today (decision records evaluated by the Edge).
+        long totalTxnToday = decisionsToday.records();
         stats.put("transactionsMonitoredToday", totalTxnToday);
-
-        long totalTxnYesterday = pspId != null
-                ? transactionRepository.countByPspAndPeriod(pspId, startOfYesterday, startOfToday)
-                : transactionRepository.countByPspAndPeriod(null, startOfYesterday, startOfToday);
+        stats.put("decisionsToday", decisionsToday.toMap());
+        long totalTxnYesterday = decisionsYesterday.records();
 
         long screeningMatchesToday = screeningResultRepository
                 .countByScreeningStatusAndScreenedAtAfter("MATCH", startOfToday)
@@ -396,7 +409,7 @@ public class DashboardController {
         days = clampTrendDays(days);
         com.posgateway.aml.entity.User user = getCurrentUser();
         Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
-        return ResponseEntity.ok(buildTransactionVolume(pspId, days));
+        return ResponseEntity.ok(decisionStats.volumeSeries(decisionScope(user, pspId), days));
     }
 
     /**
@@ -422,25 +435,6 @@ public class DashboardController {
         }
 
         return ResponseEntity.ok(alerts);
-    }
-
-    /**
-     * Get recent transactions for dashboard activity timeline
-     * GET /api/v1/dashboard/recent-transactions?limit=5
-     */
-    @GetMapping("/recent-transactions")
-    public ResponseEntity<List<com.posgateway.aml.entity.TransactionEntity>> getRecentTransactions(
-            @RequestParam(defaultValue = "5") int limit) {
-        com.posgateway.aml.entity.User user = getCurrentUser();
-        Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
-        org.springframework.data.domain.Pageable pageable =
-                org.springframework.data.domain.PageRequest.of(0, limit,
-                        org.springframework.data.domain.Sort.by("txnTs").descending());
-        // Push LIMIT into the query; avoids loading full table into memory
-        List<com.posgateway.aml.entity.TransactionEntity> transactions = pspId != null
-                ? transactionRepository.findByPspId(pspId, pageable).getContent()
-                : transactionRepository.findAll(pageable).getContent();
-        return ResponseEntity.ok(transactions);
     }
 
     /**
@@ -740,7 +734,7 @@ public class DashboardController {
         Long pspId = (user != null && user.getPsp() != null) ? user.getPsp().getPspId() : null;
 
         Map<String, Object> body = new HashMap<>();
-        body.put("transactionVolume", buildTransactionVolume(pspId, days));
+        body.put("transactionVolume", decisionStats.volumeSeries(decisionScope(user, pspId), days));
         body.put("alertTrends", buildAlertTrends(pspId, days));
         body.put("caseTrends", buildCaseTrends(pspId, days));
         body.put("screeningMatchTrends", buildScreeningMatchTrends(days));
@@ -801,39 +795,6 @@ public class DashboardController {
     private static int clampTrendDays(int days) {
         if (days <= 0) return 7;
         return Math.min(days, 90);
-    }
-
-    private Map<String, Object> buildTransactionVolume(Long pspId, int days) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime endDate = now.withHour(23).withMinute(59).withSecond(59).plusDays(1);
-        LocalDateTime startDate = now.minusDays(days - 1L).withHour(0).withMinute(0).withSecond(0);
-
-        List<Object[]> results = pspId != null
-                ? transactionRepository.getDailyTransactionCountByPspId(pspId, startDate, endDate)
-                : transactionRepository.getDailyTransactionCountAll(startDate, endDate);
-
-        Map<LocalDate, Long> dateCountMap = new HashMap<>();
-        for (Object[] row : results) {
-            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
-            dateCountMap.put(date, ((Number) row[1]).longValue());
-        }
-
-        List<String> labels = new ArrayList<>();
-        List<Long> data = new ArrayList<>();
-        LocalDate currentDate = startDate.toLocalDate();
-        LocalDate endDateLocal = endDate.toLocalDate();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM d");
-        while (!currentDate.isAfter(endDateLocal)) {
-            labels.add(currentDate.format(formatter));
-            data.add(dateCountMap.getOrDefault(currentDate, 0L));
-            currentDate = currentDate.plusDays(1);
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("labels", labels);
-        response.put("data", data);
-        response.put("pspId", pspId);
-        return response;
     }
 
     private Map<String, Object> buildAlertTrends(Long pspId, int days) {

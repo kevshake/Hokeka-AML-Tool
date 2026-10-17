@@ -18,6 +18,8 @@ import RiskGauge from '../../components/charts/RiskGauge'
 import InsightsPanel from '../../components/insights/InsightsPanel'
 import DashboardKpiCard from '../../components/dashboard/DashboardKpiCard'
 import ComplianceHealthPanel from '../../components/dashboard/ComplianceHealthPanel'
+import RecentDecisionsPanel from '../../components/dashboard/RecentDecisionsPanel'
+import FlaggedMerchantsPanel from '../../components/dashboard/FlaggedMerchantsPanel'
 import {
   useDashboardSparklines,
   useDashboardStats,
@@ -214,6 +216,11 @@ export default function DashboardPage() {
             <ScreeningResults />
             <TopRiskMerchants />
             <MonitoringAlertsPanel />
+          </section>
+
+          <section aria-label="Decision activity" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <RecentDecisionsPanel />
+            <FlaggedMerchantsPanel />
           </section>
         </div>
 

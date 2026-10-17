@@ -7,6 +7,7 @@ import {
   Building2,
   Calendar,
   CandlestickChart,
+  Eye,
   ClipboardList,
   ContactRound,
   FileSliders,
@@ -111,6 +112,7 @@ export const CONSOLE_ROUTE_RULES: RouteRule[] = [
   { prefix: "/compliance-calendar", anyOf: [Permission.VIEW_SAR, Permission.REPORT_VIEW] },
   { prefix: "/analytics", anyOf: [Permission.REPORT_VIEW] },
   { prefix: "/audit", anyOf: [Permission.VIEW_AUDIT_LOGS] },
+  { prefix: "/data-access-log", anyOf: [Permission.VIEW_AUDIT_LOGS] },
   { prefix: "/merchants", anyOf: [Permission.MERCHANT_VIEW], platformOperatorOnly: true },
   { prefix: "/psps", anyOf: [Permission.MANAGE_PSP], platformOperatorOnly: true },
   { prefix: "/edge-nodes", anyOf: [Permission.MANAGE_PSP, Permission.PSP_SETTINGS_VIEW] },
@@ -283,6 +285,7 @@ export function buildConsoleNavGroups(
     { label: "Reports", icon: FileText, to: "/reports" },
     { label: "Analytics", icon: BarChart3, to: "/analytics" },
     { label: "Audit Logs", icon: ClipboardList, to: "/audit" },
+    { label: "Data Access Log", icon: Eye, to: "/data-access-log" },
   ];
 
   const adminPlatform: ConsoleNavItem[] = [

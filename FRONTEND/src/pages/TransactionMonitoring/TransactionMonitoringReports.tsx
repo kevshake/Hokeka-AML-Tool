@@ -1,62 +1,77 @@
-import { useTransactionStats } from "../../features/api/queries";
+import { useState } from "react";
+import { useDecisionStatsSummary } from "../../features/api/decisionStats";
 
+const PERIODS = [7, 30, 90] as const;
+
+/**
+ * Monitoring report over a period, from the decision records the Edge reports (counts only: the
+ * cloud holds no amounts, so volume and average-amount figures come from the Edge's own exports).
+ */
 export default function TransactionMonitoringReports() {
-  const { data: stats, isLoading } = useTransactionStats();
+  const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
+  const { data, isLoading, isError } = useDecisionStatsSummary(days);
+  const w = data?.window;
 
-  const totalCount      = stats?.totalCount      ?? 0;
-  const approvedCount   = stats?.approvedCount   ?? 0;
-  const declinedCount   = stats?.declinedCount   ?? 0;
-  const manualCount     = stats?.manualReviewCount ?? 0;
-  const highRiskCount   = stats?.highRiskCount   ?? 0;
-  const mediumRiskCount = stats?.mediumRiskCount ?? 0;
-  const lowRiskCount    = stats?.lowRiskCount    ?? 0;
-  const totalAmountCents   = stats?.totalAmountCents   ?? 0;
-  const averageAmountCents = stats?.averageAmountCents ?? 0;
-  const fraudAlertCount    = stats?.fraudAlertCount    ?? 0;
-
-  const declineRate = totalCount > 0 ? ((declinedCount / totalCount) * 100).toFixed(2) : "0.00";
-  const manualRate  = totalCount > 0 ? ((manualCount  / totalCount) * 100).toFixed(2) : "0.00";
-
-  const fmtAmount = (cents: number) => "$" + (cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const total = w?.records ?? 0;
+  /** Share of {@code n} in the period, two decimals. */
+  const rate = (n: number) => (total > 0 ? ((n / total) * 100).toFixed(2) : "0.00");
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-lg font-semibold text-white">Transaction Monitoring Reports</h3>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Transactions" value={totalCount.toLocaleString()} />
-        <StatCard label="Approved" value={approvedCount.toLocaleString()} color="text-emerald-400" />
-        <StatCard label="Declined" value={declinedCount.toLocaleString()} color="text-red-400" />
-        <StatCard label="Manual Review" value={manualCount.toLocaleString()} color="text-amber-400" />
-        <StatCard label="Total Volume" value={fmtAmount(totalAmountCents)} />
-        <StatCard label="Avg Transaction" value={fmtAmount(averageAmountCents)} />
-        <StatCard label="High-Risk" value={highRiskCount.toLocaleString()} color="text-red-400" />
-        <StatCard label="Fraud Alerts" value={fraudAlertCount.toLocaleString()} color="text-red-400" />
-      </div>
-
-      <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
-        <h4 className="mb-3 text-sm font-semibold text-white">Summary Statistics</h4>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Decline Rate</p>
-            <p className="mt-1 text-lg font-bold text-white">{declineRate}%</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Manual Review Rate</p>
-            <p className="mt-1 text-lg font-bold text-white">{manualRate}%</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">Risk Breakdown (H / M / L)</p>
-            <p className="mt-1 text-lg font-bold text-white">{highRiskCount.toLocaleString()} / {mediumRiskCount.toLocaleString()} / {lowRiskCount.toLocaleString()}</p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold text-white">Transaction Monitoring Reports</h3>
+        <label className="flex items-center gap-2 text-xs text-glass-muted">
+          Period
+          <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value) as (typeof PERIODS)[number])} className="hokeka-field h-8 py-0">
+            {PERIODS.map((p) => <option key={p} value={p}>Last {p} days</option>)}
+          </select>
+        </label>
       </div>
 
       {isLoading && <p className="text-sm text-glass-muted">Loading report data...</p>}
+      {isError && <p className="text-sm text-red-300">Decision statistics could not be loaded.</p>}
+
+      {w && (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard label="Transactions evaluated" value={total.toLocaleString()} />
+            <StatCard label="Allowed" value={w.allow.toLocaleString()} color="text-emerald-400" />
+            <StatCard label="Blocked" value={w.block.toLocaleString()} color="text-red-400" />
+            <StatCard label="Alert / Hold" value={(w.alert + w.hold).toLocaleString()} color="text-amber-400" />
+            <StatCard label="Sanctions hits" value={w.sanctionsHit.toLocaleString()} color="text-red-400" />
+            <StatCard label="CTR required" value={w.ctrRequired.toLocaleString()} />
+            <StatCard label="Fail-closed" value={w.failClosed.toLocaleString()} />
+            <StatCard label="Average score" value={w.averageScore.toFixed(1)} />
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
+            <h4 className="mb-3 text-sm font-semibold text-white">Summary statistics</h4>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Metric label="Block rate" value={`${rate(w.block)}%`} />
+              <Metric label="Review rate (alert + hold)" value={`${rate(w.alert + w.hold)}%`} />
+              <Metric label="Flag rate" value={`${rate(w.flagged)}%`} />
+            </div>
+            <p className="mt-3 text-[11px] text-glass-muted">
+              Counts come from the Edge's decision records. Amounts are not held in the cloud; export transactions from Live Monitoring for amounts.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
+/** One summary figure. */
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-glass-muted">{label}</p>
+      <p className="mt-1 text-lg font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+/** One headline figure. */
 function StatCard({ label, value, color = "text-white" }: { label: string; value: string; color?: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">

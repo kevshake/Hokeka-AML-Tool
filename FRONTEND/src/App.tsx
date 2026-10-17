@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CssBaseline } from "@mui/material";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { EdgeSupportProvider } from "./contexts/EdgeSupportContext";
 import { isPlatformAdmin } from "./pages/EdgeNodes/edgeMeta";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
@@ -48,6 +49,7 @@ const MobileMoneyPage = lazy(() => import("./pages/MobileMoney/MobileMoneyPage")
 const WalletIntelligencePage = lazy(() => import("./pages/WalletIntelligence/WalletIntelligencePage"));
 const RecordDetailPage = lazy(() => import("./pages/RecordDetail/RecordDetailPage"));
 const NetworkAnalysisPage = lazy(() => import("./pages/Network/NetworkAnalysisPage"));
+const DataAccessLogPage = lazy(() => import("./pages/DataAccessLog/DataAccessLogPage"));
 
 /**
  * `/billing` is the PLATFORM revenue console (cross-tenant totals, admin-only endpoints). A PSP user
@@ -88,6 +90,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <EdgeSupportProvider>
           <ThemeProvider>
             <CssBaseline />
             <Routes>
@@ -138,6 +141,7 @@ function App() {
                               );
                             })}
                             <Route path="audit" element={<AuditLogsPage />} />
+                            <Route path="data-access-log" element={<DataAccessLogPage />} />
                             <Route path="runtime-errors" element={<RuntimeErrorsPage />} />
                             <Route path="rules-generation" element={<RulesGenerationPage />} />
                             <Route path="kyc-documents" element={<KycDocumentsPage />} />
@@ -160,6 +164,7 @@ function App() {
               />
             </Routes>
           </ThemeProvider>
+          </EdgeSupportProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

@@ -21,7 +21,6 @@ export type ConsoleListViewType =
   | "ASSET_ACCOUNTS"
   | "MESSAGES"
   | "RUNTIME_ERRORS"
-  | "MONITORING_TRANSACTIONS"
   | "REGULATORY_SUBMISSIONS";
 
 export interface ConsoleExportRequest {

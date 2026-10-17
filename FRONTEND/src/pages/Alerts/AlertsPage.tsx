@@ -17,6 +17,7 @@ import VirtualizedTableBody from "../../components/Common/VirtualizedTableBody";
 import TwSnackbar from "../../components/Common/TwSnackbar";
 import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
 import AlertDispositionPanel from "../../components/Alerts/AlertDispositionPanel";
+import WorkflowDetailTransactions from "../../components/EdgeData/WorkflowDetailTransactions";
 import { useAuth } from "../../contexts/AuthContext";
 import { canPerformAction } from "../../lib/consoleRbac";
 import {
@@ -295,10 +296,12 @@ export default function AlertsPage() {
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {viewAlert.transactionId && (
+              {(viewAlert.txnRef || viewAlert.edgeAssessmentId || viewAlert.transactionId) && (
                 <div>
-                  <p className="hokeka-field-label">Transaction ID</p>
-                  <p className="mt-0.5 font-mono text-sm text-ink">#{viewAlert.transactionId}</p>
+                  <p className="hokeka-field-label">Transaction reference</p>
+                  <p className="mt-0.5 font-mono text-sm text-ink">
+                    {viewAlert.txnRef || viewAlert.edgeAssessmentId || `#${viewAlert.transactionId}`}
+                  </p>
                 </div>
               )}
               {viewAlert.caseId && (
@@ -320,6 +323,11 @@ export default function AlertsPage() {
             </div>
             {viewAlert.id ? (
               <>
+                <WorkflowDetailTransactions
+                  path={`alerts/${viewAlert.id}`}
+                  title="Alerted transaction (live from the Edge)"
+                  cloudNote="The alert's own fields, disposition and history are held in the cloud and stay available."
+                />
                 <AlertDispositionPanel alert={viewAlert} onResolved={() => setViewAlert(null)} />
                 <AiVerdictPanel
                   auditPath={`ai/audit/alert/${viewAlert.id}`}

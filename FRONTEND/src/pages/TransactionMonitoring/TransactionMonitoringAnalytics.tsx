@@ -1,7 +1,4 @@
-import {
-  useMonitoringRiskDistribution,
-  useMonitoringRiskIndicators,
-} from "../../features/api/queries";
+import { useDecisionStatsSummary } from "../../features/api/decisionStats";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,84 +9,122 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { Doughnut } from "react-chartjs-2";
+import { Bar, Doughnut } from "react-chartjs-2";
 import { colors, risk, semantic } from "../../theme/tokens";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
+/**
+ * Transaction analytics built from the Edge's decision records and the hourly decision rollup:
+ * score bands, decision mix, daily volume and indicator counts. No transaction is pulled here.
+ */
 export default function TransactionMonitoringAnalytics() {
-  const { data: riskDistribution } = useMonitoringRiskDistribution();
-  const { data: riskIndicators } = useMonitoringRiskIndicators();
+  const { data, isLoading, isError } = useDecisionStatsSummary(14);
 
-  const riskChartData = riskDistribution
-    ? {
-        labels: Object.keys(riskDistribution),
-        datasets: [
-          {
-            label: "Risk Distribution",
-            data: Object.values(riskDistribution),
-            backgroundColor: [semantic.success, semantic.warning, semantic.error],
-            borderColor: [risk.low, risk.high, risk.critical],
-            borderWidth: 2,
-          },
-        ],
-      }
-    : null;
+  if (isLoading) return <p className="text-sm text-glass-muted">Loading analytics…</p>;
+  if (isError || !data) return <p className="text-sm text-red-300">Decision statistics could not be loaded.</p>;
 
-  const indicators = (riskIndicators && Array.isArray(riskIndicators)) ? riskIndicators : [];
+  const bands = data.scoreBands24h;
+  const bandTotal = bands.low + bands.medium + bands.high + bands.critical;
+  const indicators = [
+    { name: "High score (24h)", description: `Decision records scoring 70 or more`, count: data.highScore24h },
+    { name: "Sanctions hits (24h)", description: "Counterparty sanctions matches screened on the Edge", count: data.last24h.sanctionsHit },
+    { name: "CTR required (24h)", description: "Cash transactions over the reporting threshold", count: data.last24h.ctrRequired },
+    { name: "Fail-closed (24h)", description: "Decisions the Edge took in fail-closed mode", count: data.last24h.failClosed },
+    { name: "Blocked (24h)", description: "Transactions the Edge blocked", count: data.last24h.block },
+  ];
+
+  const bandChart = {
+    labels: ["Low (<30)", "Medium (30–59)", "High (60–79)", "Critical (80+)"],
+    datasets: [
+      {
+        label: "Decision records",
+        data: [bands.low, bands.medium, bands.high, bands.critical],
+        backgroundColor: [semantic.success, semantic.warning, risk.high, semantic.error],
+        borderColor: [risk.low, risk.medium, risk.high, risk.critical],
+        borderWidth: 2,
+      },
+    ],
+  };
+  const dailyChart = {
+    labels: data.daily.map((d) => d.label),
+    datasets: [
+      { label: "Allow", data: data.daily.map((d) => d.allow), backgroundColor: semantic.success },
+      { label: "Alert / Hold", data: data.daily.map((d) => d.alert + d.hold), backgroundColor: semantic.warning },
+      { label: "Block", data: data.daily.map((d) => d.block), backgroundColor: semantic.error },
+    ],
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <span className="hokeka-section-label">Analytics</span>
       <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-ink">Transaction Analytics</h3>
+      <p className="text-xs text-glass-muted">Built from the decision records your Edge reports. Transaction details stay on the Edge.</p>
 
-      {indicators.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {indicators.slice(0, 4).map((indicator: any, idx: number) => (
-            <div key={indicator.id || indicator.name || idx} className="hokeka-glass-card rounded-xl p-4">
-              <p className="mb-1 text-sm text-glass-muted">{indicator.name || indicator.type || "Risk Indicator"}</p>
-              <p className="text-xl font-bold tabular-nums text-ink">{indicator.value || indicator.count || 0}</p>
-              {indicator.percentage && <p className="text-xs text-glass-muted">{indicator.percentage}%</p>}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {indicators.map((indicator) => (
+          <div key={indicator.name} className="hokeka-glass-card rounded-xl p-4" title={indicator.description}>
+            <p className="mb-1 text-sm text-glass-muted">{indicator.name}</p>
+            <p className="text-xl font-bold tabular-nums text-ink">{indicator.count.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="hokeka-glass-card rounded-xl p-4">
-          <h4 className="mb-3 text-sm font-semibold text-ink">Risk Distribution</h4>
-          {riskChartData ? (
+          <h4 className="mb-3 text-sm font-semibold text-ink">Score distribution (24h)</h4>
+          {bandTotal > 0 ? (
             <div className="h-[300px]">
               <Doughnut
-                data={riskChartData}
+                data={bandChart}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
-                  plugins: {
-                    legend: { position: "bottom" as const, labels: { color: colors.muted, padding: 15 } },
-                  },
+                  plugins: { legend: { position: "bottom" as const, labels: { color: colors.muted, padding: 15 } } },
                 }}
               />
             </div>
           ) : (
-            <div className="flex h-[300px] items-center justify-center text-sm text-glass-muted">No risk distribution data available</div>
+            <div className="flex h-[300px] items-center justify-center text-sm text-glass-muted">No decision records in the last 24 hours</div>
           )}
         </div>
-        <div className="rounded-lg border border-white/10 bg-[var(--surface-2)] p-4">
-          <h4 className="mb-3 text-sm font-semibold text-white">Top Risk Indicators</h4>
-          {indicators.length > 0 ? (
-            <div className="space-y-1">
-              {indicators.map((indicator: any, idx: number) => (
-                <div key={indicator.id || indicator.name || idx} className="flex items-center justify-between rounded-lg border border-white/5 bg-[var(--surface-2)] p-3">
-                  <p className="text-sm text-white/80">{indicator.name || indicator.type || "Indicator"}</p>
-                  <p className="text-base font-bold text-burgundy-400">{indicator.value || indicator.count || 0}</p>
-                </div>
+        <div className="hokeka-glass-card rounded-xl p-4">
+          <h4 className="mb-3 text-sm font-semibold text-ink">Decisions per day (14 days)</h4>
+          <div className="h-[300px]">
+            <Bar
+              data={dailyChart}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true, ticks: { color: colors.muted } }, y: { stacked: true, ticks: { color: colors.muted } } },
+                plugins: { legend: { position: "bottom" as const, labels: { color: colors.muted } } },
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="hokeka-glass-card rounded-xl p-4">
+        <h4 className="mb-3 text-sm font-semibold text-ink">Merchants with the most flagged decisions (14 days)</h4>
+        {data.topMerchants.length ? (
+          <table className="hokeka-table">
+            <thead><tr><th>#</th><th>Merchant</th><th>Decisions</th><th>Flagged</th><th>Blocked</th><th>Flag rate</th></tr></thead>
+            <tbody>
+              {data.topMerchants.map((m) => (
+                <tr key={m.merchantId}>
+                  <td>{m.rank}</td>
+                  <td className="font-mono text-xs">{m.merchantId}</td>
+                  <td className="tabular-nums">{m.records.toLocaleString()}</td>
+                  <td className="tabular-nums">{m.flagged.toLocaleString()}</td>
+                  <td className="tabular-nums">{m.blocked.toLocaleString()}</td>
+                  <td className="tabular-nums">{m.flaggedRate.toFixed(1)}%</td>
+                </tr>
               ))}
-            </div>
-          ) : (
-            <p className="text-sm text-glass-muted">No risk indicators available</p>
-          )}
-        </div>
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-glass-muted">No flagged decisions in this period</p>
+        )}
       </div>
     </div>
   );

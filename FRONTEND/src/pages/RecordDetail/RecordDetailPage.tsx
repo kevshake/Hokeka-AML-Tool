@@ -2,11 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, FileText, Link2, LoaderCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { apiClient } from "../../lib/apiClient";
-import AiVerdictPanel from "../../components/Ai/AiVerdictPanel";
-import TransactionAssessmentPanel from "../../components/TransactionMonitoring/TransactionAssessmentPanel";
-import TransactionAlertsPanel from "../../components/TransactionMonitoring/TransactionAlertsPanel";
 import ComplianceLinksPanel from "../../components/compliance/ComplianceLinksPanel";
-import ScreeningActivityPanel from "../../components/screening/ScreeningActivityPanel";
+import TransactionRecordView from "./TransactionRecordView";
 
 interface RecordLink {
   recordType: string;
@@ -47,8 +44,20 @@ function RecordAnchor({ link }: { link: RecordLink }) {
   return <Link to={`/records/${link.recordType}/${link.recordId}`} className="group flex items-center justify-between gap-3 border-l-2 border-transparent px-4 py-3 transition hover:border-gold hover:bg-white/5"><div className="min-w-0"><p className="truncate text-sm font-medium text-white group-hover:text-gold">{link.label}</p><p className="mt-1 text-[11px] uppercase tracking-wide text-white/40">{link.relationship.replace(/_/g, " ")} / {link.recordType.replace(/_/g, " ")}</p></div><ExternalLink size={15} className="shrink-0 text-white/40 group-hover:text-gold" /></Link>;
 }
 
+/**
+ * Record page. Transactions are pulled live from the PSP's Edge ({@link TransactionRecordView});
+ * every other record type is cloud workflow or master data from {@code GET /records/{type}/{id}}.
+ */
 export default function RecordDetailPage() {
   const { recordType = "", recordId = "" } = useParams();
+  if (recordType.toUpperCase() === "TRANSACTION" && recordId) {
+    return <TransactionRecordView key={recordId} recordId={recordId} />;
+  }
+  return <CloudRecordView recordType={recordType} recordId={recordId} />;
+}
+
+/** A cloud-held record with its related records and occurrences. */
+function CloudRecordView({ recordType, recordId }: { recordType: string; recordId: string }) {
   const query = useQuery<RecordDetail>({
     queryKey: ["record-detail", recordType, recordId],
     queryFn: () => apiClient.get<RecordDetail>(`records/${recordType}/${recordId}`),
@@ -67,18 +76,6 @@ export default function RecordDetailPage() {
     <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,.85fr)]">
       <section><h2 className="mb-3 text-sm font-semibold">Record data</h2><dl className="divide-y divide-white/8 border border-white/10">{Object.entries(record.data).map(([key, item]) => <div key={key} className="grid gap-2 px-4 py-3 md:grid-cols-[190px_1fr]"><dt className="text-xs uppercase tracking-wide text-white/40">{key.replace(/([A-Z])/g, " $1")}</dt><dd className="whitespace-pre-wrap break-words text-sm text-white/80">{value(item)}</dd></div>)}</dl>{calculationSummary && <><h2 className="mb-3 mt-6 text-sm font-semibold">Report calculations</h2><pre className="overflow-x-auto border border-white/10 bg-black/20 p-4 text-xs leading-6 text-white/70">{JSON.stringify(calculationSummary, null, 2)}</pre></>}</section>
       <aside className="space-y-6">
-        {record.recordType === "TRANSACTION" && (
-          <>
-            <TransactionAssessmentPanel txnId={record.recordId} />
-            <TransactionAlertsPanel txnId={record.recordId} />
-            <ComplianceLinksPanel subjectType="TRANSACTION" subjectId={record.recordId} />
-            <ScreeningActivityPanel txnId={record.recordId} />
-            <AiVerdictPanel
-              auditPath={`ai/audit/transaction/${record.recordId}`}
-              title="Hokeka AI recommendation"
-            />
-          </>
-        )}
         {record.recordType === "MERCHANT" && (
           <ComplianceLinksPanel subjectType="MERCHANT" subjectId={record.recordId} />
         )}

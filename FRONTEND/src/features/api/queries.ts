@@ -2,13 +2,10 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/apiClient";
 import type {
   Case,
-  CaseTimeline,
   SarReport,
   Alert,
-  Transaction,
   Merchant,
   AuditLog,
-  DashboardStats,
   User,
   Psp,
   PageResponse,
@@ -22,27 +19,6 @@ import type { MobileMoneyContext, MobileMoneyEntityType, MobileMoneyNetwork, Mob
 import type { CryptoTransactionSummary, CryptoWalletProfile, RegulatorGrant, TravelRulePolicy, TravelRuleTransfer, VaspEntry, VaspScreeningRecord, WalletScreeningRecord } from "../../types/virtualAssets";
 
 // Dashboard
-export const useDashboardStats = () => {
-  return useQuery<DashboardStats>({
-    queryKey: ["dashboard", "stats"],
-    queryFn: () => apiClient.get<DashboardStats>("reporting/summary"),
-  });
-};
-
-export const useDashboardGlobalStats = () => {
-  return useQuery({
-    queryKey: ["dashboard", "global-stats"],
-    queryFn: () => apiClient.get("dashboard/stats"),
-  });
-};
-
-export const useTransactionVolume = (days: number = 30) => {
-  return useQuery({
-    queryKey: ["dashboard", "transaction-volume", days],
-    queryFn: () => apiClient.get(`dashboard/transaction-volume?days=${days}`),
-  });
-};
-
 export const useRiskDistribution = () => {
   return useQuery({
     queryKey: ["dashboard", "risk-distribution"],
@@ -54,13 +30,6 @@ export const useLiveAlerts = (limit: number = 5) => {
   return useQuery<Alert[]>({
     queryKey: ["dashboard", "live-alerts", limit],
     queryFn: () => apiClient.get<Alert[]>(`dashboard/live-alerts?limit=${limit}`).catch(() => []),
-  });
-};
-
-export const useRecentTransactions = (limit: number = 5) => {
-  return useQuery<Transaction[]>({
-    queryKey: ["dashboard", "recent-transactions", limit],
-    queryFn: () => apiClient.get<Transaction[]>(`dashboard/recent-transactions?limit=${limit}`).catch(() => []),
   });
 };
 
@@ -99,22 +68,6 @@ export const useCase = (id: number) => {
     queryKey: ["case", id],
     queryFn: () => apiClient.get<Case>(`compliance/cases/${id}`),
     enabled: !!id,
-  });
-};
-
-export const useCaseTimeline = (caseId: number) => {
-  return useQuery<CaseTimeline>({
-    queryKey: ["case", caseId, "timeline"],
-    queryFn: () => apiClient.get<CaseTimeline>(`cases/${caseId}/timeline`),
-    enabled: !!caseId,
-  });
-};
-
-export const useCaseNetwork = (caseId: number) => {
-  return useQuery({
-    queryKey: ["case", caseId, "network"],
-    queryFn: () => apiClient.get(`cases/${caseId}/network`),
-    enabled: !!caseId,
   });
 };
 
@@ -178,46 +131,6 @@ export const useAlerts = (params?: AlertQueryParams) => {
     queryFn: async () => {
       const raw = await apiClient.get<PageResponse<Alert> & { content?: Alert[] }>(
         `alerts${queryString ? `?${queryString}` : ""}`,
-      );
-      return {
-        content: raw.content ?? [],
-        totalElements: raw.totalElements ?? raw.content?.length ?? 0,
-        totalPages: raw.totalPages ?? 1,
-        size: raw.size ?? queryParams.size ?? 25,
-        number: raw.number ?? queryParams.page ?? 0,
-        nextCursor: raw.nextCursor ?? null,
-        hasNext: raw.hasNext ?? Boolean(raw.nextCursor),
-      };
-    },
-    placeholderData: keepPreviousData,
-  });
-};
-
-// Transactions
-export interface TransactionQueryParams {
-  page?: number;
-  size?: number;
-  pspId?: number;
-  cursor?: string;
-}
-
-export const useTransactions = (params?: number | TransactionQueryParams) => {
-  // Support backward compatibility: if number is provided, use it as page size with page 0
-  const queryParams = typeof params === 'number' 
-    ? { page: 0, size: params } 
-    : params || {};
-
-  // Convert object to query string
-  const queryString = Object.entries(queryParams)
-    .filter(([_, value]) => value !== undefined && value !== null && value !== '')
-    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-    .join('&');
-
-  return useQuery<PageResponse<Transaction>>({
-    queryKey: ["transactions", queryParams],
-    queryFn: async () => {
-      const raw = await apiClient.get<PageResponse<Transaction>>(
-        `transactions${queryString ? `?${queryString}` : ""}`,
       );
       return {
         content: raw.content ?? [],
@@ -463,67 +376,6 @@ export const useOverdueDeadlines = () => {
   return useQuery({
     queryKey: ["compliance", "calendar", "overdue"],
     queryFn: () => apiClient.get("compliance/calendar/overdue"),
-  });
-};
-
-// Transaction Monitoring
-export const useMonitoringDashboardStats = () => {
-  return useQuery<Record<string, unknown>>({
-    // W14-11 fix: this used to share ["monitoring", "dashboard-stats"] with useTransactionStats
-    // below, even though both hit the same endpoint with different declared response types
-    // (Record<string, unknown> vs the typed TransactionStats) and different query configs
-    // (this one polls every 30s, that one doesn't) -- React Query treats a shared key as one
-    // cache entry, so whichever hook mounted first silently won and the other's refetchInterval
-    // was ignored. Distinct key so each hook owns its own cache entry and config.
-    queryKey: ["monitoring", "dashboard-stats-raw"],
-    queryFn: () => apiClient.get<Record<string, unknown>>("monitoring/dashboard/stats").catch(() => ({})),
-    refetchInterval: 30_000,
-  });
-};
-
-export const useMonitoringRiskDistribution = () => {
-  return useQuery<Record<string, number>>({
-    queryKey: ["monitoring", "risk-distribution"],
-    queryFn: () => apiClient.get<Record<string, number>>("monitoring/risk-distribution").catch(() => ({})),
-  });
-};
-
-export const useMonitoringRiskIndicators = () => {
-  return useQuery<any[]>({
-    queryKey: ["monitoring", "risk-indicators"],
-    queryFn: () => apiClient.get<any[]>("monitoring/risk-indicators").catch(() => []),
-  });
-};
-
-export const useMonitoringRecentActivity = () => {
-  return useQuery<any[]>({
-    queryKey: ["monitoring", "recent-activity"],
-    queryFn: () => apiClient.get<any[]>("monitoring/recent-activity").catch(() => []),
-    refetchInterval: 30_000,
-  });
-};
-
-export interface MonitoringTransactionQueryParams {
-  page?: number;
-  size?: number;
-  riskLevel?: string;
-  decision?: string;
-  cursor?: string;
-}
-
-export const useMonitoringTransactions = (params?: MonitoringTransactionQueryParams) => {
-  const queryParams = params || {};
-
-  // Convert object to query string
-  const queryString = Object.entries(queryParams)
-    .filter(([_, value]) => value !== undefined && value !== null && value !== '')
-    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-    .join('&');
-
-  return useQuery<PageResponse<any>>({
-    queryKey: ["monitoring", "transactions", queryParams],
-    queryFn: () => apiClient.get<PageResponse<any>>(`monitoring/transactions${queryString ? `?${queryString}` : ""}`),
-    refetchInterval: 30_000,
   });
 };
 
@@ -1138,26 +990,6 @@ export const useAlertTrends = (days: number = 30) => {
       apiClient
         .get<AlertTrendsEntry[]>(`analytics/alert-trends?days=${days}`)
         .catch(() => []),
-  });
-};
-
-export interface TransactionStats {
-  totalCount: number;
-  approvedCount: number;
-  declinedCount: number;
-  manualReviewCount: number;
-  highRiskCount: number;
-  mediumRiskCount: number;
-  lowRiskCount: number;
-  totalAmountCents: number;
-  averageAmountCents: number;
-  fraudAlertCount: number;
-}
-
-export const useTransactionStats = () => {
-  return useQuery<TransactionStats>({
-    queryKey: ["monitoring", "dashboard-stats"],
-    queryFn: () => apiClient.get<TransactionStats>("monitoring/dashboard/stats"),
   });
 };
 
