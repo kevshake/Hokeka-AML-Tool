@@ -95,6 +95,18 @@ public record LedgerEvaluation(UUID edgeAssessmentId,
     }
 
     /**
+     * The same row with the local sanctions matches of the evaluation (contract §6.5): each a
+     * {@code sanctionsHitDetail}; a non-empty list sets {@code sanctionsHit} and the record's
+     * {@code watchlistEntryIds}.
+     */
+    public LedgerEvaluation withSanctionsHits(List<Map<String, Object>> hits) {
+        return new LedgerEvaluation(edgeAssessmentId, txnRef, siteId, nodeId, evaluatedAt, panHash,
+                amountCents, currency, merchantId, mcc, countryCode, channel, features, decision, score,
+                triggeredRuleIds, ruleVersionIds, reasons, bundleVersion, bundleHash, evaluator, latencyUs,
+                failClosedCode, ctrRequired, hits, typologyCodes);
+    }
+
+    /**
      * The same evaluation answered by the ledger fail-closed gate instead (§4.3): {@code HOLD},
      * {@code evaluator = none}, no triggered rules, score 0, {@code LEDGER_UNAVAILABLE}. The id,
      * time, transaction columns and features are kept, because the ledger row (once written) must

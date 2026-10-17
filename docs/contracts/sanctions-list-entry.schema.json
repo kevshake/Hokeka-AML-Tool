@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/sanctions-list-entry.schema.json",
+  "title": "Sanctions/PEP list entry",
+  "description": "One public sanctions/PEP list entity as distributed to the Edge (EDGE_DATA_RESIDENCY_CONTRACT.md section 6.4). One JSON object per line inside a sanctions list chunk. Public data only: the entry id, the listed name and aliases exactly as the Control Plane ingested them into aml-microservice, the entity type and the PEP classification. The Edge normalises and scores these names with the aml-microservice algorithm (section 6.5).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "aliases", "type"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/watchlistEntryId" },
+    "name": {
+      "description": "Primary listed name (the source caption). May be empty when the source only lists aliases.",
+      "type": "string",
+      "maxLength": 512
+    },
+    "aliases": {
+      "description": "Other listed names, in source order, with blanks removed.",
+      "type": "array",
+      "maxItems": 512,
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "type": { "enum": ["PERSON", "ORGANIZATION", "VESSEL", "UNKNOWN"] },
+    "pepLevel": {
+      "description": "Present only for politically exposed persons (PEP) and their relatives / close associates (RCA). A PEP entry is never a sanctions hit (section 6.5).",
+      "enum": ["PEP", "RCA"]
+    }
+  }
+}

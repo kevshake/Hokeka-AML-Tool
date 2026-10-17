@@ -120,6 +120,16 @@ public record EdgeConfigDocument(long configVersion,
         return merchantId != null && blockedMerchants.contains(merchantId);
     }
 
+    /** {@code sanctions.listHash}: the list snapshot to screen with (contract 6.4). */
+    public String sanctionsListHash() {
+        return document.path("sanctions").path("listHash").asText("");
+    }
+
+    /** True when the Control Plane has published a sanctions list ({@code listVersion} is not "none"). */
+    public boolean sanctionsListPublished() {
+        return !"none".equals(sanctionsListVersion);
+    }
+
     /** The ops the config allows, as an immutable list (for status output). */
     public List<String> opsAllowedList() {
         return List.copyOf(tunnel.opsAllowed());

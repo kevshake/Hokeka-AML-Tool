@@ -96,4 +96,30 @@ class AmlScreeningOrchestratorMatchDetailsTest {
         assertEquals(1, matches.size());
         assertEquals("Acme Corp", matches.get(0).get("matchedName"));
     }
+
+    /** R10b: every merchant screen (onboarding, update, rescreen) is applied to the Edge blocklist. */
+    @Test
+    void everyMerchantScreenIsAppliedToTheEdgeMerchantBlocklist() {
+        com.posgateway.aml.service.residency.MerchantSanctionsBlocklistService edge =
+                org.mockito.Mockito.mock(com.posgateway.aml.service.residency.MerchantSanctionsBlocklistService.class);
+        orchestrator.setEdgeBlocklist(edge);
+        Merchant merchant = new Merchant();
+        merchant.setMerchantId(2L);
+        merchant.setLegalName("Blue Lotus Bank");
+        ScreeningResult result = ScreeningResult.builder()
+                .screenedName("Blue Lotus Bank")
+                .status(ScreeningResult.ScreeningStatus.CLEAR)
+                .matches(List.of())
+                .screenedAt(LocalDateTime.now())
+                .build();
+        when(screeningEngine.screenMerchant("Blue Lotus Bank", null)).thenReturn(result);
+        when(screeningResultRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        orchestrator.screenMerchant(merchant);
+
+        org.mockito.Mockito.verify(edge).apply(merchant, result);
+        // A blocklist failure never fails the screening itself.
+        when(edge.apply(any(), any())).thenThrow(new IllegalStateException("db down"));
+        assertDoesNotThrow(() -> orchestrator.screenMerchant(merchant));
+    }
 }

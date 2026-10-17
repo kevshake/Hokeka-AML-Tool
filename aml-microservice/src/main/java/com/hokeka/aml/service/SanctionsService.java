@@ -85,8 +85,10 @@ public class SanctionsService {
     @Autowired(required = false)
     private AerospikeClient aerospikeClient;
 
+    // Field default mirrors the property default so a directly constructed instance (tests, and the
+    // Edge matcher parity vectors) scores with the same threshold Spring would inject.
     @Value("${sanctions.match.similarity.threshold:0.8}")
-    private double similarityThreshold;
+    private double similarityThreshold = 0.8;
 
     // ─────────────────────────────────────────────────────────────────────
     // Startup: create the prefix secondary index if it doesn't exist
@@ -250,8 +252,12 @@ public class SanctionsService {
         }
     }
 
-    /** Shared record evaluation used by both index query and scan. */
-    private void evaluateRecord(String normalizedQuery, String type, Key key, Record record, List<MatchDto> matches) {
+    /**
+     * Shared record evaluation used by both index query and scan. Package-private so the matcher
+     * parity vectors (docs/contracts/parity/sanctions-matcher-vectors.json) can drive it directly;
+     * the Edge port (edge-host com.hokeka.edge.sanctions) must reproduce its result exactly.
+     */
+    void evaluateRecord(String normalizedQuery, String type, Key key, Record record, List<MatchDto> matches) {
         String candidateName = record.getString("name");
         String aliasesCsv = record.getString("aliases");
         String candidateType = record.getString("type");
@@ -451,7 +457,8 @@ public class SanctionsService {
 
     private static String nullToEmpty(String s) { return s == null ? "" : s; }
 
-    private static String normalize(String s) {
+    /** Name normalisation: NFD, strip marks, lower-case, non [a-z0-9 ] to space, collapse spaces. */
+    static String normalize(String s) {
         if (s == null) return "";
         String decomposed = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "");

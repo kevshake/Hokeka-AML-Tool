@@ -180,6 +180,10 @@ public class SecurityConfig {
                                                                 "/edge/enroll", "/edge/bundle", "/edge/metrics",
                                                                 "/edge/assessments",
                                                                 "/edge/config",
+                                                                // Sanctions/PEP list snapshot (R10b, contract 6.4):
+                                                                // mTLS identity + ACTIVE node, like /edge/config.
+                                                                "/edge/sanctions/list",
+                                                                "/edge/sanctions/list/*/chunks/*",
                                                                 // Edge Tunnel WebSocket upgrade: mTLS identity +
                                                                 // ACTIVE node checked by TunnelHandshakeInterceptor
                                                                 // before the 101 (EDGE_DATA_RESIDENCY_CONTRACT §7.1).
@@ -187,6 +191,8 @@ public class SecurityConfig {
                                                                 "/api/v1/edge/enroll", "/api/v1/edge/bundle",
                                                                 "/api/v1/edge/metrics",
                                                                 "/api/v1/edge/assessments", "/api/v1/edge/config",
+                                                                "/api/v1/edge/sanctions/list",
+                                                                "/api/v1/edge/sanctions/list/*/chunks/*",
                                                                 "/api/v1/edge/tunnel")
                                                 .permitAll()
                                                 .requestMatchers("/edge/**", "/api/v1/edge/**").authenticated()

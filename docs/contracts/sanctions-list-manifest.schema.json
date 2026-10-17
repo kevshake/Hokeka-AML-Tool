@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/sanctions-list-manifest.schema.json",
+  "title": "Sanctions/PEP list manifest v1",
+  "description": "Describes one published sanctions/PEP list snapshot (EDGE_DATA_RESIDENCY_CONTRACT.md section 6.4). GET /api/v1/edge/sanctions/list, HSE-1 context 'hokeka.sanctions.list', signed with the Control Plane Ed25519 key, sealed to the node's X25519 key, inside the channel replay envelope; ETag is the quoted listHash. The entries travel in separately fetched chunks. listHash is the SHA-256 hex of the UTF-8 text made of one line '<index>:<sha256>:<entryCount>\\n' per chunk in index order, and equals sanctions.listHash of the Edge config that announced this snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "listVersion", "listHash", "publishedAt", "entryCount", "format", "chunks"],
+  "properties": {
+    "v": { "const": 1 },
+    "listVersion": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$" },
+    "listHash": { "$ref": "common.schema.json#/$defs/sha256Hex" },
+    "publishedAt": { "$ref": "common.schema.json#/$defs/instant" },
+    "entryCount": {
+      "description": "Sum of the chunks' entryCount.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20000000
+    },
+    "format": {
+      "description": "Chunk payload format: gzip-compressed JSON lines, one sanctions-list-entry per line, base64 in the chunk document.",
+      "const": "hokeka.sanctions.jsonl.gzip.v1"
+    },
+    "chunks": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "sha256", "entryCount", "bytes"],
+        "properties": {
+          "index": {
+            "description": "0-based; chunk i is item i.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "sha256": {
+            "description": "SHA-256 hex of the chunk's uncompressed JSON-lines bytes.",
+            "$ref": "common.schema.json#/$defs/sha256Hex"
+          },
+          "entryCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+          "bytes": {
+            "description": "Size of the gzip-compressed payload (before base64), for progress and sizing only.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8388608
+          }
+        }
+      }
+    }
+  }
+}

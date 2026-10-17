@@ -28,7 +28,7 @@ _Status: approved direction (owner decisions 2026-10-16). Supersedes the dual-po
   - Aerospike keeps its primary index in RAM: at 1M transactions/day for 5 years, that is about 117 GB of index alone.
   - It has no range queries or pagination.
 - `EdgeAssessmentShipper` buffers decisions in memory, so they are lost if the Edge restarts.
-- The Edge does no sanctions screening. The cloud's `RealTimeTransactionScreeningService` screens the merchant and the counterparty.
+- Before R10b the Edge did no sanctions screening and the cloud's `RealTimeTransactionScreeningService` screened the merchant and the counterparty. R10b moves counterparty screening to the Edge (contract §6.4, §6.5).
 - **Foundations already in place:**
   - Rust `RuleBundle` accepts unknown fields;
   - the Edge has an outbound mTLS `RestClient` (`SecureChannel`) and HSE-1 sealing;

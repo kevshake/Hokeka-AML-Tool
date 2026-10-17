@@ -1,0 +1,2524 @@
+{
+  "description" : "Generated from aml-microservice SanctionsService (normalize, similarity, evaluateRecord, top-5 by score). The Edge matcher port must reproduce every value exactly.",
+  "similarityThreshold" : 0.8,
+  "topN" : 5,
+  "entries" : [ {
+    "id" : "ofac-sdn:1001",
+    "name" : "Ivan Petrovich Sidorov",
+    "aliases" : [ "Ivan Sidorov", "I. P. Sidorov", "Iwan Sidorow" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "ofac-sdn:1002",
+    "name" : "Golden Crescent Trading LLC",
+    "aliases" : [ "Golden Crescent Trading", "GCT LLC" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "un-sc:QDi.123",
+    "name" : "Abu Bakr al-Hashimi",
+    "aliases" : [ "Abu Bakr Al Hashimi", "Abubakar Alhashimi" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "eu-fsf:EU.55.12",
+    "name" : "Société Générale d'Équipement",
+    "aliases" : [ "Societe Generale d Equipement" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "ofac-sdn:1003",
+    "name" : "MV Ocean Star",
+    "aliases" : [ "Ocean Star" ],
+    "type" : "VESSEL"
+  }, {
+    "id" : "peps:Q42",
+    "name" : "Maria Fernanda Gonzalez",
+    "aliases" : [ "María Fernanda González", "M. F. Gonzalez" ],
+    "type" : "PERSON",
+    "pepLevel" : "PEP"
+  }, {
+    "id" : "peps:Q43",
+    "name" : "Jose Luis Gonzalez",
+    "aliases" : [ ],
+    "type" : "PERSON",
+    "pepLevel" : "RCA"
+  }, {
+    "id" : "ofac-sdn:1004",
+    "name" : "Wang Wei",
+    "aliases" : [ "Wei Wang", "王伟" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "ofac-sdn:1005",
+    "name" : "Kim Jong Chol",
+    "aliases" : [ "Kim Jong-chol", "Chol Kim Jong" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "gb-hmt:7788",
+    "name" : "Northwind Shipping Company Limited",
+    "aliases" : [ "Northwind Shipping Co Ltd", "Northwind Shipping" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "ofac-sdn:1006",
+    "name" : "Ali",
+    "aliases" : [ ],
+    "type" : "PERSON"
+  }, {
+    "id" : "ofac-sdn:1007",
+    "name" : "Mohammed Abdullah Saleh",
+    "aliases" : [ "Mohamed Abdulla Saleh", "Muhammad Abdallah Salih" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "ch-seco:9001",
+    "name" : "Østergaard Holding A/S",
+    "aliases" : [ "Ostergaard Holding AS" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "ofac-sdn:1008",
+    "name" : "Straße Import GmbH",
+    "aliases" : [ "Strasse Import GmbH" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "un-sc:KPi.066",
+    "name" : "Korea Mining Development Trading Corporation",
+    "aliases" : [ "KOMID", "Changgwang Sinyong Corporation" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "ofac-sdn:1009",
+    "name" : "Jean-Pierre Dubois",
+    "aliases" : [ "Jean Pierre Dubois", "J P Dubois" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "peps:Q44",
+    "name" : "Wanjiru Kamau",
+    "aliases" : [ ],
+    "type" : "PERSON",
+    "pepLevel" : "PEP"
+  }, {
+    "id" : "ofac-sdn:1010",
+    "name" : "Ahmad Reza Tehrani",
+    "aliases" : [ "Ahmed Reza Tehrani" ],
+    "type" : "PERSON"
+  }, {
+    "id" : "ofac-sdn:1011",
+    "name" : "Blue Lotus Bank",
+    "aliases" : [ "Blue Lotus Banking Corporation" ],
+    "type" : "ORGANIZATION"
+  }, {
+    "id" : "ofac-sdn:1012",
+    "name" : "Omar",
+    "aliases" : [ "Umar" ],
+    "type" : "PERSON"
+  } ],
+  "normalize" : [ {
+    "input" : "Ivan Sidorov",
+    "normalized" : "ivan sidorov"
+  }, {
+    "input" : "IVAN PETROVICH SIDOROV",
+    "normalized" : "ivan petrovich sidorov"
+  }, {
+    "input" : "Iwan Sydorow",
+    "normalized" : "iwan sydorow"
+  }, {
+    "input" : "ivan p sidorov",
+    "normalized" : "ivan p sidorov"
+  }, {
+    "input" : "Sidorov Ivan",
+    "normalized" : "sidorov ivan"
+  }, {
+    "input" : "Golden Crescent Trading",
+    "normalized" : "golden crescent trading"
+  }, {
+    "input" : "golden crescent tradng llc",
+    "normalized" : "golden crescent tradng llc"
+  }, {
+    "input" : "Abu Bakr Al-Hashimi",
+    "normalized" : "abu bakr al hashimi"
+  }, {
+    "input" : "abubakar al hashimi",
+    "normalized" : "abubakar al hashimi"
+  }, {
+    "input" : "Societe Generale d'Equipement",
+    "normalized" : "societe generale d equipement"
+  }, {
+    "input" : "SOCIÉTÉ GÉNÉRALE",
+    "normalized" : "societe generale"
+  }, {
+    "input" : "Ocean Star",
+    "normalized" : "ocean star"
+  }, {
+    "input" : "M/V Ocean Star",
+    "normalized" : "m v ocean star"
+  }, {
+    "input" : "Maria Gonzalez",
+    "normalized" : "maria gonzalez"
+  }, {
+    "input" : "Maria Fernanda Gonzales",
+    "normalized" : "maria fernanda gonzales"
+  }, {
+    "input" : "Jose Gonzalez",
+    "normalized" : "jose gonzalez"
+  }, {
+    "input" : "Wang Wei",
+    "normalized" : "wang wei"
+  }, {
+    "input" : "Wei Wang",
+    "normalized" : "wei wang"
+  }, {
+    "input" : "Kim Jong Chul",
+    "normalized" : "kim jong chul"
+  }, {
+    "input" : "Kim Jong-Chol",
+    "normalized" : "kim jong chol"
+  }, {
+    "input" : "Northwind Shipping Co. Ltd.",
+    "normalized" : "northwind shipping co ltd"
+  }, {
+    "input" : "Northwind Shiping",
+    "normalized" : "northwind shiping"
+  }, {
+    "input" : "Ali",
+    "normalized" : "ali"
+  }, {
+    "input" : "Alí",
+    "normalized" : "ali"
+  }, {
+    "input" : "Al",
+    "normalized" : "al"
+  }, {
+    "input" : "Mohamed Abdullah Saleh",
+    "normalized" : "mohamed abdullah saleh"
+  }, {
+    "input" : "Mohammad Abdulah Saleh",
+    "normalized" : "mohammad abdulah saleh"
+  }, {
+    "input" : "Ostergaard Holding",
+    "normalized" : "ostergaard holding"
+  }, {
+    "input" : "Østergaard Holding A/S",
+    "normalized" : "stergaard holding a s"
+  }, {
+    "input" : "Strasse Import",
+    "normalized" : "strasse import"
+  }, {
+    "input" : "Straße Import GmbH",
+    "normalized" : "stra e import gmbh"
+  }, {
+    "input" : "KOMID",
+    "normalized" : "komid"
+  }, {
+    "input" : "Korea Mining Development Trading Corp",
+    "normalized" : "korea mining development trading corp"
+  }, {
+    "input" : "Jean Pierre Dubois",
+    "normalized" : "jean pierre dubois"
+  }, {
+    "input" : "J.P. Dubois",
+    "normalized" : "j p dubois"
+  }, {
+    "input" : "Wanjiru Kamau",
+    "normalized" : "wanjiru kamau"
+  }, {
+    "input" : "Wanjiru Kamao",
+    "normalized" : "wanjiru kamao"
+  }, {
+    "input" : "Ahmed Reza Tehrani",
+    "normalized" : "ahmed reza tehrani"
+  }, {
+    "input" : "Blue Lotus Bank Ltd",
+    "normalized" : "blue lotus bank ltd"
+  }, {
+    "input" : "Omar",
+    "normalized" : "omar"
+  }, {
+    "input" : "Umar",
+    "normalized" : "umar"
+  }, {
+    "input" : "Omer",
+    "normalized" : "omer"
+  }, {
+    "input" : "John Smith",
+    "normalized" : "john smith"
+  }, {
+    "input" : "Acme Widgets Inc",
+    "normalized" : "acme widgets inc"
+  }, {
+    "input" : "",
+    "normalized" : ""
+  }, {
+    "input" : "!!!",
+    "normalized" : ""
+  }, {
+    "input" : "a",
+    "normalized" : "a"
+  }, {
+    "input" : "Z",
+    "normalized" : "z"
+  }, {
+    "input" : "12345",
+    "normalized" : "12345"
+  }, {
+    "input" : "Peter Parker",
+    "normalized" : "peter parker"
+  }, {
+    "input" : "Kamau Wanjiru",
+    "normalized" : "kamau wanjiru"
+  }, {
+    "input" : "Ivan  Petrovich   Sidorov",
+    "normalized" : "ivan petrovich sidorov"
+  }, {
+    "input" : "ivan-petrovich-sidorov",
+    "normalized" : "ivan petrovich sidorov"
+  }, {
+    "input" : "Blue Lotos Bank",
+    "normalized" : "blue lotos bank"
+  }, {
+    "input" : "Golden Cresent",
+    "normalized" : "golden cresent"
+  }, {
+    "input" : "Ivan Petrovich Sidorov",
+    "normalized" : "ivan petrovich sidorov"
+  }, {
+    "input" : "I. P. Sidorov",
+    "normalized" : "i p sidorov"
+  }, {
+    "input" : "Iwan Sidorow",
+    "normalized" : "iwan sidorow"
+  }, {
+    "input" : "Golden Crescent Trading LLC",
+    "normalized" : "golden crescent trading llc"
+  }, {
+    "input" : "GCT LLC",
+    "normalized" : "gct llc"
+  }, {
+    "input" : "Abu Bakr al-Hashimi",
+    "normalized" : "abu bakr al hashimi"
+  }, {
+    "input" : "Abu Bakr Al Hashimi",
+    "normalized" : "abu bakr al hashimi"
+  }, {
+    "input" : "Abubakar Alhashimi",
+    "normalized" : "abubakar alhashimi"
+  }, {
+    "input" : "Société Générale d'Équipement",
+    "normalized" : "societe generale d equipement"
+  }, {
+    "input" : "Societe Generale d Equipement",
+    "normalized" : "societe generale d equipement"
+  }, {
+    "input" : "MV Ocean Star",
+    "normalized" : "mv ocean star"
+  }, {
+    "input" : "Maria Fernanda Gonzalez",
+    "normalized" : "maria fernanda gonzalez"
+  }, {
+    "input" : "María Fernanda González",
+    "normalized" : "maria fernanda gonzalez"
+  }, {
+    "input" : "M. F. Gonzalez",
+    "normalized" : "m f gonzalez"
+  }, {
+    "input" : "Jose Luis Gonzalez",
+    "normalized" : "jose luis gonzalez"
+  }, {
+    "input" : "王伟",
+    "normalized" : ""
+  }, {
+    "input" : "Kim Jong Chol",
+    "normalized" : "kim jong chol"
+  }, {
+    "input" : "Kim Jong-chol",
+    "normalized" : "kim jong chol"
+  }, {
+    "input" : "Chol Kim Jong",
+    "normalized" : "chol kim jong"
+  }, {
+    "input" : "Northwind Shipping Company Limited",
+    "normalized" : "northwind shipping company limited"
+  }, {
+    "input" : "Northwind Shipping Co Ltd",
+    "normalized" : "northwind shipping co ltd"
+  }, {
+    "input" : "Northwind Shipping",
+    "normalized" : "northwind shipping"
+  }, {
+    "input" : "Mohammed Abdullah Saleh",
+    "normalized" : "mohammed abdullah saleh"
+  }, {
+    "input" : "Mohamed Abdulla Saleh",
+    "normalized" : "mohamed abdulla saleh"
+  }, {
+    "input" : "Muhammad Abdallah Salih",
+    "normalized" : "muhammad abdallah salih"
+  }, {
+    "input" : "Ostergaard Holding AS",
+    "normalized" : "ostergaard holding as"
+  }, {
+    "input" : "Strasse Import GmbH",
+    "normalized" : "strasse import gmbh"
+  }, {
+    "input" : "Korea Mining Development Trading Corporation",
+    "normalized" : "korea mining development trading corporation"
+  }, {
+    "input" : "Changgwang Sinyong Corporation",
+    "normalized" : "changgwang sinyong corporation"
+  }, {
+    "input" : "Jean-Pierre Dubois",
+    "normalized" : "jean pierre dubois"
+  }, {
+    "input" : "J P Dubois",
+    "normalized" : "j p dubois"
+  }, {
+    "input" : "Ahmad Reza Tehrani",
+    "normalized" : "ahmad reza tehrani"
+  }, {
+    "input" : "Blue Lotus Bank",
+    "normalized" : "blue lotus bank"
+  }, {
+    "input" : "Blue Lotus Banking Corporation",
+    "normalized" : "blue lotus banking corporation"
+  } ],
+  "pairs" : [ {
+    "a" : "Ivan Sidorov",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Ivan Sidorov",
+    "score" : 1.0
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "I. P. Sidorov",
+    "score" : 0.75
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Iwan Sidorow",
+    "score" : 0.8333333333333334
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.14814814814814814
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Ocean Star",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Chol Kim Jong",
+    "score" : 0.23076923076923073
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ivan Sidorov",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 1.0
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Ivan Sidorov",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "I. P. Sidorov",
+    "score" : 0.5
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Iwan Sidorow",
+    "score" : 0.4545454545454546
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Northwind Shipping",
+    "score" : 0.2272727272727273
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.2727272727272727
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "IVAN PETROVICH SIDOROV",
+    "b" : "Omar",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.40909090909090906
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Ivan Sidorov",
+    "score" : 0.75
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "I. P. Sidorov",
+    "score" : 0.5833333333333333
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Iwan Sidorow",
+    "score" : 0.9166666666666666
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.10344827586206895
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Ocean Star",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Kim Jong Chol",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.13043478260869568
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.30000000000000004
+  }, {
+    "a" : "Iwan Sydorow",
+    "b" : "J P Dubois",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.6363636363636364
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Ivan Sidorov",
+    "score" : 0.8571428571428572
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "I. P. Sidorov",
+    "score" : 0.7857142857142857
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Iwan Sidorow",
+    "score" : 0.7142857142857143
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Chol Kim Jong",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "ivan p sidorov",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "Ivan Sidorov",
+    "score" : 1.0
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "GCT LLC",
+    "score" : 0.08333333333333337
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "María Fernanda González",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.1470588235294118
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "Straße Import GmbH",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Sidorov Ivan",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.2777777777777778
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Iwan Sidorow",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.8518518518518519
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Golden Crescent Trading",
+    "score" : 1.0
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.08695652173913049
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Chol Kim Jong",
+    "score" : 0.21739130434782605
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.21739130434782605
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.34090909090909094
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.34782608695652173
+  }, {
+    "a" : "Golden Crescent Trading",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.26086956521739135
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.962962962962963
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.8076923076923077
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.11538461538461542
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.34090909090909094
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "golden crescent tradng llc",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "GCT LLC",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 1.0
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 1.0
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.8421052631578947
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Wang Wei",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Ali",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "KOMID",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Abu Bakr Al-Hashimi",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.23333333333333328
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "GCT LLC",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.8947368421052632
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.8947368421052632
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.9473684210526316
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Wang Wei",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Ali",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.1333333333333333
+  }, {
+    "a" : "abubakar al hashimi",
+    "b" : "Omar",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.2068965517241379
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Société Générale d'Équipement",
+    "score" : 1.0
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Societe Generale d Equipement",
+    "score" : 1.0
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Wang Wei",
+    "score" : 0.13793103448275867
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Ali",
+    "score" : 0.10344827586206895
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "KOMID",
+    "score" : 0.10344827586206895
+  }, {
+    "a" : "Societe Generale d'Equipement",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.09999999999999998
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.052631578947368474
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Société Générale d'Équipement",
+    "score" : 0.5517241379310345
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.5517241379310345
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Ocean Star",
+    "score" : 0.3125
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "María Fernanda González",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.3125
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Chol Kim Jong",
+    "score" : 0.125
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "SOCIÉTÉ GÉNÉRALE",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.125
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Ivan Sidorov",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Iwan Sidorow",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Ocean Star",
+    "b" : "MV Ocean Star",
+    "score" : 0.7692307692307692
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Ocean Star",
+    "score" : 1.0
+  }, {
+    "a" : "Ocean Star",
+    "b" : "María Fernanda González",
+    "score" : 0.21739130434782605
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Straße Import GmbH",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Ocean Star",
+    "b" : "Omar",
+    "score" : 0.30000000000000004
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.18518518518518523
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "MV Ocean Star",
+    "score" : 0.9285714285714286
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "Ocean Star",
+    "score" : 0.7142857142857143
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "María Fernanda González",
+    "score" : 0.26086956521739135
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.20588235294117652
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "Straße Import GmbH",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "M/V Ocean Star",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Iwan Sidorow",
+    "score" : 0.0714285714285714
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "MV Ocean Star",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "María Fernanda González",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.7142857142857143
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.5555555555555556
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.19999999999999996
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Maria Gonzalez",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.18518518518518523
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Ocean Star",
+    "score" : 0.21739130434782605
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.9565217391304348
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "María Fernanda González",
+    "score" : 0.9565217391304348
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.4782608695652174
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.3913043478260869
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Northwind Shipping",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.34782608695652173
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.19999999999999996
+  }, {
+    "a" : "Maria Fernanda Gonzales",
+    "b" : "Omar",
+    "score" : 0.08695652173913049
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.4347826086956522
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "María Fernanda González",
+    "score" : 0.4347826086956522
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.6923076923076923
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.7222222222222222
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.2857142857142857
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Jose Gonzalez",
+    "b" : "Umar",
+    "score" : 0.07692307692307687
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Wang Wei",
+    "score" : 1.0
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Wei Wang",
+    "score" : 1.0
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.13043478260869568
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.19999999999999996
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wang Wei",
+    "b" : "Umar",
+    "score" : 0.0
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Wang Wei",
+    "score" : 1.0
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Wei Wang",
+    "score" : 1.0
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Chol Kim Jong",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Wei Wang",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Wang Wei",
+    "score" : 0.23076923076923073
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Kim Jong Chol",
+    "score" : 0.9230769230769231
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Kim Jong-chol",
+    "score" : 0.9230769230769231
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Chol Kim Jong",
+    "score" : 0.5
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Kim Jong Chul",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Wang Wei",
+    "score" : 0.23076923076923073
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Kim Jong Chol",
+    "score" : 1.0
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Kim Jong-chol",
+    "score" : 1.0
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Chol Kim Jong",
+    "score" : 1.0
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Kim Jong-Chol",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.07999999999999996
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.07999999999999996
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Wang Wei",
+    "score" : 0.16000000000000003
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.7352941176470589
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 1.0
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Northwind Shipping",
+    "score" : 0.72
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.16000000000000003
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Østergaard Holding A/S",
+    "score" : 0.31999999999999995
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Northwind Shipping Co. Ltd.",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.16000000000000003
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "I. P. Sidorov",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "MV Ocean Star",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Kim Jong Chol",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.5
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.6799999999999999
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Northwind Shipping",
+    "score" : 0.9444444444444444
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Straße Import GmbH",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Northwind Shiping",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Ali",
+    "b" : "Iwan Sidorow",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Ali",
+    "b" : "MV Ocean Star",
+    "score" : 0.07692307692307687
+  }, {
+    "a" : "Ali",
+    "b" : "Kim Jong Chol",
+    "score" : 0.0
+  }, {
+    "a" : "Ali",
+    "b" : "Ali",
+    "score" : 1.0
+  }, {
+    "a" : "Ali",
+    "b" : "Østergaard Holding A/S",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Ali",
+    "b" : "J P Dubois",
+    "score" : 0.09999999999999998
+  }, {
+    "a" : "Alí",
+    "b" : "Ivan Sidorov",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Alí",
+    "b" : "Société Générale d'Équipement",
+    "score" : 0.10344827586206895
+  }, {
+    "a" : "Alí",
+    "b" : "Wei Wang",
+    "score" : 0.125
+  }, {
+    "a" : "Alí",
+    "b" : "Ali",
+    "score" : 1.0
+  }, {
+    "a" : "Alí",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.09523809523809523
+  }, {
+    "a" : "Alí",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Alí",
+    "b" : "Umar",
+    "score" : 0.0
+  }, {
+    "a" : "Al",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.25
+  }, {
+    "a" : "Al",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Al",
+    "b" : "Northwind Shipping",
+    "score" : 0.0
+  }, {
+    "a" : "Al",
+    "b" : "Ali",
+    "score" : 0.6666666666666667
+  }, {
+    "a" : "Al",
+    "b" : "KOMID",
+    "score" : 0.0
+  }, {
+    "a" : "Al",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.033333333333333326
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "GCT LLC",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "María Fernanda González",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.2727272727272727
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Northwind Shipping",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.9565217391304348
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.9545454545454546
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.782608695652174
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "Mohamed Abdullah Saleh",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.2727272727272727
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "María Fernanda González",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.9130434782608696
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.8181818181818181
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.8260869565217391
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Mohammad Abdulah Saleh",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "I. P. Sidorov",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.34782608695652173
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "MV Ocean Star",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Kim Jong Chol",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Northwind Shipping",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Østergaard Holding A/S",
+    "score" : 0.7619047619047619
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.8571428571428572
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Straße Import GmbH",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Ostergaard Holding",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Iwan Sidorow",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "MV Ocean Star",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Kim Jong Chol",
+    "score" : 0.19047619047619047
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.31999999999999995
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Østergaard Holding A/S",
+    "score" : 1.0
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.9047619047619048
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Straße Import GmbH",
+    "score" : 0.23809523809523814
+  }, {
+    "a" : "Østergaard Holding A/S",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Iwan Sidorow",
+    "score" : 0.2142857142857143
+  }, {
+    "a" : "Strasse Import",
+    "b" : "MV Ocean Star",
+    "score" : 0.0714285714285714
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Kim Jong Chol",
+    "score" : 0.0714285714285714
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.08695652173913049
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Straße Import GmbH",
+    "score" : 0.6111111111111112
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.736842105263158
+  }, {
+    "a" : "Strasse Import",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.0714285714285714
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "I. P. Sidorov",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.24137931034482762
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.23809523809523814
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "Straße Import GmbH",
+    "score" : 1.0
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.8947368421052632
+  }, {
+    "a" : "Straße Import GmbH",
+    "b" : "J P Dubois",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "KOMID",
+    "b" : "Ivan Sidorov",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "KOMID",
+    "b" : "Société Générale d'Équipement",
+    "score" : 0.10344827586206895
+  }, {
+    "a" : "KOMID",
+    "b" : "Wei Wang",
+    "score" : 0.0
+  }, {
+    "a" : "KOMID",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.13043478260869568
+  }, {
+    "a" : "KOMID",
+    "b" : "KOMID",
+    "score" : 1.0
+  }, {
+    "a" : "KOMID",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "KOMID",
+    "b" : "Omar",
+    "score" : 0.4
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.21621621621621623
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.43243243243243246
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.4054054054054054
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.21621621621621623
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.18918918918918914
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.8409090909090909
+  }, {
+    "a" : "Korea Mining Development Trading Corp",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.2432432432432432
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Ivan Sidorov",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "I. P. Sidorov",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Iwan Sidorow",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "MV Ocean Star",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Kim Jong Chol",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.13043478260869568
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 1.0
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Jean Pierre Dubois",
+    "score" : 1.0
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "J P Dubois",
+    "score" : 0.5555555555555556
+  }, {
+    "a" : "Jean Pierre Dubois",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "I. P. Sidorov",
+    "score" : 0.36363636363636365
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Ocean Star",
+    "score" : 0.0
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Kim Jong-chol",
+    "score" : 0.07692307692307687
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Østergaard Holding A/S",
+    "score" : 0.19047619047619047
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.5555555555555556
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.5555555555555556
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "J P Dubois",
+    "score" : 1.0
+  }, {
+    "a" : "J.P. Dubois",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.14814814814814814
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Ocean Star",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Wang Wei",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Wei Wang",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Straße Import GmbH",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Wanjiru Kamau",
+    "score" : 1.0
+  }, {
+    "a" : "Wanjiru Kamau",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.14814814814814814
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Ocean Star",
+    "score" : 0.15384615384615385
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Wang Wei",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Wei Wang",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Straße Import GmbH",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.9230769230769231
+  }, {
+    "a" : "Wanjiru Kamao",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.2962962962962963
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.34782608695652173
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.21739130434782605
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Chol Kim Jong",
+    "score" : 0.2222222222222222
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.30434782608695654
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.34782608695652173
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.9444444444444444
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 1.0
+  }, {
+    "a" : "Ahmed Reza Tehrani",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.19999999999999996
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "GCT LLC",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "María Fernanda González",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.368421052631579
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.24
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.0
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.7894736842105263
+  }, {
+    "a" : "Blue Lotus Bank Ltd",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.5666666666666667
+  }, {
+    "a" : "Omar",
+    "b" : "GCT LLC",
+    "score" : 0.0
+  }, {
+    "a" : "Omar",
+    "b" : "Ocean Star",
+    "score" : 0.30000000000000004
+  }, {
+    "a" : "Omar",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Omar",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.040000000000000036
+  }, {
+    "a" : "Omar",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Omar",
+    "b" : "KOMID",
+    "score" : 0.4
+  }, {
+    "a" : "Omar",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.1333333333333333
+  }, {
+    "a" : "Omar",
+    "b" : "Omar",
+    "score" : 1.0
+  }, {
+    "a" : "Omar",
+    "b" : "Umar",
+    "score" : 0.75
+  }, {
+    "a" : "Umar",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Umar",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.08333333333333337
+  }, {
+    "a" : "Umar",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.0
+  }, {
+    "a" : "Umar",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Umar",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Umar",
+    "b" : "Omar",
+    "score" : 0.75
+  }, {
+    "a" : "Umar",
+    "b" : "Umar",
+    "score" : 1.0
+  }, {
+    "a" : "Omer",
+    "b" : "GCT LLC",
+    "score" : 0.0
+  }, {
+    "a" : "Omer",
+    "b" : "Ocean Star",
+    "score" : 0.30000000000000004
+  }, {
+    "a" : "Omer",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Omer",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.040000000000000036
+  }, {
+    "a" : "Omer",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Omer",
+    "b" : "KOMID",
+    "score" : 0.4
+  }, {
+    "a" : "Omer",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.06666666666666665
+  }, {
+    "a" : "Omer",
+    "b" : "Omar",
+    "score" : 0.75
+  }, {
+    "a" : "Omer",
+    "b" : "Umar",
+    "score" : 0.5
+  }, {
+    "a" : "John Smith",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "John Smith",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.0
+  }, {
+    "a" : "John Smith",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.28
+  }, {
+    "a" : "John Smith",
+    "b" : "Northwind Shipping",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "John Smith",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "John Smith",
+    "b" : "KOMID",
+    "score" : 0.30000000000000004
+  }, {
+    "a" : "John Smith",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.1333333333333333
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "GCT LLC",
+    "score" : 0.25
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "María Fernanda González",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "Northwind Shipping Company Limited",
+    "score" : 0.17647058823529416
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "Straße Import GmbH",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "Ahmad Reza Tehrani",
+    "score" : 0.2777777777777778
+  }, {
+    "a" : "Acme Widgets Inc",
+    "b" : "Ahmed Reza Tehrani",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.0
+  }, {
+    "a" : "",
+    "b" : "Ocean Star",
+    "score" : 0.0
+  }, {
+    "a" : "",
+    "b" : "Kim Jong-chol",
+    "score" : 0.0
+  }, {
+    "a" : "",
+    "b" : "Østergaard Holding A/S",
+    "score" : 0.0
+  }, {
+    "a" : "",
+    "b" : "J P Dubois",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Ivan Sidorov",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Société Générale d'Équipement",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Wei Wang",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Mohammed Abdullah Saleh",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Changgwang Sinyong Corporation",
+    "score" : 0.0
+  }, {
+    "a" : "!!!",
+    "b" : "Omar",
+    "score" : 0.0
+  }, {
+    "a" : "a",
+    "b" : "Abu Bakr al-Hashimi",
+    "score" : 0.052631578947368474
+  }, {
+    "a" : "a",
+    "b" : "M. F. Gonzalez",
+    "score" : 0.08333333333333337
+  }, {
+    "a" : "a",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.0
+  }, {
+    "a" : "a",
+    "b" : "Ali",
+    "score" : 0.33333333333333337
+  }, {
+    "a" : "a",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.022727272727272707
+  }, {
+    "a" : "a",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.06666666666666665
+  }, {
+    "a" : "Z",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.0
+  }, {
+    "a" : "Z",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.04347826086956519
+  }, {
+    "a" : "Z",
+    "b" : "Chol Kim Jong",
+    "score" : 0.0
+  }, {
+    "a" : "Z",
+    "b" : "Ostergaard Holding AS",
+    "score" : 0.0
+  }, {
+    "a" : "Z",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "I. P. Sidorov",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.0
+  }, {
+    "a" : "12345",
+    "b" : "Umar",
+    "score" : 0.0
+  }, {
+    "a" : "Peter Parker",
+    "b" : "Abu Bakr Al Hashimi",
+    "score" : 0.1578947368421053
+  }, {
+    "a" : "Peter Parker",
+    "b" : "Jose Luis Gonzalez",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Peter Parker",
+    "b" : "Northwind Shipping",
+    "score" : 0.11111111111111116
+  }, {
+    "a" : "Peter Parker",
+    "b" : "Korea Mining Development Trading Corporation",
+    "score" : 0.15909090909090906
+  }, {
+    "a" : "Peter Parker",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.19999999999999996
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.13043478260869568
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Maria Fernanda Gonzalez",
+    "score" : 0.17391304347826086
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Wang Wei",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Wei Wang",
+    "score" : 0.3076923076923077
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Northwind Shipping Co Ltd",
+    "score" : 0.07999999999999996
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Strasse Import GmbH",
+    "score" : 0.10526315789473684
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Wanjiru Kamau",
+    "score" : 1.0
+  }, {
+    "a" : "Kamau Wanjiru",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.06666666666666665
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 1.0
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Ivan Sidorov",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "I. P. Sidorov",
+    "score" : 0.5
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Iwan Sidorow",
+    "score" : 0.4545454545454546
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Abubakar Alhashimi",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Wang Wei",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Ali",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "KOMID",
+    "score" : 0.13636363636363635
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "Ivan  Petrovich   Sidorov",
+    "b" : "Umar",
+    "score" : 0.09090909090909094
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Ivan Petrovich Sidorov",
+    "score" : 1.0
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Ivan Sidorov",
+    "score" : 0.6666666666666666
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "I. P. Sidorov",
+    "score" : 0.5
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Iwan Sidorow",
+    "score" : 0.4545454545454546
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "MV Ocean Star",
+    "score" : 0.2727272727272727
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Kim Jong Chol",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.08695652173913049
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.31818181818181823
+  }, {
+    "a" : "ivan-petrovich-sidorov",
+    "b" : "Wanjiru Kamau",
+    "score" : 0.18181818181818177
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "I. P. Sidorov",
+    "score" : 0.1333333333333333
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "Societe Generale d Equipement",
+    "score" : 0.13793103448275867
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "王伟",
+    "score" : 0.0
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "Mohamed Abdulla Saleh",
+    "score" : 0.19047619047619047
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "Jean-Pierre Dubois",
+    "score" : 0.16666666666666663
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "Blue Lotus Bank",
+    "score" : 0.9333333333333333
+  }, {
+    "a" : "Blue Lotos Bank",
+    "b" : "Blue Lotus Banking Corporation",
+    "score" : 0.4666666666666667
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Ivan Sidorov",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Golden Crescent Trading LLC",
+    "score" : 0.5185185185185186
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Golden Crescent Trading",
+    "score" : 0.6086956521739131
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "MV Ocean Star",
+    "score" : 0.1428571428571429
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Kim Jong Chol",
+    "score" : 0.0714285714285714
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Muhammad Abdallah Salih",
+    "score" : 0.08695652173913049
+  }, {
+    "a" : "Golden Cresent",
+    "b" : "Jean Pierre Dubois",
+    "score" : 0.11111111111111116
+  } ],
+  "screens" : [ {
+    "query" : "Ivan Sidorov",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 1.0,
+      "matched" : "Ivan Sidorov"
+    } ]
+  }, {
+    "query" : "IVAN PETROVICH SIDOROV",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 1.0,
+      "matched" : "Ivan Petrovich Sidorov"
+    } ]
+  }, {
+    "query" : "Iwan Sydorow",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 0.9167,
+      "matched" : "Iwan Sidorow"
+    } ]
+  }, {
+    "query" : "ivan p sidorov",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 0.8571,
+      "matched" : "Ivan Sidorov"
+    } ]
+  }, {
+    "query" : "Sidorov Ivan",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 1.0,
+      "matched" : "Ivan Sidorov"
+    } ]
+  }, {
+    "query" : "Golden Crescent Trading",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1002",
+      "score" : 1.0,
+      "matched" : "Golden Crescent Trading"
+    } ]
+  }, {
+    "query" : "golden crescent tradng llc",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1002",
+      "score" : 0.963,
+      "matched" : "Golden Crescent Trading LLC"
+    } ]
+  }, {
+    "query" : "Abu Bakr Al-Hashimi",
+    "matches" : [ {
+      "entryId" : "un-sc:QDi.123",
+      "score" : 1.0,
+      "matched" : "Abu Bakr al-Hashimi"
+    } ]
+  }, {
+    "query" : "abubakar al hashimi",
+    "matches" : [ {
+      "entryId" : "un-sc:QDi.123",
+      "score" : 0.9474,
+      "matched" : "Abubakar Alhashimi"
+    } ]
+  }, {
+    "query" : "Societe Generale d'Equipement",
+    "matches" : [ {
+      "entryId" : "eu-fsf:EU.55.12",
+      "score" : 1.0,
+      "matched" : "Société Générale d'Équipement"
+    } ]
+  }, {
+    "query" : "SOCIÉTÉ GÉNÉRALE",
+    "matches" : [ ]
+  }, {
+    "query" : "Ocean Star",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1003",
+      "score" : 1.0,
+      "matched" : "Ocean Star"
+    } ]
+  }, {
+    "query" : "M/V Ocean Star",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1003",
+      "score" : 0.9286,
+      "matched" : "MV Ocean Star"
+    } ]
+  }, {
+    "query" : "Maria Gonzalez",
+    "matches" : [ ]
+  }, {
+    "query" : "Maria Fernanda Gonzales",
+    "matches" : [ {
+      "entryId" : "peps:Q42",
+      "score" : 0.9565,
+      "matched" : "Maria Fernanda Gonzalez"
+    } ]
+  }, {
+    "query" : "Jose Gonzalez",
+    "matches" : [ ]
+  }, {
+    "query" : "Wang Wei",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1004",
+      "score" : 1.0,
+      "matched" : "Wang Wei"
+    } ]
+  }, {
+    "query" : "Wei Wang",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1004",
+      "score" : 1.0,
+      "matched" : "Wang Wei"
+    } ]
+  }, {
+    "query" : "Kim Jong Chul",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1005",
+      "score" : 0.9231,
+      "matched" : "Kim Jong Chol"
+    } ]
+  }, {
+    "query" : "Kim Jong-Chol",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1005",
+      "score" : 1.0,
+      "matched" : "Kim Jong Chol"
+    } ]
+  }, {
+    "query" : "Northwind Shipping Co. Ltd.",
+    "matches" : [ {
+      "entryId" : "gb-hmt:7788",
+      "score" : 1.0,
+      "matched" : "Northwind Shipping Co Ltd"
+    } ]
+  }, {
+    "query" : "Northwind Shiping",
+    "matches" : [ {
+      "entryId" : "gb-hmt:7788",
+      "score" : 0.9444,
+      "matched" : "Northwind Shipping"
+    } ]
+  }, {
+    "query" : "Ali",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1006",
+      "score" : 1.0,
+      "matched" : "Ali"
+    } ]
+  }, {
+    "query" : "Alí",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1006",
+      "score" : 1.0,
+      "matched" : "Ali"
+    } ]
+  }, {
+    "query" : "Al",
+    "matches" : [ ]
+  }, {
+    "query" : "Mohamed Abdullah Saleh",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1007",
+      "score" : 0.9565,
+      "matched" : "Mohammed Abdullah Saleh"
+    } ]
+  }, {
+    "query" : "Mohammad Abdulah Saleh",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1007",
+      "score" : 0.913,
+      "matched" : "Mohammed Abdullah Saleh"
+    } ]
+  }, {
+    "query" : "Ostergaard Holding",
+    "matches" : [ {
+      "entryId" : "ch-seco:9001",
+      "score" : 0.8571,
+      "matched" : "Ostergaard Holding AS"
+    } ]
+  }, {
+    "query" : "Østergaard Holding A/S",
+    "matches" : [ {
+      "entryId" : "ch-seco:9001",
+      "score" : 1.0,
+      "matched" : "Østergaard Holding A/S"
+    } ]
+  }, {
+    "query" : "Strasse Import",
+    "matches" : [ ]
+  }, {
+    "query" : "Straße Import GmbH",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1008",
+      "score" : 1.0,
+      "matched" : "Straße Import GmbH"
+    } ]
+  }, {
+    "query" : "KOMID",
+    "matches" : [ {
+      "entryId" : "un-sc:KPi.066",
+      "score" : 1.0,
+      "matched" : "KOMID"
+    } ]
+  }, {
+    "query" : "Korea Mining Development Trading Corp",
+    "matches" : [ {
+      "entryId" : "un-sc:KPi.066",
+      "score" : 0.8409,
+      "matched" : "Korea Mining Development Trading Corporation"
+    } ]
+  }, {
+    "query" : "Jean Pierre Dubois",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1009",
+      "score" : 1.0,
+      "matched" : "Jean-Pierre Dubois"
+    } ]
+  }, {
+    "query" : "J.P. Dubois",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1009",
+      "score" : 1.0,
+      "matched" : "J P Dubois"
+    } ]
+  }, {
+    "query" : "Wanjiru Kamau",
+    "matches" : [ {
+      "entryId" : "peps:Q44",
+      "score" : 1.0,
+      "matched" : "Wanjiru Kamau"
+    } ]
+  }, {
+    "query" : "Wanjiru Kamao",
+    "matches" : [ {
+      "entryId" : "peps:Q44",
+      "score" : 0.9231,
+      "matched" : "Wanjiru Kamau"
+    } ]
+  }, {
+    "query" : "Ahmed Reza Tehrani",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1010",
+      "score" : 1.0,
+      "matched" : "Ahmed Reza Tehrani"
+    } ]
+  }, {
+    "query" : "Blue Lotus Bank Ltd",
+    "matches" : [ ]
+  }, {
+    "query" : "Omar",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1012",
+      "score" : 1.0,
+      "matched" : "Omar"
+    } ]
+  }, {
+    "query" : "Umar",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1012",
+      "score" : 1.0,
+      "matched" : "Umar"
+    } ]
+  }, {
+    "query" : "Omer",
+    "matches" : [ ]
+  }, {
+    "query" : "John Smith",
+    "matches" : [ ]
+  }, {
+    "query" : "Acme Widgets Inc",
+    "matches" : [ ]
+  }, {
+    "query" : "",
+    "matches" : [ ]
+  }, {
+    "query" : "!!!",
+    "matches" : [ ]
+  }, {
+    "query" : "a",
+    "matches" : [ ]
+  }, {
+    "query" : "Z",
+    "matches" : [ ]
+  }, {
+    "query" : "12345",
+    "matches" : [ ]
+  }, {
+    "query" : "Peter Parker",
+    "matches" : [ ]
+  }, {
+    "query" : "Kamau Wanjiru",
+    "matches" : [ {
+      "entryId" : "peps:Q44",
+      "score" : 1.0,
+      "matched" : "Wanjiru Kamau"
+    } ]
+  }, {
+    "query" : "Ivan  Petrovich   Sidorov",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 1.0,
+      "matched" : "Ivan Petrovich Sidorov"
+    } ]
+  }, {
+    "query" : "ivan-petrovich-sidorov",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1001",
+      "score" : 1.0,
+      "matched" : "Ivan Petrovich Sidorov"
+    } ]
+  }, {
+    "query" : "Blue Lotos Bank",
+    "matches" : [ {
+      "entryId" : "ofac-sdn:1011",
+      "score" : 0.9333,
+      "matched" : "Blue Lotus Bank"
+    } ]
+  }, {
+    "query" : "Golden Cresent",
+    "matches" : [ ]
+  } ]
+}

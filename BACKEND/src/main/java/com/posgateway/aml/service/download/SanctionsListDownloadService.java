@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.posgateway.aml.client.aml.AmlMicroserviceProperties;
 import com.posgateway.aml.entity.sanctions.SanctionsList;
 import com.posgateway.aml.repository.sanctions.SanctionsListRepository;
+import com.posgateway.aml.service.residency.EdgeSanctionsSnapshotService;
 import com.posgateway.aml.service.sanctions.WatchlistUpdateTrackingService;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,18 +51,21 @@ public class SanctionsListDownloadService {
     private final WatchlistUpdateTrackingService watchlistUpdateTrackingService;
     private final AmlMicroserviceProperties amlMicroserviceProperties;
     private final SanctionsListRepository sanctionsListRepository;
+    private final EdgeSanctionsSnapshotService edgeSanctionsSnapshots;
 
     @Autowired
     public SanctionsListDownloadService(ObjectMapper objectMapper,
                                         RestTemplate restTemplate,
                                         WatchlistUpdateTrackingService watchlistUpdateTrackingService,
                                         AmlMicroserviceProperties amlMicroserviceProperties,
-                                        SanctionsListRepository sanctionsListRepository) {
+                                        SanctionsListRepository sanctionsListRepository,
+                                        EdgeSanctionsSnapshotService edgeSanctionsSnapshots) {
         this.objectMapper = objectMapper;
         this.restTemplate = restTemplate;
         this.watchlistUpdateTrackingService = watchlistUpdateTrackingService;
         this.amlMicroserviceProperties = amlMicroserviceProperties;
         this.sanctionsListRepository = sanctionsListRepository;
+        this.edgeSanctionsSnapshots = edgeSanctionsSnapshots;
     }
 
     @Value("${sanctions.download.enabled:false}")
@@ -113,10 +117,12 @@ public class SanctionsListDownloadService {
 
     /**
      * Downloads OpenSanctions JSON-lines, parses each entity, and POSTs batches
-     * to the aml-microservice's ingest endpoint.
+     * to the aml-microservice's ingest endpoint. The same entities feed the Edge list snapshot
+     * (R10b, contract 6.4), which is published once the download completes.
      */
     public void downloadDailyDataset() {
         log.info("Downloading sanctions data from OpenSanctions...");
+        EdgeSanctionsSnapshotService.Builder snapshot = edgeSanctionsSnapshots.begin();
         try {
             String currentVersion = checkMetadataVersion();
             log.info("Latest sanctions data version: {}", currentVersion);
@@ -127,7 +133,7 @@ public class SanctionsListDownloadService {
             Path downloadedFile = downloadFile(opensanctionsUrl, tempDir);
             log.info("Downloaded file: {}", downloadedFile);
 
-            int recordsProcessed = processAndPushToMicroservice(downloadedFile);
+            int recordsProcessed = processAndPushToMicroservice(downloadedFile, snapshot);
             log.info("Successfully processed {} sanctions records", recordsProcessed);
 
             try {
@@ -143,12 +149,14 @@ public class SanctionsListDownloadService {
                 log.warn("Failed to record watchlist update: {}", e.getMessage());
             }
 
-            recordSanctionsListMetadata(currentVersion, recordsProcessed);
+            SanctionsList listRow = recordSanctionsListMetadata(currentVersion, recordsProcessed);
+            publishEdgeSnapshot(snapshot, listRow);
 
             Files.deleteIfExists(downloadedFile);
             log.info("Cleaned up temporary file");
 
         } catch (Exception e) {
+            snapshot.abort();
             log.error("Failed to download and process sanctions: {}", e.getMessage(), e);
             throw new RuntimeException("Sanctions download failed", e);
         }
@@ -190,11 +198,30 @@ public class SanctionsListDownloadService {
 
     // ---------------- internals ----------------
 
-    private void recordSanctionsListMetadata(String version, int recordsProcessed) {
+    /**
+     * Publishes the Edge list snapshot of this download. A failure here never fails the download (the
+     * aml-microservice ingest already succeeded); the Edges keep the previous snapshot until the next
+     * download publishes one.
+     */
+    void publishEdgeSnapshot(EdgeSanctionsSnapshotService.Builder snapshot, SanctionsList listRow) {
         try {
-            if (sanctionsListRepository.findByListNameAndVersion("OPENSANCTIONS_ALL", version).isPresent()) {
+            snapshot.finish(listRow).ifPresent(published -> log.info(
+                    "Edge sanctions list {} ({} entries) is the list Edge Nodes screen with",
+                    published.listVersion(), published.entryCount()));
+        } catch (RuntimeException e) {
+            snapshot.abort();
+            log.error("Edge sanctions snapshot could not be published: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    /** Records the download in {@code sanctions_lists} and returns its row (the existing one for a re-download). */
+    private SanctionsList recordSanctionsListMetadata(String version, int recordsProcessed) {
+        try {
+            java.util.Optional<SanctionsList> existing =
+                    sanctionsListRepository.findByListNameAndVersion("OPENSANCTIONS_ALL", version);
+            if (existing.isPresent()) {
                 log.debug("Sanctions list version {} already recorded", version);
-                return;
+                return existing.get();
             }
             SanctionsList row = new SanctionsList();
             row.setListName("OPENSANCTIONS_ALL");
@@ -206,9 +233,10 @@ public class SanctionsListDownloadService {
             meta.put("sourceUrl", opensanctionsUrl);
             meta.put("ingestTarget", "aml-microservice");
             row.setMetadata(meta);
-            sanctionsListRepository.save(row);
+            return sanctionsListRepository.save(row);
         } catch (Exception e) {
             log.warn("Failed to persist sanctions_lists metadata: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -237,7 +265,8 @@ public class SanctionsListDownloadService {
      * Streams the JSON-lines file, batches parsed entities, and pushes each batch
      * to the microservice. Returns the total number of entities pushed.
      */
-    private int processAndPushToMicroservice(Path filePath) throws IOException {
+    int processAndPushToMicroservice(Path filePath, EdgeSanctionsSnapshotService.Builder snapshot)
+            throws IOException {
         log.info("Processing sanctions file: {}", filePath);
         int recordCount = 0;
         int chunk = batchSize > 0 ? batchSize : DEFAULT_BATCH_SIZE;
@@ -252,6 +281,7 @@ public class SanctionsListDownloadService {
                     Map<String, Object> e = parseSanctionEntity(entityJson);
                     if (e != null) {
                         batch.add(e);
+                        snapshot.add(e);
                         recordCount++;
                     }
                     if (batch.size() >= chunk) {

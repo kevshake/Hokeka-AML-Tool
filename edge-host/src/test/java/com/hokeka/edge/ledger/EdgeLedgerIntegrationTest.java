@@ -127,7 +127,7 @@ class EdgeLedgerIntegrationTest {
             }
         }
         assertEquals(0, ledger.ensurePartitions(Instant.now()), "partition creation is idempotent");
-        assertEquals(2, ledger.schemaVersion(), "V2 (retention, holds, tunnel) is the latest migration");
+        assertEquals(3, ledger.schemaVersion(), "V3 (sanctions list, R10b) is the latest migration");
         // A second initialisation (another node of the site, or a restart) is a no-op.
         try (EdgeLedger second = LedgerTestDatabase.openLedger(LedgerTestDatabase.properties(schema), "acme-eu-2")) {
             assertTrue(second.ready());

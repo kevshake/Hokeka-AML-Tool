@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.hokeka.com/edge/sanctions-list-chunk.schema.json",
+  "title": "Sanctions/PEP list chunk v1",
+  "description": "One chunk of a published sanctions/PEP list snapshot (EDGE_DATA_RESIDENCY_CONTRACT.md section 6.4). GET /api/v1/edge/sanctions/list/{listHash}/chunks/{index}, HSE-1 context 'hokeka.sanctions.list.chunk', signed with the Control Plane Ed25519 key, sealed to the node's X25519 key, inside the channel replay envelope. data is the base64 of the gzip-compressed JSON lines; each line is one sanctions-list-entry. The Edge MUST check listHash, index, sha256 and entryCount against the manifest it holds before storing the chunk.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "listHash", "index", "sha256", "entryCount", "encoding", "data"],
+  "properties": {
+    "v": { "const": 1 },
+    "listHash": { "$ref": "common.schema.json#/$defs/sha256Hex" },
+    "index": { "type": "integer", "minimum": 0, "maximum": 4095 },
+    "sha256": { "$ref": "common.schema.json#/$defs/sha256Hex" },
+    "entryCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+    "encoding": { "const": "gzip+base64" },
+    "data": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 11184812,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    }
+  }
+}

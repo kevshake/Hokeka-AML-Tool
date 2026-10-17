@@ -210,7 +210,7 @@ The decision record carries only these fields:
 | `failClosedCode` | present only on fail-closed `HOLD` |
 | `latencyMs` | |
 | `merchantId` | when valid |
-| `ctrRequired`, `sanctionsHit`, `watchlistEntryIds`, `typologyCodes` | The node sends `false` / none today. Edge CTR and sanctions screening are planned (R10a, R10b) |
+| `ctrRequired`, `sanctionsHit`, `watchlistEntryIds`, `typologyCodes` | `sanctionsHit` / `watchlistEntryIds` come from local screening of `counterparty_name`, `cardholder_name` and `beneficiary_name` (R10b, contract §6.5). `ctrRequired` / `typologyCodes`: R10a |
 
 It never carries the PAN hash, amount, currency, country, MCC, channel, other features, or the
 `reasons` text. The node validates each record against the closed schema

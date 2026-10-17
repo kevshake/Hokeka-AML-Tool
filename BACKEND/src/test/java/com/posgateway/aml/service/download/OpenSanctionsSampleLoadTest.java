@@ -66,7 +66,8 @@ class OpenSanctionsSampleLoadTest {
                 mock(RestTemplate.class),
                 mock(WatchlistUpdateTrackingService.class),
                 mock(AmlMicroserviceProperties.class),
-                mock(SanctionsListRepository.class));
+                mock(SanctionsListRepository.class),
+                mock(com.posgateway.aml.service.residency.EdgeSanctionsSnapshotService.class));
     }
 
     /** Returns current JVM heap usage for coarse memory measurement during sample ingest tests. */

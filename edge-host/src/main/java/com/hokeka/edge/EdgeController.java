@@ -11,6 +11,9 @@ import com.hokeka.edge.residency.EdgeConfigPoller;
 import com.hokeka.edge.residency.EdgeConfigStore;
 import com.hokeka.edge.residency.RetentionPolicy;
 import com.hokeka.edge.residency.RetentionPurger;
+import com.hokeka.edge.sanctions.SanctionsListPoller;
+import com.hokeka.edge.sanctions.SanctionsListStore;
+import com.hokeka.edge.sanctions.SanctionsScreener;
 import com.hokeka.edge.store.EdgeFeatureStore;
 import com.hokeka.edge.tunnel.EdgeTunnelClient;
 import com.hokeka.edge.store.FeatureDerivation;
@@ -62,6 +65,22 @@ public class EdgeController {
     private EdgeConfigPoller edgeConfigPoller;
     private RetentionPurger purger;
     private LedgerProperties ledgerProperties;
+    private SanctionsScreener screener;
+    private SanctionsListStore sanctionsLists;
+    private SanctionsListPoller sanctionsPoller;
+
+    /** Local sanctions screening and merchant blocklist (R10b); optional so the controller works without it. */
+    @Autowired(required = false)
+    public void setSanctions(SanctionsScreener screener, SanctionsListStore sanctionsLists) {
+        this.screener = screener;
+        this.sanctionsLists = sanctionsLists;
+    }
+
+    /** The sanctions list fetcher (exists only with the control-plane channel), for status output. */
+    @Autowired(required = false)
+    public void setSanctionsPoller(SanctionsListPoller sanctionsPoller) {
+        this.sanctionsPoller = sanctionsPoller;
+    }
 
     /** Data-residency status sources (R2/R5); each is optional so the controller works without them. */
     @Autowired(required = false)
@@ -141,6 +160,7 @@ public class EdgeController {
         status.put("ledger", ledgerStatus());
         status.put("edgeConfig", edgeConfigStatus());
         status.put("retention", retentionStatus());
+        status.put("sanctions", sanctionsStatus());
         status.put("tunnel", tunnel == null ? Map.of("state", "NOT_CONFIGURED") : tunnel.status());
         return status;
     }
@@ -170,6 +190,27 @@ public class EdgeController {
             s.put("lastPollSuccess", edgeConfigPoller.lastSuccess() == null ? null
                     : edgeConfigPoller.lastSuccess().toString());
             s.put("lastPollError", edgeConfigPoller.lastError());
+        }
+        return s;
+    }
+
+    /** The sanctions list in force (version, size) and the last fetch outcome; never list content. */
+    private Map<String, Object> sanctionsStatus() {
+        Map<String, Object> s = new LinkedHashMap<>();
+        if (sanctionsLists == null) {
+            s.put("state", "NOT_CONFIGURED");
+            return s;
+        }
+        java.util.Optional<SanctionsListStore.Loaded> list = sanctionsLists.current();
+        s.put("state", list.isPresent() ? "LOADED" : "NO_LIST");
+        s.put("listVersion", list.map(SanctionsListStore.Loaded::listVersion).orElse(null));
+        s.put("listHash", list.map(SanctionsListStore.Loaded::listHash).orElse(null));
+        s.put("entries", list.map(SanctionsListStore.Loaded::entryCount).orElse(0));
+        s.put("variants", list.map(l -> l.index().variantCount()).orElse(0));
+        s.put("activatedAt", list.map(l -> l.activatedAt().toString()).orElse(null));
+        s.put("lastError", sanctionsLists.lastError());
+        if (sanctionsPoller != null) {
+            s.put("lastFetchSuccess", sanctionsPoller.lastSuccess() == null ? null : sanctionsPoller.lastSuccess().toString());
         }
         return s;
     }
@@ -289,11 +330,17 @@ public class EdgeController {
         UUID edgeAssessmentId = UUID.randomUUID();
         long version = engine.activeVersion();
         String bundleHash = engine.activeBundleHash();
+
+        // R10b: local sanctions screening of the counterparty names and the merchant blocklist. The
+        // names never leave the Edge; only watchlist entry ids reach the decision record.
+        SanctionsScreener.Result screening = screener == null ? SanctionsScreener.Result.NONE
+                : screener.screen(evaluated);
+        outcome = SanctionsScreener.apply(outcome, screening);
         long evalMicros = Math.max(0L, (System.nanoTime() - startNanos) / 1000L);
 
         LedgerEvaluation row = LedgerEvaluations.fromEvaluation(edgeAssessmentId, evaluatedAt, siteId, nodeId,
                 evaluated, panHash, outcome.decision(), version, bundleHash, outcome.evaluator(),
-                outcome.failClosedCode(), evalMicros);
+                outcome.failClosedCode(), evalMicros).withSanctionsHits(screening.hits());
         LedgerEvaluation standing = recorder.record(row);
 
         EdgeRuleInterpreter.Decision decision = standing == row ? outcome.decision()

@@ -47,7 +47,7 @@ The owner decisions of 2026-10-16 change the ground this plan was written on. Th
 | R8 | Workflow references by ID; detach Alert/Case/SAR/Screening/Finding from `TransactionEntity` | Planned |
 | R9 | SAR/CTR filing from Edge pulls; filed-document store; hold notifications | Planned |
 | R10a | Edge CTR, FX, limits, structuring; SpEL typology library compiled to Edge IR | Planned |
-| R10b | Sanctions list distribution and Edge matcher; merchant blocklist | Planned |
+| R10b | Sanctions list distribution and Edge matcher; merchant blocklist | Done (contract §6.4, §6.5) |
 | R10c | Remove the feature-bag POST to `/edge/decision`; site-scoped velocity | Done |
 | R11 | Console live pulls (`useEdgeData`), offline banner, dashboards on rollups, access-log viewer | Planned |
 | R15 | Back-fill legacy cloud transaction data to each Edge, then verify | Planned |
