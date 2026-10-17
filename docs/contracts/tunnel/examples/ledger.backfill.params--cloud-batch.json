@@ -1,0 +1,93 @@
+{
+  "phase" : "BATCH",
+  "backfillId" : "b4c0ffee-0000-4000-8000-000000000015",
+  "batchSeq" : 0,
+  "rows" : [ {
+    "legacyTransactionId" : "txn-55120",
+    "edgeAssessmentId" : "4d298ed2-d12f-5908-8ed9-6bbc73cc7213",
+    "txnRef" : "AUTH-2025-03-02-000017",
+    "evaluatedAt" : "2025-03-02T14:21:09.331Z",
+    "panHash" : "sha256:9c1185a5c5e9fc54612808977ee8f548b2258d31",
+    "amountMinor" : 1250000,
+    "currency" : "KES",
+    "merchantId" : "mrc_00421",
+    "countryCode" : "KE",
+    "channel" : "POS",
+    "mcc" : "5411",
+    "features" : {
+      "device_id" : "dv-77a1",
+      "is_cross_border" : false,
+      "legacy_source" : "cloud_ingest",
+      "mcc" : "5411",
+      "txn_count_1h" : 11
+    },
+    "decision" : "ALERT",
+    "score" : 30,
+    "triggeredRuleIds" : [ 1204 ],
+    "ruleVersionIds" : [ ],
+    "reasons" : [ "Legacy rule Legacy night-time rule" ],
+    "ctrRequired" : false
+  }, {
+    "legacyTransactionId" : "txn-55121",
+    "edgeAssessmentId" : "3b0a8f7e-5c41-4d2e-9a7b-6f1e2d3c4b5a",
+    "txnRef" : "AUTH-2025-03-02-000018",
+    "evaluatedAt" : "2025-03-02T14:25:00.500Z",
+    "currency" : "KES",
+    "merchantId" : "mrc_00421",
+    "countryCode" : "KE",
+    "channel" : "ATM",
+    "features" : {
+      "amount_minor_signed" : "-500",
+      "ip_address" : "10.1.2.3",
+      "legacy_source" : "cloud_ingest"
+    },
+    "decision" : "HOLD",
+    "score" : 64,
+    "triggeredRuleIds" : [ 77, 78 ],
+    "ruleVersionIds" : [ 9 ],
+    "reasons" : [ ],
+    "ctrRequired" : true
+  }, {
+    "legacyTransactionId" : "mat-9001",
+    "edgeAssessmentId" : "f7a9f9dd-857a-57fa-9c13-4c22c8efafd1",
+    "txnRef" : "VA-TX-9001",
+    "evaluatedAt" : "2026-01-05T08:00:00.000Z",
+    "countryCode" : "KE",
+    "features" : {
+      "amount_currency" : "BTC",
+      "amount_decimal" : "0.5",
+      "asset_class" : "CRYPTO",
+      "asset_symbol" : "BTC",
+      "beneficiary_name" : "Jane Beneficiary",
+      "legacy_source" : "multi_asset",
+      "travel_rule_required" : true,
+      "travel_rule_transfer_status" : "TRANSMITTED"
+    },
+    "decision" : "BLOCK",
+    "score" : 85,
+    "triggeredRuleIds" : [ ],
+    "ruleVersionIds" : [ ],
+    "reasons" : [ "Legacy risk signal MIXER_EXPOSURE", "Legacy risk signal TRAVEL_RULE_MISSING" ],
+    "ctrRequired" : false
+  }, {
+    "legacyTransactionId" : "mat-9002",
+    "edgeAssessmentId" : "62fad12f-95b2-5c92-ba78-e3fc185ac936",
+    "txnRef" : "MM-9002",
+    "evaluatedAt" : "2026-02-10T19:30:15.250Z",
+    "amountMinor" : 15025,
+    "currency" : "KES",
+    "countryCode" : "KE",
+    "features" : {
+      "account_id" : "wallet-254700000001",
+      "latitude" : "-1.2921",
+      "legacy_source" : "multi_asset",
+      "mobile_money_event_type" : "P2P_TRANSFER"
+    },
+    "decision" : "ALLOW",
+    "score" : 0,
+    "triggeredRuleIds" : [ ],
+    "ruleVersionIds" : [ ],
+    "reasons" : [ ],
+    "ctrRequired" : false
+  } ]
+}
