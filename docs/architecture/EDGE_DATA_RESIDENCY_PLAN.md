@@ -289,6 +289,11 @@ under an active hold.
 9. **Platform admin access.** Governed by decision 10.
 10. **Webhooks.** IDs and decision only.
 11. **Existing cloud data.** One-off `ledger.backfill` over the tunnel per PSP, then purge (decision 9).
+    **R15 status (implemented):** `service/backfill` (V270 run state) back-fills card and multi-asset
+    legacy rows per PSP and site, verifies by COMMIT digest plus a `txn.batchGet` content sample,
+    completes decision records and the R8 references, and exposes the R12 gate
+    `BackfillCoverageService.requirePurgeAllowed`. Control API `/api/v1/psps/{id}/edge-backfill`.
+    Details: contract §11 "Implementation notes (R15)".
 12. **In-flight plans.** `docs/IMPLEMENTATION_PLAN.md` WP-01/02/06/07 (cloud orchestrator, canonical transaction v2) are re-scoped to the Edge ledger.
 
 ## Flyway (cloud): numbers assigned at implementation time

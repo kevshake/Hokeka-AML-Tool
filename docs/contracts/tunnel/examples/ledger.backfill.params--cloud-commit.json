@@ -1,0 +1,6 @@
+{
+  "phase" : "COMMIT",
+  "backfillId" : "b4c0ffee-0000-4000-8000-000000000015",
+  "expectedRows" : 4,
+  "expectedIdDigest" : "4a7de9b5da80c73ccf590da622a4f146e6aa29a07a8721736fae3f08b40e257f"
+}
