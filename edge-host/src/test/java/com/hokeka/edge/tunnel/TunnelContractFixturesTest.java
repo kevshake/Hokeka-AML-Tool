@@ -99,6 +99,7 @@ class TunnelContractFixturesTest {
             case "composite-cursor" -> schemaOnly("tunnel/composite-cursor.schema.json", fx, valid); // cloud-only
             case "edge-config" -> config(fx, valid);
             case "hold.ack.item" -> schemaOnly("tunnel/notify/hold.ack.item.schema.json", fx, valid);
+            case "sanctions-list-manifest", "sanctions-list-chunk", "sanctions-list-entry" -> sanctionsList(stem, fx, valid);
             default -> {
                 if (stem.endsWith(".params")) {
                     opParams(stem.substring(0, stem.length() - ".params".length()), name, fx, valid);
@@ -320,6 +321,33 @@ class TunnelContractFixturesTest {
     /** Schema check for documents only the Control Plane interprets. */
     private void schemaOnly(String schema, ObjectNode fx, boolean valid) {
         assertEquals(valid, schemas.violations(schema, fx).isEmpty());
+    }
+
+    /**
+     * R10b sanctions list documents through the Edge's own checks: the schema, then the manifest's
+     * listHash/entryCount consistency, the chunk's gzip + SHA-256 + entry parsing, and the entry parser
+     * (which refuses the invalid entries for the same reasons as the schema).
+     */
+    private void sanctionsList(String stem, ObjectNode fx, boolean valid) throws Exception {
+        assertEquals(valid, schemas.violations(stem + ".schema.json", fx).isEmpty(), stem);
+        if (!valid) {
+            if (stem.equals("sanctions-list-entry")) {
+                assertThrows(com.hokeka.edge.sanctions.SanctionsListCodec.InvalidListException.class,
+                        () -> com.hokeka.edge.sanctions.SanctionsListCodec.entry(fx.toString(), mapper));
+            }
+            return;
+        }
+        switch (stem) {
+            case "sanctions-list-manifest" -> com.hokeka.edge.sanctions.SanctionsListCodec.verifyManifest(fx);
+            case "sanctions-list-chunk" -> {
+                byte[] raw = com.hokeka.edge.sanctions.SanctionsListCodec.gunzip(
+                        Base64.getDecoder().decode(fx.get("data").asText()));
+                assertEquals(fx.get("entryCount").asInt(), com.hokeka.edge.sanctions.SanctionsListCodec.parseChunk(
+                        raw, fx.get("sha256").asText(), fx.get("entryCount").asInt(), mapper).size());
+            }
+            default -> assertEquals(fx.get("id").asText(),
+                    com.hokeka.edge.sanctions.SanctionsListCodec.entry(fx.toString(), mapper).id());
+        }
     }
 
     /** An opened request issued now. */

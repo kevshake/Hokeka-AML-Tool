@@ -318,7 +318,7 @@ class TunnelOpsIntegrationTest {
         ObjectNode item = r.items().get(0);
         assertEquals("OK", item.get("status").asText());
         assertEquals(TunnelRig.SITE_ID, item.get("siteId").asText());
-        assertEquals(2, item.get("schemaVersion").asInt());
+        assertEquals(3, item.get("schemaVersion").asInt());
         assertEquals(5, item.get("retention").get("years").asInt());
         assertEquals(14, item.get("retention").get("configVersion").asInt());
         assertEquals(Jcs.sha256Hex(new byte[0]), item.get("holds").get("activeHoldDigest").asText());

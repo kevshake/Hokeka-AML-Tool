@@ -12,6 +12,14 @@ import com.hokeka.edge.channel.RuleBundlePoller;
 import com.hokeka.edge.channel.SecureChannel;
 import com.hokeka.edge.contract.ContractSchemas;
 import com.hokeka.edge.crypto.EdgeKeys;
+import com.hokeka.edge.channel.ReplayGuard;
+import com.hokeka.edge.channel.SealedEnvelopeCodec;
+import com.hokeka.edge.residency.EdgeConfigPoller;
+import com.hokeka.edge.sanctions.SanctionsListPoller;
+import com.hokeka.edge.sanctions.SanctionsListStore;
+import com.hokeka.edge.sanctions.SanctionsTestLists;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -77,9 +85,14 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
             "amount", "amount_cents", "amountMinor", "currency", "country_code", "countryCode", "mcc", "channel",
             "customer_id", "device_id", "ip_address", "features", "reasons", "cardholder_name");
 
-    /** Transaction values that must not appear in any outbound plaintext. */
+    /** Transaction values that must not appear in any outbound plaintext (R10b: counterparty names too). */
     private static final List<String> TRANSACTION_VALUES = List.of("9f2c1d7a-pan-hash", "4111111111111111",
-            "125000", "250000", "KES", "KE", "cust-778899", "dev-55aa", "10.20.30.40", "Wanjiru Kamau", "5732");
+            "125000", "250000", "KES", "KE", "cust-778899", "dev-55aa", "10.20.30.40", "Wanjiru Kamau", "5732",
+            "Ivan Sidorov", "Northwind Shiping", "Jean Normal");
+
+    /** Names that must not appear anywhere in any outbound plaintext, not even inside another value. */
+    private static final List<String> NAMES = List.of("Ivan Sidorov", "Sidorov", "Northwind", "Wanjiru", "Kamau",
+            "Jean Normal");
 
     private static final String BUNDLE = """
         { "version": 41, "psp_id": 42, "rules": [
@@ -112,6 +125,12 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
     private MetricsShipper metricsShipper;
     @Autowired
     private OutboxShipper outboxShipper;
+    @Autowired
+    private EdgeConfigPoller configPoller;
+    @Autowired
+    private SanctionsListPoller sanctionsPoller;
+    @Autowired
+    private SanctionsListStore sanctionsLists;
 
     /**
      * Runs before the Spring context: aborts (skips) the class when no ledger database is reachable,
@@ -222,14 +241,76 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
         return MAPPER.readTree(json);
     }
 
+    /** HSE-1 seals {@code payload} for this Edge as the Control Plane does (CP signing key, edge X25519). */
+    private static byte[] sealForEdge(JsonNode payload, String context) {
+        return new SealedEnvelopeCodec(MAPPER, new ReplayGuard()).seal(payload, EDGE_ID,
+                EdgeKeys.x25519RawPublic(EDGE_X25519.getPublic()), CONTROL_PLANE_ED25519.getPrivate(), context,
+                Instant.now());
+    }
+
+    /**
+     * R10b: the fake Control Plane serves a sealed Edge config naming a sanctions list and blocking
+     * one merchant, plus that list's sealed manifest and chunks.
+     */
+    private SanctionsTestLists.Built serveConfigAndSanctionsList() throws Exception {
+        SanctionsTestLists.Built list = SanctionsTestLists.build(List.of(
+                SanctionsTestLists.entry("us-ofac-sdn:NK-1001", "Ivan Petrovich Sidorov", List.of("Ivan Sidorov"),
+                        "PERSON", null),
+                SanctionsTestLists.entry("gb-hmt:7788", "Northwind Shipping Company Limited",
+                        List.of("Northwind Shipping"), "ORGANIZATION", null),
+                SanctionsTestLists.entry("peps:Q44", "Wanjiru Kamau", List.of(), "PERSON", "PEP")),
+                2, "20261017-0200", "2026-10-17T02:00:00Z");
+        ObjectNode config = (ObjectNode) MAPPER.readTree(Files.readString(Path.of(
+                System.getProperty("contracts.dir", "../docs/contracts"), "tunnel", "examples", "edge-config--default.json")));
+        config.put("configVersion", 1);
+        config.put("pspId", 42);
+        ObjectNode sanctions = (ObjectNode) config.get("sanctions");
+        sanctions.put("listVersion", "20261017-0200");
+        sanctions.put("listHash", list.listHash);
+        sanctions.put("publishedAt", "2026-10-17T02:00:00Z");
+        ObjectNode block = ((ArrayNode) config.get("merchantBlocklist").get("entries")).addObject();
+        block.put("merchantId", "mrc_blocked");
+        block.put("reasonCode", "SANCTIONED");
+        block.put("since", "2026-10-17T03:00:00Z");
+        cloud.served.put(EdgeConfigPoller.CONFIG_PATH, () -> sealForEdge(config, EdgeConfigPoller.CTX_EDGE_CONFIG));
+        cloud.served.put(SanctionsListPoller.LIST_PATH, () -> sealForEdge(list.manifest, SanctionsListPoller.CTX_LIST));
+        for (int i = 0; i < list.chunks.size(); i++) {
+            ObjectNode chunk = list.chunks.get(i);
+            cloud.served.put(SanctionsListPoller.LIST_PATH + "/" + list.listHash + "/chunks/" + i,
+                    () -> sealForEdge(chunk, SanctionsListPoller.CTX_CHUNK));
+        }
+        return list;
+    }
+
     @Test
     void alertAndHoldSendOnlyTheSealedDecisionRecordAndMetrics() throws Exception {
         engine.loadPlainBundle(BUNDLE.getBytes(StandardCharsets.UTF_8));
+        SanctionsTestLists.Built list = serveConfigAndSanctionsList();
+        configPoller.poll();
+        SanctionsListPoller.Outcome fetched = sanctionsPoller.poll();
+        assertTrue(Set.of(SanctionsListPoller.Outcome.ACTIVATED, SanctionsListPoller.Outcome.UP_TO_DATE).contains(fetched),
+                fetched + " " + sanctionsPoller.lastError());
+        assertEquals(list.listHash, sanctionsLists.currentHash(), "the list the config names is in force");
 
         JsonNode hold = evaluate(txn("R10C-HOLD-1", 125000L, true));
         JsonNode alert = evaluate(txn("R10C-ALERT-1", 250000L, false));
         assertEquals("HOLD", hold.path("action").asText(), hold.toString());
         assertEquals("ALERT", alert.path("action").asText(), alert.toString());
+
+        // R10b: counterparty / beneficiary names are screened locally; the decision changes, the names stay.
+        Map<String, Object> sanctioned = txn("R10B-HIT-1", 1000L, false);
+        sanctioned.put("counterparty_name", "Ivan Sidorov");
+        JsonNode hit = evaluate(sanctioned);
+        assertEquals("BLOCK", hit.path("action").asText(), hit.toString());
+        Map<String, Object> potential = txn("R10B-POTENTIAL-1", 1000L, false);
+        potential.put("beneficiary_name", "Northwind Shiping");
+        JsonNode review = evaluate(potential);
+        assertEquals("HOLD", review.path("action").asText(), review.toString());
+        Map<String, Object> blockedMerchant = txn("R10B-MERCHANT-1", 1000L, false);
+        blockedMerchant.put("merchant_id", "mrc_blocked");
+        blockedMerchant.put("counterparty_name", "Jean Normal");
+        JsonNode refused = evaluate(blockedMerchant);
+        assertEquals("BLOCK", refused.path("action").asText(), "a blocklisted merchant is refused: " + refused);
         for (JsonNode response : List.of(hold, alert)) {
             // The Edge received no AI advisory, so its answer claims none.
             assertFalse(response.toString().contains("AI recommendation"), response.toString());
@@ -243,7 +324,8 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
         List<String> paths = cloud.outboundPaths();
         List<String> unexpected = new ArrayList<>();
         for (String path : paths) {
-            if (!ALLOWED_PATHS.contains(path)) {
+            // The sanctions list manifest and its chunks (R10b) are bodiless GETs of public data.
+            if (!ALLOWED_PATHS.contains(path) && !path.startsWith(SanctionsListPoller.LIST_PATH)) {
                 unexpected.add(path);
             }
         }
@@ -265,11 +347,30 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
         }
 
         // The decision records: both evaluations, schema-valid (checked by the fake), no forbidden member.
-        assertEquals(Set.of(hold.path("edgeAssessmentId").asText(), alert.path("edgeAssessmentId").asText()),
-                cloud.receivedIds());
+        assertEquals(Set.of(hold.path("edgeAssessmentId").asText(), alert.path("edgeAssessmentId").asText(),
+                hit.path("edgeAssessmentId").asText(), review.path("edgeAssessmentId").asText(),
+                refused.path("edgeAssessmentId").asText()), cloud.receivedIds());
         for (JsonNode record : cloud.received) {
             assertEquals(EDGE_ID, record.path("edgeNodeId").asText());
             assertEquals(SITE_ID, record.path("siteId").asText());
+            String id = record.path("edgeAssessmentId").asText();
+            if (id.equals(hit.path("edgeAssessmentId").asText())) {
+                assertTrue(record.path("sanctionsHit").asBoolean(), record.toString());
+                assertEquals("us-ofac-sdn:NK-1001", record.path("watchlistEntryIds").get(0).asText());
+                assertEquals("BLOCK", record.path("decision").asText());
+            } else if (id.equals(review.path("edgeAssessmentId").asText())) {
+                assertTrue(record.path("sanctionsHit").asBoolean(), record.toString());
+                assertEquals("gb-hmt:7788", record.path("watchlistEntryIds").get(0).asText());
+                assertEquals("HOLD", record.path("decision").asText());
+            } else if (id.equals(refused.path("edgeAssessmentId").asText())) {
+                assertFalse(record.path("sanctionsHit").asBoolean(), "a blocklist refusal is not a list hit");
+                assertEquals("BLOCK", record.path("decision").asText());
+                assertEquals("mrc_blocked", record.path("merchantId").asText());
+            } else {
+                // The cardholder is a PEP on the list: enhanced due diligence, never a sanctions hit.
+                assertFalse(record.path("sanctionsHit").asBoolean(), record.toString());
+                assertTrue(record.path("watchlistEntryIds").isMissingNode(), record.toString());
+            }
         }
 
         // Decrypted payloads (batches and metrics): no forbidden member and no transaction value at
@@ -286,6 +387,9 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
             for (String value : values) {
                 // merchant_id is cloud master data and MAY travel as merchantId (contract §2.2).
                 assertFalse(TRANSACTION_VALUES.contains(value), "an outbound payload carries " + value + ": " + plaintext);
+            }
+            for (String name : NAMES) {
+                assertFalse(plaintext.contains(name), "an outbound payload carries the name " + name + ": " + plaintext);
             }
         }
     }

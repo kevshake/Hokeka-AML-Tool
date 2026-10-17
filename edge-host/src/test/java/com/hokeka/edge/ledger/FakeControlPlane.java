@@ -61,6 +61,11 @@ final class FakeControlPlane implements AutoCloseable {
     final List<Outbound> outbound = new CopyOnWriteArrayList<>();
     /** Opened (decrypted) plaintext of every sealed decision-record batch and metrics report. */
     final List<String> openedPayloads = new CopyOnWriteArrayList<>();
+    /**
+     * Documents served with 200 on GET, by path: each supplier seals a fresh envelope per request (so
+     * the Edge replay guard sees a new nonce). Used for the Edge config and the sanctions list (R10b).
+     */
+    final Map<String, java.util.function.Supplier<byte[]>> served = new ConcurrentHashMap<>();
 
     /**
      * One request as the Control Plane saw it.
@@ -86,6 +91,15 @@ final class FakeControlPlane implements AutoCloseable {
             byte[] body = ex.getRequestBody().readAllBytes();
             String path = ex.getRequestURI().getPath();
             outbound.add(new Outbound(ex.getRequestMethod(), path, body));
+            java.util.function.Supplier<byte[]> document = served.get(path);
+            if (document != null && "GET".equals(ex.getRequestMethod())) {
+                byte[] sealed = document.get();
+                ex.getResponseHeaders().add("Content-Type", "application/octet-stream");
+                ex.sendResponseHeaders(200, sealed.length);
+                ex.getResponseBody().write(sealed);
+                ex.close();
+                return;
+            }
             int status = switch (path) {
                 case "/api/v1/edge/bundle", "/api/v1/edge/config" -> 304;
                 case "/api/v1/edge/metrics" -> openMetrics(body);

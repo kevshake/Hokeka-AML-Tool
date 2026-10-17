@@ -81,6 +81,13 @@ hokeka:
     # Daily purge at this site-local time; EDGE_SITE_TIMEZONE is an IANA id (blank = host zone).
     purge-time: "${EDGE_PURGE_TIME:02:00}"
     site-timezone: ${EDGE_SITE_TIMEZONE:}
+  # Local sanctions screening (contract §6.4/§6.5, R10b). The list is fetched from the Control Plane,
+  # kept on the site ledger and screened in memory; counterparty names never leave the Edge.
+  sanctions:
+    # Same default as aml-microservice sanctions.match.similarity.threshold (scores must agree).
+    similarity-threshold: ${EDGE_SANCTIONS_SIMILARITY_THRESHOLD:0.8}
+    # true: an evaluation with a name to screen is held while the published list is not loaded yet.
+    hold-when-list-missing: ${EDGE_SANCTIONS_HOLD_WHEN_LIST_MISSING:true}
   # Edge Tunnel client (contract §7). Local settings can only narrow what the Control Plane allows.
   tunnel:
     # false = never connect: the Console shows this site offline (§7.6.1).
