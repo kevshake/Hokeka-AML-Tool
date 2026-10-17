@@ -185,6 +185,33 @@ is served its legacy cloud rows flagged `source: "CLOUD_LEGACY"` (gated and audi
 until R12. Alert detail, `GET /compliance/sar/{id}/detail`, case timeline and case network fill
 `transactionDetails` live per view. Details: contract §7.14 "Implementation notes (R6)".
 
+**R9 status (implemented):** `POST /api/v1/sar/{id}/file` and `POST /api/v1/ctr/{id}/file`
+(`RegulatoryFilingController` → `RegulatoryFilingService`) check, pull, then file in one locked
+transaction. Only the PSP's own MLRO / compliance officer with `FILE_SAR` files; a SAR must be
+`APPROVED` by someone other than its creator (the SAR workflow's maker-checker); platform staff
+never file. The pull is `filing.extract` as the filer (purpose `SAR_FILING` / `CTR_FILING`, the
+filing reference on both audit rows), routed per decision-record site in chunks of 200; a PSP
+without an Edge files from its legacy rows (audited the same way). Any missing transaction, missing
+amount, missing CTR aggregate or failed pull refuses with a retryable 503 and changes nothing.
+The goAML document is rendered with amounts, times, merchant, rules, typologies and sanctions
+matches (narrative PANs redacted) and stored in `regulatory_filed_documents` (V269): AES-256-GCM
+field encryption (`enc:v1:`), SHA-256 seal, `retain_until` = filing + `retention_years`, a trigger
+that refuses UPDATE and early DELETE, one document per record. The legacy
+`/compliance/sar/{id}/file` and `/compliance/sar/workflow/file` go through the same path; a FILED
+SAR cannot be set by `PUT` or deleted. Filed documents are read without any Edge pull:
+`GET /sar/{id}/filed-document`, `/ctr/{id}/filed-document`, `/filed-documents` (+ `/export`),
+`/filed-documents/{id}` and `/{id}/content` (PSP-scoped, audited; platform staff need support access
+and a reason for the content). SAR list/detail responses carry `filedDocument`.
+Legal holds (V269 `legal_hold_workflows`, `legal_holds`, `legal_hold_items`, `legal_hold_site_acks`):
+a drafted SAR holds its decision records (reason `SAR`), an `ESCALATED` case its case transactions
+(`CASE`, via the reconciler), a filed CTR its aggregate (`CTR`); filing sets the release basis, case
+closure sets it to the resolution time; holds release `FILING_RETENTION_ELAPSED` / `CASE_CLOSED`
+once basis + `retention_years` passes, `PLACED_IN_ERROR` when the record is deleted. `hold.place` /
+`hold.release` go to every site after commit; `hold.ack` is tracked per site with the
+`activeHoldDigest` comparison; unconfirmed holds are re-sent after every `hello.ack`
+(`LegalHoldTunnelListener`) and by a five-minute sweep. `DecisionRecordPurgeService` keeps records
+under an active hold.
+
 **Deleted (in R12, after parity sign-off):**
 - `POST /transactions/ingest`, `/ingest/batch`
 - `/transaction/result`

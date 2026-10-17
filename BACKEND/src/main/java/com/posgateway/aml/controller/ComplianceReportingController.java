@@ -43,17 +43,38 @@ public class ComplianceReportingController {
     private final com.posgateway.aml.mapper.SarMapper sarMapper;
     /** Live pull of the SAR's transactions when the SAR is viewed (R6). */
     private final com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails;
+    /** R9 filing from Edge pulls (the only path that marks a SAR FILED). */
+    private final com.posgateway.aml.service.filing.RegulatoryFilingService filingService;
+    /** R9 filed-document store access ("filed" status, stored XML of a filed SAR). */
+    private final com.posgateway.aml.service.filing.FiledDocumentAccessService filedDocuments;
+    /** R9 legal holds (released when a SAR draft is deleted). */
+    private final com.posgateway.aml.service.legalhold.LegalHoldService legalHolds;
 
     public ComplianceReportingController(ComplianceReportingService reportingService,
             SuspiciousActivityReportRepository sarRepository,
             PspIsolationService pspIsolationService,
             com.posgateway.aml.mapper.SarMapper sarMapper,
-            com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails) {
+            com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails,
+            com.posgateway.aml.service.filing.RegulatoryFilingService filingService,
+            com.posgateway.aml.service.filing.FiledDocumentAccessService filedDocuments,
+            com.posgateway.aml.service.legalhold.LegalHoldService legalHolds) {
         this.reportingService = reportingService;
         this.sarRepository = sarRepository;
         this.pspIsolationService = pspIsolationService;
         this.sarMapper = sarMapper;
         this.transactionDetails = transactionDetails;
+        this.filingService = filingService;
+        this.filedDocuments = filedDocuments;
+        this.legalHolds = legalHolds;
+    }
+
+    /** Adds each filed SAR's filed-document metadata to a list of SAR responses (R9 "filed" status). */
+    private <C extends java.util.Collection<SarResponse>> C withFiledDocuments(C responses) {
+        java.util.List<Long> ids = responses.stream().map(SarResponse::getReportId)
+                .filter(java.util.Objects::nonNull).toList();
+        Map<Long, com.posgateway.aml.dto.compliance.FiledDocumentSummary> docs = filedDocuments.summariesOfSars(ids);
+        responses.forEach(r -> r.setFiledDocument(docs.get(r.getReportId())));
+        return responses;
     }
 
     /**
@@ -69,9 +90,12 @@ public class ComplianceReportingController {
         if (page != null || size != null) {
             int safePage = page != null ? page : 0;
             int safeSize = size != null ? size : 25;
-            return ResponseEntity.ok(reportingService.getSarsPage(status, safePage, safeSize));
+            org.springframework.data.domain.Page<SarResponse> result = reportingService.getSarsPage(status, safePage,
+                    safeSize);
+            withFiledDocuments(result.getContent());
+            return ResponseEntity.ok(result);
         }
-        return ResponseEntity.ok(reportingService.getAllSars(status));
+        return ResponseEntity.ok(withFiledDocuments(reportingService.getAllSars(status)));
     }
 
     @PostMapping
@@ -86,10 +110,20 @@ public class ComplianceReportingController {
         return ResponseEntity.ok(reportingService.updateSar(id, request));
     }
 
+    /**
+     * Files an APPROVED SAR through the R9 filing path (the same as {@code POST /api/v1/sar/{id}/file}):
+     * the transactions are pulled from the Edge and the filed document stored before the SAR becomes
+     * FILED. Optional body {@code {"regulatorReference": "..."}}.
+     */
     @PostMapping("/{id}/file")
-    public ResponseEntity<SarResponse> fileSar(@PathVariable Long id) {
+    public ResponseEntity<SarResponse> fileSar(@PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> body) {
         log.info("File SAR request: {}", id);
-        return ResponseEntity.ok(reportingService.fileSar(id));
+        com.posgateway.aml.service.filing.RegulatoryFilingService.FilingResult result = filingService.fileSar(id,
+                body == null ? null : body.get("regulatorReference"));
+        SarResponse response = sarRepository.findById(id).map(sarMapper::toResponse).orElseGet(SarResponse::new);
+        response.setFiledDocument(result.document());
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(response);
     }
 
     /**
@@ -115,7 +149,7 @@ public class ComplianceReportingController {
      */
     @GetMapping("/{id}/detail")
     public ResponseEntity<SarResponse> getSarDetail(@PathVariable Long id,
-            @RequestParam(defaultValue = "true") boolean transactionDetails,
+            @RequestParam(required = false) Boolean transactionDetails,
             @RequestParam(required = false) String supportReason,
             @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         SuspiciousActivityReport sar = sarRepository.findById(id).orElse(null);
@@ -124,7 +158,12 @@ public class ComplianceReportingController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         SarResponse response = sarMapper.toResponse(sar);
-        if (!transactionDetails) {
+        // A filed SAR is shown from its stored filed document (R9): no Edge pull unless asked for.
+        response.setFiledDocument(filedDocuments.summaryOf(
+                com.posgateway.aml.entity.filing.RegulatoryFiledDocument.WorkflowType.SAR, id, sar.getPspId())
+                .orElse(null));
+        boolean pull = transactionDetails != null ? transactionDetails : response.getFiledDocument() == null;
+        if (!pull) {
             response.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.notRequested());
         } else if (sar.getPspId() == null) {
             response.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.none());
@@ -142,7 +181,9 @@ public class ComplianceReportingController {
     }
 
     @GetMapping("/{id}/xml")
-    public ResponseEntity<String> downloadSarXml(@PathVariable Long id) {
+    public ResponseEntity<byte[]> downloadSarXml(@PathVariable Long id,
+            @RequestParam(required = false) String supportReason,
+            @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         log.info("Download SAR XML: {}", id);
         // Tenant check before rendering: a PSP-scoped officer may only export their PSP's SAR.
         SuspiciousActivityReport sar = sarRepository.findById(id).orElse(null);
@@ -150,12 +191,25 @@ public class ComplianceReportingController {
                 || pspIsolationService.getCurrentUserPspId().equals(sar.getPspId()))) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
+        // A filed SAR exports its stored regulatory record exactly as filed (audited, no Edge pull).
+        // Bytes, not a String body: framework TRACE logging never renders the document.
+        java.util.Optional<com.posgateway.aml.service.filing.FiledDocumentAccessService.Download> filed =
+                filedDocuments.downloadFor(com.posgateway.aml.entity.filing.RegulatoryFiledDocument.WorkflowType.SAR,
+                        id, supportReason != null && !supportReason.isBlank() ? supportReason : reasonHeader);
+        if (filed.isPresent()) {
+            return ResponseEntity.ok()
+                    .cacheControl(org.springframework.http.CacheControl.noStore())
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filed.get().fileName() + "\"")
+                    .header("X-Content-SHA256", filed.get().sha256())
+                    .contentType(MediaType.APPLICATION_XML)
+                    .body(filed.get().content());
+        }
         String xml = reportingService.generateFincenXml(id);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sar_" + id + ".xml\"")
                 .contentType(MediaType.APPLICATION_XML)
-                .body(xml);
+                .body(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**
@@ -173,7 +227,16 @@ public class ComplianceReportingController {
                 && !pspIsolationService.getCurrentUserPspId().equals(sar.getPspId())) {
             return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
         }
+        // A filed SAR is part of the regulatory record (R9): it cannot be deleted.
+        if (sar.getStatus() == SarStatus.FILED) {
+            return ResponseEntity.<Void>status(HttpStatus.CONFLICT).build();
+        }
         sarRepository.delete(sar);
+        // The draft's legal holds were placed in error now that the SAR is gone.
+        com.posgateway.aml.entity.User actor = pspIsolationService.getCurrentUser();
+        legalHolds.releaseWorkflow(com.posgateway.aml.entity.filing.LegalHoldWorkflow.Type.SAR, id,
+                com.posgateway.aml.entity.filing.LegalHold.ReleaseReason.PLACED_IN_ERROR,
+                actor != null && actor.getId() != null ? "u-" + actor.getId() : null);
         return ResponseEntity.<Void>noContent().build();
     }
 

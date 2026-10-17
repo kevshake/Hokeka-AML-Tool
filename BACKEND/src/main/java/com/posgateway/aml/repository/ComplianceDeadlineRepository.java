@@ -16,6 +16,11 @@ public interface ComplianceDeadlineRepository extends JpaRepository<ComplianceDe
 
     Optional<ComplianceDeadline> findBySourceTypeAndSourceId(String sourceType, Long sourceId);
 
+    /** The deadline row locked for the caller's transaction (R9 CTR filing: one filing at a time). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT d FROM ComplianceDeadline d WHERE d.id = :id")
+    Optional<ComplianceDeadline> lockById(@org.springframework.data.repository.query.Param("id") Long id);
+
     /**
      * Find deadlines in date range that are not completed
      */

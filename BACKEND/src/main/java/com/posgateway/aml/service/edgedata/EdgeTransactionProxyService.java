@@ -164,6 +164,87 @@ public class EdgeTransactionProxyService {
         return EdgePull.of(tunnel.gateway().request(r));
     }
 
+    /**
+     * The answer of a filing pull: TRANSACTION items in requested order, CTR_AGGREGATE items, and
+     * how complete it is. Lives only for the filing request (§7.16, §2.3).
+     *
+     * @param incomplete       a site that answered reported its answer incomplete
+     * @param missing          requested ids no answering site returned
+     * @param unavailableSites sites that did not answer (harmless when nothing is missing)
+     */
+    public record FilingPull(List<ObjectNode> transactions, List<ObjectNode> aggregates, List<String> missing,
+                             boolean incomplete, List<EdgeDataResult.UnavailableSite> unavailableSites,
+                             List<UUID> auditIds) {}
+
+    /**
+     * {@code filing.extract} (§7.6) of a SAR/STR/CTR filing. Ids whose decision record names a site
+     * go to that site only, the rest to every site; each group is pulled in chunks of at most 200
+     * ids. Unlike {@link #batchGet}, a group that fails fails the whole pull: a filing never uses
+     * part of its data.
+     *
+     * @param kind      {@code SAR}, {@code STR} or {@code CTR}
+     * @param filingRef the filing's workflowRef (also carried on the actor for both audit rows)
+     * @throws EdgeDataException the first group's failure
+     */
+    public FilingPull filingExtract(EdgeDataScope scope, String kind, String filingRef, Collection<UUID> ids) {
+        List<String> order = new ArrayList<>();
+        new LinkedHashSet<>(ids).forEach(id -> order.add(id.toString()));
+        if (order.isEmpty()) {
+            return new FilingPull(List.of(), List.of(), List.of(), false, List.of(), List.of());
+        }
+        Map<String, String> siteById = sitesOf(scope.pspId(), ids);
+        Map<String, List<String>> groups = new LinkedHashMap<>();
+        for (String id : order) {
+            groups.computeIfAbsent(siteById.getOrDefault(id, ""), k -> new ArrayList<>()).add(id);
+        }
+        Map<String, ObjectNode> byId = new LinkedHashMap<>();
+        List<ObjectNode> aggregates = new ArrayList<>();
+        Set<String> missing = new LinkedHashSet<>();
+        Map<String, EdgeDataResult.UnavailableSite> unavailable = new LinkedHashMap<>();
+        List<UUID> audits = new ArrayList<>();
+        boolean incomplete = false;
+        for (Map.Entry<String, List<String>> g : groups.entrySet()) {
+            List<String> groupIds = g.getValue();
+            for (int i = 0; i < groupIds.size(); i += MAX_BATCH_IDS) {
+                ObjectNode params = JsonNodeFactory.instance.objectNode();
+                params.put("kind", kind);
+                params.put("filingRef", filingRef);
+                ArrayNode arr = params.putArray("edgeAssessmentIds");
+                groupIds.subList(i, Math.min(groupIds.size(), i + MAX_BATCH_IDS)).forEach(arr::add);
+                EdgeDataRequest r = EdgeDataRequest.of(scope.pspId(), TunnelOp.FILING_EXTRACT, params, scope.actor());
+                if (!g.getKey().isEmpty()) {
+                    r = r.onSites(Set.of(g.getKey()));
+                }
+                EdgeDataResult res = tunnel.gateway().request(r);
+                audits.add(res.auditId());
+                // A site that answered but reported its own answer incomplete (unavailable sites are
+                // judged by the ids they leave missing).
+                incomplete |= res.incompleteReason() != null || (res.incomplete() && res.unavailableSites().isEmpty());
+                res.unavailableSites().forEach(u -> unavailable.putIfAbsent(String.valueOf(u.siteId()), u));
+                missing.addAll(res.missing());
+                for (ObjectNode item : res.items()) {
+                    if ("CTR_AGGREGATE".equals(item.path("kind").asText())) {
+                        aggregates.add(item);
+                    } else {
+                        byId.putIfAbsent(item.path("transaction").path("edgeAssessmentId").asText(), item);
+                    }
+                }
+            }
+        }
+        List<ObjectNode> ordered = new ArrayList<>();
+        for (String id : order) {
+            ObjectNode item = byId.get(id);
+            if (item != null) {
+                ordered.add(item);
+                missing.remove(id);
+            } else {
+                missing.add(id);
+            }
+        }
+        return new FilingPull(List.copyOf(ordered), List.copyOf(aggregates), List.copyOf(missing), incomplete,
+                List.copyOf(unavailable.values()), List.copyOf(audits));
+    }
+
     /** {@code ledger.health} of every site (one item per answering site). */
     public EdgeDataResult ledgerHealth(EdgeDataScope scope) {
         return tunnel.gateway().request(EdgeDataRequest.of(scope.pspId(), TunnelOp.LEDGER_HEALTH,

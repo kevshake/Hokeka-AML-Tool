@@ -153,7 +153,17 @@ public class ComplianceReportingService {
         }
 
         if (request.getStatus() != null) {
-            sar.setStatus(SarStatus.valueOf(request.getStatus()));
+            SarStatus requested = SarStatus.valueOf(request.getStatus());
+            // FILED is reached only through the filing workflow, which stores the filed document (R9).
+            if (requested == SarStatus.FILED && sar.getStatus() != SarStatus.FILED) {
+                throw new com.posgateway.aml.exception.ConflictException(
+                        "A SAR becomes FILED only through POST /sar/{id}/file");
+            }
+            if (sar.getStatus() == SarStatus.FILED && requested != SarStatus.FILED) {
+                throw new com.posgateway.aml.exception.ConflictException(
+                        "A filed SAR is part of the regulatory record; file an amendment instead");
+            }
+            sar.setStatus(requested);
         }
         if (request.getNarrative() != null) {
             sar.setNarrative(request.getNarrative());
@@ -163,42 +173,16 @@ public class ComplianceReportingService {
         return sarMapper.toResponse(sar);
     }
 
-    @Transactional
-    public SarResponse fileSar(Long id) {
-        SuspiciousActivityReport sar = sarRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("SAR not found: " + id));
-
-        if (!pspIsolationService.isPlatformAdministrator()) {
-            Long pspId = pspIsolationService.getCurrentUserPspId();
-            if (!pspId.equals(sar.getPspId())) {
-                throw new org.springframework.security.access.AccessDeniedException("Access denied to this SAR");
-            }
-        }
-
-        if (sar.getStatus() == SarStatus.FILED) {
-            throw new IllegalStateException("SAR is already filed");
-        }
-
-        sar.setStatus(SarStatus.FILED);
-        sar.setFiledAt(LocalDateTime.now());
-
-        // Simulating submission to FinCEN
-        log.info("Filing SAR {} to FinCEN...", id);
-
-        return sarMapper.toResponse(sarRepository.save(sar));
-    }
-
     /**
-     * Generates a goAML-compliant Suspicious Activity Report (SAR) XML document
-     * for submission to the FRC (Kenya) or equivalent regulator, using all
+     * Generates the goAML-style XML of an <b>unfiled</b> SAR (a draft export for review), using the
      * fields stored on the SAR and its linked compliance case.
      *
-     * <p>Data residency (plan conflict 7): the cloud holds the SAR's transactions by reference only.
+     * <p>Data residency (plan conflict 7): the cloud holds a draft's transactions by reference only.
      * Each {@code <transaction>} block therefore carries the transaction reference ({@code tran_id} =
-     * txnRef, else the decision record id) and the decision record's evaluation date; it carries no
-     * amount, because the amount is transaction data on the PSP's Edge. Pulling the transaction
-     * detail at filing time and storing it in the filed document is work package R9, which this
-     * method does not do.
+     * txnRef, else the decision record id) and the decision record's evaluation date, and no amount.
+     * Filing (R9, {@code RegulatoryFilingService}) pulls the transaction details from the Edge and
+     * stores the complete document; a filed SAR's XML export serves that stored document instead of
+     * this draft rendering.
      *
      * @param id the SAR database ID; throws {@link IllegalArgumentException} if not found.
      * @return well-formed XML string ready for regulatory submission.

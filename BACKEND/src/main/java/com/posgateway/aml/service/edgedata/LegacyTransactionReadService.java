@@ -170,6 +170,57 @@ public class LegacyTransactionReadService {
         });
     }
 
+    /** One legacy row resolved for a filing, with the reference that named it. */
+    public record LegacyFilingRow(TransactionReference reference, TransactionEntity transaction) {}
+
+    /**
+     * The legacy stand-in for {@code filing.extract} (§7.6) for a PSP without an Edge: the rows
+     * named by the filing's references, in reference order, read under one audited access-log row
+     * (op {@code filing.extract}, the filing's kind and reference). Lives only for the filing.
+     *
+     * @param auditId the access-log id to use (recorded on the filed document)
+     * @return the rows found and the references no row matched ({@code missing})
+     */
+    public LegacyFiling filingExtract(EdgeDataScope scope, String kind, String filingRef,
+                                      Collection<TransactionReference> refs, UUID auditId) {
+        List<TransactionReference> list = refs.stream().filter(r -> r != null && !r.isEmpty()).toList();
+        ObjectNode params = JsonNodeFactory.instance.objectNode();
+        params.put("kind", kind);
+        params.put("filingRef", filingRef);
+        ArrayNode ids = params.putArray("edgeAssessmentIds");
+        list.forEach(r -> ids.add(r.edgeAssessmentId() != null ? r.edgeAssessmentId().toString()
+                : legacyRef(r.legacyTransactionId())));
+        return audited(scope, TunnelOp.FILING_EXTRACT, params, () -> {
+            Map<TransactionReference, Long> idByRef = new LinkedHashMap<>();
+            for (TransactionReference r : list) {
+                Long id = r.legacyTransactionId() != null ? r.legacyTransactionId()
+                        : r.edgeAssessmentId() == null ? null : legacyIdOf(scope.pspId(), r.edgeAssessmentId()).orElse(null);
+                idByRef.put(r, id);
+            }
+            Set<Long> wanted = new LinkedHashSet<>();
+            idByRef.values().stream().filter(java.util.Objects::nonNull).forEach(wanted::add);
+            Map<Long, TransactionEntity> rows = new LinkedHashMap<>();
+            if (!wanted.isEmpty()) {
+                transactions.findByPspIdAndTxnIdIn(scope.pspId(), wanted).forEach(t -> rows.put(t.getTxnId(), t));
+            }
+            List<LegacyFilingRow> found = new ArrayList<>();
+            List<String> missing = new ArrayList<>();
+            Set<Long> emitted = new TreeSet<>();
+            idByRef.forEach((ref, id) -> {
+                TransactionEntity t = id == null ? null : rows.get(id);
+                if (t == null) {
+                    missing.add(ref.label());
+                } else if (emitted.add(id)) {
+                    found.add(new LegacyFilingRow(ref, t));
+                }
+            });
+            return new Audited<>(new LegacyFiling(List.copyOf(found), List.copyOf(missing)), found.size());
+        }, auditId);
+    }
+
+    /** Result of {@link #filingExtract}: rows found and labels of references with no row. */
+    public record LegacyFiling(List<LegacyFilingRow> rows, List<String> missing) {}
+
     /** Result of an audited read with its item count. */
     private record Audited<T>(T value, int items) {}
 
@@ -184,7 +235,11 @@ public class LegacyTransactionReadService {
      * the row with the outcome (also when the read is refused or fails).
      */
     private <T> T audited(EdgeDataScope scope, TunnelOp op, ObjectNode params, Read<T> read) {
-        UUID auditId = UUID.randomUUID();
+        return audited(scope, op, params, read, UUID.randomUUID());
+    }
+
+    /** {@link #audited(EdgeDataScope, TunnelOp, ObjectNode, Read)} under a caller-chosen access-log id. */
+    private <T> T audited(EdgeDataScope scope, TunnelOp op, ObjectNode params, Read<T> read, UUID auditId) {
         try {
             tunnel.auditor().begin(auditId, scope.actor(), op, params);
         } catch (RuntimeException e) {

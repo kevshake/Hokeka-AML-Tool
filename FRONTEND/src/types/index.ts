@@ -86,6 +86,82 @@ export interface SarReport {
   filingReference?: string;
   /** The SAR's transactions by ID only; details are pulled live from the Edge. */
   transactionReferences?: TransactionReference[];
+  /** Set once the SAR is filed: the stored regulatory record (no Edge pull to view it). */
+  filedDocument?: FiledDocumentSummary;
+}
+
+/**
+ * Metadata of a filed SAR/STR/CTR document (R9). The document itself is the stored regulatory
+ * record: download it from `GET /filed-documents/{id}/content` (audited, never pulled from the Edge).
+ */
+export interface FiledDocumentSummary {
+  id: number;
+  documentKind: "SAR" | "STR" | "CTR";
+  workflowType: "SAR" | "CTR_DEADLINE";
+  /** Id of the SAR or of the CTR compliance deadline. */
+  workflowId: number;
+  filingRef: string;
+  documentFormat: string;
+  contentType: string;
+  fileName: string;
+  /** SHA-256 hex of the document bytes (also sent as `X-Content-SHA256` on download). */
+  contentSha256: string;
+  contentLength: number;
+  transactionCount: number;
+  dataSource: "EDGE" | "CLOUD_LEGACY" | "NONE";
+  regulatorReference?: string;
+  filedBy?: string;
+  filedAt: string;
+  retainUntil: string;
+}
+
+/** `POST /sar/{id}/file` and `POST /ctr/{id}/file` body. */
+export interface FileFilingRequest {
+  /** The regulator's reference, when already known at filing time. */
+  regulatorReference?: string;
+}
+
+/** Answer of a successful filing. */
+export interface FilingResult {
+  workflowType: "SAR" | "CTR_DEADLINE";
+  workflowId: number;
+  status: "FILED";
+  document: FiledDocumentSummary;
+}
+
+/**
+ * A refused filing: nothing was filed and nothing changed. `retryable` refusals (Edge offline,
+ * partial answer, busy, timeout) can be retried as they are.
+ */
+export interface FilingRefusal {
+  code:
+    | "FILING_NOT_ALLOWED"
+    | "FILING_NOT_FOUND"
+    | "FILING_STATE_CONFLICT"
+    | "ALREADY_FILED"
+    | "FILING_CONCURRENT_CHANGE"
+    | "FILING_INCOMPLETE"
+    | "EDGE_PULL_FAILED"
+    | "CTR_BELOW_THRESHOLD"
+    | "FILING_STORE_FAILED";
+  httpStatus: number;
+  message: string;
+  retryable: boolean;
+  filingRef?: string;
+  /** The Edge's §7.11 error when the pull failed as a whole. */
+  edgeError?: EdgeDataError;
+  unavailableSites?: Array<{ siteId?: string; code: EdgeDataErrorCode }>;
+  /** Transactions no answering site returned. */
+  missingCount?: number;
+}
+
+/** `GET /filed-documents` page. */
+export interface FiledDocumentPage {
+  content: FiledDocumentSummary[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
 }
 
 /**
