@@ -846,6 +846,10 @@ one in `retention.pendingChange`. Increasing retention cannot restore data alrea
   fresh or reinstalled node cannot know whether the PSP chose more than 5 years, and keeping data
   too long is recoverable while purging too early is not.
 - A failed purge MUST be retried next day and MUST NOT partially drop a partition.
+- One node per site purges. A run holds the PostgreSQL session advisory lock
+  `hokeka.edge.purge:<ledger schema>` and re-checks `edge_purge_log` while holding it. The key names
+  the schema because advisory locks are database-wide: ledgers of other sites in other schemas of
+  the same database purge independently.
 
 ### 8.3 Holds
 

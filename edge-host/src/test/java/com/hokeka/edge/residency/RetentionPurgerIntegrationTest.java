@@ -161,14 +161,23 @@ class RetentionPurgerIntegrationTest {
                 "the local floor can only raise retention");
     }
 
+    /**
+     * Another node of the site holding the purge lock makes this node skip; once that node releases
+     * it (as {@code RetentionPurger} does, explicitly, before returning its connection) this node
+     * purges, and only once per daily slot.
+     *
+     * <p>The other node unlocks explicitly rather than by closing its connection: a closed JDBC
+     * connection returns before the server backend has exited, and a backend releases its session
+     * locks only on exit, so an immediate try-lock after a close can still be refused.
+     */
     @Test
     void onlyOneNodePurgesAndOnlyOncePerDay() throws Exception {
         rig.acceptConfig(14, null);
-        try (Connection other = LedgerTestDatabase.connect(rig.schema);
-             PreparedStatement ps = other.prepareStatement("SELECT pg_advisory_lock(hashtext('hokeka.edge.purge'))")) {
-            ps.executeQuery().close();
+        try (Connection other = LedgerTestDatabase.connect(rig.schema)) {
+            advisory(other, "pg_advisory_lock");
             rig.purger.runIfDue();
             assertTrue(purgeOutcomes().isEmpty(), "another node holds the purge lock");
+            assertTrue(advisory(other, "pg_advisory_unlock"), "the other node held the schema's purge lock");
         }
         rig.purger.runIfDue();
         assertEquals(List.of("OK"), purgeOutcomes());
@@ -178,6 +187,27 @@ class RetentionPurgerIntegrationTest {
         rig.clock.set(Instant.parse("2026-10-18T02:00:01Z"));
         rig.purger.runIfDue();
         assertEquals(List.of("OK", "OK"), purgeOutcomes());
+    }
+
+    /**
+     * The purge lock is scoped to the ledger schema: a node purging a ledger in another schema of
+     * the same database (another site, or another test's ledger) holds a different key and does not
+     * stop this site's purge.
+     */
+    @Test
+    void aPurgeLockInAnotherSchemaDoesNotBlockThisSite() throws Exception {
+        rig.acceptConfig(14, null);
+        TunnelRig otherSite = new TunnelRig();
+        try (Connection other = LedgerTestDatabase.connect(otherSite.schema)) {
+            advisory(other, "pg_advisory_lock");
+            rig.purger.runIfDue();
+            assertEquals(List.of("OK"), purgeOutcomes(), "another schema's purge lock is a different key");
+            assertEquals("LOCKED", otherSite.purger.run(NOW, true).outcome(),
+                    "the same schema's purge lock is the same key");
+            assertTrue(advisory(other, "pg_advisory_unlock"));
+        } finally {
+            otherSite.close();
+        }
     }
 
     @Test
@@ -197,6 +227,20 @@ class RetentionPurgerIntegrationTest {
         assertTrue(exists(old), "a lock timeout drops nothing of that partition");
         assertEquals("OK", rig.purger.purgeNow().outcome());
         assertFalse(exists(old));
+    }
+
+    /**
+     * Calls an advisory lock function on the purge key of {@code c}'s schema, built the way
+     * {@code RetentionPurger} builds it, and returns its boolean result (true for a void lock).
+     */
+    private static boolean advisory(Connection c, String function) throws Exception {
+        try (PreparedStatement ps = c.prepareStatement("SELECT " + function + "(" + RetentionPurger.LOCK_KEY_SQL + ")::text")) {
+            ps.setString(1, RetentionPurger.LOCK_KEY_PREFIX);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return !"false".equals(rs.getString(1));
+            }
+        }
     }
 
     private boolean exists(UUID id) throws Exception {
