@@ -39,12 +39,13 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 - [ ] Lane 2: R2 Edge purge/holds · R5 Edge tunnel client · R8 refs-by-ID · R10a Edge typologies (SpEL→IR, CTR, structuring) · R10b Edge sanctions matcher · R10c remove PII feature-bag POST
   - [x] R2 + R5 Edge purge/holds/config consumer + tunnel client (merged; edge-host 304 tests, 0 failures)
   - [x] R8 refs-by-ID (merged; V264; branch tests 990 with 1 fixed failure + 2 Docker-env errors; fresh PG V1–V264 validate 3/3)
-  - [ ] R10a Edge typologies + CTR + limits (agent running from wp-lane2-base; V266 reserved)
-  - [ ] R10b Edge sanctions matcher + merchant blocklist (agent running from wp-lane2-base; V267 reserved)
+  - [ ] R10a Edge typologies + CTR + limits (built on wp-r10a-edge-typologies: 50 of 64 SpEL rules compiled, 14 listed with reasons; V268; merge conflicts with R10b on the Edge evaluate path, being resolved on wp-r10a-merge)
+  - [x] R10b Edge sanctions matcher + merchant blocklist (merged 4f2c66802; V267, ledger V3; branch: aml-ms 44, edge-host 337, BACKEND 1001 tests, only the 2 Docker-env errors)
   - [x] R10c remove PII feature-bag POST + site-scoped velocity (merged after R8; V265; edge-host 309 tests 0 failures; BACKEND full suite on merged branch 988 tests: only the 2 Docker-env errors after the contracts LF fix)
 - [ ] Gaps found by R14a: billing counts only cloud ingest, so Edge decision records bill nothing (owner decision, must land before R12) · Edge does not de-duplicate a retried txn_id (re-evaluates; ref points at newest row)
 - [ ] Gaps found by R2+R5: installers (install.sh, install.ps1) still default EDGE_PSPID to "acme" but tunnel/purge need an integer PSP id · Edge limits, merchant blocklist and sanctions version are parsed but not enforced on evaluate (R10a/R10b) · no test runs the real BACKEND tunnel server against the real Edge client (R13)
 - [ ] Gaps found by R8: rule logs and AI audit still lack ID reference columns · legacy readers still walk `transactions` (CrossPspFraudIntelligenceService, AiAuditAccessService, TransactionRetentionService, ComplianceLinksQueryService.forTransaction; DecisionEngine reason text can contain amounts) → R12 · SAR/goAML XML has no amounts until R9 filing pulls them from the Edge · CaseDecisionService CASE_UPDATE webhook still carries staff username `decidedBy`
+- [ ] Gaps found by R10b: closing a case as false positive does not lift an automatic merchant SANCTIONED block (only a clear rescreen or admin unblock) · Edge heap for the full OpenSanctions set with PEPs is unmeasured (100k synthetic entries tested; option include-pep=false) · metrics v2 sanctions counters not wired (Edge still sends v1 metrics) · RetentionPurgerIntegrationTest.onlyOneNodePurgesAndOnlyOncePerDay failed once then passed (suspected race with cached Spring contexts purging the shared test ledger)
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
 - [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
