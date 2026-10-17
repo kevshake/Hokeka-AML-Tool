@@ -264,6 +264,10 @@ class NoFeaturesLeaveTheEdgeIntegrationTest {
                 System.getProperty("contracts.dir", "../docs/contracts"), "tunnel", "examples", "edge-config--default.json")));
         config.put("configVersion", 1);
         config.put("pspId", 42);
+        // R10a enforces limits[] against site counters in Aerospike, which this test runs without:
+        // unreadable counters would answer HOLD / LIMITS_UNAVAILABLE (fail visibly, covered by
+        // ComplianceOverlayTest) and hide the rule-driven ALERT this test needs. No limits here.
+        config.putArray("limits");
         ObjectNode sanctions = (ObjectNode) config.get("sanctions");
         sanctions.put("listVersion", "20261017-0200");
         sanctions.put("listHash", list.listHash);
