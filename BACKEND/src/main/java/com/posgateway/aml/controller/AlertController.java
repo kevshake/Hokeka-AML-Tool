@@ -45,6 +45,8 @@ public class AlertController {
     private final com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService;
     private final com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService;
     private final com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService;
+    /** Live pull of the alerted transactions' details when the alert is viewed (R6). */
+    private final com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails;
 
         @Autowired
         public AlertController(AlertRepository alertRepository, AlertDispositionService alertDispositionService,
@@ -56,7 +58,8 @@ public class AlertController {
                                                               com.posgateway.aml.service.alert.AlertDetailQueryService alertDetailQueryService,
                                                               com.posgateway.aml.service.alert.AlertPrioritizationService alertPrioritizationService,
                                                               com.posgateway.aml.service.alert.AlertDispositionMakerCheckerService alertDispositionMakerCheckerService,
-                                                              com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService) {
+                                                              com.posgateway.aml.service.pagination.KeysetSliceService keysetSliceService,
+                                                              com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails) {
         this.alertRepository = alertRepository;
         this.alertDispositionService = alertDispositionService;
         this.pspIsolationService = pspIsolationService;
@@ -69,6 +72,7 @@ public class AlertController {
                                 this.alertPrioritizationService = alertPrioritizationService;
                                 this.alertDispositionMakerCheckerService = alertDispositionMakerCheckerService;
                                 this.keysetSliceService = keysetSliceService;
+                                this.transactionDetails = transactionDetails;
                             }
 
     /**
@@ -149,10 +153,18 @@ public class AlertController {
     /**
      * Get alert by ID with PSP access validation
      * GET /alerts/{id}
+     *
+     * <p>R6: the alerted transactions' details are pulled live from the PSP's Edge when the alert is
+     * viewed ({@code transactionDetails=false} skips the pull) and never persisted;
+     * {@code transactionDetailsStatus} reports offline / partial / timeout / busy without failing
+     * the view. Platform staff need the PSP's support access and a {@code supportReason}.
      */
     @GetMapping("/{id}")
     @SuppressWarnings("null")
-    public ResponseEntity<?> getAlertById(@PathVariable Long id) {
+    public ResponseEntity<?> getAlertById(@PathVariable Long id,
+                                          @RequestParam(defaultValue = "true") boolean transactionDetails,
+                                          @RequestParam(required = false) String supportReason,
+                                          @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         Long userPspId = pspIsolationService.getCurrentUserPspId();
         
         return alertRepository.findById(id)
@@ -160,9 +172,32 @@ public class AlertController {
                     if (!hasAlertAccess(alert, userPspId)) {
                         return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
                     }
-                    return ResponseEntity.ok(alertDetailQueryService.getAlertDetail(id));
+                    com.posgateway.aml.dto.alert.AlertDetailResponseDTO dto = alertDetailQueryService.getAlertDetail(id);
+                    fillTransactionDetails(alert, dto, transactionDetails,
+                            supportReason != null && !supportReason.isBlank() ? supportReason : reasonHeader);
+                    return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /** R6 live pull of the alert's referenced transactions into the response (never persisted). */
+    private void fillTransactionDetails(Alert alert, com.posgateway.aml.dto.alert.AlertDetailResponseDTO dto,
+                                        boolean pull, String supportReason) {
+        if (!pull) {
+            dto.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.notRequested());
+            return;
+        }
+        if (alert.getPspId() == null) {
+            dto.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.none());
+            return;
+        }
+        com.posgateway.aml.service.edgedata.TransactionDetailsService.Details d = transactionDetails.forRecord(
+                alert.getPspId(), dto.getTransactionRefs(),
+                com.posgateway.aml.edge.tunnel.TunnelActor.Purpose.ALERT_REVIEW,
+                com.posgateway.aml.service.edgedata.EdgeDataCallerResolver.WorkflowRefs.ofAlert(alert.getAlertId()),
+                supportReason);
+        dto.setTransactionDetails(d.items());
+        dto.setTransactionDetailsStatus(d.status());
     }
 
     /**

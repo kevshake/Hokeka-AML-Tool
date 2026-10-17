@@ -20,6 +20,9 @@ public interface AssessmentRepository extends JpaRepository<Assessment, UUID> {
     /** Finds the control-plane assessment linked to an edge-issued assessment id (unique index, V251). */
     Optional<Assessment> findByEdgeAssessmentId(UUID edgeAssessmentId);
 
+    /** A PSP's decision record by its Edge id: the tenant-scoped lookup the R6 data proxy routes by. */
+    Optional<Assessment> findFirstByPspIdAndEdgeAssessmentId(Long pspId, UUID edgeAssessmentId);
+
     /**
      * A PSP's assessments of one legacy transaction for one trigger type, oldest first. Used to pick
      * the transaction's reference (V264 back-fill rule: Edge-adopted first, then oldest).

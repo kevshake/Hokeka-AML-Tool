@@ -23,6 +23,18 @@ public class AssessmentDetailResponseDTO {
     private Long latencyMs;
     private Instant createdAt;
     private List<FindingResponseDTO> findings;
+    /** Where the assessed transaction lives: {@code EDGE} or {@code CLOUD_LEGACY} (R6). */
+    private String source;
+
+    /** {@code EDGE} or {@code CLOUD_LEGACY}. */
+    public String getSource() {
+        return source;
+    }
+
+    /** Sets the transaction source. */
+    public void setSource(String source) {
+        this.source = source;
+    }
 
     public UUID getAssessmentId() {
         return assessmentId;

@@ -16,9 +16,9 @@ import java.util.Map;
  *   <li>{@code transactionRefs}: every linked transaction as decision record id / txnRef / site
  *       (and the legacy cloud id for legacy-ingest rows);</li>
  *   <li>{@code transactionIds}: the legacy cloud ids only, kept for existing callers until R12;</li>
- *   <li>{@code transactionDetails}: always null from this endpoint. The cloud holds no transaction
- *       detail; the Console fills it by pulling the referenced transactions live from the PSP's Edge
- *       (work package R6).</li>
+ *   <li>{@code transactionDetails}: pulled live from the PSP's Edge when the alert is viewed (work
+ *       package R6) and never persisted; {@code transactionDetailsStatus} says how the pull went
+ *       (offline, partial, timeout, busy, support access) without failing the view.</li>
  * </ul>
  */
 public class AlertDetailResponseDTO {
@@ -26,6 +26,7 @@ public class AlertDetailResponseDTO {
     private Long alertId;
     private List<TransactionReference> transactionRefs = new ArrayList<>();
     private List<Map<String, Object>> transactionDetails;
+    private com.posgateway.aml.dto.edgedata.EdgePullStatus transactionDetailsStatus;
     private String action;
     private String status;
     private String severity;
@@ -127,7 +128,7 @@ public class AlertDetailResponseDTO {
         this.transactionRefs = transactionRefs;
     }
 
-    /** Null from the cloud; filled by the R6 live pull from the Edge. */
+    /** Details pulled live from the Edge when viewed (R6); null when not pulled. */
     public List<Map<String, Object>> getTransactionDetails() {
         return transactionDetails;
     }
@@ -135,6 +136,16 @@ public class AlertDetailResponseDTO {
     /** Sets transaction details pulled live from the Edge (R6); never persisted. */
     public void setTransactionDetails(List<Map<String, Object>> transactionDetails) {
         this.transactionDetails = transactionDetails;
+    }
+
+    /** How the live pull of {@link #getTransactionDetails()} went (R6). */
+    public com.posgateway.aml.dto.edgedata.EdgePullStatus getTransactionDetailsStatus() {
+        return transactionDetailsStatus;
+    }
+
+    /** Sets the live pull status (R6). */
+    public void setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus status) {
+        this.transactionDetailsStatus = status;
     }
 
     public List<FindingResponseDTO> getFindings() {

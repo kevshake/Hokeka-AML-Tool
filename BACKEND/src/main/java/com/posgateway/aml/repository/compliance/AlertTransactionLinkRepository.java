@@ -17,4 +17,7 @@ public interface AlertTransactionLinkRepository extends JpaRepository<AlertTrans
 
     /** Returns every transaction contributing to an alert. */
     List<AlertTransactionLink> findByAlertIdOrderByPrimaryLinkDescIdDesc(Long alertId);
+
+    /** Returns every alert link naming a decision record (V264 reference), newest links first by id. */
+    List<AlertTransactionLink> findByEdgeAssessmentIdOrderByIdDesc(java.util.UUID edgeAssessmentId);
 }

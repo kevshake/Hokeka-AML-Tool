@@ -69,4 +69,12 @@ public class AlertLinkageService {
                 .distinct()
                 .toList();
     }
+
+    /** Returns alert ids linked to a decision record via alert_transactions (V264 reference). */
+    public List<Long> findAlertIdsByDecisionRecord(java.util.UUID edgeAssessmentId) {
+        return alertTransactionLinkRepository.findByEdgeAssessmentIdOrderByIdDesc(edgeAssessmentId).stream()
+                .map(link -> link.getAlertId())
+                .distinct()
+                .toList();
+    }
 }

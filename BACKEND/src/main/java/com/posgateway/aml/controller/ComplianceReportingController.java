@@ -40,13 +40,20 @@ public class ComplianceReportingController {
     private final ComplianceReportingService reportingService;
     private final SuspiciousActivityReportRepository sarRepository;
     private final PspIsolationService pspIsolationService;
+    private final com.posgateway.aml.mapper.SarMapper sarMapper;
+    /** Live pull of the SAR's transactions when the SAR is viewed (R6). */
+    private final com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails;
 
     public ComplianceReportingController(ComplianceReportingService reportingService,
             SuspiciousActivityReportRepository sarRepository,
-            PspIsolationService pspIsolationService) {
+            PspIsolationService pspIsolationService,
+            com.posgateway.aml.mapper.SarMapper sarMapper,
+            com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails) {
         this.reportingService = reportingService;
         this.sarRepository = sarRepository;
         this.pspIsolationService = pspIsolationService;
+        this.sarMapper = sarMapper;
+        this.transactionDetails = transactionDetails;
     }
 
     /**
@@ -97,6 +104,41 @@ public class ComplianceReportingController {
                         || pspIsolationService.getCurrentUserPspId().equals(sar.getPspId()))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    }
+
+    /**
+     * SAR view with its transactions pulled live from the PSP's Edge (R6): the draft stores only ID
+     * references, so {@code transactionDetails} is rendered per view and never persisted (plan
+     * conflict 7); {@code transactionDetailsStatus} reports offline / partial / timeout / busy.
+     * Platform staff need the PSP's support access and a {@code supportReason}.
+     * GET /api/v1/compliance/sar/{id}/detail
+     */
+    @GetMapping("/{id}/detail")
+    public ResponseEntity<SarResponse> getSarDetail(@PathVariable Long id,
+            @RequestParam(defaultValue = "true") boolean transactionDetails,
+            @RequestParam(required = false) String supportReason,
+            @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
+        SuspiciousActivityReport sar = sarRepository.findById(id).orElse(null);
+        if (sar == null || !(pspIsolationService.isPlatformAdministrator()
+                || pspIsolationService.getCurrentUserPspId().equals(sar.getPspId()))) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        SarResponse response = sarMapper.toResponse(sar);
+        if (!transactionDetails) {
+            response.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.notRequested());
+        } else if (sar.getPspId() == null) {
+            response.setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus.none());
+        } else {
+            com.posgateway.aml.service.edgedata.TransactionDetailsService.Details d = this.transactionDetails.forRecord(
+                    sar.getPspId(), sar.getTransactionReferences(),
+                    com.posgateway.aml.edge.tunnel.TunnelActor.Purpose.SAR_FILING,
+                    com.posgateway.aml.service.edgedata.EdgeDataCallerResolver.WorkflowRefs.ofFiling(
+                            sar.getSarReference() != null ? sar.getSarReference() : "SAR-" + sar.getId()),
+                    supportReason != null && !supportReason.isBlank() ? supportReason : reasonHeader);
+            response.setTransactionDetails(d.items());
+            response.setTransactionDetailsStatus(d.status());
+        }
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(response);
     }
 
     @GetMapping("/{id}/xml")

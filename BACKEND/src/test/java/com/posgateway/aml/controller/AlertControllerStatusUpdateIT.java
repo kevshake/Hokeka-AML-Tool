@@ -68,7 +68,8 @@ class AlertControllerStatusUpdateIT {
                 alertDetailQueryService,
                 alertPrioritizationService,
                 alertDispositionMakerCheckerService,
-                keysetSliceService);
+                keysetSliceService,
+                org.mockito.Mockito.mock(com.posgateway.aml.service.edgedata.TransactionDetailsService.class));
         org.mockito.Mockito.lenient()
                 .when(alertDispositionMakerCheckerService.applyMakerChecker(any(), any(), any()))
                 .thenReturn(true);

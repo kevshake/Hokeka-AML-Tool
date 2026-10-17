@@ -48,6 +48,8 @@ class ComplianceSarAccessTest {
     @MockBean ComplianceReportingService reportingService;
     @MockBean SuspiciousActivityReportRepository sarRepository;
     @MockBean PspIsolationService pspIsolationService;
+    @MockBean com.posgateway.aml.mapper.SarMapper sarMapper;
+    @MockBean com.posgateway.aml.service.edgedata.TransactionDetailsService transactionDetails;
 
     @Test
     @WithMockUser(roles = "PSP_USER")

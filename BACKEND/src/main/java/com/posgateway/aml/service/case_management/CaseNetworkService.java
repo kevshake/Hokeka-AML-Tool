@@ -238,7 +238,8 @@ public class CaseNetworkService {
 
     /**
      * Create transaction node: the ID reference plus the decision record's decision. Transaction
-     * details are not read from the cloud; {@code transactionDetails} stays null until the R6 live pull.
+     * details are not read from the cloud; {@code transactionDetails} is filled per view by the R6
+     * live pull ({@code CaseTransactionDetailsEnricher}) and is never persisted.
      */
     private NetworkNode createTransactionNode(TransactionReference reference, Assessment record) {
         Map<String, Object> data = new LinkedHashMap<>(reference.toMap());
@@ -345,6 +346,8 @@ public class CaseNetworkService {
         private List<NetworkNode> nodes = new ArrayList<>();
         private List<NetworkEdge> edges = new ArrayList<>();
         private Map<String, Object> neo4jMetrics;
+        private com.posgateway.aml.dto.edgedata.EdgePullStatus transactionDetailsStatus;
+        private com.posgateway.aml.dto.edgedata.EdgePullStatus relatedStatus;
 
         public void addNode(NetworkNode node) {
             if (nodes.stream().noneMatch(n -> n.getId().equals(node.getId()))) {
@@ -372,6 +375,26 @@ public class CaseNetworkService {
 
         public void setNeo4jMetrics(Map<String, Object> neo4jMetrics) {
             this.neo4jMetrics = neo4jMetrics;
+        }
+
+        /** How the live pull of the transaction nodes' details went (R6); null until enriched. */
+        public com.posgateway.aml.dto.edgedata.EdgePullStatus getTransactionDetailsStatus() {
+            return transactionDetailsStatus;
+        }
+
+        /** Sets the live pull status of the transaction nodes (R6). */
+        public void setTransactionDetailsStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus status) {
+            this.transactionDetailsStatus = status;
+        }
+
+        /** How the optional txn.related expansion went (R6); null when not requested. */
+        public com.posgateway.aml.dto.edgedata.EdgePullStatus getRelatedStatus() {
+            return relatedStatus;
+        }
+
+        /** Sets the txn.related expansion status (R6). */
+        public void setRelatedStatus(com.posgateway.aml.dto.edgedata.EdgePullStatus status) {
+            this.relatedStatus = status;
         }
     }
 

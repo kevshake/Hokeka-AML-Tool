@@ -22,4 +22,7 @@ public interface ScreeningActivityRepository extends JpaRepository<ScreeningActi
 
     /** PSP-scoped screening ledger page for Console exports and list views. */
     Page<ScreeningActivity> findByPspIdOrderByCreatedAtDesc(Long pspId, Pageable pageable);
+
+    /** Screening runs of one decision record (V264 reference), newest first. */
+    Page<ScreeningActivity> findByEdgeAssessmentIdOrderByCreatedAtDesc(java.util.UUID edgeAssessmentId, Pageable pageable);
 }

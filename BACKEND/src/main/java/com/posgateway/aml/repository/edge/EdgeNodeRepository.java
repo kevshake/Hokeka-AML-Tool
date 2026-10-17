@@ -27,4 +27,10 @@ public interface EdgeNodeRepository extends JpaRepository<EdgeNode, Long> {
     List<EdgeNode> findByPspIdAndStatus(Long pspId, EdgeNodeStatus status);
 
     boolean existsByEdgeId(String edgeId);
+
+    /**
+     * True when the PSP has an Edge Node that ever activated (whatever its status now): its
+     * transaction data lives on an Edge Ledger, so the R6 data proxy serves it from the Edge only.
+     */
+    boolean existsByPspIdAndActivatedAtIsNotNull(Long pspId);
 }

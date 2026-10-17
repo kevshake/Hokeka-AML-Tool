@@ -70,7 +70,39 @@ public class ComplianceLinksQueryService {
         alertTransactionLinkRepository.findByTxnIdOrderByIdDesc(txnId).forEach(row ->
                 alertRepository.findById(row.getAlertId()).ifPresent(a ->
                         alerts.add(link("ALERT", a.getAlertId(), "LINKED_ALERT", a.getReason()))));
+        List<LinkedRecord> screening = new ArrayList<>();
+        screeningActivityRepository.findByTxnIdOrderByCreatedAtDesc(txnId, PageRequest.of(0, 20))
+                .forEach(sa -> screening.add(link("SCREENING_ACTIVITY", sa.getId(), "SCREENING", sa.getReason())));
+        return graphFor(String.valueOf(txnId), link("TRANSACTION", txnId, "SELF", "Transaction #" + txnId),
+                alerts, screening);
+    }
 
+    /**
+     * Returns the compliance graph anchored on a decision record (R6, by ID reference only): alerts
+     * that name it directly or through {@code alert_transactions}, their cases, SARs and disputes, and
+     * its screening runs. {@code pspId} scopes every row to one PSP; {@code null} (platform
+     * administrators) reads across PSPs, as the cloud workflow views already allow them to.
+     */
+    public ComplianceLinksResponse forDecisionRecord(Long pspId, java.util.UUID edgeAssessmentId) {
+        List<LinkedRecord> alerts = new ArrayList<>();
+        (pspId == null ? alertRepository.findByEdgeAssessmentIdOrderByCreatedAtDesc(edgeAssessmentId)
+                : alertRepository.findByPspIdAndEdgeAssessmentIdOrderByCreatedAtDesc(pspId, edgeAssessmentId))
+                .forEach(a -> alerts.add(link("ALERT", a.getAlertId(), "FRAUD_ALERT", a.getReason())));
+        alertTransactionLinkRepository.findByEdgeAssessmentIdOrderByIdDesc(edgeAssessmentId).forEach(row ->
+                alertRepository.findById(row.getAlertId())
+                        .filter(a -> pspId == null || pspId.equals(a.getPspId()))
+                        .ifPresent(a -> alerts.add(link("ALERT", a.getAlertId(), "LINKED_ALERT", a.getReason()))));
+        List<LinkedRecord> screening = new ArrayList<>();
+        screeningActivityRepository.findByEdgeAssessmentIdOrderByCreatedAtDesc(edgeAssessmentId, PageRequest.of(0, 20))
+                .stream().filter(sa -> pspId == null || pspId.equals(sa.getPspId()))
+                .forEach(sa -> screening.add(link("SCREENING_ACTIVITY", sa.getId(), "SCREENING", sa.getReason())));
+        String id = edgeAssessmentId.toString();
+        return graphFor(id, link("TRANSACTION", id, "SELF", "Transaction " + id), alerts, screening);
+    }
+
+    /** Cases, SARs and disputes reached from a transaction's alerts, plus the anchor and screening. */
+    private ComplianceLinksResponse graphFor(String anchorId, LinkedRecord self, List<LinkedRecord> alerts,
+                                             List<LinkedRecord> screening) {
         List<LinkedRecord> cases = new ArrayList<>();
         dedupe(alerts).forEach(a -> alertRepository.findById(Long.valueOf(a.recordId())).ifPresent(alert -> {
             if (alert.getComplianceCaseId() != null) {
@@ -96,13 +128,8 @@ public class ComplianceLinksQueryService {
             });
         });
 
-        List<LinkedRecord> screening = new ArrayList<>();
-        screeningActivityRepository.findByTxnIdOrderByCreatedAtDesc(txnId, PageRequest.of(0, 20))
-                .forEach(sa -> screening.add(link("SCREENING_ACTIVITY", sa.getId(), "SCREENING", sa.getReason())));
-
-        return new ComplianceLinksResponse("TRANSACTION", String.valueOf(txnId), dedupe(alerts), dedupe(cases),
-                List.of(link("TRANSACTION", txnId, "SELF", "Transaction #" + txnId)),
-                dedupe(sars), dedupe(disputes), List.of(), List.of(), dedupe(screening));
+        return new ComplianceLinksResponse("TRANSACTION", anchorId, dedupe(alerts), dedupe(cases),
+                List.of(self), dedupe(sars), dedupe(disputes), List.of(), List.of(), dedupe(screening));
     }
 
     /** Returns the compliance graph anchored on a fraud alert id. */
