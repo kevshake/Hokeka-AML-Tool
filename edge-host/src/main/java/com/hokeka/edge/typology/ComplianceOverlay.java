@@ -59,6 +59,8 @@ public final class ComplianceOverlay {
     private static final String BIN_COUNT = "n";
     private static final String BIN_AMOUNT = "amt";
     private static final int CTR_TTL = 4 * 86400;
+    /** decision-record-v2 {@code typologyCodes} maxItems. */
+    static final int MAX_CODES = 64;
 
     private final EdgeFeatureStore store;
     private final Supplier<Optional<EdgeConfigDocument>> config;
@@ -107,10 +109,14 @@ public final class ComplianceOverlay {
         boolean ctrRequired;
         boolean band;
 
-        /** Raises the required action and records a typology code with its local reason. */
+        /**
+         * Raises the required action and records a typology code with its local reason. The decision
+         * record carries at most {@link #MAX_CODES} codes (schema maxItems); the action and the
+         * ledger reasons always reflect every check.
+         */
         void flag(Action a, String code, String reason) {
             action = action.max(a);
-            if (!codes.contains(code)) {
+            if (!codes.contains(code) && codes.size() < MAX_CODES) {
                 codes.add(code);
             }
             reasons.add(reason);

@@ -168,6 +168,21 @@ class ComplianceOverlayTest {
         assertEquals(List.of("LIMIT_FX_UNAVAILABLE"), gbp.typologyCodes());
     }
 
+    /** Many breached limits: the action holds, the record keeps the schema's 64-code maximum. */
+    @Test
+    void typologyCodesAreCappedAtTheSchemaMaximum() {
+        ComplianceOverlay o = overlay(TypologyFixtures.config(d -> {
+            for (int i = 1; i <= 70; i++) {
+                TypologyFixtures.limit(d, i, "CARD", "COUNT", "P1D", null, 0, "HOLD");
+            }
+        }));
+        ComplianceOverlay.Assessment a = run(o, req("pan_hash", "card-x", "amount_cents", 1L, "currency", "USD"),
+                Action.ALLOW);
+        assertEquals(Action.HOLD, a.action());
+        assertEquals(ComplianceOverlay.MAX_CODES, a.typologyCodes().size());
+        assertEquals(70, a.reasons().size());
+    }
+
     /** Before the first config document: no CTR, no limits (contract §6.3). */
     @Test
     void noConfigMeansNoCtrAndNoLimits() {
