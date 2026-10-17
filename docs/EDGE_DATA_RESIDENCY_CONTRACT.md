@@ -891,6 +891,21 @@ Holds (§7.10) override retention on both sides. Releasing a hold makes its rows
 next run if they are past the cutoff and no other active hold covers them;
 `edge_held_evaluations` rows are deleted then.
 
+**Implementation notes (R9, Control Plane).** When holds are placed and released, which §7.10
+leaves to the cloud:
+
+| Workflow record | Placed | reasonCode | Release basis | Released with |
+|---|---|---|---|---|
+| SAR | when drafted (and by the reconciler for any unfiled SAR whose references are not yet covered) | `SAR` | filing time | `FILING_RETENTION_ELAPSED` once basis + `retention_years` has passed; `PLACED_IN_ERROR` when the SAR is deleted unfiled |
+| Case | when the case is `ESCALATED` (reconciler) | `CASE` | resolution time when the case closes (cleared again if reopened) | `CASE_CLOSED` once basis + `retention_years` has passed; `PLACED_IN_ERROR` when the case is deleted |
+| CTR deadline | at filing, over the aggregate's ids | `CTR` | filing time | `FILING_RETENTION_ELAPSED` |
+
+A hold covers at most 1 000 ids (more ids become several holds), is recorded per site in
+`legal_hold_site_acks`, and is unconfirmed until that site's `hold.ack` matches the last notify
+(APPLIED for a place, RELEASED or UNKNOWN_HOLD for a release). Every unconfirmed hold is re-sent
+after each `hello.ack` of the site, and every five minutes to connected sites that have not
+confirmed it; a divergent `activeHoldDigest` re-sends the site's unconfirmed holds.
+
 ### 8.4 Cloud decision records and filed documents
 
 - Daily, the Control Plane deletes decision records with `evaluated_at < now − retention_years`,
@@ -898,6 +913,9 @@ next run if they are past the cutoff and no other active hold covers them;
   Closed workflow records keep their own retention (at least `retention_years` from closure) and
   keep the decision records they reference until then.
 - Filed SAR/STR/CTR documents are kept for at least `retention_years` from the filing date.
+  (R9: `regulatory_filed_documents.retain_until`; a database trigger refuses UPDATE always and
+  DELETE before `retain_until`. The document is AES-256-GCM encrypted with the platform field key
+  and sealed by the SHA-256 of its plaintext, re-checked on every read.)
 - `edge_data_access_log` is kept for at least `retention_years`.
 
 ## 9. Support access

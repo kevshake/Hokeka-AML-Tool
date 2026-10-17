@@ -181,7 +181,7 @@ public class ComplianceReportingController {
     }
 
     @GetMapping("/{id}/xml")
-    public ResponseEntity<String> downloadSarXml(@PathVariable Long id,
+    public ResponseEntity<byte[]> downloadSarXml(@PathVariable Long id,
             @RequestParam(required = false) String supportReason,
             @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         log.info("Download SAR XML: {}", id);
@@ -192,6 +192,7 @@ public class ComplianceReportingController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         // A filed SAR exports its stored regulatory record exactly as filed (audited, no Edge pull).
+        // Bytes, not a String body: framework TRACE logging never renders the document.
         java.util.Optional<com.posgateway.aml.service.filing.FiledDocumentAccessService.Download> filed =
                 filedDocuments.downloadFor(com.posgateway.aml.entity.filing.RegulatoryFiledDocument.WorkflowType.SAR,
                         id, supportReason != null && !supportReason.isBlank() ? supportReason : reasonHeader);
@@ -201,14 +202,14 @@ public class ComplianceReportingController {
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filed.get().fileName() + "\"")
                     .header("X-Content-SHA256", filed.get().sha256())
                     .contentType(MediaType.APPLICATION_XML)
-                    .body(new String(filed.get().content(), java.nio.charset.StandardCharsets.UTF_8));
+                    .body(filed.get().content());
         }
         String xml = reportingService.generateFincenXml(id);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sar_" + id + ".xml\"")
                 .contentType(MediaType.APPLICATION_XML)
-                .body(xml);
+                .body(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**

@@ -45,7 +45,15 @@ final class FakeEdge implements WebSocket.Listener {
         void onRequest(FakeEdge edge, TunnelFrameCodec.OpenedFrame request) throws Exception;
     }
 
+    /** Reacts to one verified notify frame (R9: hold.place / hold.release acknowledgement). */
+    @FunctionalInterface
+    interface NotifyHandler {
+        void onNotify(FakeEdge edge, TunnelFrameCodec.OpenedFrame notify) throws Exception;
+    }
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    volatile NotifyHandler notifyHandler = (e, n) -> { };
 
     final String edgeId;
     final String siteId;
@@ -337,6 +345,7 @@ final class FakeEdge implements WebSocket.Listener {
                 }
                 handler.onRequest(this, f);
             }
+            case "notify" -> notifyHandler.onNotify(this, f);
             case "credit" -> {
                 AtomicInteger c = credit.get(f.corrId());
                 if (c != null) {
