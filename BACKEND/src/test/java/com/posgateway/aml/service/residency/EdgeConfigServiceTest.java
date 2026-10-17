@@ -10,13 +10,11 @@ import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.entity.residency.EdgeLimit;
 import com.posgateway.aml.entity.residency.EdgeMerchantBlocklistEntry;
 import com.posgateway.aml.entity.residency.PspEdgeSettings;
-import com.posgateway.aml.entity.sanctions.SanctionsList;
 import com.posgateway.aml.repository.CurrencyRateRepository;
 import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.residency.EdgeLimitRepository;
 import com.posgateway.aml.repository.residency.EdgeMerchantBlocklistRepository;
 import com.posgateway.aml.repository.residency.PspEdgeSettingsRepository;
-import com.posgateway.aml.repository.sanctions.SanctionsListRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -60,7 +58,7 @@ class EdgeConfigServiceTest {
     private EdgeLimitRepository limits;
     private EdgeMerchantBlocklistRepository blocklist;
     private CurrencyRateRepository rates;
-    private SanctionsListRepository sanctions;
+    private EdgeSanctionsSnapshotStore sanctions;
     private ApplicationEventPublisher events;
     private EdgeConfigService service;
     private final Map<Long, List<String>> issued = new ConcurrentHashMap<>();
@@ -86,8 +84,8 @@ class EdgeConfigServiceTest {
         when(blocklist.findByPspIdAndRemovedAtIsNullOrderByMerchantIdAsc(12L)).thenReturn(List.of());
         rates = mock(CurrencyRateRepository.class);
         when(rates.findAll()).thenReturn(List.of());
-        sanctions = mock(SanctionsListRepository.class);
-        when(sanctions.findFirstByOrderByDownloadedAtDescListIdDesc()).thenReturn(Optional.empty());
+        sanctions = mock(EdgeSanctionsSnapshotStore.class);
+        when(sanctions.latestReady()).thenReturn(Optional.empty());
 
         EdgeConfigDocumentBuilder builder = new EdgeConfigDocumentBuilder(psps, dataSettings, edgeSettings, limits,
                 blocklist, rates, sanctions, new BigDecimal("15000"), 72);
@@ -160,14 +158,10 @@ class EdgeConfigServiceTest {
                 rate("EUR", "1.085200", true, localNow.minusHours(3)),
                 rate("GBP", "1.300000", false, localNow.minusHours(1)),     // not regulatory-approved
                 rate("TZS", "0.000400", true, localNow.minusHours(100))));  // stale (> 72 h)
-        SanctionsList list = new SanctionsList();
-        list.setListId(4);
-        list.setListName("OPENSANCTIONS_ALL");
-        list.setListSource("OpenSanctions");
-        list.setVersion("20261016050000-abc");
-        list.setRecordCount(1200);
-        list.setDownloadedAt(localNow.minusHours(3));
-        when(sanctions.findFirstByOrderByDownloadedAtDescListIdDesc()).thenReturn(Optional.of(list));
+        // R10b: the section names the published Edge list snapshot, whose hash the Edge verifies.
+        String listHash = "43b32a22bf784accc75a5bdcd258e737be48c207b8785269b041eb42b02457e2";
+        when(sanctions.latestReady()).thenReturn(Optional.of(new EdgeSanctionsSnapshotStore.Snapshot(4L,
+                "20261016050000-abc", listHash, NOW.minusSeconds(3 * 3600), 1200, 1)));
 
         JsonNode doc = service.current(12L).document();
         assertConforms(doc);
@@ -184,6 +178,8 @@ class EdgeConfigServiceTest {
         assertEquals("mrc_09917", doc.at("/merchantBlocklist/entries/0/merchantId").asText());
         assertEquals(3, doc.at("/merchantBlocklist/version").asLong());
         assertEquals("20261016050000-abc", doc.at("/sanctions/listVersion").asText());
+        assertEquals(listHash, doc.at("/sanctions/listHash").asText());
+        assertEquals(NOW.minusSeconds(3 * 3600).toString(), doc.at("/sanctions/publishedAt").asText());
         assertTrue(doc.at("/tunnel/backfillAllowed").asBoolean());
     }
 

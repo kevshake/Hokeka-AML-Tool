@@ -85,6 +85,9 @@ public class AmlScreeningOrchestrator {
         // Create audit trail
         createAuditTrail(merchant, result, PROVIDER);
 
+        // Confirmed sanctions hits reach the PSP's Edges through the config merchant blocklist (R10b).
+        syncEdgeBlocklist(merchant, result);
+
         log.info("Screening complete for '{}': status={}, matches={}, provider={}",
                 merchant.getLegalName(), result.getStatus(), result.getMatchCount(), PROVIDER);
 
@@ -240,10 +243,31 @@ public class AmlScreeningOrchestrator {
         }
     }
 
+    /** PEP/RCA match (shared rule, {@link com.posgateway.aml.service.sanctions.SanctionsHitClassifier}). */
     private static boolean isPepMatch(String listName, String pepLevel) {
-        if (pepLevel != null && !pepLevel.isBlank()) {
-            return true;
-        }
-        return listName != null && listName.toUpperCase(java.util.Locale.ROOT).contains("PEP");
+        return com.posgateway.aml.service.sanctions.SanctionsHitClassifier.isPepMatch(listName, pepLevel);
     }
+
+    /** Edge merchant blocklist sync (R10b); optional so the orchestrator works without it. */
+    private com.posgateway.aml.service.residency.MerchantSanctionsBlocklistService edgeBlocklist;
+
+    /** Injects the Edge merchant blocklist sync. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEdgeBlocklist(com.posgateway.aml.service.residency.MerchantSanctionsBlocklistService edgeBlocklist) {
+        this.edgeBlocklist = edgeBlocklist;
+    }
+
+    /** Applies a merchant screening result to the Edge blocklist; a failure never fails the screening. */
+    private void syncEdgeBlocklist(Merchant merchant, ScreeningResult result) {
+        if (edgeBlocklist == null) {
+            return;
+        }
+        try {
+            edgeBlocklist.apply(merchant, result);
+        } catch (RuntimeException e) {
+            log.error("Edge blocklist sync failed for merchant {}: {}", merchant.getMerchantId(),
+                    e.getClass().getSimpleName());
+        }
+    }
+
 }

@@ -121,6 +121,18 @@ class PspActivationFilterTest {
             request.setContextPath("/api/v1");
             assertTrue(filter.shouldNotFilter(request), path + " must be exempt");
         }
+        // R10b: the sanctions list manifest and chunks, with and without the servlet context path.
+        String chunk = "/edge/sanctions/list/" + "a".repeat(64) + "/chunks/3";
+        for (String path : new String[]{"/edge/sanctions/list", chunk}) {
+            MockHttpServletRequest withContext = new MockHttpServletRequest("GET", "/api/v1" + path);
+            withContext.setContextPath("/api/v1");
+            assertTrue(filter.shouldNotFilter(withContext), path + " must be exempt under /api/v1");
+            MockHttpServletRequest bare = new MockHttpServletRequest("GET", "/api/v1" + path);
+            assertTrue(filter.shouldNotFilter(bare), "/api/v1" + path + " must be exempt without a context path");
+            assertTrue(filter.shouldNotFilter(new MockHttpServletRequest("GET", path)), path + " must be exempt");
+        }
+        MockHttpServletRequest notAChunk = new MockHttpServletRequest("GET", "/edge/sanctions/other");
+        assertFalse(filter.shouldNotFilter(notAChunk), "only the list paths are exempt");
         // R10c: the feature-bag endpoint is gone, so it is no longer a machine path either.
         MockHttpServletRequest removed = new MockHttpServletRequest("POST", "/api/v1/edge/decision");
         removed.setContextPath("/api/v1");

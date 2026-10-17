@@ -73,6 +73,12 @@ public class PspActivationFilter extends OncePerRequestFilter {
             "/edge/metrics",
             "/edge/assessments",
             "/edge/config",
+            // Sanctions/PEP list manifest and chunks (R10b; mTLS + ACTIVE node like /edge/config).
+            // Listed with and without the /api/v1 servlet context path, as in SecurityConfig.
+            "/edge/sanctions/list",
+            "/edge/sanctions/list/*/chunks/*",
+            "/api/v1/edge/sanctions/list",
+            "/api/v1/edge/sanctions/list/*/chunks/*",
             // Edge Tunnel WebSocket (mTLS + ACTIVE node, TunnelHandshakeInterceptor).
             "/edge/tunnel",
             // On-prem machine-to-machine lease endpoints (client credentials in body).

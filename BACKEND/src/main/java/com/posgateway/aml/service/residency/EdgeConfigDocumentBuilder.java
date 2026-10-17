@@ -8,13 +8,11 @@ import com.posgateway.aml.entity.psp.Psp;
 import com.posgateway.aml.entity.residency.EdgeLimit;
 import com.posgateway.aml.entity.residency.EdgeMerchantBlocklistEntry;
 import com.posgateway.aml.entity.residency.PspEdgeSettings;
-import com.posgateway.aml.entity.sanctions.SanctionsList;
 import com.posgateway.aml.repository.CurrencyRateRepository;
 import com.posgateway.aml.repository.PspRepository;
 import com.posgateway.aml.repository.residency.EdgeLimitRepository;
 import com.posgateway.aml.repository.residency.EdgeMerchantBlocklistRepository;
 import com.posgateway.aml.repository.residency.PspEdgeSettingsRepository;
-import com.posgateway.aml.repository.sanctions.SanctionsListRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -23,7 +21,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -46,7 +43,7 @@ import java.util.regex.Pattern;
  *       FX from regulatory-approved {@code currency_rates} (same validity rules as cloud CTR evaluation)</td></tr>
  *   <tr><td>limits</td><td>{@code edge_limits}</td></tr>
  *   <tr><td>merchantBlocklist</td><td>{@code edge_merchant_blocklist}</td></tr>
- *   <tr><td>sanctions</td><td>latest {@code sanctions_lists} snapshot</td></tr>
+ *   <tr><td>sanctions</td><td>newest READY Edge list snapshot ({@code edge_sanctions_snapshots}, R10b)</td></tr>
  *   <tr><td>tunnel</td><td>{@code psp_edge_settings}</td></tr>
  * </table>
  *
@@ -67,7 +64,7 @@ public class EdgeConfigDocumentBuilder {
     private final EdgeLimitRepository limits;
     private final EdgeMerchantBlocklistRepository blocklist;
     private final CurrencyRateRepository currencyRates;
-    private final SanctionsListRepository sanctionsLists;
+    private final EdgeSanctionsSnapshotStore sanctionsSnapshots;
     private final BigDecimal defaultCtrThresholdUsd;
     private final Duration maximumFxAge;
 
@@ -77,7 +74,7 @@ public class EdgeConfigDocumentBuilder {
                                      EdgeLimitRepository limits,
                                      EdgeMerchantBlocklistRepository blocklist,
                                      CurrencyRateRepository currencyRates,
-                                     SanctionsListRepository sanctionsLists,
+                                     EdgeSanctionsSnapshotStore sanctionsSnapshots,
                                      @Value("${compliance.kenya.ctr.threshold-usd:15000}") BigDecimal defaultCtrThresholdUsd,
                                      @Value("${compliance.regulatory-fx.max-age-hours:72}") long maximumFxAgeHours) {
         this.psps = psps;
@@ -86,7 +83,7 @@ public class EdgeConfigDocumentBuilder {
         this.limits = limits;
         this.blocklist = blocklist;
         this.currencyRates = currencyRates;
-        this.sanctionsLists = sanctionsLists;
+        this.sanctionsSnapshots = sanctionsSnapshots;
         this.defaultCtrThresholdUsd = defaultCtrThresholdUsd;
         this.maximumFxAge = Duration.ofHours(Math.max(1L, maximumFxAgeHours));
     }
@@ -263,30 +260,24 @@ public class EdgeConfigDocumentBuilder {
     }
 
     /**
-     * {@code sanctions}: identity of the latest downloaded list snapshot. {@code listHash} is the
-     * SHA-256 of the snapshot's identifying metadata (name, source, version, record count, download
-     * time); before any list was downloaded the section says {@code listVersion "none"} with the hash
-     * of the empty string and the epoch, which no real snapshot can match.
+     * {@code sanctions}: identity of the newest published Edge list snapshot (contract 6.4), the
+     * document {@code GET /api/v1/edge/sanctions/list} serves. {@code listHash} is that snapshot's hash
+     * over its chunk lines, so the Edge can tell which list to fetch and verify it got that one.
+     * Before any snapshot is published the section says {@code listVersion "none"} with the hash of
+     * the empty string and the epoch, which no real snapshot can match.
      */
     private ObjectNode sanctions() {
         ObjectNode node = JsonNodeFactory.instance.objectNode();
-        SanctionsList latest = sanctionsLists.findFirstByOrderByDownloadedAtDescListIdDesc().orElse(null);
-        if (latest == null || latest.getDownloadedAt() == null) {
+        EdgeSanctionsSnapshotStore.Snapshot latest = sanctionsSnapshots.latestReady().orElse(null);
+        if (latest == null) {
             node.put("listVersion", "none");
             node.put("listHash", CanonicalJson.sha256Hex(new byte[0]));
             node.put("publishedAt", instant(Instant.EPOCH));
             return node;
         }
-        Instant published = latest.getDownloadedAt().atZone(ZoneId.systemDefault()).toInstant();
-        node.put("listVersion", listVersion(latest.getVersion(), published));
-        String identity = String.join("\n",
-                String.valueOf(latest.getListName()),
-                String.valueOf(latest.getListSource()),
-                String.valueOf(latest.getVersion()),
-                String.valueOf(latest.getRecordCount()),
-                published.toString());
-        node.put("listHash", CanonicalJson.sha256Hex(identity.getBytes(StandardCharsets.UTF_8)));
-        node.put("publishedAt", instant(published));
+        node.put("listVersion", listVersion(latest.listVersion(), latest.publishedAt()));
+        node.put("listHash", latest.listHash());
+        node.put("publishedAt", instant(latest.publishedAt()));
         return node;
     }
 
