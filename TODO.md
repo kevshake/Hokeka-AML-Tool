@@ -1,6 +1,19 @@
 # TODO — Full Platform Completion (no stubs, no mocks, no placeholders)
 _Last updated: 2026-10-16_
 
+## Wave 75 — Process flow, user journeys, client-hosting readiness (2026-10-17)
+
+Map every hop each user type makes, from sign-up to day-to-day work. Fix any logic that blocks a client from finishing a process, and make every doc match the Edge-only architecture.
+
+- [ ] A1 Audit PSP tenant journeys in code (sign-up, onboarding, users and roles, API keys, Edge install and enrol, settings, retention, billing, offboarding)
+- [ ] A2 Audit compliance journeys in code (decision → alert → case → SAR/STR/CTR, Console live pulls, offline Edge, legal holds, data-access log)
+- [ ] A3 Audit platform-admin journeys and doc consistency (every doc that contradicts the code or the Edge-only model)
+- [ ] A4 Audit billing end to end (plan limit, overage per batch / next N / per transaction, metered from Edge decision records, invoice PDF emailed to the PSP, card on file in PSP admin through gateway tokenisation with no raw PAN, automatic charge)
+- [ ] F2 Fix the billing gaps found by A4 and update the billing docs
+- [ ] F1 Fix the blocking process-flow logic found by A1–A3
+- [ ] D1 Write `docs/PROCESS_FLOW.md` (every role, every hop, preconditions, failure exits) and fix the broken docs
+- [ ] V1 Verify: BACKEND, edge-host and FE suites on the combined branch; then push
+
 ## Wave 73 — Fix PSP-simulation findings (2026-10-16)
 
 - [x] C1 demo passwords: dev/test-only demo users, prod admin from SEED_ADMIN_PASSWORD only, V253 disables seeded demo accounts
@@ -54,9 +67,9 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 - [x] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
   - [x] R6 cloud data proxy (merged b4e8d3eaa; no migration; BACKEND 1065 tests, only the 2 Docker-env errors; NOTE: Console transaction list reads `content` but the proxy returns `items`, so it is empty until R11)
   - [x] R9 SAR/CTR filing from Edge pulls (merged; V269 filed-document store (encrypted, immutable, in Postgres) + legal holds; merged branch BACKEND 1096 only Docker-env errors, Console typecheck/lint/vitest clean)
-- [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
+- [x] Lane 4: R11 Console rewiring · R15 legacy data back-fill
   - [x] R11 Console live pulls (merged; transaction list fixed (it read the legacy monitoring store); useEdgeData + offline banner + support-reason flow; Edge Sites + Data Access Log pages; dashboards on decision_stats_hourly; vitest 74, typecheck/lint/build clean, BACKEND 1071 only Docker-env errors)
-  - [ ] R15 legacy cloud data back-fill to Edge (merged LOCALLY, not pushed: verified on its own branch (BACKEND 1086, edge-host 380 incl. real BackfillImporter fixtures); combined-branch suites were killed by low memory and must be re-run before push)
+  - [x] R15 legacy cloud data back-fill to Edge (combined branch verified 2026-10-17: BACKEND 1117, 0 failures, 2 known Docker-env errors; edge-host 380/380)
 - [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
 - [ ] Lane 6: R13 simulator rewrite + N1 residency canary · R14b docs final
 - [ ] Re-run full simulation on the new architecture
