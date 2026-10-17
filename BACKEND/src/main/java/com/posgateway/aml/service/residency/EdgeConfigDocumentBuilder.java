@@ -71,6 +71,14 @@ public class EdgeConfigDocumentBuilder {
     private final BigDecimal defaultCtrThresholdUsd;
     private final Duration maximumFxAge;
 
+    /** Cash structuring floor as a share of the CTR threshold (the cloud detector's setting). */
+    @Value("${compliance.kenya.structuring.floor-ratio:0.80}")
+    private BigDecimal structuringFloorRatio = new BigDecimal("0.80");
+
+    /** Repeat count that makes sub-threshold cash structuring (the cloud detector's setting, ≥ 2). */
+    @Value("${compliance.kenya.structuring.minimum-transactions:2}")
+    private int structuringMinimumTransactions = 2;
+
     public EdgeConfigDocumentBuilder(PspRepository psps,
                                      PspDataSettingsService dataSettings,
                                      PspEdgeSettingsRepository edgeSettings,
@@ -170,6 +178,11 @@ public class EdgeConfigDocumentBuilder {
         }
         ArrayNode channels = node.putArray("cashChannels");
         settings.getCtrCashChannels().stream().distinct().sorted().forEach(channels::add);
+        // R10a: the Edge runs the cloud's cash structuring detector with the same settings.
+        ObjectNode structuring = node.putObject("structuring");
+        String ratio = decimalString(structuringFloorRatio);
+        structuring.put("floorRatio", ratio == null ? "0.8" : ratio);
+        structuring.put("minTransactions", Math.max(2, Math.min(100, structuringMinimumTransactions)));
         node.set("fx", fx(now));
         return node;
     }

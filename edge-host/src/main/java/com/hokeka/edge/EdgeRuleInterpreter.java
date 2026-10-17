@@ -38,7 +38,7 @@ public final class EdgeRuleInterpreter {
         Action(int s) { this.severity = s; }
 
         /** The stronger of this action and {@code other}. */
-        Action max(Action other) { return other.severity > this.severity ? other : this; }
+        public Action max(Action other) { return other.severity > this.severity ? other : this; }
     }
 
     /** The evaluation result. */

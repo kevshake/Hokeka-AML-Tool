@@ -6,11 +6,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hokeka.edge.residency.EdgeConfigDocument;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Currency;
 import java.util.List;
 import java.util.UUID;
 
@@ -85,32 +83,17 @@ public final class CtrAggregator {
 
     /** One amount (minor units of {@code currency}) in major units of the reporting currency. */
     static BigDecimal toReporting(long amountMinor, String currency, EdgeConfigDocument.Ctr ctr) throws TunnelException {
-        BigDecimal major = BigDecimal.valueOf(amountMinor).movePointLeft(digits(currency));
-        String reporting = ctr.reportingCurrency();
-        if (currency.equals(reporting)) {
-            return major;
-        }
-        BigDecimal inBase = currency.equals(ctr.fxBase()) ? major : major.multiply(rate(currency, ctr));
-        return reporting.equals(ctr.fxBase()) ? inBase : inBase.divide(rate(reporting, ctr), MathContext.DECIMAL128);
-    }
-
-    /** {@code rates[currency]}; INTERNAL when missing or zero. */
-    private static BigDecimal rate(String currency, EdgeConfigDocument.Ctr ctr) throws TunnelException {
-        BigDecimal r = ctr.rates().get(currency);
-        if (r == null || r.signum() == 0) {
+        java.util.Optional<BigDecimal> converted =
+                com.hokeka.edge.residency.FxConversion.toMajor(amountMinor, currency, ctr.reportingCurrency(), ctr);
+        if (converted.isEmpty()) {
             throw new TunnelException(TunnelErrorCode.INTERNAL,
                     "the Edge config has no usable FX rate for a currency of the CTR day");
         }
-        return r;
+        return converted.get();
     }
 
     /** ISO 4217 minor-unit digits (2 when the JDK does not know the code). */
     static int digits(String currency) {
-        try {
-            int d = Currency.getInstance(currency).getDefaultFractionDigits();
-            return d < 0 ? 0 : d;
-        } catch (IllegalArgumentException e) {
-            return 2;
-        }
+        return com.hokeka.edge.residency.FxConversion.digits(currency);
     }
 }

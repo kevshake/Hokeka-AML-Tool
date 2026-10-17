@@ -14,6 +14,8 @@ import com.hokeka.edge.residency.RetentionPurger;
 import com.hokeka.edge.store.EdgeFeatureStore;
 import com.hokeka.edge.tunnel.EdgeTunnelClient;
 import com.hokeka.edge.store.FeatureDerivation;
+import com.hokeka.edge.store.TxnContext;
+import com.hokeka.edge.typology.ComplianceOverlay;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +55,7 @@ public class EdgeController {
     private final EvaluationRecorder recorder;
     private final String nodeId;
     private final String siteId;
+    private final ComplianceOverlay overlay;
 
     @Value("${featurestore.fail-closed:true}")
     private boolean failClosedOnStoreUnavailable;
@@ -115,6 +118,7 @@ public class EdgeController {
         this.recorder = recorder;
         this.nodeId = nodeId == null ? "" : nodeId.trim();
         this.siteId = siteId == null ? "" : siteId.trim();
+        this.overlay = new ComplianceOverlay(featureStore, this::configInForce);
     }
 
     /**
@@ -254,8 +258,10 @@ public class EdgeController {
         }
 
         String panHash = features.get("pan_hash") == null ? null : String.valueOf(features.get("pan_hash"));
+        TxnContext txn = TxnContext.from(features, evaluatedAt);
 
-        FeatureDerivation derived = featureStore.deriveFeaturesDetailed(panHash);
+        // History features (velocity windows, z-score, profiles) in one bounded store read (R10a).
+        FeatureDerivation derived = featureStore.derive(txn);
         if (failClosedOnStoreUnavailable && derived.storeUnavailable()
                 && panHash != null && !panHash.isBlank()) {
             EdgeRuleInterpreter.Decision hold = new EdgeRuleInterpreter.Decision(
@@ -264,20 +270,47 @@ public class EdgeController {
                     List.of(),
                     List.of("feature store unavailable (fail-closed): pre-auth evaluation withheld"));
             return respond(new EdgeEngine.Outcome(hold, EdgeEngine.CONTRACT_EVALUATOR_NONE,
-                    "FEATURE_STORE_UNAVAILABLE"), features, panHash, evaluatedAt, startNanos);
+                    "FEATURE_STORE_UNAVAILABLE"), features, panHash, evaluatedAt, startNanos, null);
         }
+
+        // CTR, cash structuring and Edge Config limits (R10a); the CTR card-day counter advances here.
+        ComplianceOverlay.Assessment compliance = overlay.assess(txn, features, derived.features());
 
         // Caller-supplied values win over derived ones, so an integrator can override for testing
         // or supply a richer value than the local store can compute.
         Map<String, Object> enriched = new LinkedHashMap<>(derived.features());
+        enriched.putAll(compliance.features());
         enriched.putAll(features);
 
-        EdgeEngine.Outcome outcome = engine.evaluateWithProvenance(enriched);
+        EdgeEngine.Outcome outcome = withCompliance(engine.evaluateWithProvenance(enriched), compliance);
 
-        // Record AFTER evaluating, so a transaction never inflates its own velocity counters.
-        featureStore.recordVelocity(panHash, velocityAmount(enriched.get("amount_cents")));
+        // Record AFTER evaluating, so a transaction never inflates the history its own rules read.
+        featureStore.record(txn, compliance.structuringBand());
+        overlay.commit(compliance, outcome.decision().action());
 
-        return respond(outcome, enriched, panHash, evaluatedAt, startNanos);
+        return respond(outcome, enriched, panHash, evaluatedAt, startNanos, compliance);
+    }
+
+    /**
+     * The engine outcome with the compliance overlay applied: the stronger action wins and the
+     * overlay's local reasons are appended. A fail-closed outcome is kept as it is (contract §4.1:
+     * fail-closed ⇒ HOLD with no triggered rules); its CTR flag is still recorded.
+     */
+    static EdgeEngine.Outcome withCompliance(EdgeEngine.Outcome outcome, ComplianceOverlay.Assessment compliance) {
+        if (outcome.failClosedCode() != null || compliance.reasons().isEmpty()) {
+            return outcome;
+        }
+        EdgeRuleInterpreter.Decision d = outcome.decision();
+        List<String> reasons = new java.util.ArrayList<>(d.reasons());
+        reasons.addAll(compliance.reasons());
+        EdgeRuleInterpreter.Decision merged = new EdgeRuleInterpreter.Decision(d.action().max(compliance.action()),
+                d.score(), d.triggeredRuleIds(), reasons, d.triggeredRuleVersionIds());
+        return new EdgeEngine.Outcome(merged, outcome.evaluator(), null);
+    }
+
+    /** The Edge Config document in force, if any. */
+    private java.util.Optional<EdgeConfigDocument> configInForce() {
+        return edgeConfig == null ? java.util.Optional.empty() : edgeConfig.current();
     }
 
     /**
@@ -285,7 +318,8 @@ public class EdgeController {
      * metrics of the decision that stands, and builds the response.
      */
     private ResponseEntity<EdgeEvaluation> respond(EdgeEngine.Outcome outcome, Map<String, Object> evaluated,
-                                                   String panHash, Instant evaluatedAt, long startNanos) {
+                                                   String panHash, Instant evaluatedAt, long startNanos,
+                                                   ComplianceOverlay.Assessment compliance) {
         UUID edgeAssessmentId = UUID.randomUUID();
         long version = engine.activeVersion();
         String bundleHash = engine.activeBundleHash();
@@ -294,6 +328,9 @@ public class EdgeController {
         LedgerEvaluation row = LedgerEvaluations.fromEvaluation(edgeAssessmentId, evaluatedAt, siteId, nodeId,
                 evaluated, panHash, outcome.decision(), version, bundleHash, outcome.evaluator(),
                 outcome.failClosedCode(), evalMicros);
+        if (compliance != null) {
+            row = row.withCompliance(compliance.ctrRequired(), compliance.typologyCodes());
+        }
         LedgerEvaluation standing = recorder.record(row);
 
         EdgeRuleInterpreter.Decision decision = standing == row ? outcome.decision()
@@ -301,23 +338,5 @@ public class EdgeController {
                         standing.reasons(), List.of());
         metrics.record(decision, (System.nanoTime() - startNanos) / 1000.0);
         return ResponseEntity.ok(EdgeEvaluation.of(decision, edgeAssessmentId.toString(), version, bundleHash));
-    }
-
-    /**
-     * {@code amount_cents} for the velocity counters (minor units): a number's integral part, a
-     * numeric string, or 0 when absent, negative or unusable — the same rule the store always used.
-     */
-    static long velocityAmount(Object value) {
-        if (value instanceof Number n) {
-            return Math.max(0L, n.longValue());
-        }
-        if (value != null) {
-            try {
-                return Math.max(0L, Long.parseLong(value.toString().trim()));
-            } catch (NumberFormatException ignored) {
-                return 0L;
-            }
-        }
-        return 0L;
     }
 }

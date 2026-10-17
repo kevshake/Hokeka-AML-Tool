@@ -100,6 +100,16 @@
           "maxItems": 32,
           "uniqueItems": true
         },
+        "structuring": {
+          "description": "Cash structuring detection (R10a). A cash transaction whose reporting-currency amount is at least floorRatio x the threshold and below it, with at least minTransactions such transactions on the card in the last 24 hours (the current one included), is held for review with typology CASH_STRUCTURING_24H. Absent: floorRatio 0.80, minTransactions 2.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["floorRatio", "minTransactions"],
+          "properties": {
+            "floorRatio": { "$ref": "common.schema.json#/$defs/decimalString" },
+            "minTransactions": { "type": "integer", "minimum": 2, "maximum": 100 }
+          }
+        },
         "fx": {
           "type": "object",
           "additionalProperties": false,

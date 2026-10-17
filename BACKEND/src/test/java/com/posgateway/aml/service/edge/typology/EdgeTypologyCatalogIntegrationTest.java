@@ -101,10 +101,17 @@ class EdgeTypologyCatalogIntegrationTest {
         assertTrue(seeds.stream().allMatch(r -> "SPEL".equals(r.getRuleType())), "every seeded rule is SpEL");
 
         EdgeReferenceLists lists = new EdgeReferenceLists() {
-            /** Small fixed lists (content does not affect compilability). */
+            /** Fixed sample lists; the edge-host typology tests rely on these values. */
             @Override
             public List<String> values(Long pspId, String list) {
-                return List.of("X1");
+                return switch (list) {
+                    case HIGH_RISK_COUNTRIES -> List.of("IR", "KP", "MM");
+                    case MERCHANTS_HIGH_RISK_COUNTRY -> List.of("m-hrc");
+                    case "blacklist_pan" -> List.of("pan-blocked");
+                    case "blacklist_device" -> List.of("dev-blocked");
+                    case "blacklist_reference_keyword" -> List.of("casino");
+                    default -> List.of();
+                };
             }
 
             /** Fixed stamp. */
@@ -138,9 +145,17 @@ class EdgeTypologyCatalogIntegrationTest {
             assertFalse(reason.isBlank());
         }
         // The whole compiled catalog is a valid IR v2 bundle for the Edge interpreter.
+        byte[] bundle = bundleService.buildBundleJson(result.version(), 42L, result.rules(),
+                result.manifestHash(), result.lists(), result.uncompiled());
         EdgeRuleInterpreter interpreter = new EdgeRuleInterpreter();
-        interpreter.loadBundle(bundleService.buildBundleJson(result.version(), 42L, result.rules(),
-                result.manifestHash(), result.lists(), result.uncompiled()));
+        interpreter.loadBundle(bundle);
+        // Shared with edge-host (EdgeTypologyEvaluateTest): the compiled seed catalog, so the Edge
+        // evaluate tests run the exact IR this compiler emits.
+        Path vector = Path.of("..", "edge-engine", "test-vectors", "typology_catalog_bundle.json");
+        if (Files.isDirectory(vector.getParent())) {
+            com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
+            Files.write(vector, m.writerWithDefaultPrettyPrinter().writeValueAsBytes(m.readTree(bundle)));
+        }
         // E2's burst: 12 card transactions within a minute trip R-172 and R-30 (both ALERT).
         EdgeRuleInterpreter.Decision burst = interpreter.evaluate(Map.of("pan_txn_count_1m", 11L,
                 "pan_txn_count_24h", 11L, "amount", 10.11, "txn_direction", "OUTBOUND"));

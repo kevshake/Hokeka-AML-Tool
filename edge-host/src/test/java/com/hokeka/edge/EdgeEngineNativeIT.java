@@ -85,6 +85,37 @@ class EdgeEngineNativeIT {
         }
     }
 
+    /**
+     * The compiled seed catalog (BACKEND EdgeRuleCompiler output) loads in the native core and
+     * gives the Java interpreter's decision on derived-feature bags of every typology.
+     */
+    @Test
+    void nativeCoreAgreesWithJavaOnTheCompiledTypologyCatalog() throws Exception {
+        byte[] bundle = java.nio.file.Files.readAllBytes(java.nio.file.Path.of("..", "edge-engine", "test-vectors",
+                "typology_catalog_bundle.json"));
+        EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
+        engine.loadVerifiedBundle(bundle);
+        assertEquals(EdgeEngine.EVALUATOR_NATIVE, engine.activeEvaluator());
+        EdgeRuleInterpreter java = new EdgeRuleInterpreter();
+        java.loadBundle(bundle);
+        List<Map<String, Object>> bags = List.of(
+                Map.of("pan_txn_count_1m", 9L, "pan_txn_count_24h", 12L, "amount", 10.0, "txn_direction", "OUTBOUND"),
+                Map.of("amount", 8500.0, "pan_txn_count_24h", 5L, "txn_direction", "INBOUND"),
+                Map.of("zscore_amount_vs_pan_history", 4.2, "is_first_transaction", false),
+                Map.of("country_code", "ir", "pan_txn_count_24h", 6L),
+                Map.of("pan_hash", "PAN-BLOCKED", "device_key", "x"),
+                Map.of("reference_lc", "casino deposit", "anonymous_payment_screening_hit", true),
+                Map.of("days_since_last_activity", 400L, "round_value_share_pct", 80.0, "unique_senders", 12L),
+                Map.of());
+        for (Map<String, Object> bag : bags) {
+            Decision n = engine.evaluate(bag);
+            Decision j = java.evaluate(bag);
+            assertEquals(j.action(), n.action(), bag.toString());
+            assertEquals(j.score(), n.score(), bag.toString());
+            assertEquals(j.triggeredRuleIds(), n.triggeredRuleIds(), bag.toString());
+        }
+    }
+
     @Test
     void malformedIrIsRejectedAndTheRunningBundleSurvives() {
         EdgeEngine engine = new EdgeEngine(AuthorizationGate.alwaysAuthorized());
