@@ -47,10 +47,13 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 - [ ] Gaps found by R8: rule logs and AI audit still lack ID reference columns · legacy readers still walk `transactions` (CrossPspFraudIntelligenceService, AiAuditAccessService, TransactionRetentionService, ComplianceLinksQueryService.forTransaction; DecisionEngine reason text can contain amounts) → R12 · SAR/goAML XML has no amounts until R9 filing pulls them from the Edge · CaseDecisionService CASE_UPDATE webhook still carries staff username `decidedBy`
 - [ ] Gaps found by R10b: closing a case as false positive does not lift an automatic merchant SANCTIONED block (only a clear rescreen or admin unblock) · Edge heap for the full OpenSanctions set with PEPs is unmeasured (100k synthetic entries tested; option include-pep=false) · metrics v2 sanctions counters not wired (Edge still sends v1 metrics) · ~~purge test race~~ fixed: root cause was a JDBC close returning before Postgres freed the session lock; production lock key was also database-wide, now scoped per ledger schema
 - [ ] Gaps found by R10a: 14 of 64 SpEL rules cannot run on the Edge (R-17/32/128/169 screening (covered by R10b matcher), R-45/61/118 need merchant legal names, R-CB-1..5 chargeback data cloud-only, R-127 peer group, R-173 VFMP/HECM) · cloud FATF-blacklist HOLD and ML-score checks in RegulatoryComplianceService are not ported (need a country-risk list on the Edge + Edge ML artifact) · removing a list entry does not bump the bundle version · large blacklists may exceed the 1 MiB Aerospike bundle record · sim E2 "normal txn ALLOW" will now ALERT/HOLD because R-1/3/117/131/170 fire on a first anonymous transaction (owner/R13 decision) · Aerospike round-trip latency unmeasured (no server here)
+- [ ] Gaps found by R6: platform admins can no longer list all PSPs transactions at once (pspId required, no cross-PSP fan-out) · ConsoleListExportService TRANSACTIONS export, monitoring/, mobile-money/, virtual-assets/transactions and dashboard "recent transactions" still read legacy cloud rows and async export jobs write files to disk (R12)
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
-  - [ ] R6 cloud data proxy (agent running; V269 if a migration is needed)
-  - [ ] R9 SAR/CTR filing from Edge pulls (after R6 and the R10a merge)
+  - [x] R6 cloud data proxy (merged b4e8d3eaa; no migration; BACKEND 1065 tests, only the 2 Docker-env errors; NOTE: Console transaction list reads `content` but the proxy returns `items`, so it is empty until R11)
+  - [ ] R9 SAR/CTR filing from Edge pulls (agent running; V269)
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
+  - [ ] R11 Console live pulls (agent running)
+  - [ ] R15 legacy cloud data back-fill to Edge (agent running; V270)
 - [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
 - [ ] Lane 6: R13 simulator rewrite + N1 residency canary · R14b docs final
 - [ ] Re-run full simulation on the new architecture
