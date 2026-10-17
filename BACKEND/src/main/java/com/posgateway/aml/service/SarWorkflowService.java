@@ -8,6 +8,9 @@ import com.posgateway.aml.model.SarStatus;
 import com.posgateway.aml.repository.SuspiciousActivityReportRepository;
 import com.posgateway.aml.service.compliance.ComplianceCalendarService;
 import com.posgateway.aml.service.compliance.RegulatoryDeadlineService;
+import com.posgateway.aml.entity.filing.LegalHoldWorkflow;
+import com.posgateway.aml.model.TransactionReference;
+import com.posgateway.aml.service.legalhold.LegalHoldService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,8 @@ public class SarWorkflowService {
     private final RegulatoryDeadlineService regulatoryDeadlineService;
     private final ComplianceCalendarService complianceCalendarService;
     private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService;
+    /** Legal holds on the Edge for the transactions of a drafted SAR (R9). */
+    private final LegalHoldService legalHoldService;
 
     @Autowired
     public SarWorkflowService(SuspiciousActivityReportRepository sarRepository,
@@ -40,13 +45,15 @@ public class SarWorkflowService {
             AuditLogService auditLogService,
             RegulatoryDeadlineService regulatoryDeadlineService,
             ComplianceCalendarService complianceCalendarService,
-            com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService) {
+            com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService,
+            LegalHoldService legalHoldService) {
         this.sarRepository = sarRepository;
         this.permissionService = permissionService;
         this.auditLogService = auditLogService;
         this.regulatoryDeadlineService = regulatoryDeadlineService;
         this.complianceCalendarService = complianceCalendarService;
         this.complianceEntityLinkService = complianceEntityLinkService;
+        this.legalHoldService = legalHoldService;
     }
 
     private static final DateTimeFormatter SAR_REF_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -114,7 +121,23 @@ public class SarWorkflowService {
         if (saved.getComplianceCase() != null) {
             complianceEntityLinkService.linkSarToCaseAlerts(saved.getId(), saved.getComplianceCase().getId(), null);
         }
+        placeSarHolds(saved, creator);
         return saved;
+    }
+
+    /**
+     * Residency contract 7.10 / 8.3: a drafted SAR places a legal hold (reasonCode SAR) on the Edge for
+     * the decision records it references, so the PSP's Edge Ledger keeps them past retention. The
+     * hold rows are written in this transaction and the notifies go out after it commits.
+     */
+    private void placeSarHolds(SuspiciousActivityReport sar, User actor) {
+        if (sar.getPspId() == null || sar.getPspId() <= 0) {
+            return;
+        }
+        java.util.List<java.util.UUID> ids = sar.getTransactionReferences().stream()
+                .map(TransactionReference::edgeAssessmentId).filter(java.util.Objects::nonNull).toList();
+        legalHoldService.ensureCoverage(sar.getPspId(), LegalHoldWorkflow.Type.SAR, sar.getId(), "SAR",
+                sar.getSarReference(), ids, actor != null && actor.getId() != null ? "u-" + actor.getId() : null);
     }
 
     /**
@@ -223,16 +246,20 @@ public class SarWorkflowService {
     }
 
     /**
-     * Mark SAR as Filed
+     * Records the filing of an APPROVED SAR (maker-checker already done: the approver was not the
+     * creator). Called only by the R9 filing service, inside the transaction that stores the filed
+     * document and with the SAR row locked, so a SAR never becomes FILED without its filed document.
+     *
+     * @param sar             the locked SAR
+     * @param filingReference the regulator's reference, if known at filing time
+     * @param filedAt         the filing time (the filed document's too)
      */
     @Transactional
-    public SuspiciousActivityReport markAsFiled(Long sarId, String filingReference, User filer) {
+    public SuspiciousActivityReport recordFiled(SuspiciousActivityReport sar, String filingReference, User filer,
+            LocalDateTime filedAt) {
         if (!permissionService.hasPermission(filer.getRole(), Permission.FILE_SAR)) {
             throw new SecurityException("User does not have permission to file SARs");
         }
-
-        SuspiciousActivityReport sar = sarRepository.findById(sarId)
-                .orElseThrow(() -> new IllegalArgumentException("SAR not found"));
         assertPspAccess(sar, filer);
 
         if (sar.getStatus() != SarStatus.APPROVED) {
@@ -245,7 +272,7 @@ public class SarWorkflowService {
 
         sar.setStatus(SarStatus.FILED);
         sar.setFiledBy(filer);
-        sar.setFiledAt(LocalDateTime.now());
+        sar.setFiledAt(filedAt);
         sar.setFilingReferenceNumber(filingReference);
         sar.setDeadlineBreached(sar.getFilingDeadline() != null
                 && sar.getFiledAt().isAfter(sar.getFilingDeadline()));

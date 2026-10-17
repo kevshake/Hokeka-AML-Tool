@@ -29,8 +29,23 @@ public class SarResponse {
     private List<Map<String, Object>> transactionDetails;
     /** How the live pull of {@code transactionDetails} went (R6); null when not pulled. */
     private com.posgateway.aml.dto.edgedata.EdgePullStatus transactionDetailsStatus;
+    /**
+     * The filed document's metadata once the SAR is filed (R9), else null. A filed SAR is shown
+     * from this stored regulatory record; its content is served by the download endpoint.
+     */
+    private FiledDocumentSummary filedDocument;
 
     public SarResponse() {
+    }
+
+    /** The filed document of a filed SAR (R9), or null. */
+    public FiledDocumentSummary getFiledDocument() {
+        return filedDocument;
+    }
+
+    /** Sets the filed document's metadata. */
+    public void setFiledDocument(FiledDocumentSummary filedDocument) {
+        this.filedDocument = filedDocument;
     }
 
     /** The SAR's transaction references. */

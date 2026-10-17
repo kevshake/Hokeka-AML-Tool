@@ -19,6 +19,11 @@ import java.util.Optional;
 @Repository
 public interface SuspiciousActivityReportRepository extends JpaRepository<SuspiciousActivityReport, Long> {
 
+    /** The SAR row locked for the caller's transaction (R9 filing: one filing at a time). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM SuspiciousActivityReport s WHERE s.id = :id")
+    Optional<SuspiciousActivityReport> lockById(@Param("id") Long id);
+
     /**
      * Find SARs by status
      */

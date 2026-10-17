@@ -17,6 +17,5 @@ public interface SarMapper {
     @Mapping(target = "suspectInfo", ignore = true)
     @Mapping(target = "activityInfo", ignore = true)
     @Mapping(target = "transactionReferences", source = "transactionReferences")
-    @Mapping(target = "transactionDetails", ignore = true)
-    SarResponse toResponse(SuspiciousActivityReport sar);
+    @Mapping(target = "transactionDetails", ignore = true)    SarResponse toResponse(SuspiciousActivityReport sar);
 }

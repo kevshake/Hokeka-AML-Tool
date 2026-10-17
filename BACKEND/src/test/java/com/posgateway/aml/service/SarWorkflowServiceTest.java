@@ -29,12 +29,14 @@ class SarWorkflowServiceTest {
     private final ComplianceCalendarService calendarService = mock(ComplianceCalendarService.class);
     private final com.posgateway.aml.service.compliance.ComplianceEntityLinkService complianceEntityLinkService =
             mock(com.posgateway.aml.service.compliance.ComplianceEntityLinkService.class);
+    private final com.posgateway.aml.service.legalhold.LegalHoldService legalHoldService =
+            mock(com.posgateway.aml.service.legalhold.LegalHoldService.class);
     private SarWorkflowService service;
 
     @BeforeEach
     void setUp() {
         service = new SarWorkflowService(repository, permissionService, auditLogService,
-                deadlineService, calendarService, complianceEntityLinkService);
+                deadlineService, calendarService, complianceEntityLinkService, legalHoldService);
         when(repository.save(any(SuspiciousActivityReport.class))).thenAnswer(invocation -> {
             SuspiciousActivityReport sar = invocation.getArgument(0);
             if (sar.getId() == null) sar.setId(77L);
@@ -62,6 +64,29 @@ class SarWorkflowServiceTest {
         assertThat(saved.getDeadlineWarningAt()).isEqualTo(deadline.minusHours(24));
         verify(calendarService).upsertSourceDeadline("SAR_FILING", deadline,
                 "SAR-TEST filing deadline (KE-POCAMLA-STR-2D)", "KE", 45L, "SAR", 77L);
+    }
+
+    /** Verifies: drafting a SAR places a legal hold (reason SAR) over its decision record ids. */
+    @Test
+    void draftingPlacesLegalHoldOverReferencedDecisionRecords() {
+        User creator = user(10L, 45L, "analyst");
+        when(permissionService.hasPermission(creator.getRole(), Permission.CREATE_SAR)).thenReturn(true);
+        LocalDateTime suspicion = LocalDateTime.of(2026, 7, 15, 9, 0);
+        when(deadlineService.calculate(RegulatoryDeadlineService.SAR_STR, "KE", 45L, suspicion))
+                .thenReturn(new RegulatoryDeadlineService.DeadlineCalculation(
+                        2L, "KE-POCAMLA-STR-2D", suspicion.plusDays(2), 24, "POCAMLA section 44"));
+        SuspiciousActivityReport draft = sar(creator, 45L, SarStatus.DRAFT);
+        draft.setJurisdiction("KE");
+        draft.setSuspicionAroseAt(suspicion);
+        java.util.UUID edgeId = java.util.UUID.fromString("c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f");
+        draft.setTransactionReferences(java.util.List.of(
+                com.posgateway.aml.model.TransactionReference.ofDecisionRecord(edgeId, "AUTH-1", "site-a"),
+                com.posgateway.aml.model.TransactionReference.ofLegacyTransaction(991L)));
+
+        service.createSarDraft(draft, creator);
+
+        verify(legalHoldService).ensureCoverage(45L, com.posgateway.aml.entity.filing.LegalHoldWorkflow.Type.SAR, 77L,
+                "SAR", "SAR-TEST", java.util.List.of(edgeId), "u-10");
     }
 
     @Test
@@ -136,12 +161,12 @@ class SarWorkflowServiceTest {
         User filer = user(12L, 45L, "mlro");
         SuspiciousActivityReport sar = sar(user(10L, 45L, "analyst"), 45L, SarStatus.APPROVED);
         sar.setFilingDeadline(LocalDateTime.now().minusMinutes(1));
-        when(repository.findById(77L)).thenReturn(Optional.of(sar));
         when(permissionService.hasPermission(filer.getRole(), Permission.FILE_SAR)).thenReturn(true);
 
-        SuspiciousActivityReport filed = service.markAsFiled(77L, "FRC-2026-001", filer);
+        SuspiciousActivityReport filed = service.recordFiled(sar, "FRC-2026-001", filer, LocalDateTime.now());
 
         assertThat(filed.getStatus()).isEqualTo(SarStatus.FILED);
+        assertThat(filed.getFiledBy()).isEqualTo(filer);
         assertThat(filed.isDeadlineBreached()).isTrue();
         assertThat(filed.getFilingReferenceNumber()).isEqualTo("FRC-2026-001");
         verify(calendarService).completeSourceDeadline("SAR", 77L);

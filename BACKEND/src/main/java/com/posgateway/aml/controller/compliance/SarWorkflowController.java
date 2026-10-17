@@ -27,10 +27,17 @@ public class SarWorkflowController {
 
     private final SarWorkflowService sarWorkflowService;
     private final UserRepository userRepository;
+    /** R9 filing (the only path that marks a SAR FILED). */
+    private final com.posgateway.aml.service.filing.RegulatoryFilingService filingService;
+    private final com.posgateway.aml.repository.SuspiciousActivityReportRepository sarRepository;
 
-    public SarWorkflowController(SarWorkflowService sarWorkflowService, UserRepository userRepository) {
+    public SarWorkflowController(SarWorkflowService sarWorkflowService, UserRepository userRepository,
+            com.posgateway.aml.service.filing.RegulatoryFilingService filingService,
+            com.posgateway.aml.repository.SuspiciousActivityReportRepository sarRepository) {
         this.sarWorkflowService = sarWorkflowService;
         this.userRepository = userRepository;
+        this.filingService = filingService;
+        this.sarRepository = sarRepository;
     }
 
     @PostMapping("/create")
@@ -75,13 +82,21 @@ public class SarWorkflowController {
         return ResponseEntity.ok(updated);
     }
 
+    /**
+     * Files an APPROVED SAR through the R9 filing path ({@code POST /api/v1/sar/{id}/file}): the
+     * transactions are pulled from the Edge and the filed document stored before the SAR is FILED.
+     * {@code filingReference} is recorded as the regulator's reference.
+     */
     @PostMapping("/file")
     @PreAuthorize("hasAuthority('FILE_SAR')")
     public ResponseEntity<SuspiciousActivityReport> file(@RequestBody FileSarRequest request) {
-        User filer = currentUser();
-        SuspiciousActivityReport updated = sarWorkflowService.markAsFiled(request.getSarId(),
-                request.getFilingReference(), filer);
-        return ResponseEntity.ok(updated);
+        currentUser();
+        if (request.getSarId() == null) {
+            throw new IllegalArgumentException("sarId is required");
+        }
+        filingService.fileSar(request.getSarId(), request.getFilingReference());
+        return sarRepository.findById(request.getSarId()).map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     private User currentUser() {

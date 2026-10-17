@@ -45,11 +45,12 @@ import java.util.Map;
  *   <li>a case linking the record directly (case_transactions) is open or recently closed, or has
  *       such a SAR;</li>
  *   <li>a SAR referencing the record directly (sar_transactions) is unfiled or filed less than
- *       {@code retention_years} ago.</li>
+ *       {@code retention_years} ago;</li>
+ *   <li>an ACTIVE legal hold of the PSP covers the record ({@code legal_hold_items}, V269, R9):
+ *       holds override retention on both sides (contract 8.3).</li>
  * </ul>
  * Findings go with the record ({@code ON DELETE CASCADE}). The rollup {@code decision_stats_hourly}
- * holds aggregates only and is not touched. Each PSP run that deletes anything is audited. Legal
- * holds do not exist in the cloud yet (work package R9 adds them and their exclusion here).
+ * holds aggregates only and is not touched. Each PSP run that deletes anything is audited.
  */
 @Service
 public class DecisionRecordPurgeService {
@@ -118,6 +119,13 @@ public class DecisionRecordPurgeService {
                           AND (s.status IN ('DRAFT', 'PENDING_REVIEW', 'APPROVED')
                                OR s.filed_at IS NULL
                                OR s.filed_at >= ?)
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM legal_hold_items hi
+                         JOIN legal_holds h ON h.hold_id = hi.hold_id
+                        WHERE hi.edge_assessment_id = d.edge_assessment_id
+                          AND h.psp_id = d.psp_id
+                          AND h.state = 'ACTIVE'
                    )
                  LIMIT ?)
             """.formatted(DecisionRecordWorkflowService.SOURCE_TYPE);

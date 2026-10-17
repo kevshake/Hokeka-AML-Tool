@@ -448,11 +448,27 @@ public class SuspiciousActivityReport {
             status = SarStatus.DRAFT;
         if (sarType == null)
             sarType = SarType.INITIAL;
+        redactAnalystText();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        redactAnalystText();
+    }
+
+    /**
+     * Residency contract 2.3 / plan conflict 7: analyst free text is workflow data and must not
+     * carry card numbers, so PAN-like values are redacted before every write.
+     */
+    private void redactAnalystText() {
+        if (com.posgateway.aml.util.PanRedactor.containsPan(narrative)) {
+            org.slf4j.LoggerFactory.getLogger(SuspiciousActivityReport.class)
+                    .warn("SAR {}: a PAN-like value in the narrative was redacted before storing", id);
+            narrative = com.posgateway.aml.util.PanRedactor.redact(narrative);
+        }
+        amendmentReason = com.posgateway.aml.util.PanRedactor.redact(amendmentReason);
+        reviewNotes = com.posgateway.aml.util.PanRedactor.redact(reviewNotes);
     }
 
     public static SuspiciousActivityReportBuilder builder() {
