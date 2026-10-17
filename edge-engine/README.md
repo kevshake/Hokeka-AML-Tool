@@ -63,6 +63,23 @@ The plaintext inside an HSE-1 bundle is JSON deserialised by `rule-core::RuleBun
 `condition` is a tree of `cmp` / `all` (AND) / `any` (OR) / `not` — the same semantics as the
 control-plane `DynamicRuleConverter`, so the existing per-PSP rule catalog compiles straight to it.
 
+**IR v2 (R10a)** adds `exists` (field present), `in_list` (field text in the bundle's
+`"lists": {name: [strings]}`, ASCII case-insensitive; a bundle naming an undefined list is
+rejected) and `const` (fixed truth value), plus top-level `ir_version: 2` and an informational
+`uncompiled: [{id, name, reason}]` section (rules the Control Plane could not compile; ignored
+here). The Java interpreters (`edge-host` and BACKEND's reference copy) implement the same
+semantics. Shared vectors:
+
+- `test-vectors/rule_ir_parity.json`: run by `cargo test` (`shared_parity_vectors`), edge-host
+  `EdgeRuleIrParityTest`, and `EdgeEngineNativeIT` (JNI vs Java, `mvn test -Pnative-core`).
+- `test-vectors/typology_catalog_bundle.json`: the seeded SpEL catalog as BACKEND's
+  `EdgeRuleCompiler` compiles it (written by `EdgeTypologyCatalogIntegrationTest`), run end to end by
+  edge-host `EdgeTypologyEvaluateTest` and natively by `EdgeEngineNativeIT`.
+
+On Windows without MSVC: `cargo +stable-x86_64-pc-windows-gnu test --target-dir target-gnu`, and
+`cargo +stable-x86_64-pc-windows-gnu build --release -p edge-jni --target-dir target-gnu` produces
+`target-gnu/release/edge_engine.dll` for `-Pnative-core -Dnative.core.dir=<that dir>`.
+
 ## Still to build (see TODO Wave 55)
 
 Edge host (Spring Boot: transaction API on virtual threads, offline token validation, rule

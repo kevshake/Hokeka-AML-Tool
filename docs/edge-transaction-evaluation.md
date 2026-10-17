@@ -22,7 +22,8 @@ Your API node
 EdgeController
     │  0. CHECK txn_id: PAN-like → 422 TXN_REF_LOOKS_LIKE_PAN; malformed → 422 TXN_REF_INVALID
     │  1. read pan_hash from the body
-    │  2. ENRICH: derive velocity features from Aerospike (fail-closed if unavailable)
+    │  2. ENRICH: derive history features from Aerospike (fail-closed if unavailable), then the
+    │     compliance overlay: CTR card-day total, cash structuring, Edge Config limits (§6.1)
     │  3. MERGE:  caller-supplied fields overwrite derived ones
     ▼
 EdgeEngine
@@ -31,7 +32,8 @@ EdgeEngine
     │  6. EVALUATE via the Rust core, or the Java interpreter as warm standby
     ▼
 EdgeController
-    │  7. advance this card's velocity counters (after the decision; site-scoped keys)
+    │  7. merge the overlay's action (strongest wins); advance this card's history and the limit
+    │     usage (after the decision; site-scoped keys; BLOCK uses no limit)
     │  8. MINT edgeAssessmentId (UUID)
     │  9. RECORD on the Edge Ledger: evaluation row + txn_ref index + decision-record outbox row,
     │     one SQL statement, one local transaction. Failure → HOLD / LEDGER_UNAVAILABLE (§5.3)
@@ -48,8 +50,10 @@ Later, in the background:
 Ordering details to know:
 
 - **Enrichment happens before evaluation**, so rules see this card's history.
-- **Velocity counters advance after evaluation**, so a transaction never inflates its own counters.
-  The transaction you just sent is *not* in the `pan_txn_count_1h` its rules saw.
+- **History advances after evaluation**, so stored counters never contain the transaction being
+  evaluated; the derivation then adds it explicitly where the cloud's windows did (§2.2), so
+  `pan_txn_count_24h` = earlier transactions + 1. The CTR card-day total is the exception: it is
+  advanced atomically before evaluation, so concurrent nodes cannot both miss the crossing.
 - **The ledger write happens before the answer.** If the PSP gets an `edgeAssessmentId`, that
   evaluation is on the ledger, or it is a fail-closed `HOLD` waiting in the retry buffer (§5.3).
 
@@ -92,22 +96,54 @@ plus any value the Luhn guard flags). Do not rely on that: a raw card number has
 
 ### 2.2 Features the node derives for you
 
-The node reads these from Aerospike, keyed on `pan_hash`, and merges them in **before** evaluation:
+The node reads the card's (and its device's and IP's) history from Aerospike in **one batch get**
+and merges the derived features in **before** evaluation (`CardHistoryFeatures`, R10a). Names and
+arithmetic are the cloud's (`RuleFeatureEnrichmentService`), so the compiled SpEL typology catalog
+sees the same values the cloud rules saw. **Counts and sums over a window ending "now" include the
+transaction being evaluated**, as the cloud's did (it stored the transaction before scoring);
+features the cloud computed over earlier transactions only ("before now") exclude it.
 
-| Derived feature | Type | Meaning |
+| Derived feature(s) | Source | Meaning |
 |---|---|---|
-| `pan_txn_count_1h` | integer | Transactions on this card in the current hourly bucket |
-| `pan_txn_count_24h` | integer | Transactions on this card across the last 24 hourly buckets |
-| `pan_amount_sum_24h` | decimal | Sum of amounts over the same 24 buckets, **in major units** (cents ÷ 100) |
+| `amount` | request | `amount_cents ÷ 100` (0 when absent), as the cloud's `#tx.amount` |
+| `txn_direction` | request | `direction` normalised: starts with `IN` or is `CREDIT` → `INBOUND`, else `OUTBOUND` |
+| `amount_ending_pattern` | request | amount ends in `.00` or `.99` |
+| `pan_txn_count_1m`, `_5m`, `_1h` | recent list | Rolling, exact, current included |
+| `pan_txn_count_24h`, `pan_amount_sum_24h` | hourly buckets | Last 24 UTC hourly buckets + current; sum **in major units** |
+| `is_first_transaction`, `days_since_last_activity` | card profile | No earlier evaluation on the site; whole days since the last one |
+| `is_new_country`, `is_new_currency` | recent list | No earlier evaluation with this country / currency in 30 days |
+| `txn_count_deviation_ratio`, `volume_deviation_ratio` | daily buckets | 7-day vs 30-day daily average (count / amount) |
+| `avg_amount_spike_ratio`, `zscore_amount_vs_pan_history` | daily buckets | Amount vs the card's 30-day mean; z-score with the population standard deviation (0 without history or spread) |
+| `volume_ratio_t1_t2`, `txn_count_window_ratio`, `daily_txn_count_ratio`, `avg_amount_window_ratio`, `daily_avg_amount_ratio` | hourly + daily buckets | The cloud's window ratios |
+| `send_receive_ratio`, `spend_receive_spike_ratio` | daily / hourly buckets | Rapid movement: outbound vs inbound count (7 d) and amount (24 h) |
+| `same_parties_volume`, `circular_trading_count`, `refund_share_pct`, `round_value_share_pct`, `round_value_txn_count`, `unique_senders`, `unique_counterparties`, `distinct_banks`, `bank_name_changes`, `distinct_payment_ids` | recent list | 7-day features over the card's remembered evaluations |
+| `distinct_users_per_payment_id` | device profile | Distinct merchants seen with `device_id` (else `device_fingerprint`) |
+| `distinct_users_per_ip`, `payment_id_use_count`, `distinct_countries`, `ip_outside_expected_location`, `ip_change_count` | IP profile | Merchants, 7-day uses and countries seen with `ip_address` |
+| `cash_transaction`, `ctr_required`, `is_structuring_suspected`, `structuring_repeat_count_24h`, `structuring_amount_band` | Edge Config + counters | See §6.1 |
+| `anonymous_payment_screening_hit`, `reference_lc`, `device_key` | request | Prepaid `card_type`, cash, or no `customer_account_reference` / `account_id` / `customer_id` / `customer_email`; lower-cased `reference`; device key |
 
-> **Unit mismatch.** You send `amount_cents` in **minor** units. The derived `pan_amount_sum_24h` is
-> in **major** units. A rule that compares the two without the 100× factor is wrong by two orders of
-> magnitude.
+A feature the cloud set only under a condition (e.g. `avg_amount_spike_ratio` only when the card has
+a 30-day average) is set here under the same condition.
 
-> **Bucket semantics.** `pan_txn_count_1h` is the *current clock-hour bucket*, not a rolling 60
-> minutes. At 10:59 it covers 59 minutes. At 11:01 it resets to near zero. `pan_txn_count_24h` sums
-> 24 buckets, so it spans 23 to 24 hours. A rule that needs a strict rolling window must say so
-> differently.
+> **Unit mismatch.** You send `amount_cents` in **minor** units. The derived `amount` and
+> `pan_amount_sum_24h` are in **major** units.
+
+> **Window resolution.** 1 min / 5 min / 1 h are rolling and exact from the card's last 100
+> evaluations (when 100 fall inside the window, the count is bounded below by the current and
+> previous hourly buckets). 24 h is the last 24 UTC hourly buckets, so it spans 23 to 24 hours;
+> "yesterday" is buckets 24–47. 7 and 30 days are the current UTC day plus the 6 / 29 previous
+> ones. The cloud's 30-day z-score used at most 1 000 amounts; the Edge uses all of them. "New
+> country/currency" looks at the last 100 evaluations (the cloud looked at 200).
+
+**Cost.** Before evaluation: one batch get of at most 82 keys (48 hourly + 31 daily buckets, card,
+device and IP profiles). After it: two atomic adds (hour, day) and up to three generation-checked
+profile writes (card, device, IP; each ≤ 100 entries, ~8 KB). With CTR on, a cash card transaction
+adds one atomic `operate`; Edge Config limits add one batch get before and one add per applicable
+limit after. No ledger query runs on the evaluate path. The in-process cost of deriving every
+feature and evaluating the 50-rule compiled catalog on the Java interpreter measured p50 0.03 ms /
+p99 0.38 ms (`TypologyLatencyTest`, dev laptop); the store round trips come on top (on a site LAN a
+batch get and an `operate` typically cost 0.1–0.5 ms each — not measured in this repository,
+because the test environment has no Aerospike server).
 
 Velocity is site-scoped. Buckets are keyed `<pan_hash>:<yyyyMMddHH>:<site_id>` (site id =
 `EDGE_SITE_ID`, or `EDGE_EDGEID` for a single-node site). All nodes of one Edge Site share one
@@ -210,7 +246,8 @@ The decision record carries only these fields:
 | `failClosedCode` | present only on fail-closed `HOLD` |
 | `latencyMs` | |
 | `merchantId` | when valid |
-| `ctrRequired`, `sanctionsHit`, `watchlistEntryIds`, `typologyCodes` | The node sends `false` / none today. Edge CTR and sanctions screening are planned (R10a, R10b) |
+| `ctrRequired`, `typologyCodes` | Set by the compliance overlay (§6.1): `CTR_REPORTABLE`, `CASH_STRUCTURING_24H`, `LIMIT_<limitId>`, and the fail-visible codes `CTR_FX_UNAVAILABLE`, `CTR_CONFIG_INVALID`, `CTR_AGGREGATE_UNAVAILABLE`, `LIMIT_FX_UNAVAILABLE`, `LIMITS_UNAVAILABLE` |
+| `sanctionsHit`, `watchlistEntryIds` | `false` / none today; Edge sanctions screening is R10b |
 
 It never carries the PAN hash, amount, currency, country, MCC, channel, other features, or the
 `reasons` text. The node validates each record against the closed schema
@@ -263,6 +300,9 @@ Conditions are a small nested boolean tree:
 | `any` | `{"type":"any","any":[…]}` | OR: at least one child must match |
 | `not` | `{"type":"not","not":{…}}` | Negation |
 | `cmp` | `{"type":"cmp","field":…,"op":…,"value":…}` | Leaf comparison |
+| `exists` | `{"type":"exists","field":…}` | IR v2: the field is present with a scalar value (SpEL `x != null`) |
+| `in_list` | `{"type":"in_list","field":…,"list":…}` | IR v2: the field's string form is in the bundle's `lists[list]`, ASCII case-insensitive (high-risk countries, payment blacklists, merchants onboarded in a high-risk country) |
+| `const` | `{"type":"const","value":true\|false}` | IR v2: fixed truth value (a rule its parameters make inert) |
 
 Comparison operators:
 
@@ -271,9 +311,25 @@ Comparison operators:
 | `EQ` / `NE` | Numeric comparison when both sides are numeric (tolerance 1e-9), otherwise string comparison |
 | `GT` / `GTE` / `LT` / `LTE` | Numeric only. If either side is non-numeric the comparison is **false** |
 | `IN` | `value` is a **comma-separated string**, e.g. `"5411,5812,5999"`, matched against the field as a trimmed string |
-| `CONTAINS` | Substring match on the string form of the field |
+| `CONTAINS` | Substring match on the string form of the field and of the value |
 
-**An unknown condition type or operator evaluates to `false`.** The rule does not fire.
+A string counts as a number only when it is a plain decimal literal (`-12.5`, `1e3`; no spaces,
+`inf`, `NaN`, hex or type suffix). A JSON `null`, array or object feature counts as absent. Numbers
+compare as text in their shortest plain form (`0.5`, `0.0000001`; integral values without a
+decimal point). The Rust core and the Java interpreter implement exactly this; the shared vectors
+`edge-engine/test-vectors/rule_ir_parity.json` run in both (and through JNI with `-Pnative-core`).
+
+**A bundle with an unknown condition type or operator, or an `in_list` naming a list it does not
+define, is rejected at load** and the previous bundle stays active.
+
+**Compiled SpEL catalog.** The Control Plane compiles the seeded SpEL typology rules to this IR
+(`EdgeRuleCompiler`, R10a): `#params` are folded in, `#tx` / `#features` become the derived features
+of §2.2, and SpEL's null ordering is kept (`null < x` and `null != x` are true in SpEL, so those
+compile to `any(not exists f, cmp)`). A rule that cannot run on the Edge is listed with its reason
+in the bundle's `uncompiled` section (and in the cloud's `edge_bundles.uncompiled_rules`); it is
+never dropped silently. Today these are the screening rules (R-17, R-32, R-128, R-169 — R10b),
+the merchant legal-name rules (R-45, R-61, R-118), the chargeback/dispute rules (R-CB-1…5), the
+peer-group rule (R-127) and the scheme-stage rule (R-173).
 
 ### 4.5 A missing feature never fires a rule
 
@@ -403,8 +459,40 @@ rule list. Evaluation starts at `ALLOW`, so an empty list would disarm the node 
 returns 404. There is no supported way to inject rules locally.
 
 The Control Plane also serves a sealed per-PSP **Edge Config** document at `GET /api/v1/edge/config`
-(retention, support access, CTR, limits, blocklist, tunnel settings). The node does not consume it
-yet. The config consumer is planned (R2).
+(retention, support access, CTR, limits, blocklist, tunnel settings). The node consumes it (R2);
+its CTR and limits sections drive §6.1.
+
+### 6.1 Compliance overlay: CTR, FX, cash structuring, limits (R10a)
+
+`ComplianceOverlay` runs on every evaluation, next to the rules. Its action is merged with the
+rules' (strongest wins); its codes go into the decision record's `typologyCodes`; its reasons go
+into the response and the ledger only. Before the first config document is accepted: CTR off, no
+limits (contract §6.3).
+
+- **Cash** = request `cash_transaction` / `is_cash` true, or `channel` in `ctr.cashChannels`.
+- **CTR.** Each cash amount is converted to `ctr.reportingCurrency` with `ctr.fx`
+  (`rates[C]` = base units per unit of C) and added, in micro-minor units rounded up, to an atomic
+  site counter for the card and business day (`ctr.businessDayTimezone`). The transaction that takes
+  the total to `thresholds[reportingCurrency]` or above sets `ctrRequired` (`CTR_REPORTABLE`); later
+  cash transactions of the same card-day do not (the CTR workflow pulls the whole day with
+  `filing.extract`). Every evaluated cash transaction counts, whatever its decision. Without a card
+  key the check is per transaction.
+- **Fail visibly, never under-report.** A cash amount that cannot be converted (no rate, zero rate,
+  no currency) → `HOLD`, `ctrRequired = true`, `CTR_FX_UNAVAILABLE`. CTR enabled without a threshold
+  for the reporting currency → `HOLD`, `ctrRequired`, `CTR_CONFIG_INVALID`. Counter unreadable →
+  `HOLD`, `ctrRequired`, `CTR_AGGREGATE_UNAVAILABLE`.
+- **Cash structuring** (the cloud detector): a cash amount in
+  [`ctr.structuring.floorRatio` × threshold, threshold) — defaults 0.80 and 2 — with at least
+  `minTransactions` such transactions on the card in the last 24 hourly buckets, current included →
+  `HOLD`, `CASH_STRUCTURING_24H`.
+- **Limits.** Each `limits[]` entry whose `merchantId` / `mcc` filter matches is checked against
+  site counters keyed by limit and scope value (card, merchant, or the whole PSP): `PT1H` = 12 ×
+  5-minute buckets, `P1D` = 24 hourly, `P7D` / `P30D` = 7 / 30 daily. `used + this > max` applies the
+  limit's `action` with `LIMIT_<limitId>`. AMOUNT limits convert into the limit's `currency`; no rate
+  → `HOLD`, `LIMIT_FX_UNAVAILABLE`. Unreadable counters → `HOLD`, `LIMITS_UNAVAILABLE`. Usage is
+  recorded after the decision, except for `BLOCK` (a declined payment uses no limit). A `PSP`-scope
+  limit increments one record per bucket for every transaction of the site: keep such limits few on
+  high-volume sites (Aerospike serialises writes to one record).
 
 ---
 
@@ -432,12 +520,21 @@ install guide.
 
 ### 7.2 Aerospike (namespace `hokeka`)
 
-Aerospike now holds only velocity and the bundle. The former `txn` set is gone.
+Aerospike holds history for the derivations, compliance counters and the bundle; every key ends
+with the site id. The former `txn` set is gone.
 
 | Set | Key | Contents | TTL |
 |---|---|---|---|
-| `velocity` | `<pan_hash>:yyyyMMddHH` | `{count, amount_cents}`, incremented atomically | 26 h |
+| `velocity` | `<pan_hash>:yyyyMMddHH:<site>` | `{count, amount_cents, amount_n, in/out count, in/out cents, band}`, atomic adds | 50 h |
+| `velocity_day` | `<pan_hash>:yyyyMMdd:<site>` | `{count, cents, amount_n, sq, in/out count}`, atomic adds | 32 d |
+| `card_profile` | `<pan_hash>:<site>` | first/last seen, last 100 evaluations (time, amount, merchant, country, currency, direction, device, brand) | 800 d |
+| `device_profile`, `ip_profile` | `<device or ip>:<site>` | last 100 evaluations seen with it | 400 d |
+| `ctr_day` | `<pan_hash>:<yyyyMMdd business day>:<site>` | cash total (reporting currency, micro-minor units), count | 4 d |
+| `limit_usage` | `L<limitId>:<scope value>:<bucket>:<site>` | count, amount (limit currency, minor units) | window + 1 bucket |
 | `rules` | `active` | Last verified bundle | Never expires |
+
+The profiles hold card-linked data (merchant, country, device) for at most 800 days, on the PSP's
+premises; size Aerospike memory for one primary-index entry per active card, device and IP.
 
 ### 7.3 Sent to Hokeka
 
