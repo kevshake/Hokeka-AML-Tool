@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.posgateway.aml.dto.alert.TransactionAlertsResponseDTO;
 import com.posgateway.aml.dto.assessment.AssessmentDetailResponseDTO;
 import com.posgateway.aml.dto.compliance.ComplianceLinksResponse;
+import com.posgateway.aml.dto.edgedata.EdgeDataBody;
 import com.posgateway.aml.service.edgedata.EdgeDataCallerResolver;
 import com.posgateway.aml.service.edgedata.TransactionExportService;
 import com.posgateway.aml.service.edgedata.TransactionFilter;
@@ -83,7 +84,7 @@ public class EdgeTransactionController {
     /** {@code GET /transactions}: one page of the PSP's transactions, newest first. */
     @GetMapping("/transactions")
     @PreAuthorize(LIST_ROLES)
-    public ResponseEntity<ObjectNode> list(@RequestParam(defaultValue = "0") int page,
+    public ResponseEntity<EdgeDataBody> list(@RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "50") int size,
                                            @RequestParam(required = false) String cursor,
                                            @RequestParam(required = false) Long pspId,
@@ -136,7 +137,7 @@ public class EdgeTransactionController {
     /** {@code POST /transactions:batchGet}: up to 200 transactions by decision record id. */
     @PostMapping("/transactions:batchGet")
     @PreAuthorize(READ_ROLES)
-    public ResponseEntity<ObjectNode> batchGet(@RequestBody BatchGetRequest body,
+    public ResponseEntity<EdgeDataBody> batchGet(@RequestBody BatchGetRequest body,
                                                @RequestParam(required = false) Long pspId,
                                                @RequestParam(required = false) String supportReason,
                                                @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader,
@@ -150,7 +151,7 @@ public class EdgeTransactionController {
     /** {@code GET /transactions/{id}}: the Edge detail and the cloud decision record. */
     @GetMapping("/transactions/{id}")
     @PreAuthorize(READ_ROLES)
-    public ResponseEntity<ObjectNode> get(@PathVariable String id,
+    public ResponseEntity<EdgeDataBody> get(@PathVariable String id,
                                           @RequestParam(required = false) Long pspId,
                                           @RequestParam(required = false) String supportReason,
                                           @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader,
@@ -163,7 +164,7 @@ public class EdgeTransactionController {
     /** {@code GET /transactions/{edgeAssessmentId}/related}: linked evaluations (never the key value). */
     @GetMapping("/transactions/{id}/related")
     @PreAuthorize(READ_ROLES)
-    public ResponseEntity<ObjectNode> related(@PathVariable String id,
+    public ResponseEntity<EdgeDataBody> related(@PathVariable String id,
                                               @RequestParam(required = false) List<String> linkBy,
                                               @RequestParam(required = false) Integer windowDays,
                                               @RequestParam(required = false) Integer depth,
@@ -215,8 +216,8 @@ public class EdgeTransactionController {
         return new TransactionReadService.Access(pspId, reason, TransactionReadService.purpose(purpose), refs);
     }
 
-    /** 200 with {@code Cache-Control: no-store}. */
-    private static ResponseEntity<ObjectNode> noStore(ObjectNode body) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+    /** 200 with {@code Cache-Control: no-store}; the body's toString never shows the data. */
+    private static ResponseEntity<EdgeDataBody> noStore(ObjectNode body) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new EdgeDataBody(body));
     }
 }

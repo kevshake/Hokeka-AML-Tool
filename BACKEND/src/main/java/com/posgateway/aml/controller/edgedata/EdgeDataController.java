@@ -1,6 +1,6 @@
 package com.posgateway.aml.controller.edgedata;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.posgateway.aml.dto.edgedata.EdgeDataBody;
 import com.posgateway.aml.service.edgedata.EdgeDataAccessLogService;
 import com.posgateway.aml.service.edgedata.EdgeDataStatusService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,17 +43,17 @@ public class EdgeDataController {
     @GetMapping("/status")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','PLATFORM_ADMIN','APP_CONTROLLER','COMPLIANCE_OFFICER',"
             + "'ANALYST','PSP_ADMIN','PSP_ANALYST','PSP_USER','VIEWER')")
-    public ResponseEntity<ObjectNode> status(@RequestParam(required = false) Long pspId,
+    public ResponseEntity<EdgeDataBody> status(@RequestParam(required = false) Long pspId,
                                              @RequestParam(required = false) String supportReason,
                                              @RequestHeader(value = "X-Support-Reason", required = false) String reasonHeader) {
         String reason = supportReason != null && !supportReason.isBlank() ? supportReason : reasonHeader;
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(status.status(pspId, reason));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new EdgeDataBody(status.status(pspId, reason)));
     }
 
     /** {@code GET /edge-data/access-log}: newest first, {@code page}/{@code size} (≤ 200). */
     @GetMapping("/access-log")
     @PreAuthorize(LOG_ROLES)
-    public ResponseEntity<ObjectNode> accessLog(@RequestParam(required = false) Long pspId,
+    public ResponseEntity<EdgeDataBody> accessLog(@RequestParam(required = false) Long pspId,
                                                 @RequestParam(defaultValue = "0") int page,
                                                 @RequestParam(defaultValue = "25") int size,
                                                 @RequestParam(required = false) String from,
@@ -62,8 +62,8 @@ public class EdgeDataController {
                                                 @RequestParam(required = false) String actorKind,
                                                 @RequestParam(required = false) Boolean supportAccess,
                                                 @RequestParam(required = false) String outcome) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(accessLog.page(pspId,
-                new EdgeDataAccessLogService.Filter(from, to, op, actorKind, supportAccess, outcome), page, size));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new EdgeDataBody(accessLog.page(pspId,
+                new EdgeDataAccessLogService.Filter(from, to, op, actorKind, supportAccess, outcome), page, size)));
     }
 
     /** {@code GET /edge-data/access-log/export}: every matching row, CSV or JSON lines. */
