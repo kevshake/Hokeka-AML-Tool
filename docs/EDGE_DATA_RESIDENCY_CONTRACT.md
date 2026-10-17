@@ -963,6 +963,70 @@ One-off, per PSP, before the cloud transaction tables are dropped (R15, then R12
 `ledger.backfill` rows travel cloud → Edge and MAY carry `panHash`, amounts and features; the Edge
 MUST NOT echo them in acknowledgements.
 
+Implementation notes (R15):
+
+- **Sources.** Card / cloud-ingest rows (`transactions` + `transaction_features` + the R8 cloud
+  assessment) and multi-asset rows (`multi_asset_transactions` + `mobile_money_transaction_contexts`
+  + `travel_rule_transfers` + `multi_asset_risk_signals`; the dependent stores travel as features
+  of their multi-asset row). `legacyTransactionId` is `txn-<transactions.txn_id>` or
+  `mat-<multi_asset_transactions.id>`; the minted id is UUIDv5 over `"<pspId>:<legacyTransactionId>"`
+  (fixture `request--ledger-backfill-batch.json` is the vector). The carried id follows R8 / V264:
+  the assessment's `edge_assessment_id`, else its own id. Rows are sent `TXN` first, then `MAT`,
+  each by (evaluation time, id); legacy `TIMESTAMP` columns are read in
+  `edge.backfill.legacy-time-zone` (default: the JVM zone that wrote them).
+- **Mapping.** `iso_msg`, `emv_tags` and `customer_email` are never read; features go through the
+  §2.4 rules in the cloud too (so the Edge strips nothing more, asserted by the edge-host
+  `CloudBackfillFixturesIntegrationTest` on the shared `ledger.backfill.params--cloud-*.json`
+  fixtures). A `pan_hash` that is not hash-shaped (raw PAN, `UNKNOWN`) is dropped. Values a
+  contract field cannot hold travel as features: `amount_decimal` / `amount_currency` (asset codes,
+  more decimals than the currency), `amount_minor_signed`, `legacy_merchant_ref`, `legacy_country`,
+  `legacy_channel`. Decisions map REVIEW/FLAG → ALERT, SUSPEND → HOLD; scores are the
+  assessment's, else the legacy model probability × 100, else the multi-asset risk score. Legacy
+  rule names resolve to rule definition ids (PSP's own, then global); unresolved names and
+  multi-asset risk signals become reasons.
+- **Site routing (rows "whose site is ambiguous").** A platform admin records a default target site
+  per PSP (`ledger_backfill_targets`; a single-site PSP defaults to its site, a multi-site PSP
+  must name one). Per row: the site of its cloud decision record when that is a current site of
+  the PSP; else the merchant's site when every Edge decision record of that merchant names the
+  same one site (frozen at the PSP's first back-fill in `ledger_backfill_merchant_sites`); else
+  (no records, records at two or more sites, multi-asset rows without a merchant) the default
+  site. One run (backfillId) per receiving site.
+- **Batches** are ≤ 500 rows and ≤ `edge.backfill.batch-bytes` (600 000) of row JSON, halved on
+  `FRAME_TOO_LARGE`. The cursor, batch sequence and every acknowledgement are persisted before the
+  next request (`ledger_backfill_runs` / `_batches` / `_rows`, V270: ids, counts, codes only), so a
+  restart resumes at the next batch; a lost acknowledgement re-sends the same batch (all
+  duplicates). Retryable errors back off (`retryAfterMs` honoured) and STALL after
+  `max-consecutive-failures`; others FAIL the run with the code. ABORT is sent when the Edge began.
+- **COMMIT digest.** `expectedRows` / `expectedIdDigest` cover the rows the Edge acknowledged
+  holding (accepted or duplicate), not rejected rows: the Edge computes its digest over the rows it
+  holds, so this is the only reading under which a run with any rejection can verify. Rejected rows
+  are then listed separately and gate the purge (below). VERIFY_MISMATCH re-sends every batch up to
+  `max-resend-rounds` (2), then FAILs.
+- **Verification.** After COMMIT `VERIFIED` (equal count and digest), the cloud re-derives a
+  deterministic sample (up to 200 held rows) from the legacy tables and compares it field by field
+  with `txn.batchGet` (ids, txnRef, time, decision, score, merchant, amount, currency, mcc,
+  country, channel, CTR flag, rule / version ids, reasons, canonical features, `origin = BACKFILL`,
+  `evaluator = cloud-legacy`, site). Only then is the run `VERIFIED`. Rejections are triaged:
+  `PAST_RETENTION` needs no copy; `ID_CONFLICT` / `TXN_REF_CONFLICT` against the Edge's own `LIVE`
+  evaluation (a dual-posted transaction) are `PRESENT_ON_EDGE`; the rest wait for an operator
+  decision (`EXCLUDED`, with a reason).
+- **References.** Per acknowledged batch, in the same transaction: the cloud assessment of a held
+  row becomes its decision record (`edge_assessment_id`, `site_id`, `evaluated_at`, `merchant_id`
+  filled); a row without one gets a minted class-D decision record (`evaluator = cloud-legacy`);
+  R8 workflow rows left without an Edge id (alerts, alert / case / SAR links and their Envers
+  history, screening activities, findings) get the minted id, and rows with the id get the site.
+- **Purge gate.** `BackfillCoverageService.requirePurgeAllowed(pspId)` (R12): refused unless the
+  PSP has a `VERIFIED` run and every legacy row inside its retention is held or resolved in a
+  `VERIFIED` run; rows ingested after a run's window need a top-up run. `purgeReadinessAll()` also
+  counts legacy rows without a PSP, which no run can cover.
+- **Control.** `/api/v1/psps/{pspId}/edge-backfill` (report; `/runs` start; `/runs/{id}/pause`,
+  `/resume`, `/abort`; `/runs/{id}/rejections`, `/rejections/exclude`). Platform-initiated: start
+  and resume are platform operators only, with the PSP's support access enabled and a 10..500
+  character reason; pause, abort, row decisions and the report are also open to the PSP's own
+  administrators, MLRO and compliance officers. Tunnel requests are always `SYSTEM` /
+  `system:backfill` (never a platform user). Actions are audited (`EDGE_BACKFILL_*`) and every tunnel
+  request writes its `edge_data_access_log` row. Nothing deletes cloud data.
+
 ## 12. Versioning and compatibility
 
 ### 12.1 Version fields
@@ -1072,3 +1136,8 @@ Each item is a choice made here for the owner to confirm or overturn.
     contract does not cover it.
 23. **Legacy rows are served per PSP, never mixed (R6):** Edge PSPs read only their Edge; PSPs with
     no activated Edge Node read their legacy cloud rows flagged `CLOUD_LEGACY` until R12 (§7.14).
+24. **Back-fill COMMIT digest covers held rows (R15):** `expectedIdDigest` is computed over the
+    rows the Edge acknowledged holding, so rejected rows do not make every COMMIT mismatch; they
+    are triaged or decided by an operator and gate the R12 purge instead (§11).
+25. **Back-fill site routing (R15):** decision-record site, else the merchant's single Edge site
+    (frozen at the first back-fill), else the PSP's default target site (§11).
