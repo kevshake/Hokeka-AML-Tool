@@ -31,7 +31,7 @@ public interface EdgeBundleManifestRepository extends JpaRepository<EdgeBundleMa
 
     /**
      * Stores the rules of this bundle that were not compiled to Edge IR, with reasons
-     * ({@code [{ruleId,name,reason}]}, V266).
+     * ({@code [{ruleId,name,reason}]}, V268).
      *
      * @return rows updated (0 when the manifest row does not exist)
      */

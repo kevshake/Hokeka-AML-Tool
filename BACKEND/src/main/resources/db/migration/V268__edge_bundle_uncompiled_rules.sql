@@ -1,4 +1,4 @@
--- V266 (R10a): rules a published Edge bundle could not carry, with the reason.
+-- V268 (R10a): rules a published Edge bundle could not carry, with the reason.
 --
 -- EdgeRuleCompiler now compiles the SpEL typology catalog to Edge Rule IR v2. A rule that
 -- genuinely cannot run on the Edge (screening owned by R10b, cloud-only dispute data, merchant

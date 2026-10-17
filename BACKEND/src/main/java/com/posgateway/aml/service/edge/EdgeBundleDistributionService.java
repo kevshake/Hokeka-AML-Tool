@@ -164,7 +164,7 @@ public class EdgeBundleDistributionService {
             manifests.insertIfAbsent(pspId, compiled.manifestHash(), rules.toString(), compiled.rules().size(),
                     java.time.LocalDateTime.now());
         }
-        // The rules left off the Edge, with reasons (V266). Refreshed on every seal: the manifest
+        // The rules left off the Edge, with reasons (V268). Refreshed on every seal: the manifest
         // hash covers compiled rules only, so the uncompiled set can change under the same hash.
         ArrayNode uncompiled = mapper.createArrayNode();
         for (com.posgateway.aml.edge.EdgeBundleService.UncompiledRule u : compiled.uncompiled()) {
