@@ -175,7 +175,8 @@ This contract adds:
 |---|---|---|
 | Decision record batch | `hokeka.decision.records` | Edge → cloud |
 | Edge config document | `hokeka.edge.config` | cloud → Edge |
-| Sanctions/PEP list snapshot (reserved for R10b) | `hokeka.sanctions.list` | cloud → Edge |
+| Sanctions/PEP list manifest (§6.4) | `hokeka.sanctions.list` | cloud → Edge |
+| Sanctions/PEP list chunk (§6.4) | `hokeka.sanctions.list.chunk` | cloud → Edge |
 | Tunnel frame of type `<t>` | `hokeka.tunnel.<t>` (e.g. `hokeka.tunnel.request`, `hokeka.tunnel.hello.ack`) | per frame type |
 | Metrics report v2 | `hokeka.metrics.report` (unchanged; v1 and v2 are told apart by the payload's `v`) | Edge → cloud |
 
@@ -308,7 +309,7 @@ Schema: [`contracts/edge-config.schema.json`](contracts/edge-config.schema.json)
 | `ctr` | `enabled`, `aggregation = CARD_BUSINESS_DAY`, `businessDayTimezone` (IANA), `reportingCurrency`, `thresholds[]` (minor units), `cashChannels[]`, `fx {asOf, base, rates{CCY: decimal string}}` | per PSP jurisdiction |
 | `limits[]` | `{limitId, scope CARD/MERCHANT/PSP, metric COUNT/AMOUNT, window PT1H/P1D/P7D/P30D, currency (AMOUNT), max, action, merchantId?, mcc?}` | none |
 | `merchantBlocklist` | `version`, `entries[{merchantId, reasonCode, since}]` | empty |
-| `sanctions` | `listVersion`, `listHash`, `publishedAt` of the list snapshot to screen with | — |
+| `sanctions` | `listVersion`, `listHash`, `publishedAt` of the list snapshot to screen with (§6.4) | `none` |
 | `tunnel` | `enabled`, `opsAllowed[]`, `backfillAllowed`, `maxInflightPerSession` (≤ 16) | enabled, all read ops, backfill off, 16 |
 
 FX rates are decimal strings (never JSON numbers) and mean "units of `base` per one unit of the
@@ -343,6 +344,78 @@ unaffected.
 Local settings can only narrow: `EDGE_TUNNEL_ENABLED=false` and `EDGE_TUNNEL_OPS` restrict the
 tunnel further (§7.6.1); `EDGE_RETENTION_MIN_YEARS` (default 5) raises the floor, so effective
 retention = max(config `years`, local floor).
+
+### 6.4 Sanctions/PEP list document (R10b)
+
+Schemas: [`contracts/sanctions-list-manifest.schema.json`](contracts/sanctions-list-manifest.schema.json),
+[`contracts/sanctions-list-chunk.schema.json`](contracts/sanctions-list-chunk.schema.json),
+[`contracts/sanctions-list-entry.schema.json`](contracts/sanctions-list-entry.schema.json).
+
+The public sanctions/PEP list is distributed to the Edge so counterparties are screened locally; no
+name ever goes to the cloud or to aml-microservice.
+
+- **Source.** The Control Plane builds a snapshot from the same entities its OpenSanctions download
+  pushes to aml-microservice (`SanctionsListDownloadService`), so both matchers screen the same names.
+  Snapshots live in `edge_sanctions_snapshots` / `edge_sanctions_snapshot_chunks` (V267); the newest
+  two READY ones are kept. A publish re-issues the Edge config of every PSP with Edge Nodes (new
+  `configVersion`, `notify config.updated`).
+- **Format.** Entries (`{id, name, aliases, type, pepLevel?}`, `id` = public watchlist entry id
+  `<listId>:<entryId>`) as JSON lines, at most 5 000 per chunk, gzip-compressed. Chosen over one big
+  document because the OpenSanctions "default" collection (≈1.2 M entities with PEPs) is ≈120–180 MB
+  of JSON lines (≈30–45 MB gzip, ≈250 chunks of ≈150 KB); a single sealed envelope that size would be
+  held in memory twice on both sides. The sanctions-only collection is ≈60 k entities (≈12 chunks).
+  `edge.sanctions.snapshot.include-pep=false` (cloud) leaves PEP/RCA entries out, since they never
+  change an Edge decision (§6.5).
+- **Hashes.** `chunks[i].sha256` is the SHA-256 of chunk i's uncompressed bytes. `listHash` is the
+  SHA-256 of the UTF-8 text of one line `<index>:<sha256>:<entryCount>\n` per chunk in index order.
+  The Edge config's `sanctions.listHash` is that value (`listVersion "none"` and the hash of the empty
+  string before any publish).
+- **Endpoints.** mTLS, same authorisation as `/edge/config` (verified certificate, node `ACTIVE`,
+  bare `403` otherwise), `Cache-Control: no-store`:
+  - `GET /api/v1/edge/sanctions/list`: the newest snapshot's manifest, replay envelope, HSE-1 sealed to
+    the node, context `hokeka.sanctions.list`. `ETag: "<listHash>"`, `X-Sanctions-List-Version`;
+    `If-None-Match` (quoted, bare or weak) → `304`; `404` before the first publish.
+  - `GET /api/v1/edge/sanctions/list/{listHash}/chunks/{index}`: one chunk (`data` = base64 of the
+    gzip), context `hokeka.sanctions.list.chunk`, `ETag: "<chunk sha256>"`. Addressed by hash, so a
+    node mid-download keeps fetching the snapshot it started even after a newer publish; `404` once
+    that snapshot is pruned or for an unknown index.
+- **Edge processing.** The Edge fetches when the config in force names a `listHash` it does not hold
+  (on every config poll and right after a newly accepted config). It MUST open each document like the
+  config (signature, AEAD, replay, `edgeId`), validate it against its schema, require manifest
+  `listHash` = config `sanctions.listHash` and re-derive it from the chunk lines, and require every
+  chunk's `listHash`, `index`, uncompressed `sha256` and `entryCount` to match its manifest line.
+  Verified chunks are stored on the site ledger (`edge_sanctions_lists`, `edge_sanctions_list_chunks`,
+  ledger V3) as they arrive; the list is used only after the whole stored list was re-verified, and
+  the previous list stays in force until then. After a restart the node restores the stored list
+  (re-verified the same way) without the Control Plane.
+
+### 6.5 Edge sanctions screening and merchant blocklist (R10b)
+
+- **Matcher.** The aml-microservice matcher, ported line for line: NFD normalisation, marks
+  stripped, lower case, non `[a-z0-9 ]` to space; score `max(Jaccard of tokens, 1 − levenshtein/maxLen)`;
+  best of name and aliases; kept at or above the similarity threshold (default 0.8, same as
+  aml-microservice); rounded to 4 decimals; top 5, equal scores by entry id.
+  [`contracts/parity/sanctions-matcher-vectors.json`](contracts/parity/sanctions-matcher-vectors.json)
+  is generated from aml-microservice and asserted by both implementations. The Edge indexes the list
+  in memory with a lossless candidate filter, so screening never changes a result and stays well
+  under a millisecond per name for lists of 100 k entries.
+- **Fields.** `counterparty_name` and `cardholder_name` (`matchedOn COUNTERPARTY_NAME`),
+  `beneficiary_name` (`BENEFICIARY_NAME`), when present as non-blank strings. No type filter.
+- **Actions.** A match on a sanctions-list entry (no `pepLevel`) with score ≥ 0.95 (aml-microservice
+  `FLAGGED`, the cloud's confirmed-match threshold) is a confirmed hit: the decision becomes `BLOCK`.
+  A sanctions-list match below 0.95 is a potential hit: the decision becomes at least `HOLD`. Both set
+  `sanctionsHit = true` and list the entry ids in `watchlistEntryIds`; the full match
+  (`sanctionsHitDetail`, with `matchedValue`) stays in `edge_evaluations.sanctions_hits`. A PEP/RCA
+  match is never a sanctions hit and never changes the decision; it only adds a local reason.
+- **Merchant blocklist.** A `merchant_id` on the config's `merchantBlocklist` makes the decision
+  `BLOCK` (no `sanctionsHit`: the cloud already knows). The cloud adds a `SANCTIONED` entry when
+  merchant screening (onboarding, update, periodic rescreen) finds a confirmed sanctions-list hit and
+  lifts it when a rescreen is clear of sanctions-list matches; PEP-only matches count as clear.
+  Entries with other reasons are only lifted by a person.
+- **No list.** When the config names a published list that the node has not loaded yet, an evaluation
+  carrying a name to screen is held (`EDGE_SANCTIONS_HOLD_WHEN_LIST_MISSING`, default true). Before
+  the first config, or while the config says `none`, screening is off.
+- **Fail-closed.** A fail-closed evaluation keeps its `HOLD` (§4.1); its hits are still recorded.
 
 ## 7. Edge Tunnel protocol
 
