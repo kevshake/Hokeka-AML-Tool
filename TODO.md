@@ -48,6 +48,8 @@ Edge is the sole fraud/AML decider; the cloud stores decision records only, neve
 - [ ] Gaps found by R10b: closing a case as false positive does not lift an automatic merchant SANCTIONED block (only a clear rescreen or admin unblock) · Edge heap for the full OpenSanctions set with PEPs is unmeasured (100k synthetic entries tested; option include-pep=false) · metrics v2 sanctions counters not wired (Edge still sends v1 metrics) · RetentionPurgerIntegrationTest.onlyOneNodePurgesAndOnlyOncePerDay failed once then passed (suspected race with cached Spring contexts purging the shared test ledger)
 - [ ] Gaps found by R10a: 14 of 64 SpEL rules cannot run on the Edge (R-17/32/128/169 screening (covered by R10b matcher), R-45/61/118 need merchant legal names, R-CB-1..5 chargeback data cloud-only, R-127 peer group, R-173 VFMP/HECM) · cloud FATF-blacklist HOLD and ML-score checks in RegulatoryComplianceService are not ported (need a country-risk list on the Edge + Edge ML artifact) · removing a list entry does not bump the bundle version · large blacklists may exceed the 1 MiB Aerospike bundle record · sim E2 "normal txn ALLOW" will now ALERT/HOLD because R-1/3/117/131/170 fire on a first anonymous transaction (owner/R13 decision) · Aerospike round-trip latency unmeasured (no server here)
 - [ ] Lane 3: R6 cloud data proxy · R9 SAR/CTR filing from Edge
+  - [ ] R6 cloud data proxy (agent running; V269 if a migration is needed)
+  - [ ] R9 SAR/CTR filing from Edge pulls (after R6 and the R10a merge)
 - [ ] Lane 4: R11 Console rewiring · R15 legacy data back-fill
 - [ ] Lane 5: R12 delete cloud ingest/evaluation + purge migration (needs parity sign-off)
 - [ ] Lane 6: R13 simulator rewrite + N1 residency canary · R14b docs final
