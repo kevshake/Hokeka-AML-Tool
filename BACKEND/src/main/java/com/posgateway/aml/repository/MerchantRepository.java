@@ -20,6 +20,20 @@ import org.springframework.data.domain.Pageable;
 public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSpecificationExecutor<Merchant> {
 
     /**
+     * Ids (as text) of a PSP's merchants whose onboarding country is on {@code high_risk_countries}
+     * — the merchants the cloud's {@code onboarding_high_risk_country} feature is true for. Shipped
+     * to the PSP's Edge as a bundle list (R10a). Native, so it is independent of the tenant filter.
+     */
+    @Query(value = "SELECT CAST(m.merchant_id AS VARCHAR) FROM merchants m "
+            + "JOIN high_risk_countries h ON h.country_code = UPPER(m.country) "
+            + "WHERE m.psp_id = :pspId ORDER BY m.merchant_id", nativeQuery = true)
+    List<String> idsInHighRiskCountries(@Param("pspId") Long pspId);
+
+    /** Newest {@code updated_at} of a PSP's merchants (null when it has none). */
+    @Query(value = "SELECT MAX(m.updated_at) FROM merchants m WHERE m.psp_id = :pspId", nativeQuery = true)
+    LocalDateTime newestUpdateForPsp(@Param("pspId") Long pspId);
+
+    /**
      * Find merchant by registration number and country
      */
     Optional<Merchant> findByCountryAndRegistrationNumber(String country, String registrationNumber);

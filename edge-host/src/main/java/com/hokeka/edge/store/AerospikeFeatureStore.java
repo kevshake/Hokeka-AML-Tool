@@ -1,11 +1,15 @@
 package com.hokeka.edge.store;
 
 import com.aerospike.client.AerospikeClient;
+import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Operation;
 import com.aerospike.client.Record;
+import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.BatchPolicy;
+import com.aerospike.client.policy.GenerationPolicy;
+import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,72 +17,92 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * Aerospike-backed on-premises store for velocity counters and the rule bundle.
+ * Aerospike-backed on-premises store for card history, compliance counters and the rule bundle.
  *
- * <h2>Data model</h2>
+ * <h2>Data model (namespace configured, default "hokeka"; every key ends with the site id)</h2>
  * <pre>
- *   namespace &lt;configured, default "hokeka"&gt;
- *     set velocity  key = "&lt;panHash&gt;:yyyyMMddHH:&lt;siteId&gt;"   hourly counters {count, amount_cents}, TTL 26 h
- *     set rules     key = "active"                          {version, ir, saved_at}, never expires
+ *   set velocity        "&lt;pan&gt;:yyyyMMddHH:&lt;site&gt;"  hourly {count, amount_cents, amount_n, in_count,
+ *                                                   out_count, in_cents, out_cents, band}, TTL 50 h
+ *   set velocity_day    "&lt;pan&gt;:yyyyMMdd:&lt;site&gt;"    daily {count, cents, amount_n, sq, in_count, out_count},
+ *                                                   TTL 32 d
+ *   set card_profile    "&lt;pan&gt;:&lt;site&gt;"             {first, last, recent} — recent = last 100 evaluations, TTL 800 d
+ *   set device_profile  "&lt;device&gt;:&lt;site&gt;"          {recent}, TTL 400 d
+ *   set ip_profile      "&lt;ip&gt;:&lt;site&gt;"              {recent}, TTL 400 d
+ *   set &lt;counter set&gt;   "&lt;key&gt;:&lt;site&gt;"             compliance counters (CTR card-day, limits)
+ *   set rules           "active"                        {version, ir, saved_at}, never expires
  * </pre>
  *
- * <h2>Site-scoped velocity</h2>
- * Velocity keys carry the Edge Site id ({@code <pan>:<hour>:<site>}, EDGE_DATA_RESIDENCY_PLAN.md
- * "Edge storage" and "Velocity across sites"). All nodes of one site share one Aerospike cluster, so
- * they all advance and read the same buckets. Reads use the <b>local</b> site's keys only: a PSP with
- * several sites sees one card's activity across sites only where the sites' Aerospike clusters are
- * linked by XDR; without XDR, velocity is per site (documented in {@code deploy/README.md}).
+ * <h2>Site-scoped</h2>
+ * All nodes of one Edge Site share one Aerospike cluster, so they advance and read the same
+ * records; reads use the local site's keys only. Across sites, history is per site unless the
+ * clusters are linked by XDR (EDGE_DATA_RESIDENCY_PLAN.md, conflict 3).
  *
- * <p>Transactions are <b>not</b> stored here any more: the system of record for evaluations is the
- * Edge Ledger (PostgreSQL, {@code com.hokeka.edge.ledger}), which holds them for the PSP's
- * multi-year retention with range queries and partition purges — neither of which an in-RAM primary
- * index can afford (EDGE_DATA_RESIDENCY_PLAN.md, "Edge storage"). The former {@code txn} set is gone.
+ * <h2>Cost per evaluation (bounded, no scans)</h2>
+ * One batch get of at most 48 + 31 + 3 = 82 keys before evaluation; after it, two atomic
+ * {@code operate} adds (hour, day) and up to three profile read-modify-writes (card, device, IP),
+ * each a generation-checked {@code put} of a record holding at most 100 entries. Counters for CTR
+ * and limits are separate small batches issued by the compliance overlay only when the Edge
+ * Config enables them.
  *
- * <h2>Why hourly buckets</h2>
- * Aerospike is a key-value store: counting a card's recent transactions by scanning is O(n) and
- * needs a secondary index. Instead each transaction atomically increments the counter record for its
- * hour ({@code Operation.add} — a single server-side atomic op, no read-modify-write race), and a
- * window is read as a bounded batch of at most 24 key lookups. Buckets carry a TTL slightly longer
- * than the widest window, so expiry is automatic and no cleanup job is needed.
- *
- * <p>Every method is fail-soft: a store outage degrades enrichment (features are simply absent) but
- * never fails a decision. Fail-closed behaviour remains the engine's job.
+ * <p>Every method is fail-soft: a store outage makes history unavailable (reported, so the
+ * controller can fail closed) but never throws.
  */
 public class AerospikeFeatureStore implements EdgeFeatureStore {
 
     private static final Logger log = LoggerFactory.getLogger(AerospikeFeatureStore.class);
 
     static final String SET_VELOCITY = "velocity";
+    static final String SET_DAY = "velocity_day";
+    static final String SET_CARD = "card_profile";
+    static final String SET_DEVICE = "device_profile";
+    static final String SET_IP = "ip_profile";
     static final String SET_RULES = "rules";
     static final String RULES_KEY = "active";
 
     static final String BIN_COUNT = "count";
     static final String BIN_AMOUNT = "amount_cents";
+    static final String BIN_AMOUNT_N = "amount_n";
+    static final String BIN_IN_COUNT = "in_count";
+    static final String BIN_OUT_COUNT = "out_count";
+    static final String BIN_IN_CENTS = "in_cents";
+    static final String BIN_OUT_CENTS = "out_cents";
+    static final String BIN_BAND = "band";
+    static final String BIN_CENTS = "cents";
+    static final String BIN_SQUARES = "sq";
+    static final String BIN_FIRST = "first";
+    static final String BIN_LAST = "last";
+    static final String BIN_RECENT = "recent";
     static final String BIN_VERSION = "version";
     static final String BIN_IR = "ir";
 
     private static final DateTimeFormatter HOUR =
             DateTimeFormatter.ofPattern("yyyyMMddHH").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter DAY =
+            DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC);
 
-    /** Widest velocity window read back, in hours. */
-    private static final int WINDOW_HOURS = 24;
+    private static final int HOUR_TTL = (CardHistory.HOURS + 2) * 3600;
+    private static final int DAY_TTL = (CardHistory.DAYS + 1) * 86400;
+    private static final int CARD_TTL = 800 * 86400;
+    private static final int LINK_TTL = 400 * 86400;
+    /** Attempts of a profile read-modify-write before giving up on a contended record. */
+    private static final int PROFILE_ATTEMPTS = 4;
 
     private final AerospikeClient client;
     private final String namespace;
     private final String siteId;
-    private final int velocityTtlSeconds;
 
     /**
      * Creates the store for one Edge Site.
      *
      * @param client    connected Aerospike client
-     * @param namespace namespace holding the velocity and rules sets
-     * @param siteId    this node's Edge Site id; the last segment of every velocity key
+     * @param namespace namespace holding the sets
+     * @param siteId    this node's Edge Site id; the last segment of every key
      * @throws IllegalArgumentException when {@code siteId} is null or blank
      */
     public AerospikeFeatureStore(AerospikeClient client, String namespace, String siteId) {
@@ -88,11 +112,9 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
         this.client = client;
         this.namespace = namespace;
         this.siteId = siteId.trim();
-        // Keep buckets a little past the widest window so a boundary read never misses a live bucket.
-        this.velocityTtlSeconds = (WINDOW_HOURS + 2) * 3600;
     }
 
-    /** The Edge Site id the velocity keys are scoped to. */
+    /** The Edge Site id the keys are scoped to. */
     public String siteId() {
         return siteId;
     }
@@ -107,82 +129,239 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
         }
     }
 
-    /** Velocity features for this card from the local site's buckets (see {@link #deriveFeaturesDetailed}). */
+    /** History features for a card alone (no device / IP), see {@link #derive}. */
     @Override
     public Map<String, Object> deriveFeatures(String panHash) {
         return deriveFeaturesDetailed(panHash).features();
     }
 
-    /**
-     * Reads the card's last 24 hourly buckets of the <b>local site</b> in one batch get and sums them
-     * into {@code pan_txn_count_1h}, {@code pan_txn_count_24h} and {@code pan_amount_sum_24h}. A
-     * blank pan hash yields no features; an unreachable store is reported as unavailable.
-     */
+    /** {@link #derive} for a card alone, evaluated now. */
     @Override
     public FeatureDerivation deriveFeaturesDetailed(String panHash) {
-        Map<String, Object> features = new LinkedHashMap<>();
         if (isBlank(panHash)) {
-            return new FeatureDerivation(features, false);
+            return new FeatureDerivation(Map.of(), false);
         }
-        if (!available()) {
-            return new FeatureDerivation(features, true);
-        }
-        try {
-            Instant now = Instant.now();
-            Key[] keys = new Key[WINDOW_HOURS];
-            for (int hoursBack = 0; hoursBack < WINDOW_HOURS; hoursBack++) {
-                keys[hoursBack] = velocityKey(panHash, now.minusSeconds(hoursBack * 3600L));
-            }
-
-            Record[] records = client.get(new BatchPolicy(), keys);
-            long count1h = 0;
-            long count24h = 0;
-            long amount24h = 0;
-
-            for (int hoursBack = 0; hoursBack < WINDOW_HOURS; hoursBack++) {
-                Record record = records[hoursBack];
-                if (record == null) {
-                    continue;
-                }
-                long c = record.getLong(BIN_COUNT);
-                long a = record.getLong(BIN_AMOUNT);
-                count24h += c;
-                amount24h += a;
-                if (hoursBack == 0) {
-                    count1h = c;
-                }
-            }
-
-            features.put("pan_txn_count_1h", count1h);
-            features.put("pan_txn_count_24h", count24h);
-            // Cents → major units, matching the control plane's enrichment convention.
-            features.put("pan_amount_sum_24h", amount24h / 100.0);
-            return new FeatureDerivation(features, false);
-        } catch (Exception e) {
-            log.warn("Velocity enrichment unavailable for this evaluation: {}", e.getMessage());
-            return new FeatureDerivation(features, true);
-        }
+        return derive(new TxnContext(Instant.now(), panHash, null, null, null, null, null,
+                TxnContext.OUTBOUND, false, null, null, null));
     }
 
     /**
-     * Advances this card's hourly velocity bucket <b>of the local site</b>: count + 1 and amount sum
-     * + {@code amountCents}, as one atomic server-side {@code operate}. A blank pan hash records
-     * nothing. Never throws.
+     * Reads the card's 48 hourly and 31 daily buckets, its profile and the device / IP profiles of
+     * the local site in one batch get.
      */
+    @Override
+    public Optional<CardHistory> readHistory(TxnContext txn) {
+        boolean card = txn.hasCard();
+        if (!card && txn.deviceKey() == null && txn.ipAddress() == null) {
+            return Optional.of(CardHistory.empty());
+        }
+        if (!available()) {
+            return Optional.empty();
+        }
+        try {
+            List<Key> keys = new ArrayList<>();
+            Instant now = txn.at();
+            if (card) {
+                for (int h = 0; h < CardHistory.HOURS; h++) {
+                    keys.add(hourKey(txn.panHash(), now.minusSeconds(h * 3600L)));
+                }
+                for (int d = 0; d < CardHistory.DAYS; d++) {
+                    keys.add(dayKey(txn.panHash(), now.minusSeconds(d * 86400L)));
+                }
+                keys.add(profileKey(SET_CARD, txn.panHash()));
+            }
+            int deviceIndex = -1;
+            int ipIndex = -1;
+            if (txn.deviceKey() != null) {
+                deviceIndex = keys.size();
+                keys.add(profileKey(SET_DEVICE, txn.deviceKey()));
+            }
+            if (txn.ipAddress() != null) {
+                ipIndex = keys.size();
+                keys.add(profileKey(SET_IP, txn.ipAddress()));
+            }
+            Record[] r = client.get(new BatchPolicy(), keys.toArray(new Key[0]));
+
+            CardHistory empty = CardHistory.empty();
+            List<CardHistory.Hour> hours = new ArrayList<>(empty.hours());
+            List<CardHistory.Day> days = new ArrayList<>(empty.days());
+            long first = 0;
+            long last = 0;
+            List<CardHistory.Entry> recent = List.of();
+            if (card) {
+                for (int h = 0; h < CardHistory.HOURS; h++) {
+                    Record b = r[h];
+                    if (b != null) {
+                        hours.set(h, new CardHistory.Hour(b.getLong(BIN_COUNT), b.getLong(BIN_AMOUNT),
+                                b.getLong(BIN_AMOUNT_N), b.getLong(BIN_IN_COUNT), b.getLong(BIN_OUT_COUNT),
+                                b.getLong(BIN_IN_CENTS), b.getLong(BIN_OUT_CENTS), b.getLong(BIN_BAND)));
+                    }
+                }
+                for (int d = 0; d < CardHistory.DAYS; d++) {
+                    Record b = r[CardHistory.HOURS + d];
+                    if (b != null) {
+                        days.set(d, new CardHistory.Day(b.getLong(BIN_COUNT), b.getLong(BIN_CENTS),
+                                b.getLong(BIN_AMOUNT_N), b.getDouble(BIN_SQUARES), b.getLong(BIN_IN_COUNT),
+                                b.getLong(BIN_OUT_COUNT)));
+                    }
+                }
+                Record p = r[CardHistory.HOURS + CardHistory.DAYS];
+                if (p != null) {
+                    first = p.getLong(BIN_FIRST);
+                    last = p.getLong(BIN_LAST);
+                    recent = CardHistory.decode(p.getString(BIN_RECENT));
+                }
+            }
+            List<CardHistory.Entry> deviceRecent = deviceIndex >= 0 && r[deviceIndex] != null
+                    ? CardHistory.decode(r[deviceIndex].getString(BIN_RECENT)) : List.of();
+            List<CardHistory.Entry> ipRecent = ipIndex >= 0 && r[ipIndex] != null
+                    ? CardHistory.decode(r[ipIndex].getString(BIN_RECENT)) : List.of();
+            return Optional.of(new CardHistory(hours, days, first, last, recent, ipRecent, deviceRecent));
+        } catch (Exception e) {
+            log.warn("History read unavailable for this evaluation: {}", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /** Records a card-only transaction of {@code amountCents} now (legacy entry point). */
     @Override
     public void recordVelocity(String panHash, long amountCents) {
         if (isBlank(panHash)) {
             return;
         }
+        record(new TxnContext(Instant.now(), panHash, Math.max(0L, amountCents), null, null, null, null,
+                TxnContext.OUTBOUND, false, null, null, null), false);
+    }
+
+    /**
+     * Advances the card's hourly and daily buckets atomically and appends the evaluation to the
+     * card, device and IP profiles. Never throws.
+     */
+    @Override
+    public void record(TxnContext txn, boolean structuringBand) {
+        CardHistory.Entry entry = CardHistory.Entry.of(txn);
+        long cents = txn.amountCentsOrZero();
+        long hasAmount = txn.amountCents() == null ? 0L : 1L;
+        boolean in = txn.inbound();
         try {
-            WritePolicy velocityPolicy = new WritePolicy();
-            velocityPolicy.expiration = velocityTtlSeconds;
-            client.operate(velocityPolicy, velocityKey(panHash, Instant.now()),
-                    Operation.add(new Bin(BIN_COUNT, 1L)),
-                    Operation.add(new Bin(BIN_AMOUNT, Math.max(0L, amountCents))));
+            if (txn.hasCard()) {
+                client.operate(ttl(HOUR_TTL), hourKey(txn.panHash(), txn.at()),
+                        Operation.add(new Bin(BIN_COUNT, 1L)),
+                        Operation.add(new Bin(BIN_AMOUNT, cents)),
+                        Operation.add(new Bin(BIN_AMOUNT_N, hasAmount)),
+                        Operation.add(new Bin(BIN_IN_COUNT, in ? 1L : 0L)),
+                        Operation.add(new Bin(BIN_OUT_COUNT, in ? 0L : 1L)),
+                        Operation.add(new Bin(BIN_IN_CENTS, in ? cents : 0L)),
+                        Operation.add(new Bin(BIN_OUT_CENTS, in ? 0L : cents)),
+                        Operation.add(new Bin(BIN_BAND, structuringBand ? 1L : 0L)));
+                client.operate(ttl(DAY_TTL), dayKey(txn.panHash(), txn.at()),
+                        Operation.add(new Bin(BIN_COUNT, 1L)),
+                        Operation.add(new Bin(BIN_CENTS, cents)),
+                        Operation.add(new Bin(BIN_AMOUNT_N, hasAmount)),
+                        Operation.add(new Bin(BIN_SQUARES, hasAmount == 1L ? (double) cents * (double) cents : 0.0)),
+                        Operation.add(new Bin(BIN_IN_COUNT, in ? 1L : 0L)),
+                        Operation.add(new Bin(BIN_OUT_COUNT, in ? 0L : 1L)));
+                appendProfile(SET_CARD, txn.panHash(), entry, CARD_TTL, true);
+            }
+            if (txn.deviceKey() != null) {
+                appendProfile(SET_DEVICE, txn.deviceKey(), entry, LINK_TTL, false);
+            }
+            if (txn.ipAddress() != null) {
+                appendProfile(SET_IP, txn.ipAddress(), entry, LINK_TTL, false);
+            }
         } catch (Exception e) {
             // Never fail the decision because the store is unhappy.
-            log.warn("Could not advance velocity counters locally: {}", e.getMessage());
+            log.warn("Could not advance card history locally: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Prepends an entry to a profile's recent list with a generation-checked write, retrying when
+     * another node of the site updated the same record in between.
+     */
+    private void appendProfile(String set, String id, CardHistory.Entry entry, int ttlSeconds, boolean card) {
+        Key key = profileKey(set, id);
+        for (int attempt = 0; attempt < PROFILE_ATTEMPTS; attempt++) {
+            Record current = client.get(null, key);
+            List<CardHistory.Entry> recent = current == null ? List.of()
+                    : CardHistory.decode(current.getString(BIN_RECENT));
+            WritePolicy policy = ttl(ttlSeconds);
+            if (current == null) {
+                policy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
+            } else {
+                policy.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
+                policy.generation = current.generation;
+            }
+            List<Bin> bins = new ArrayList<>();
+            bins.add(new Bin(BIN_RECENT, CardHistory.encode(CardHistory.prepend(entry, recent))));
+            if (card) {
+                long first = current == null || current.getLong(BIN_FIRST) == 0 ? entry.atMs()
+                        : Math.min(current.getLong(BIN_FIRST), entry.atMs());
+                long last = current == null ? entry.atMs() : Math.max(current.getLong(BIN_LAST), entry.atMs());
+                bins.add(new Bin(BIN_FIRST, first));
+                bins.add(new Bin(BIN_LAST, last));
+            }
+            try {
+                client.put(policy, key, bins.toArray(new Bin[0]));
+                return;
+            } catch (AerospikeException e) {
+                if (e.getResultCode() != ResultCode.GENERATION_ERROR && e.getResultCode() != ResultCode.KEY_EXISTS_ERROR) {
+                    throw e;
+                }
+            }
+        }
+        log.warn("Profile update in set {} lost {} races in a row; this evaluation is not in its history",
+                set, PROFILE_ATTEMPTS);
+    }
+
+    /** Reads counter bins of many records in one batch; empty when the store is unavailable. */
+    @Override
+    public Optional<long[][]> readCounters(List<CounterKey> keys, List<String> bins) {
+        if (!available()) {
+            return Optional.empty();
+        }
+        try {
+            Key[] k = keys.stream().map(this::counterKey).toArray(Key[]::new);
+            Record[] records = k.length == 0 ? new Record[0] : client.get(new BatchPolicy(), k);
+            long[][] out = new long[keys.size()][bins.size()];
+            for (int i = 0; i < records.length; i++) {
+                if (records[i] != null) {
+                    for (int j = 0; j < bins.size(); j++) {
+                        out[i][j] = records[i].getLong(bins.get(j));
+                    }
+                }
+            }
+            return Optional.of(out);
+        } catch (Exception e) {
+            log.warn("Counter read unavailable: {}", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /** Adds to counter bins and returns the post-add values atomically (one {@code operate}). */
+    @Override
+    public Optional<long[]> addCounters(CounterKey key, int ttlSeconds, Map<String, Long> increments) {
+        if (!available()) {
+            return Optional.empty();
+        }
+        try {
+            List<Operation> ops = new ArrayList<>();
+            for (Map.Entry<String, Long> e : increments.entrySet()) {
+                ops.add(Operation.add(new Bin(e.getKey(), e.getValue())));
+            }
+            for (String bin : increments.keySet()) {
+                ops.add(Operation.get(bin));
+            }
+            Record r = client.operate(ttl(ttlSeconds), counterKey(key), ops.toArray(new Operation[0]));
+            long[] out = new long[increments.size()];
+            int i = 0;
+            for (String bin : increments.keySet()) {
+                out[i++] = r == null ? 0L : r.getLong(bin);
+            }
+            return Optional.of(out);
+        } catch (Exception e) {
+            log.warn("Counter update unavailable: {}", e.getClass().getSimpleName());
+            return Optional.empty();
         }
     }
 
@@ -226,9 +405,31 @@ public class AerospikeFeatureStore implements EdgeFeatureStore {
         }
     }
 
-    /** The velocity bucket key of this card for the hour containing {@code at}, on this site. */
-    Key velocityKey(String panHash, Instant at) {
+    /** A write policy with the given TTL. */
+    private static WritePolicy ttl(int seconds) {
+        WritePolicy p = new WritePolicy();
+        p.expiration = seconds;
+        return p;
+    }
+
+    /** Hourly bucket key. */
+    private Key hourKey(String panHash, Instant at) {
         return new Key(namespace, SET_VELOCITY, velocityUserKey(panHash, at, siteId));
+    }
+
+    /** Daily bucket key {@code <pan>:<yyyyMMdd UTC>:<site>}. */
+    private Key dayKey(String panHash, Instant at) {
+        return new Key(namespace, SET_DAY, panHash + ":" + DAY.format(at) + ":" + siteId);
+    }
+
+    /** Profile key {@code <id>:<site>}. */
+    private Key profileKey(String set, String id) {
+        return new Key(namespace, set, id + ":" + siteId);
+    }
+
+    /** Counter key {@code <key>:<site>}. */
+    private Key counterKey(CounterKey key) {
+        return new Key(namespace, key.set(), key.key() + ":" + siteId);
     }
 
     /** The user key {@code <panHash>:<yyyyMMddHH UTC>:<siteId>} (contract format). */

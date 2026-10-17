@@ -28,4 +28,16 @@ public interface EdgeBundleManifestRepository extends JpaRepository<EdgeBundleMa
     int insertIfAbsent(@Param("pspId") Long pspId, @Param("manifestHash") String manifestHash,
                        @Param("manifest") String manifest, @Param("ruleCount") int ruleCount,
                        @Param("createdAt") LocalDateTime createdAt);
+
+    /**
+     * Stores the rules of this bundle that were not compiled to Edge IR, with reasons
+     * ({@code [{ruleId,name,reason}]}, V268).
+     *
+     * @return rows updated (0 when the manifest row does not exist)
+     */
+    @Modifying
+    @Query(value = "UPDATE edge_bundles SET uncompiled_rules = CAST(:uncompiled AS jsonb) "
+            + "WHERE psp_id = :pspId AND manifest_hash = :manifestHash", nativeQuery = true)
+    int recordUncompiled(@Param("pspId") Long pspId, @Param("manifestHash") String manifestHash,
+                         @Param("uncompiled") String uncompiled);
 }

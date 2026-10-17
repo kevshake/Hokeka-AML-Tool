@@ -32,7 +32,7 @@ use arc_swap::ArcSwapOption;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jbyteArray, jlong};
 use jni::JNIEnv;
-use rule_core::{evaluate, Decision, Features, RuleBundle};
+use rule_core::{evaluate, features_from_json, Decision, RuleBundle};
 use std::sync::Arc;
 
 static ACTIVE_BUNDLE: ArcSwapOption<RuleBundle> = ArcSwapOption::const_empty();
@@ -120,14 +120,17 @@ pub extern "system" fn Java_com_hokeka_edge_EdgeEngine_evaluate<'l>(
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Converts the JNI feature bytes, parses them (null / array / object members count as absent, as
+/// in the Java interpreter) and evaluates against the active bundle; None when anything is missing.
 fn evaluate_internal(env: &mut JNIEnv, features_json: JByteArray) -> Option<Decision> {
     let raw = env.convert_byte_array(&features_json).ok()?;
-    let features: Features = serde_json::from_slice(&raw).ok()?;
+    let features = features_from_json(&raw).ok()?;
     let guard = ACTIVE_BUNDLE.load();
     let bundle = guard.as_ref()?; // None if no bundle loaded → fail-closed below
     Some(evaluate(bundle, &features))
 }
 
+/// The HOLD decision returned when no bundle is active or the input cannot be read.
 fn fail_closed() -> Decision {
     Decision {
         action: rule_core::Action::Hold,
@@ -148,12 +151,14 @@ mod tests {
     // publishes a bundle must hold this lock or they would clobber each other intermittently.
     static SERIAL: Mutex<()> = Mutex::new(());
 
+    /// Serialises tests that touch the process-global bundle.
     fn serial() -> MutexGuard<'static, ()> {
         SERIAL
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// A one-rule bundle JSON with the given version and score.
     fn bundle_json(version: u64, score: i32) -> Vec<u8> {
         format!(
             r#"{{"version":{version},"psp_id":42,"rules":[
@@ -164,8 +169,9 @@ mod tests {
         .into_bytes()
     }
 
-    fn vpn_features() -> Features {
-        serde_json::from_slice(br#"{"ip_vpn_or_proxy":true}"#).unwrap()
+    /// Features that trip the VPN rule.
+    fn vpn_features() -> rule_core::Features {
+        features_from_json(br#"{"ip_vpn_or_proxy":true}"#).unwrap()
     }
 
     // The control-plane path: verified IR activates and is actually used by the native evaluator.
@@ -215,7 +221,7 @@ mod tests {
         activate_ir(&bundle_json(50, 25)).expect("bundle");
         let guard = ACTIVE_BUNDLE.load();
         let bundle = guard.as_ref().unwrap();
-        let features: Features = serde_json::from_slice(br#"{"ip_vpn_or_proxy":false}"#).unwrap();
+        let features = features_from_json(br#"{"ip_vpn_or_proxy":false}"#).unwrap();
         let d = evaluate(bundle, &features);
         assert_eq!(d.score, 0);
         assert!(d.triggered_rule_ids.is_empty());

@@ -69,6 +69,24 @@ public interface PaymentBlacklistRepository extends JpaRepository<PaymentBlackli
             @Param("type") String type, @Param("active") Boolean active,
             org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * Values of every active, unexpired entry of one type that applies to a PSP (its own plus the
+     * platform-wide list) — the set {@link #existsActiveNonExpiredForTenantOrPlatform} answers
+     * membership against, distributed to the PSP's Edge in its rule bundle (R10a).
+     */
+    @Query("SELECT DISTINCT e.entryValue FROM PaymentBlacklistEntry e "
+            + "WHERE e.entryType = :type AND e.active = true "
+            + "AND (e.expiresAt IS NULL OR e.expiresAt > :now) "
+            + "AND ((e.pspId IS NULL AND e.platformWide = true) "
+            + "     OR (:pspId IS NOT NULL AND e.pspId = :pspId))")
+    java.util.List<String> activeValuesForTenantOrPlatform(@Param("pspId") Long pspId, @Param("type") String type,
+                                                          @Param("now") LocalDateTime now);
+
+    /** Newest creation time of any entry that applies to a PSP (null when none). */
+    @Query("SELECT MAX(e.createdAt) FROM PaymentBlacklistEntry e "
+            + "WHERE (e.pspId IS NULL AND e.platformWide = true) OR (:pspId IS NOT NULL AND e.pspId = :pspId)")
+    LocalDateTime newestCreatedAtForTenantOrPlatform(@Param("pspId") Long pspId);
+
     /** @deprecated Prefer tenant-aware queries. */
     @Deprecated
     Optional<PaymentBlacklistEntry> findByEntryTypeAndEntryValueAndActiveTrue(String entryType, String entryValue);

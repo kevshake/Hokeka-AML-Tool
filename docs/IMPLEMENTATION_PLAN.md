@@ -46,7 +46,7 @@ The owner decisions of 2026-10-16 change the ground this plan was written on. Th
 | R6 | Cloud data proxy: `/transactions` GETs re-backed by the tunnel, batchGet, related, export, support-access gate on the Console API | Planned |
 | R8 | Workflow references by ID; detach Alert/Case/SAR/Screening/Finding from `TransactionEntity` | Planned |
 | R9 | SAR/CTR filing from Edge pulls; filed-document store; hold notifications | Planned |
-| R10a | Edge CTR, FX, limits, structuring; SpEL typology library compiled to Edge IR | Planned |
+| R10a | Edge CTR, FX, limits, structuring; SpEL typology library compiled to Edge IR | Done (contract §6.3; `edge-transaction-evaluation.md` §6.1, §6.2; V268). 14 of 64 SpEL rules stay cloud-only (listed in the bundle's `uncompiled` section) |
 | R10b | Sanctions list distribution and Edge matcher; merchant blocklist | Done (contract §6.4, §6.5) |
 | R10c | Remove the feature-bag POST to `/edge/decision`; site-scoped velocity | Done |
 | R11 | Console live pulls (`useEdgeData`), offline banner, dashboards on rollups, access-log viewer | Planned |

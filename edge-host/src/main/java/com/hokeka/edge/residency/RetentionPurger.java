@@ -35,7 +35,10 @@ import java.util.regex.Pattern;
  *       ({@code EDGE_SITE_TIMEZONE}); a run of any outcome uses up that day, so a failed run is
  *       retried the next day.</li>
  *   <li>Only one node per site purges: the run holds the session advisory lock
- *       {@code hokeka.edge.purge} and re-checks {@code edge_purge_log} under it.</li>
+ *       {@code hokeka.edge.purge:<ledger schema>} and re-checks {@code edge_purge_log} under it.
+ *       Advisory locks are database-wide, so the key names the schema being purged: the nodes of
+ *       one site (one schema) exclude each other, while ledgers of other sites in other schemas of
+ *       the same database purge independently.</li>
  *   <li>Before any config document has been accepted nothing is purged (outcome
  *       {@code SKIPPED_NO_CONFIG}).</li>
  *   <li>{@code cutoff = now − effective retention years} (UTC); every monthly partition whose upper
@@ -54,8 +57,13 @@ public class RetentionPurger {
 
     private static final Logger log = LoggerFactory.getLogger(RetentionPurger.class);
 
-    /** Session advisory lock key text: one purger per site. */
-    static final String LOCK_KEY = "hokeka.edge.purge";
+    /**
+     * Session advisory lock key prefix; the key is this plus {@code current_schema()}, so there is
+     * one purger per ledger schema (= per site), not one per database.
+     */
+    static final String LOCK_KEY_PREFIX = "hokeka.edge.purge:";
+    /** The lock key expression, evaluated on the purging session (its search path is the ledger schema). */
+    static final String LOCK_KEY_SQL = "hashtext(? || current_schema())";
     /** {@code edge_purge_log} keeps at least this many runs (§8.2). */
     static final int KEEP_PURGE_RUNS = 400;
 
@@ -436,10 +444,13 @@ public class RetentionPurger {
         }
     }
 
-    /** Session-level advisory lock; false when another node of the site is purging. */
+    /**
+     * Session-level advisory lock on this ledger schema's purge key; false when another node of the
+     * site (same schema) is purging. Ledgers in other schemas of the database do not contend.
+     */
     private static boolean tryLock(Connection c) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement("SELECT pg_try_advisory_lock(hashtext(?))")) {
-            ps.setString(1, LOCK_KEY);
+        try (PreparedStatement ps = c.prepareStatement("SELECT pg_try_advisory_lock(" + LOCK_KEY_SQL + ")")) {
+            ps.setString(1, LOCK_KEY_PREFIX);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() && rs.getBoolean(1);
             }

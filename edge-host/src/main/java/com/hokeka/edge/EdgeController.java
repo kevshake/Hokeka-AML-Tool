@@ -17,6 +17,8 @@ import com.hokeka.edge.sanctions.SanctionsScreener;
 import com.hokeka.edge.store.EdgeFeatureStore;
 import com.hokeka.edge.tunnel.EdgeTunnelClient;
 import com.hokeka.edge.store.FeatureDerivation;
+import com.hokeka.edge.store.TxnContext;
+import com.hokeka.edge.typology.ComplianceOverlay;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -56,6 +58,7 @@ public class EdgeController {
     private final EvaluationRecorder recorder;
     private final String nodeId;
     private final String siteId;
+    private final ComplianceOverlay overlay;
 
     @Value("${featurestore.fail-closed:true}")
     private boolean failClosedOnStoreUnavailable;
@@ -134,6 +137,7 @@ public class EdgeController {
         this.recorder = recorder;
         this.nodeId = nodeId == null ? "" : nodeId.trim();
         this.siteId = siteId == null ? "" : siteId.trim();
+        this.overlay = new ComplianceOverlay(featureStore, this::configInForce);
     }
 
     /**
@@ -263,19 +267,30 @@ public class EdgeController {
      *   <li>A PAN-like {@code txn_id} is refused with {@code 422 TXN_REF_LOOKS_LIKE_PAN}, and a
      *       {@code txn_id} that is not a valid reference with {@code 422 TXN_REF_INVALID}; nothing is
      *       evaluated or stored (contract §2.2, §2.5).</li>
-     *   <li>The caller-supplied features are enriched with locally-derived velocity history from the
-     *       on-prem store. With {@code featurestore.fail-closed=true} (default) an unavailable store
-     *       yields {@code HOLD / FEATURE_STORE_UNAVAILABLE}.</li>
-     *   <li>The engine decides (or a fail-closed gate answers {@code HOLD}).</li>
-     *   <li>The card's velocity counters are advanced (after evaluating, so a transaction never
-     *       inflates its own counters).</li>
+     *   <li><b>Screen</b> (R10b): the counterparty names are screened against the in-memory sanctions
+     *       list and the merchant against the config blocklist. It is in-memory only, so it runs
+     *       first and its verdict is known before anything is counted.</li>
+     *   <li><b>Derive</b> (R10a): history features (velocity windows, z-score, profiles) in one
+     *       bounded site-store read. With {@code featurestore.fail-closed=true} (default) an
+     *       unavailable store yields {@code HOLD / FEATURE_STORE_UNAVAILABLE}; screening hits are
+     *       still recorded on that HOLD.</li>
+     *   <li><b>Compliance overlay</b> (R10a): CTR/FX, cash structuring and Edge Config limits. The
+     *       CTR card-day counter advances here, before any decision, so CTR never under-reports;
+     *       limit usage is only read.</li>
+     *   <li><b>Evaluate</b>: the engine decides on the request + derived + compliance features.</li>
+     *   <li><b>Merge</b>: the final action is the strongest of rules, compliance overlay and
+     *       screening (BLOCK &gt; HOLD &gt; ALERT &gt; ALLOW); a fail-closed HOLD stays a HOLD.</li>
+     *   <li><b>Record</b>: the card history advances (after evaluating, so a transaction never
+     *       inflates its own counters) and limit usage is committed with the <em>final</em> action,
+     *       so a transaction BLOCKed by a rule, a limit, a sanctions hit or the merchant blocklist
+     *       consumes no limit.</li>
      *   <li>The evaluation and its decision record are written to the Edge Ledger in one
      *       transaction. If that fails under {@code ledger.fail-closed=true}, the answer becomes
      *       {@code HOLD / LEDGER_UNAVAILABLE}.</li>
      * </ol>
      *
      * <p>Every evaluated response (including fail-closed HOLDs) carries a fresh
-     * {@code edgeAssessmentId}.
+     * {@code edgeAssessmentId}. Nothing here logs names or transaction values.
      */
     @PostMapping("/evaluate")
     public ResponseEntity<?> evaluate(@RequestBody Map<String, Object> features) {
@@ -295,8 +310,15 @@ public class EdgeController {
         }
 
         String panHash = features.get("pan_hash") == null ? null : String.valueOf(features.get("pan_hash"));
+        TxnContext txn = TxnContext.from(features, evaluatedAt);
 
-        FeatureDerivation derived = featureStore.deriveFeaturesDetailed(panHash);
+        // R10b: local sanctions screening and merchant blocklist on the caller's fields. The names
+        // never leave the Edge; only watchlist entry ids reach the decision record.
+        SanctionsScreener.Result screening = screener == null ? SanctionsScreener.Result.NONE
+                : screener.screen(features);
+
+        // History features (velocity windows, z-score, profiles) in one bounded store read (R10a).
+        FeatureDerivation derived = featureStore.derive(txn);
         if (failClosedOnStoreUnavailable && derived.storeUnavailable()
                 && panHash != null && !panHash.isBlank()) {
             EdgeRuleInterpreter.Decision hold = new EdgeRuleInterpreter.Decision(
@@ -304,43 +326,78 @@ public class EdgeController {
                     0,
                     List.of(),
                     List.of("feature store unavailable (fail-closed): pre-auth evaluation withheld"));
-            return respond(new EdgeEngine.Outcome(hold, EdgeEngine.CONTRACT_EVALUATOR_NONE,
-                    "FEATURE_STORE_UNAVAILABLE"), features, panHash, evaluatedAt, startNanos);
+            EdgeEngine.Outcome failClosed = SanctionsScreener.apply(new EdgeEngine.Outcome(hold,
+                    EdgeEngine.CONTRACT_EVALUATOR_NONE, "FEATURE_STORE_UNAVAILABLE"), screening);
+            return respond(failClosed, features, panHash, evaluatedAt, startNanos, null, screening);
         }
+
+        // CTR, cash structuring and Edge Config limits (R10a); the CTR card-day counter advances here.
+        ComplianceOverlay.Assessment compliance = overlay.assess(txn, features, derived.features());
 
         // Caller-supplied values win over derived ones, so an integrator can override for testing
         // or supply a richer value than the local store can compute.
         Map<String, Object> enriched = new LinkedHashMap<>(derived.features());
+        enriched.putAll(compliance.features());
         enriched.putAll(features);
 
-        EdgeEngine.Outcome outcome = engine.evaluateWithProvenance(enriched);
+        // Strongest of rules, compliance overlay and screening; a fail-closed outcome stays HOLD.
+        EdgeEngine.Outcome outcome = SanctionsScreener.apply(
+                withCompliance(engine.evaluateWithProvenance(enriched), compliance), screening);
 
-        // Record AFTER evaluating, so a transaction never inflates its own velocity counters.
-        featureStore.recordVelocity(panHash, velocityAmount(enriched.get("amount_cents")));
+        // Record AFTER the final decision, so a transaction never inflates the history its own rules
+        // read and a BLOCK from any source (rules, limits, sanctions, blocklist) consumes no limit.
+        featureStore.record(txn, compliance.structuringBand());
+        overlay.commit(compliance, outcome.decision().action());
 
-        return respond(outcome, enriched, panHash, evaluatedAt, startNanos);
+        return respond(outcome, enriched, panHash, evaluatedAt, startNanos, compliance, screening);
     }
 
     /**
-     * Records the evaluation on the ledger (which may turn it into a fail-closed HOLD), records the
-     * metrics of the decision that stands, and builds the response.
+     * The engine outcome with the compliance overlay applied: the stronger action wins and the
+     * overlay's local reasons are appended. A fail-closed outcome is kept as it is (contract §4.1:
+     * fail-closed ⇒ HOLD with no triggered rules); its CTR flag is still recorded.
+     */
+    static EdgeEngine.Outcome withCompliance(EdgeEngine.Outcome outcome, ComplianceOverlay.Assessment compliance) {
+        if (outcome.failClosedCode() != null || compliance.reasons().isEmpty()) {
+            return outcome;
+        }
+        EdgeRuleInterpreter.Decision d = outcome.decision();
+        List<String> reasons = new java.util.ArrayList<>(d.reasons());
+        reasons.addAll(compliance.reasons());
+        EdgeRuleInterpreter.Decision merged = new EdgeRuleInterpreter.Decision(d.action().max(compliance.action()),
+                d.score(), d.triggeredRuleIds(), reasons, d.triggeredRuleVersionIds());
+        return new EdgeEngine.Outcome(merged, outcome.evaluator(), null);
+    }
+
+    /** The Edge Config document in force, if any. */
+    private java.util.Optional<EdgeConfigDocument> configInForce() {
+        return edgeConfig == null ? java.util.Optional.empty() : edgeConfig.current();
+    }
+
+    /**
+     * Records the final evaluation on the ledger (which may turn it into a fail-closed HOLD) with
+     * its sanctions hits and compliance flags, records the metrics of the decision that stands, and
+     * builds the response.
+     *
+     * @param outcome    the final outcome (screening and overlay already merged)
+     * @param compliance the overlay's assessment, or null when the overlay did not run
+     * @param screening  the sanctions/blocklist screening result
      */
     private ResponseEntity<EdgeEvaluation> respond(EdgeEngine.Outcome outcome, Map<String, Object> evaluated,
-                                                   String panHash, Instant evaluatedAt, long startNanos) {
+                                                   String panHash, Instant evaluatedAt, long startNanos,
+                                                   ComplianceOverlay.Assessment compliance,
+                                                   SanctionsScreener.Result screening) {
         UUID edgeAssessmentId = UUID.randomUUID();
         long version = engine.activeVersion();
         String bundleHash = engine.activeBundleHash();
-
-        // R10b: local sanctions screening of the counterparty names and the merchant blocklist. The
-        // names never leave the Edge; only watchlist entry ids reach the decision record.
-        SanctionsScreener.Result screening = screener == null ? SanctionsScreener.Result.NONE
-                : screener.screen(evaluated);
-        outcome = SanctionsScreener.apply(outcome, screening);
         long evalMicros = Math.max(0L, (System.nanoTime() - startNanos) / 1000L);
 
         LedgerEvaluation row = LedgerEvaluations.fromEvaluation(edgeAssessmentId, evaluatedAt, siteId, nodeId,
                 evaluated, panHash, outcome.decision(), version, bundleHash, outcome.evaluator(),
                 outcome.failClosedCode(), evalMicros).withSanctionsHits(screening.hits());
+        if (compliance != null) {
+            row = row.withCompliance(compliance.ctrRequired(), compliance.typologyCodes());
+        }
         LedgerEvaluation standing = recorder.record(row);
 
         EdgeRuleInterpreter.Decision decision = standing == row ? outcome.decision()
@@ -348,23 +405,5 @@ public class EdgeController {
                         standing.reasons(), List.of());
         metrics.record(decision, (System.nanoTime() - startNanos) / 1000.0);
         return ResponseEntity.ok(EdgeEvaluation.of(decision, edgeAssessmentId.toString(), version, bundleHash));
-    }
-
-    /**
-     * {@code amount_cents} for the velocity counters (minor units): a number's integral part, a
-     * numeric string, or 0 when absent, negative or unusable — the same rule the store always used.
-     */
-    static long velocityAmount(Object value) {
-        if (value instanceof Number n) {
-            return Math.max(0L, n.longValue());
-        }
-        if (value != null) {
-            try {
-                return Math.max(0L, Long.parseLong(value.toString().trim()));
-            } catch (NumberFormatException ignored) {
-                return 0L;
-            }
-        }
-        return 0L;
     }
 }
