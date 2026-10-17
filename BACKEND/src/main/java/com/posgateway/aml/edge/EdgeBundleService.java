@@ -45,12 +45,50 @@ public class EdgeBundleService {
         return buildBundleJson(version, pspId, rules, null);
     }
 
+    /** Bundle JSON with a manifest hash and no lists (IR v1 shape). */
     public byte[] buildBundleJson(long version, long pspId, List<CompiledRule> rules, String manifestHash) {
+        return buildBundleJson(version, pspId, rules, manifestHash, java.util.Map.of(), List.of());
+    }
+
+    /**
+     * A rule that the compiler could not turn into Edge IR, listed in the bundle's
+     * {@code uncompiled} manifest section with the reason (the Edge ignores the section; it exists
+     * so the published bundle itself says which rules do not run there).
+     *
+     * @param id     rule id
+     * @param name   rule name
+     * @param reason why it cannot run on the Edge
+     */
+    public record UncompiledRule(long id, String name, String reason) {
+    }
+
+    /** IR revision emitted by {@link #buildBundleJson(long, long, List, String, java.util.Map, List)}. */
+    public static final int IR_VERSION = 2;
+
+    /**
+     * Full IR v2 bundle JSON: rules, the named {@code lists} the rules' {@code in_list} conditions
+     * read, and the {@code uncompiled} manifest.
+     */
+    public byte[] buildBundleJson(long version, long pspId, List<CompiledRule> rules, String manifestHash,
+                                  java.util.Map<String, List<String>> lists, List<UncompiledRule> uncompiled) {
         ObjectNode root = mapper.createObjectNode();
         root.put("version", version);
         root.put("psp_id", pspId);
+        root.put("ir_version", IR_VERSION);
         if (manifestHash != null && !manifestHash.isBlank()) {
             root.put("manifest_hash", manifestHash);
+        }
+        ObjectNode listsNode = root.putObject("lists");
+        new java.util.TreeMap<>(lists).forEach((name, values) -> {
+            ArrayNode items = listsNode.putArray(name);
+            values.forEach(items::add);
+        });
+        ArrayNode skipped = root.putArray("uncompiled");
+        for (UncompiledRule u : uncompiled) {
+            ObjectNode item = skipped.addObject();
+            item.put("id", u.id());
+            item.put("name", u.name());
+            item.put("reason", u.reason());
         }
         ArrayNode arr = root.putArray("rules");
         for (CompiledRule r : rules) {
@@ -100,6 +138,32 @@ public class EdgeBundleService {
         return n;
     }
 
+    /** IR v2 {@code exists}: the feature is present with a scalar value. */
+    public ObjectNode exists(String field) {
+        ObjectNode n = mapper.createObjectNode();
+        n.put("type", "exists");
+        n.put("field", field);
+        return n;
+    }
+
+    /** IR v2 {@code in_list}: the feature's text (ASCII case-insensitive) is in a bundle list. */
+    public ObjectNode inList(String field, String list) {
+        ObjectNode n = mapper.createObjectNode();
+        n.put("type", "in_list");
+        n.put("field", field);
+        n.put("list", list);
+        return n;
+    }
+
+    /** IR v2 {@code const}: a fixed truth value. */
+    public ObjectNode constant(boolean value) {
+        ObjectNode n = mapper.createObjectNode();
+        n.put("type", "const");
+        n.put("value", value);
+        return n;
+    }
+
+    /** AND group. */
     public ObjectNode all(ObjectNode... conditions) {
         return group("all", conditions);
     }

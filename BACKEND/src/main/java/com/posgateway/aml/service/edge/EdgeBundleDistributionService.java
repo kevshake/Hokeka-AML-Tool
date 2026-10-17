@@ -79,7 +79,7 @@ public class EdgeBundleDistributionService {
     /** The version an edge would be served right now, without doing the (costlier) sealing work. */
     @Transactional(readOnly = true)
     public long currentVersion(Long pspId) {
-        return compiler.compile(rulesFor(pspId)).version();
+        return compiler.compile(rulesFor(pspId), pspId).version();
     }
 
     /**
@@ -110,7 +110,7 @@ public class EdgeBundleDistributionService {
     // transaction"), so every first bundle pull answered 500 and edges stayed fail-closed.
     @Transactional
     public SealedBundle sealFor(EdgeNode node) {
-        EdgeRuleCompiler.CompilationResult compiled = compiler.compile(rulesFor(node.getPspId()));
+        EdgeRuleCompiler.CompilationResult compiled = compiler.compile(rulesFor(node.getPspId()), node.getPspId());
 
         // FAIL-CLOSED: both edge interpreters start at ALLOW and iterate the rule list, so a
         // zero-rule bundle is a signed instruction to allow everything. That can happen silently when
@@ -128,7 +128,7 @@ public class EdgeBundleDistributionService {
         persistManifest(node.getPspId(), compiled);
         byte[] plaintext = wrapInReplayEnvelope(
                 bundleService.buildBundleJson(compiled.version(), node.getPspId(), compiled.rules(),
-                        compiled.manifestHash()),
+                        compiled.manifestHash(), compiled.lists(), compiled.uncompiled()),
                 node.getEdgeId());
 
         byte[] edgeX25519Pub = Base64.getDecoder().decode(node.getEdgeX25519PublicKey());
@@ -152,19 +152,28 @@ public class EdgeBundleDistributionService {
         if (manifests == null || pspId == null || compiled.manifestHash() == null) {
             return;
         }
-        if (manifests.findByPspIdAndManifestHash(pspId, compiled.manifestHash()).isPresent()) {
-            return;
-        }
-        ArrayNode rules = mapper.createArrayNode();
-        for (com.posgateway.aml.edge.EdgeBundleService.CompiledRule rule : compiled.rules()) {
-            ObjectNode item = rules.addObject();
-            item.put("ruleId", rule.id());
-            if (rule.ruleVersionId() != null) {
-                item.put("ruleVersionId", rule.ruleVersionId());
+        if (manifests.findByPspIdAndManifestHash(pspId, compiled.manifestHash()).isEmpty()) {
+            ArrayNode rules = mapper.createArrayNode();
+            for (com.posgateway.aml.edge.EdgeBundleService.CompiledRule rule : compiled.rules()) {
+                ObjectNode item = rules.addObject();
+                item.put("ruleId", rule.id());
+                if (rule.ruleVersionId() != null) {
+                    item.put("ruleVersionId", rule.ruleVersionId());
+                }
             }
+            manifests.insertIfAbsent(pspId, compiled.manifestHash(), rules.toString(), compiled.rules().size(),
+                    java.time.LocalDateTime.now());
         }
-        manifests.insertIfAbsent(pspId, compiled.manifestHash(), rules.toString(), compiled.rules().size(),
-                java.time.LocalDateTime.now());
+        // The rules left off the Edge, with reasons (V266). Refreshed on every seal: the manifest
+        // hash covers compiled rules only, so the uncompiled set can change under the same hash.
+        ArrayNode uncompiled = mapper.createArrayNode();
+        for (com.posgateway.aml.edge.EdgeBundleService.UncompiledRule u : compiled.uncompiled()) {
+            ObjectNode item = uncompiled.addObject();
+            item.put("ruleId", u.id());
+            item.put("name", u.name());
+            item.put("reason", u.reason());
+        }
+        manifests.recordUncompiled(pspId, compiled.manifestHash(), uncompiled.toString());
     }
 
     /** {@code {"nonce":…,"issuedAt":…,"edgeId":…,"payload":<rule IR>}} — contract §4. */
